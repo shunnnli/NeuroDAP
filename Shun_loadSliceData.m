@@ -10,7 +10,7 @@
 
 %% Define data path
 clear; close all;
-addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/Methods')));
+addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
 
 % Select sessions for analysis
 parentPath = osPathSwitch('/Volumes/MICROSCOPE/wengang/Exp_withShun/');

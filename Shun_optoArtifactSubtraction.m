@@ -11,7 +11,7 @@ time pulse
 %% Read waveform data from ap.bin
 
 clear; close all;
-addpath(genpath('D:\Shun\Neuropixel analysis\Methods'));
+addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
 [twoColors,colors,blueRedYellow,blueGreenYellow,blueWhiteRed] = loadColors;
 
 % Setup data structure

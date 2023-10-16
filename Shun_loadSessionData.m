@@ -5,7 +5,7 @@
 %% Load files
 
 clear; close all;
-addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/Methods')));
+addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
 
 % Select sessions via uipickfiles
 sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/MICROSCOPE/Shun'));

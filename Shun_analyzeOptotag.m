@@ -3,7 +3,7 @@
 
 %% Load data
 clear; close all;
-addpath(genpath('\\research.files.med.harvard.edu\neurobio\MICROSCOPE\Shun\Analysis\Methods'));
+addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
 
 setenv('NEUROPIXEL_MAP_FILE', which('neuropixPhase3B2_kilosortChanMap.mat'));
 % setenv('NEUROPIXEL_DATAROOT', 'D:\Shun\Analysis\Result-Neuropixel utils');

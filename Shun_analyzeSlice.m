@@ -7,7 +7,7 @@
 
 %% Define data path
 clear; close all;
-addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/Methods')));
+addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
 [~,colors,~,blueGreenYellow,blueWhiteRed,~,bluePurpleRed] = loadColors;
 
 % % Select sessions for analysis

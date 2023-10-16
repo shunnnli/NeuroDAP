@@ -10,7 +10,7 @@ clear all;
 close all;
 
 % Load npy-matlab
-addpath(genpath('/Volumes/Shun neuro data/Neuropixel/npy-matlab'))
+addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
 
 %% Load NPY data to matlab
 

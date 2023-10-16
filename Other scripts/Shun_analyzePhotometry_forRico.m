@@ -1,0 +1,253 @@
+%% Load data
+
+clear; close all;
+% addpath(genpath('D:\Shun\Neuropixel analysis\Methods'));
+addpath(genpath('\\research.files.med.harvard.edu\neurobio\MICROSCOPE\Shun\Analysis\Methods'));
+[~,~,~,~,blueWhiteRed,blueGreenPurple,bluePurpleRed] = loadColors;
+             
+
+% Select session via uigetdir
+sessionpath = uigetdir('\\research.files.med.harvard.edu\neurobio\MICROSCOPE\Shun');
+dirsplit = strsplit(sessionpath,filesep); 
+sessionName = dirsplit{end}; session.projectPath = strcat('\\',fullfile(dirsplit{2:end-1}));
+clear dirsplit
+
+disp(strcat('********** ',sessionName,'**********'));
+load(strcat(sessionpath,'\','sync_',sessionName,'.mat'));
+disp(['Session ',sessionName,' loaded']);
+
+%% Preprocess photometry data (nidaq)
+
+photometry_raw = photometry;
+rollingSize = 60; % rolling window in sec
+
+% Rolling z score to detrend (60s window)
+rollingmean = movmean(photometry_raw,rollingSize*nidq.Fs);
+rollingstd = movstd(photometry_raw,rollingSize*nidq.Fs);
+photometry_detrended = (photometry_raw - rollingmean)./rollingstd;
+
+% Downsample to 100Hz
+downsample_freq = 100; nSampPerBin = (1/downsample_freq)*nidq.Fs;
+photometry_100 = downsamplePhotometry(photometry_detrended,nSampPerBin);
+
+% Rolling z score (60s window)
+rollingmean = movmean(photometry_100,rollingSize*100);
+rollingstd = movstd(photometry_100,rollingSize*100);
+photometry_zscore = (photometry_100 - rollingmean)./rollingstd;
+
+% (optional?) Downsample to 50Hz
+downsample_freq = 50; nSampPerBin = 1/downsample_freq*100;
+photometry_50 = downsamplePhotometry(photometry_zscore,nSampPerBin);
+
+disp('Preprocessing finished');
+
+%% (NIDAQ + Labjack) Plot pre-processing steps
+initializeFig(1,1);
+
+% Raw photometry
+subplot(3,3,1);
+plot(photometry_raw);
+xlabel(['Time (',num2str(1000/nidq.Fs),' ms)']); ylabel('Signal (V)');
+title('NIDAQ photometry: raw');
+
+% After detrend (1min)
+subplot(3,3,4);
+plot(photometry_detrended); hold on
+xlabel(['Time (',num2str(1000/nidq.Fs),' ms)']); ylabel('z-score');
+title('NIDAQ photometry: after detrend (60s window)');
+
+% After downsample to 50Hz
+subplot(3,3,7);
+plot(photometry_50);
+xlabel(['Time (',num2str(1000/50),' ms)']); ylabel('z-score');
+title('NIDAQ photometry: Downsampled 100Hz -> rolling -> Downsampled to 50Hz');
+
+subplot(3,3,2)
+plot(demodGreen);xlabel('Time'); ylabel('z-score');
+title('Labjack photometry: detrend->demod');
+
+subplot(3,3,5)
+plot(rollingGreen);xlabel('Time'); ylabel('z-score');
+title('Labjack photometry: detrend->demod->rolling');
+
+subplot(3,3,8)
+plot(rollingGreenLP);xlabel('Time'); ylabel('z-score');
+title('Labjack photometry: detrend->demod->LP->rolling');
+
+% Create the uitable
+subplot(3,3,[3 6 9])
+histogram(normrnd(0,1,size(rollingGreenLP)),200); hold on
+histogram(rollingGreenLP,200); hold on
+histogram(photometry_50,200); hold on
+skew_lj = skewness(rollingGreenLP); kur_lj = kurtosis(rollingGreenLP);
+skew_ni = skewness(photometry_50); kur_ni = kurtosis(photometry_50);
+xlabel('z-score'); ylabel('Count'); legend({'Normal distribution','LJ Photometry','NI Photometry'});
+dim = [0.8205 0.6 0.55 0.27];
+str = {strcat("NI Skewness: ",num2str(skew_ni)),strcat("NI Kurtosis: ",num2str(kur_ni)),...
+    strcat("LJ Skewness: ",num2str(skew_lj)),strcat("LJ Kurtosis: ",num2str(kur_lj))};
+annotation('textbox',dim,'String',str,'FitBoxToText','on');
+title('Histogram of photometry traces');
+
+% Save figure
+saveas(gcf,strcat(session.path,'\summary_preprocess_',sessionName,'.png'));
+
+%% (NIDAQ) Plot pre-processing steps
+preprocess_summary_fig = figure('Position', get(0, 'Screensize'));
+
+% Raw photometry
+subplot(3,2,1);
+plot(photometry_raw);
+xlabel(['Time (',num2str(1000/nidq.Fs),' ms)']); ylabel('Signal (V)');
+title('Raw photometry');
+
+% After detrend (1min)
+subplot(3,2,2);
+plot(photometry_detrended); hold on
+xlabel(['Time (',num2str(1000/nidq.Fs),' ms)']); ylabel('z-score');
+title('After detrend (60s window)');
+
+% After downsample to 100Hz
+subplot(3,2,3);
+plot(photometry_100);
+xlabel(['Time (',num2str(1000/100),' ms)']); ylabel('z-score');
+title('Downsampled to 100Hz');
+
+% After rolling z score (1min)
+subplot(3,2,4);
+plot(photometry_zscore); hold on
+xlabel(['Time (',num2str(1000/100),' ms)']); ylabel('z-score');
+title('After z-score (60s window)');
+
+% After downsample to 50Hz
+subplot(3,2,5);
+plot(photometry_50);
+xlabel(['Time (',num2str(1000/50),' ms)']); ylabel('z-score');
+title('Downsampled to 50Hz');
+
+% Create the uitable
+subplot(3,2,6);
+histogram(normrnd(0,1,size(photometry_50)),200); hold on
+histogram(photometry_50,200); hold on
+xlabel('z-score'); ylabel('Count'); legend({'Normal distribution','Photometry'});
+dim = [0.8205 0.001 0.25 0.27];
+str = {strcat("Skewness: ",num2str(skewness)),strcat("Kurtosis: ",num2str(kurtosis))};
+annotation('textbox',dim,'String',str,'FitBoxToText','on');
+title('Histogram of z-scored photometry');
+
+% Save figure
+saveas(gcf,strcat(session.path,'\summary_preprocess_',sessionName,'.png'));
+
+%% Find first pulse of each opto stimulation pattern
+
+if ~exist('firstPulse','var')
+    allPulses = find(redLaser);
+    intervalThreshold = 5*session.behaviorFs;
+    temp_interval = [100000,diff(allPulses)];
+    firstPulse = allPulses(temp_interval > intervalThreshold);
+
+    % Save first pulse data
+    save(strcat(sessionpath,'\','sync_',session.name),"firstPulse",'-append');
+
+    disp('Finished: first pulse data');
+end
+
+%% Plot airpuff PSTH
+photometry = photometry_50; binSize = 1/50;
+timeRange = [-0.5,2]; % in sec
+
+
+% Extract photometry traces for each event
+airpuffIdx = find(airpuff); airpuffInSec = airpuffIdx/nidq.Fs;
+[airpuffTraces,t] = getTraces(airpuffInSec,photometry,timeRange,binSize);
+
+waterIdx = find(rightSolenoid); waterInSec = waterIdx/nidq.Fs;
+[waterTraces,~] = getTraces(waterInSec,photometry,timeRange,binSize);
+
+% Plot everything
+initializeFig(0.5,0.5);
+subplot(2,1,1)
+plotSEM(t,airpuffTraces,bluePurpleRed(1,:));
+plotSEM(t,waterTraces,bluePurpleRed(500,:));
+plotEvent('',0,'r');
+
+xlabel('Time (s)'); ylabel('z-score');
+legend({['Airpuff (n=',num2str(length(airpuffIdx)),')'],...
+    ['Water (n=',num2str(length(waterIdx)),')']},...
+    'Location','best'); 
+box off
+
+subplot(2,1,2)
+groupSize = 20;
+nLines = ceil(size(airpuffTraces,1)/groupSize);
+legendList = cell(nLines,1);
+nColors = round(linspace(1,size(bluePurpleRed,1),nLines));
+for i = 1:nLines
+    startTrial = (i-1)*groupSize+1; 
+    if i == nLines; endTrial = size(airpuffTraces,1);
+    else; endTrial = i*groupSize; end
+    plotSEM(t,airpuffTraces(startTrial:endTrial,:),bluePurpleRed(nColors(i),:));
+    legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial)];
+end
+plotEvent('',0,'r');
+legend(legendList);
+xlabel('Time (s)'); ylabel('z-score');
+box off
+
+saveas(gcf,strcat(session.path,'\psth_airpuff&outcome_',sessionName,'.png'));
+
+%% Plot Optogenetic PSTH
+
+photometry = photometry_50; binSize = 1/50;
+timeRange = [-0.5,2]; % in sec
+
+
+% Extract photometry traces for each event
+airpuffIdx = find(airpuff); airpuffInSec = airpuffIdx/nidq.Fs;
+[airpuffTraces,t] = getTraces(airpuffInSec,photometry,timeRange,binSize);
+waterIdx = find(rightSolenoid); waterInSec = waterIdx/nidq.Fs;
+[waterTraces,~] = getTraces(waterInSec,photometry,timeRange,binSize);
+
+set1Idx = firstPulse(1:30); set1InSec = set1Idx/nidq.Fs;
+[set1Traces,~] = getTraces(set1InSec,photometry,timeRange,binSize);
+set2Idx = firstPulse(31:60); set2InSec = set2Idx/nidq.Fs;
+[set2Traces,~] = getTraces(set2InSec,photometry,timeRange,binSize);
+set3Idx = firstPulse(61:90); set3InSec = set3Idx/nidq.Fs;
+[set3Traces,~] = getTraces(set3InSec,photometry,timeRange,binSize);
+set4Idx = firstPulse(91:120); set4InSec = set4Idx/nidq.Fs;
+[set4Traces,~] = getTraces(set4InSec,photometry,timeRange,binSize);
+set5Idx = firstPulse(121:150); set5InSec = set5Idx/nidq.Fs;
+[set5Traces,~] = getTraces(set5InSec,photometry,timeRange,binSize);
+set6Idx = firstPulse(151:180); set6InSec = set6Idx/nidq.Fs;
+[set6Traces,~] = getTraces(set6InSec,photometry,timeRange,binSize);
+set7Idx = firstPulse(181:210); set7InSec = set7Idx/nidq.Fs;
+[set7Traces,~] = getTraces(set7InSec,photometry,timeRange,binSize);
+
+% Plot everything
+initializeFig(1,1);
+plotSEM(t,airpuffTraces,bluePurpleRed(1,:));
+plotSEM(t,waterTraces,[0.4 0.4 0.4]);
+
+plotSEM(t,set1Traces,bluePurpleRed(100,:));
+plotSEM(t,set2Traces,bluePurpleRed(200,:));
+plotSEM(t,set3Traces,bluePurpleRed(300,:));
+plotSEM(t,set4Traces,bluePurpleRed(400,:));
+plotSEM(t,set5Traces,bluePurpleRed(500,:));
+plotSEM(t,set6Traces,blueGreenPurple(250,:));
+plotSEM(t,set7Traces,blueGreenPurple(500,:));
+plotEvent('',0,'r');
+
+xlabel('Time (s)'); ylabel('z-score');
+legend({['Airpuff (n=',num2str(length(airpuffIdx)),')'],...
+    ['Water (n=',num2str(length(waterIdx)),')'],...
+    ['35Hz, 100ms (n=',num2str(length(set1Idx)),')'],...
+    ['35Hz, 200ms (n=',num2str(length(set2Idx)),')'],...
+    ['35Hz, 300ms (n=',num2str(length(set3Idx)),')'],...
+    ['35Hz, 400ms (n=',num2str(length(set4Idx)),')'],...
+    ['35Hz, 500ms (n=',num2str(length(set5Idx)),')'],...
+    ['50Hz, 500ms (n=',num2str(length(set6Idx)),')'],...
+    ['500ms continous (n=',num2str(length(set7Idx)),')']},...
+    'Location','best'); 
+box off
+
+% Save figure
+saveas(gcf,strcat(session.path,'\summary_',sessionName,'.png'));

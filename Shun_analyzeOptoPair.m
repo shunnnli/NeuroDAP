@@ -6,8 +6,7 @@
 %% Setup
 
 clear; close all;
-% addpath(genpath('D:\Shun\Neuropixel analysis\Methods'));
-addpath(genpath('\\research.files.med.harvard.edu\neurobio\MICROSCOPE\Shun\Analysis\Methods'));
+addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
 [~,~,~,blueGreenYellow,blueWhiteRed,~,bluePurpleRed,purpleWhiteRed] = loadColors;
 r2p_cmap = getColormap([255, 50, 58],[0 0 0],500,'midcol',[255 255 255]);
 p2r_cmap = getColormap([241 160 255],[0 0 0],500,'midcol',[255 255 255]);
