@@ -1,0 +1,84 @@
+function processed = demodulate(sData,finalFs,params,options)
+
+% Shun Li, 2023/10/15
+% Adapted from code written by Bernardo Sabatini
+
+arguments
+    sData (1,:) {mustBeNumeric}
+    finalFs double
+    params struct
+    
+    options.modFreq = 167; % Hz (green labjack mod frequency)
+
+    options.pointsToEstimateCarrier = 1e6; % samples
+    options.bandWidth = 3;            % number of frequency steps by Hz.  Eg 1 means analyze center frequency and +/- 1 Hz
+    options.detrendWindow = 180;      % seconds
+    options.spectralWindow = 966;     % samples (prev 2*9*12)
+    
+
+    options.plotFFT = false;
+    options.parameters = {};
+end
+
+%% Setup
+
+rawTimeStep = 1/params.sync.labjackFs;
+finalTimeStep = 1/finalFs;
+options.nSampPerDemodBin = finalTimeStep/rawTimeStep; % =40 if labjackFs=2000Hz
+
+if isnumeric(sData) && ~isfloat(sData); sData = double(sData);
+else; error('Data must be numeric'); end
+
+%% Find the carrier frequency with an FFT
+endPoint = min(options.pointsToEstimateCarrier, length(sData));
+sData_fft = fft(normalize(sData(1:endPoint)));
+P2 = abs(sData_fft/endPoint);
+P1 = P2(1:endPoint/2+1);
+P1(2:end-1) = 2*P1(2:end-1);
+
+% make the frequency bins
+fftFreq = params.sync.labjackFs * (0:(endPoint/2))/endPoint;
+if options.plotFFT
+    figure; plot(fftFreq,P1);
+    title('FFT'); 
+    set(gca, 'YScale', 'log', 'XScale', 'log');
+end
+
+% find the frequency of the peak power
+[~, maxFindex] = max(P1);
+calculatedModFrequency = fftFreq(maxFindex);
+disp(['Discovered modulation frequency is ' num2str(calculatedModFrequency),' Hz']);
+
+if ~isnan(options.modFreq) && (options.modFreq~=calculatedModFrequency)
+    warning('Discovered modulation frequency does not equal the user provided frequency!');
+    disp(['Using modulation frequency ' num2str(options.modFreq)]);
+end
+
+%% do the demodulation for the non-detrended data
+
+% Calc demodulation params
+options.spectralFrequencies = (-options.bandWidth:options.bandWidth)+options.modFreq;
+processed.options.spectralWindowOverlap = options.spectralWindow-options.nSampPerDemodBin;
+
+detrendWindowSamples_rawFs = 2*floor(options.detrendWindow*params.sync.labjackFs/2);
+detrendWindowSamples_finalFs = 2*floor(options.detrendWindow*finalFs/2);
+
+% Demod without detrend
+[spectVals, ~, dmTimes] = spectrogram(sData, options.spectralWindow, processed.options.spectralWindowOverlap, processed.options.spectralFrequencies, params.sync.labjackFs);
+processed.demodData_nodetrend = mean(abs(spectVals),1);    % save raw demodulated (not detrended)
+processed.demodTimes = dmTimes;                              % save time points
+
+% Demod with detrend
+sData = rollingZ(sData, detrendWindowSamples_rawFs);
+
+[spectVals, ~, ~] = spectrogram(sData, options.spectralWindow, processed.options.spectralWindowOverlap, processed.options.spectralFrequencies, params.sync.labjackFs);
+dmData = mean(abs(spectVals),1); % convert spectrogram to power    
+
+dmData = rollingZ(dmData, detrendWindowSamples_finalFs);
+dmData(1:(detrendWindowSamples_finalFs/2)) = nan;
+dmData((end-detrendWindowSamples_finalFs/2):end) = nan;
+processed.demodData = dmData;
+
+processed.options = options;
+
+end
