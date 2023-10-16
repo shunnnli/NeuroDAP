@@ -19,6 +19,7 @@ arguments
    options.dsMethod string = 'resample' % check downsamplePhotometry.m for explaination
    options.movingAvergeFilter logical = false % moving average filter after downsample
    options.movingAverageWindowSize double = 2 % moving average window size after downsample
+   options.removeTwoEnds logical = false; % see demodulatePhotometry.m
    options.plotLJPhotometry logical = true; % Plot photometry signals or not
 
    % Sync related params
@@ -191,8 +192,10 @@ if options.reloadAll || options.reloadNI
     
     % Process NIDAQ photometry data
     if ni_photometryON == true
+        % Extract raw
+        photometry_raw = analogNI(8,:);
         % Downsample
-        ds_photometry = downsamplePhotometry(analogNI(8,:),options.downsampleFs,nidq.Fs,...
+        ds_photometry = downsamplePhotometry(photometry_raw,options.downsampleFs,nidq.Fs,...
                                      movingAvergeFilter=options.movingAvergeFilter,...
                                      movingAverageWindowSize=options.movingAverageWindowSize,...
                                      dsMethod=options.dsMethod);
@@ -207,20 +210,21 @@ if options.reloadAll || options.reloadNI
 
         % Plot processed vs raw (30sec)
         if options.plotLJPhotometry
-            initializeFig(0.5,0.5); t = tiledlayout('flow');
+            initializeFig(0.67,0.5); tiledlayout('flow');
             if totalDuration_NI < 30; plotDuration = totalDuration_NI; 
             else; plotDuration = 30; end % in sec
 
+            nexttile;
             % Plot raw green
             yyaxis left
             plotSamples = params.sync.behaviorFs * plotDuration;
-            plot(linspace(1,plotDuration,plotSamples),photometry_raw(1:plotSamples),'-k'); hold on
+            plot(linspace(1,plotDuration,plotSamples),photometry_raw(1:plotSamples)); hold on
             % Plot processed green
             yyaxis right
-            ax2 = axes(t); ax2.Layout.Tile = 1;
             plotSamples = params.sync.ni_photometryFs * plotDuration;
-            plot(linspace(1,plotDuration,plotSamples),photometryNI(1:plotSamples),'-r'); hold on
-            legend({'Raw green','Processed green'});
+            plot(linspace(1,plotDuration,plotSamples),photometryNI(1:plotSamples),...
+                LineWidth=2); hold on
+            legend({'Raw green','Processed green'}); xlabel('Time (s)');
             saveas(gcf,strcat(session.path,'\Photometry_NI_processed',sessionName,'.png'))
         end 
     end
@@ -350,22 +354,6 @@ if withRecording && (options.reloadAll || options.reloadImec)
     syncLFP = ReadBinByCh(0, lfp.totalSampIncluded, lfp.meta, session.lfpBin, session.pathLFP, 385);
     disp('time for reading sync channel from Imec data');
     toc
-
-%     signalRange = 1:spikeDownSample*nDownSamples;
-%     params.ephys.signalRange = signalRange;
-%     processed.ephys.signals = spikes;
-%     syncImec_downsampled_risingEdge = ...
-%         (squeeze(sum(...
-%         reshape([diff(syncImec(signalRange), 1, 2) zeros(1, 1)]==1, ...
-%         1, spikeDownSample, nDownSamples), ...
-%         2))>0);
-% 
-%     syncLFP_downsampled_risingEdge = ...
-%         (squeeze(sum(...
-%         reshape([diff(syncLFP(signalRange), 1, 2) zeros(1, 1)]==1, ...
-%         1, spikeDownSample, nDownSamples), ...
-%         2))>0);
-    
     
     %% Save ephys data
     save(strcat(session.path,filesep,'sync_',sessionName),'ap','lfp','-append');
@@ -382,6 +370,7 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
 
     %% Concatenate raw.mat files
 
+    disp("Ongoing: concatenate and save raw photometry data");
     concatLabjack(session.path,save=true);
     load(strcat(session.path,filesep,'photometryLJ_raw.mat'));
     disp('Finished: concatenate and saved raw photometry data');
@@ -397,7 +386,7 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
     params.photometry.totalDuration = totalDuration_LJ;
 
     %% Downsample (no freq mod)
-
+    disp("Ongoing: Process unmodulated photometry data");
     if ~params.photometry.freqMod
         % detrendGreen = rollingZ(rawGreen,options.rollingWindowTime);
         % disp('Finished: detrend raw photometry data');
@@ -406,7 +395,7 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
         demodGreen = downsamplePhotometry(rawGreen,options.downsampleFs,params.sync.labjackFs,...
                          dsMethod='resample');
         if options.downsampleFs ~= length(demodGreen) / totalDuration_LJ
-            warning("Desired downsampleFs is different from calculated Fs! Used calculated Fs instead!");
+            warning("   Desired downsampleFs is different from calculated Fs! Used calculated Fs instead!");
         end
         params.sync.photometryFs = length(demodGreen) / totalDuration_LJ;
         disp("Finished: no modulation, skip demodulation and downsampled");
@@ -430,32 +419,37 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
 
         % Plot processed vs raw (30sec)
         if options.plotLJPhotometry
-            initializeFig(0.5,0.5); t = tiledlayout('flow');
+            initializeFig(0.67,0.5); tiledlayout('flow');
             if totalDuration_LJ < 30; plotDuration = totalDuration_LJ; 
             else; plotDuration = 30; end % in sec
 
+            nexttile;
             % Plot raw green
             yyaxis left
             plotSamples = params.sync.labjackFs * plotDuration;
-            plot(linspace(1,plotDuration,plotSamples),rawGreen(1:plotSamples),'-k'); hold on
+            plot(linspace(1,plotDuration,plotSamples),rawGreen(1:plotSamples)); hold on
             % Plot processed green
             yyaxis right
             plotSamples = params.sync.photometryFs * plotDuration;
-            plot(linspace(1,plotDuration,plotSamples),rollingGreen(1:plotSamples),'-r'); hold on
-            legend({'Raw green','Processed green'});
+            plot(linspace(1,plotDuration,plotSamples),rollingGreen(1:plotSamples),...
+                LineWidth=2); hold on
+            legend({'Raw green','Processed green'}); xlabel('Time (s)');
             saveas(gcf,strcat(session.path,'\Photometry_LJ_processed',sessionName,'.png'))
         end
 
         % Save green channels
         save(strcat(session.path,filesep,'sync_',sessionName), ...
             'demodGreen','rollingGreen','-append');
+        disp("Finished: processed and saved photometry data");
     end
 
     %% Demodulation (with freq mod)
-
+    disp("Ongoing: Process modulated photometry data");
     if params.photometry.freqMod
         demodulate_green = demodulatePhotometry(rawGreen,options.downsampleFs,params,...
-                            modFreq=params.photometry.modFreqGreen);
+                            originalFs=params.sync.labjackFs,...
+                            modFreq=params.photometry.modFreqGreen,...
+                            removeTwoEnds=options.removeTwoEnds);
 
         % Store process information
         rollingGreen = demodulate_green.demodData;
@@ -466,7 +460,7 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
         params.photometry.demodParams_LJGreen = demodulate_green.options;
 
         if options.plotLJPhotometry
-            initializeFig(0.5,0.5); t = tiledlayout('flow');
+            initializeFig(0.67,0.5); tiledlayout('flow');
             if totalDuration_LJ < 30; plotDuration = totalDuration_LJ; 
             else; plotDuration = 30; end % in sec
 
@@ -474,20 +468,21 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
             nexttile;
             % Raw
             yyaxis left
-            plotSamples = params.sync.labjackFs * plotDuration;
-            plot(ax1,linspace(1,plotDuration,plotSamples),rawGreen(1:plotSamples),'-k'); hold on
+            plotSamples = floor(params.sync.labjackFs * plotDuration);
+            plot(linspace(1,plotDuration,plotSamples),rawGreen(1:plotSamples)); hold on
             legend('Raw green');
             % Processed
             yyaxis right
-            plotSamples = params.sync.photometryFs * plotDuration;
-            plot(ax2,linspace(1,plotDuration,plotSamples),rollingGreen(1:plotSamples),'-r'); hold on
-            legend({'Raw green','Processed green'});
-
+            plotSamples = floor(params.sync.photometryFs * plotDuration);
+            plot(linspace(1,plotDuration,plotSamples),rollingGreen(1:plotSamples),...
+                LineWidth=2); hold on
+            legend({'Raw green','Processed green'}); xlabel('Time (s)');
             saveas(gcf,strcat(session.path,'\Photometry_LJ_processed',sessionName,'.png'));
         end
 
         % Save green channels
         save(strcat(session.path,filesep,'sync_',sessionName),'rollingGreen','-append');
+        disp("Finished: processed and saved photometry data");
     end
 end
 

@@ -238,8 +238,6 @@ if options.plotPhotometry
 
     if session.ni_photometryON && session.withPhotometry
         initializeFig(.5,.5);
-        
-        % Create the uitable
         histogram(normrnd(0,1,size(photometryLJ)),200); hold on
         histogram(photometryLJ,200); hold on
         histogram(photometryNI,200); hold on
@@ -254,9 +252,6 @@ if options.plotPhotometry
     
     elseif session.ni_photometryON && ~session.withPhotometry
         initializeFig(.5,.5);
-        
-        % Create the uitable
-        subplot(3,2,[2 4 6]);
         histogram(normrnd(0,1,size(photometryNI)),200); hold on
         histogram(photometryNI,200); hold on
         xlabel('z-score'); ylabel('Count'); legend({'Normal distribution','Photometry'});
@@ -267,9 +262,6 @@ if options.plotPhotometry
     
     else
         initializeFig(.5,.5);
-    
-        % Create the uitable
-        subplot(3,2,[2 4 6])
         histogram(normrnd(0,1,size(rollingGreen)),200); hold on
         histogram(rollingGreen,200); hold on
         skew = skewness(rollingGreen); kur = kurtosis(rollingGreen);

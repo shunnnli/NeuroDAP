@@ -16,20 +16,21 @@ D = dir(strcat(pathPhotometry,'Raw_*.mat'));
 filename = {D.name}; load(strcat(pathPhotometry,filename{1}));
 
 % Store mod related signal
-freqMod = false; modFreqGreen = nan; modFreqRed = nan;
+numChannels = length(temp)/samplerate;
 if ~exist('freqMod','var')
     freqMod = true; 
-    disp(['Variable "freqMod" not found, set to ',num2str(freqMod)]);
+    disp(['     Variable "freqMod" not found, set to ',num2str(freqMod)]);
 end
 if ~exist('modFreqGreen','var') && freqMod
     modFreqGreen = 167; 
-    disp(['Variable "modFreqGreen" not found, set to ',num2str(modFreqGreen),' Hz']);
+    disp(['     Variable "modFreqGreen" not found, set to ',num2str(modFreqGreen),' Hz']);
+else; modFreqGreen = nan;
 end
 if ~exist('modFreqRed','var') && freqMod
     modFreqRed = 223; 
-    disp(['Variable "modFreqRed" not found, set to ',num2str(modFreqRed),' Hz']);
+    disp(['     Variable "modFreqRed" not found, set to ',num2str(modFreqRed),' Hz']);
+else; modFreqRed = nan;
 end
-numChannels = length(temp)/samplerate;
 
 % Load all data
 output = zeros(1,(length(D)*length(temp)));
