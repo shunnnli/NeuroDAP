@@ -236,7 +236,7 @@ if options.plotPhotometry
 
     %% Plot pre-processing steps
 
-    if session.ni_photometryON && session.withPhotometry
+    if session.withPhotometryNI && session.withPhotometry
         initializeFig(.5,.5);
         histogram(normrnd(0,1,size(photometryLJ)),200); hold on
         histogram(photometryLJ,200); hold on
@@ -250,7 +250,7 @@ if options.plotPhotometry
         annotation('textbox',dim,'String',str,'FitBoxToText','on');
         title('Histogram of photometry traces');
     
-    elseif session.ni_photometryON && ~session.withPhotometry
+    elseif session.withPhotometryNI && ~session.withPhotometry
         initializeFig(.5,.5);
         histogram(normrnd(0,1,size(photometryNI)),200); hold on
         histogram(photometryNI,200); hold on
@@ -561,7 +561,7 @@ if options.plotPhotometry
     
     %% (NI) Plot combined PSTH
     
-    if session.ni_photometryON
+    if session.withPhotometryNI
         timeRange = [-1,5]; lick_binSize = 0.2;
         
         % 2. Plot traces
@@ -678,7 +678,7 @@ if options.plotPhotometry
     
     %% (NI) Plot single stimulus PSTH
     
-    if session.ni_photometryON
+    if session.withPhotometryNI
     
         if strcmp(task,'random')
             eventIdxes = {stimIdx,waterIdx,toneIdx,airpuffIdx};

@@ -1,0 +1,95 @@
+% Shun_loadSessionData
+% Shun Li, 4/2/2022
+
+
+%% Load files
+
+clear; close all;
+addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
+
+% Select sessions via uipickfiles
+sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/MICROSCOPE/Shun'));
+
+% Select anlaysis params
+prompt = {'NI photometry:';'Reload All:';'Plot photometry:';'Plot licks:'};
+format = struct('type', {}, 'style', {}, 'items', {}, 'size', {});
+format(1,1).type   = 'list'; format(1,1).style = 'popupmenu';
+format(1,1).items  = {'true','false'}; format(1,1).size  = [150 20];
+format(2,1).type   = 'list'; format(2,1).style = 'popupmenu';
+format(2,1).items  = {'true','false'}; format(2,1).size  = [150 20];
+format(3,1).type   = 'list'; format(3,1).style = 'popupmenu';
+format(3,1).items  = {'true','false'}; format(3,1).size  = [150 20];
+format(4,1).type   = 'list'; format(4,1).style = 'popupmenu';
+format(4,1).items  = {'true','false'}; format(4,1).size  = [150 20];
+defaultanswers = {1, 2, 1, 1}; %index from the items in the list
+[answer, ~] = inputsdlg(prompt, 'Set analysis params', format, defaultanswers);
+% Set analysis params
+ni_photometry = (answer{1} == 1);
+reloadAll = (answer{2} == 1);
+plotPhotometry = (answer{3} == 1); 
+plotLicks = (answer{4} == 1); 
+
+% Select session params
+taskList = cell(size(sessionList));
+stimPatternList = cell(size(sessionList));
+% Build dlg box
+prompt_task = cell(length(sessionList),1);
+prompt_opto = cell(length(sessionList),1);
+format_task = struct('type', {}, 'style', {}, 'items', {}, 'size', {});
+format_opto = struct('type', {}, 'style', {}, 'items', {}, 'size', {});
+default_task = num2cell(ones(size(sessionList)));
+default_opto = num2cell(ones(size(sessionList)));
+for s = 1:length(sessionList)
+    dirsplit = strsplit(sessionList{s},filesep); 
+    sessionName = dirsplit{end}; clear dirsplit
+
+    prompt_task(s) = {sessionName(1:end-3)};
+    prompt_opto(s) = {sessionName(1:end-3)};
+
+    format_task(s,1).type   = 'list';
+    format_task(s,1).style = 'popupmenu';
+    format_task(s,1).items  = {'Random','Reward pairing','Punish pairing'};
+    format_task(s,1).size  = [150 20];
+
+    format_opto(s,1).type   = 'list';
+    format_opto(s,1).style = 'popupmenu';
+    format_opto(s,1).items  = {'Opto start','Opto pattern'};
+    format_opto(s,1).size  = [150 20];
+end
+[answer_task, canceled1] = inputsdlg(prompt_task, 'Session task', format_task, default_task);
+[answer_opto, canceled2] = inputsdlg(prompt_opto, 'Opto signal type', format_opto, default_opto);
+if any([canceled1,canceled2]); return; end
+
+% Set session params
+for s = 1:length(sessionList)
+    switch answer_task{s}
+        case 1; taskList{s} = "random";
+        case 2; taskList{s} = "reward pairing";
+        case 3; taskList{s} = "punish pairing";
+    end
+    switch answer_opto{s}
+        case 1; stimPatternList{s} = {'2','500','500'};
+        case 2; stimPatternList{s} = {'40','5','500'};
+    end
+end
+
+% Run each session
+for s = 1:length(sessionList)
+    close all;
+    clearvars -except s sessionList taskList stimPatternList ni_photometry plotPhotometry reloadAll plotLicks
+    
+    dirsplit = strsplit(sessionList{s},filesep); 
+    sessionName = dirsplit{end}; clear dirsplit
+    try
+        loadSessions(sessionList{s},ni_photometry=ni_photometry,...
+            reloadAll=reloadAll,...
+            rollingWindowTime=180);
+        e
+    catch ME
+        disp(getReport(ME));
+        warning(['Session ', sessionName, ' have an error, skipped for now!!!!']);
+        continue
+    end 
+end
+
+return

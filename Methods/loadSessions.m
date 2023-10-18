@@ -20,7 +20,7 @@ arguments
    options.movingAvergeFilter logical = false % moving average filter after downsample
    options.movingAverageWindowSize double = 2 % moving average window size after downsample
    options.removeTwoEnds logical = false; % see demodulatePhotometry.m
-   options.plotLJPhotometry logical = true; % Plot photometry signals or not
+   options.plotPhotometry logical = true; % Plot photometry signals or not
 
    % Sync related params
    options.syncPulseWindow double = 200 % #of sync pulse to xcorr
@@ -48,9 +48,6 @@ clear dirsplit
 
 disp(strcat('**********',sessionName,'**********'));
 session.name = sessionName; session.path = sessionpath;
-
-% Save options params
-ni_photometryON = options.ni_photometry;
 
 % Decide reload if session has already been loaded and synced
 if ~isempty(dir(fullfile(session.path,"sync_*.mat")))
@@ -191,7 +188,7 @@ if options.reloadAll || options.reloadNI
     allTones(rightTone ~= 0) = 2;
     
     % Process NIDAQ photometry data
-    if ni_photometryON == true
+    if options.ni_photometry == true
         % Extract raw
         photometry_raw = analogNI(8,:);
         % Downsample
@@ -209,7 +206,7 @@ if options.reloadAll || options.reloadNI
         disp('Finished: NI photometry processing');
 
         % Plot processed vs raw (30sec)
-        if options.plotLJPhotometry
+        if options.plotPhotometry
             initializeFig(0.67,0.5); tiledlayout('flow');
             if totalDuration_NI < 30; plotDuration = totalDuration_NI; 
             else; plotDuration = 30; end % in sec
@@ -224,7 +221,7 @@ if options.reloadAll || options.reloadNI
             plotSamples = params.sync.ni_photometryFs * plotDuration;
             plot(linspace(1,plotDuration,plotSamples),photometryNI(1:plotSamples),...
                 LineWidth=2); hold on
-            legend({'Raw green','Processed green'}); xlabel('Time (s)');
+            legend({'Raw NI green','Processed NI green'}); xlabel('Time (s)');
             saveas(gcf,strcat(session.path,'\Photometry_NI_processed',sessionName,'.png'))
         end 
     end
@@ -262,7 +259,7 @@ if options.reloadAll || options.reloadNI
     % plot(rightSolenoid(timewindow)); hold on
     
     %% Save behavioral data
-    if ni_photometryON
+    if options.ni_photometry
         save(strcat(session.path,filesep,'sync_',sessionName),...
             'airpuff','leftLick','rightLick','leftTone','rightTone',....
             'leftSolenoid','rightSolenoid','allTones','blink','gyro',...
@@ -418,7 +415,7 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
         end
 
         % Plot processed vs raw (30sec)
-        if options.plotLJPhotometry
+        if options.plotPhotometry
             initializeFig(0.67,0.5); tiledlayout('flow');
             if totalDuration_LJ < 30; plotDuration = totalDuration_LJ; 
             else; plotDuration = 30; end % in sec
@@ -433,7 +430,7 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
             plotSamples = params.sync.photometryFs * plotDuration;
             plot(linspace(1,plotDuration,plotSamples),rollingGreen(1:plotSamples),...
                 LineWidth=2); hold on
-            legend({'Raw green','Processed green'}); xlabel('Time (s)');
+            legend({'Raw LJ green','Processed LJ green'}); xlabel('Time (s)');
             saveas(gcf,strcat(session.path,'\Photometry_LJ_processed',sessionName,'.png'))
         end
 
@@ -459,7 +456,7 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
         params.sync.photometryFs = length(demodulate_green.demodData) / totalDuration_LJ;
         params.photometry.demodParams_LJGreen = demodulate_green.options;
 
-        if options.plotLJPhotometry
+        if options.plotPhotometry
             initializeFig(0.67,0.5); tiledlayout('flow');
             if totalDuration_LJ < 30; plotDuration = totalDuration_LJ; 
             else; plotDuration = 30; end % in sec
@@ -476,7 +473,7 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
             plotSamples = floor(params.sync.photometryFs * plotDuration);
             plot(linspace(1,plotDuration,plotSamples),rollingGreen(1:plotSamples),...
                 LineWidth=2); hold on
-            legend({'Raw green','Processed green'}); xlabel('Time (s)');
+            legend({'Raw LJ green','Processed LJ green'}); xlabel('Time (s)');
             saveas(gcf,strcat(session.path,'\Photometry_LJ_processed',sessionName,'.png'));
         end
 
@@ -971,7 +968,7 @@ end
 session.withRecording = withRecording;
 session.withPhotometry = withPhotometry;
 session.withCamera = withCamera;
-session.ni_photometryON = ni_photometryON;
+session.withPhotometryNI = options.ni_photometry;
 
 params.session = session;
 params.sync.timeNI = timeNI;
