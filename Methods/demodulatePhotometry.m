@@ -1,4 +1,4 @@
-function processed = demodulatePhotometry(signal,finalFs,params,options)
+function processed = demodulatePhotometry(signal,finalFs,options)
 
 % Shun Li, 2023/10/15
 % Adapted from code written by Bernardo Sabatini
@@ -6,17 +6,16 @@ function processed = demodulatePhotometry(signal,finalFs,params,options)
 arguments
     signal (1,:) {mustBeNumeric}
     finalFs double
-    params struct
     
-    options.modFreq = 167; % Hz (green labjack mod frequency)
-    options.originalFs = 2000; % Hz
-    options.pointsToEstimateCarrier = 1e6; % samples
-    options.bandWidth = 3;            % number of frequency steps by Hz.  Eg 1 means analyze center frequency and +/- 1 Hz
-    options.detrendWindow = 180;      % seconds
+    options.modFreq double = 167; % Hz (green labjack mod frequency)
+    options.originalFs double = 2000; % Hz
+    options.pointsToEstimateCarrier double = 1e6; % samples
+    options.bandWidth double = 3;            % number of frequency steps by Hz.  Eg 1 means analyze center frequency and +/- 1 Hz
+    options.detrendWindow double = 180;      % seconds
     
-    options.removeTwoEnds = false;    % nan values for the first half of the first spectral window and last half of the last spectural window
-    options.resample = true;          % resample to finalFs when demodulation didn't produce finalFs
-    options.plotFFT = false;
+    options.removeTwoEnds logical = false;    % nan values for the first half of the first spectral window and last half of the last spectural window
+    options.resample logical = true;          % resample to finalFs when demodulation didn't produce finalFs
+    options.plotFFT logical = false;
 end
 
 %% Setup
@@ -84,7 +83,7 @@ end
 processed.demodData = dmData;
 
 % Resample to targetFs if neccessary
-demodFs = length(dmData)/params.photometry.totalDuration;
+demodFs = length(dmData)/(length(signal)/options.originalFs);
 if options.resample && (finalFs ~= demodFs)
     [p,q] = rat(finalFs/demodFs);
     % n = 10; beta = 5; % n: length of filter window (default 10); beta: smoothing (default 5)

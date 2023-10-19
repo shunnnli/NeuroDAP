@@ -2,7 +2,6 @@ function [] = loadSessions(sessionpath,options)
 
 arguments
    sessionpath string
-   options.ni_photometry logical = true
    
    % Reload options (unfinished)
    options.reloadAll logical = false       % If false, skip the whole function if sync_.mat is found
@@ -19,8 +18,12 @@ arguments
    options.dsMethod string = 'resample' % check downsamplePhotometry.m for explaination
    options.movingAvergeFilter logical = false % moving average filter after downsample
    options.movingAverageWindowSize double = 2 % moving average window size after downsample
-   options.removeTwoEnds logical = false; % see demodulatePhotometry.m
-   options.plotPhotometry logical = true; % Plot photometry signals or not
+   options.removeTwoEnds logical = false % see demodulatePhotometry.m
+   options.plotPhotometry logical = true % Plot photometry signals or not
+
+   options.withPhotometryNI logical = true
+   options.photometryNI_mod logical = false
+   options.photometryNI_modFreq double = 271.391
 
    % Sync related params
    options.syncPulseWindow double = 200 % #of sync pulse to xcorr
@@ -55,6 +58,8 @@ if ~isempty(dir(fullfile(session.path,"sync_*.mat")))
         disp('Loading stop: sync file found.'); 
         return; 
     end
+else
+    options.reloadAll = true;
 end
 
 withRecording = ~isempty(dir(fullfile(session.path,'catgt_*\*imec*.ap.bin')));
@@ -188,22 +193,42 @@ if options.reloadAll || options.reloadNI
     allTones(rightTone ~= 0) = 2;
     
     % Process NIDAQ photometry data
-    if options.ni_photometry == true
+    if options.withPhotometryNI == true
+
         % Extract raw
         photometry_raw = analogNI(8,:);
-        % Downsample
-        ds_photometry = downsamplePhotometry(photometry_raw,options.downsampleFs,nidq.Fs,...
-                                     movingAvergeFilter=options.movingAvergeFilter,...
-                                     movingAverageWindowSize=options.movingAverageWindowSize,...
-                                     dsMethod=options.dsMethod);
-        % Rolling z score
-        rollingSize = options.rollingWindowTime; % rolling window in sec
-        photometryNI = rollingZ(ds_photometry,rollingSize);
-        
-        % Store params
-        params.sync.ni_photometryFs = options.downsampleFs;
-        totalDuration_NI = length(allTones) / params.sync.behaviorFs;
-        disp('Finished: NI photometry processing');
+        totalDuration_NI = length(photometry_raw) / params.sync.behaviorFs;
+
+        % Process
+        if options.photometryNI_mod
+            demodulate_NI = demodulatePhotometry(photometry_raw,options.downsampleFs,...
+                            originalFs=nidq.Fs,...
+                            modFreq=options.photometryNI_modFreq,...
+                            removeTwoEnds=options.removeTwoEnds);
+
+            % Store process information
+            photometryNI = demodulate_NI.demodData;
+            if options.downsampleFs ~= length(demodulate_NI.demodData) / totalDuration_NI
+                warning("Desired downsampleFs is different from calculated Fs! Used calculated Fs instead!");
+            end
+            params.sync.ni_photometryFs = length(demodulate_NI.demodData) / totalDuration_NI;
+            params.photometry.demodParams_NIGreen = demodulate_NI.options;
+
+        else
+            % Downsample
+            ds_photometry = downsamplePhotometry(photometry_raw,options.downsampleFs,nidq.Fs,...
+                                         movingAvergeFilter=options.movingAvergeFilter,...
+                                         movingAverageWindowSize=options.movingAverageWindowSize,...
+                                         dsMethod=options.dsMethod);
+            % Rolling z score
+            rollingSize = options.rollingWindowTime; % rolling window in sec
+            photometryNI = rollingZ(ds_photometry,rollingSize);
+            
+            % Store params
+            params.sync.ni_photometryFs = options.downsampleFs;
+            totalDuration_NI = length(allTones) / params.sync.behaviorFs;
+            disp('Finished: NI photometry processing');
+        end
 
         % Plot processed vs raw (30sec)
         if options.plotPhotometry
@@ -259,7 +284,7 @@ if options.reloadAll || options.reloadNI
     % plot(rightSolenoid(timewindow)); hold on
     
     %% Save behavioral data
-    if options.ni_photometry
+    if options.withPhotometryNI
         save(strcat(session.path,filesep,'sync_',sessionName),...
             'airpuff','leftLick','rightLick','leftTone','rightTone',....
             'leftSolenoid','rightSolenoid','allTones','blink','gyro',...
@@ -443,7 +468,7 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
     %% Demodulation (with freq mod)
     disp("Ongoing: Process modulated photometry data");
     if params.photometry.freqMod
-        demodulate_green = demodulatePhotometry(rawGreen,options.downsampleFs,params,...
+        demodulate_green = demodulatePhotometry(rawGreen,options.downsampleFs,...
                             originalFs=params.sync.labjackFs,...
                             modFreq=params.photometry.modFreqGreen,...
                             removeTwoEnds=options.removeTwoEnds);
@@ -968,7 +993,7 @@ end
 session.withRecording = withRecording;
 session.withPhotometry = withPhotometry;
 session.withCamera = withCamera;
-session.withPhotometryNI = options.ni_photometry;
+session.withPhotometryNI = options.withPhotometryNI;
 
 params.session = session;
 params.sync.timeNI = timeNI;

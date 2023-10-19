@@ -24,7 +24,7 @@ format(4,1).items  = {'true','false'}; format(4,1).size  = [150 20];
 defaultanswers = {1, 2, 1, 1}; %index from the items in the list
 [answer, ~] = inputsdlg(prompt, 'Set analysis params', format, defaultanswers);
 % Set analysis params
-ni_photometry = (answer{1} == 1);
+withPhotometryNI = (answer{1} == 1);
 reloadAll = (answer{2} == 1);
 plotPhotometry = (answer{3} == 1); 
 plotLicks = (answer{4} == 1); 
@@ -76,13 +76,13 @@ end
 % Run each session
 for s = 1:length(sessionList)
     close all;
-    clearvars -except s sessionList taskList stimPatternList ni_photometry plotPhotometry reloadAll plotLicks
+    clearvars -except s sessionList taskList stimPatternList withPhotometryNI plotPhotometry reloadAll plotLicks
     
     dirsplit = strsplit(sessionList{s},filesep); 
     sessionName = dirsplit{end}; clear dirsplit
     try
-        loadSessions(sessionList{s},ni_photometry=ni_photometry,...
-            reloadAll=reloadAll,...
+        loadSessions(sessionList{s},reloadAll=reloadAll,...
+            withPhotometryNI=withPhotometryNI,photometryNI_mod=true,...
             rollingWindowTime=180);
         analyzeSessions_optoPair(sessionList{s},taskList{s},stimPatternList{s},...
             redo=true,round=false,performing=false,...
