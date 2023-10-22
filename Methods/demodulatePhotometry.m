@@ -15,7 +15,7 @@ arguments
     
     options.removeTwoEnds logical = false;    % nan values for the first half of the first spectral window and last half of the last spectural window
     options.resample logical = true;          % resample to finalFs when demodulation didn't produce finalFs
-    options.plotFFT logical = false;
+    options.plotFFT logical = true;
 end
 
 %% Setup
@@ -85,6 +85,8 @@ processed.demodData = dmData;
 % Resample to targetFs if neccessary
 demodFs = length(dmData)/(length(signal)/options.originalFs);
 if options.resample && (finalFs ~= demodFs)
+    disp(['     Demodulation: length(demod)=',num2str(length(dmData))]);
+    disp(['     Demodulation: length(idealDemod)=',num2str((length(signal)/options.originalFs)*finalFs)]);
     [p,q] = rat(finalFs/demodFs);
     % n = 10; beta = 5; % n: length of filter window (default 10); beta: smoothing (default 5)
     processed.demodData = resample(dmData,p,q);
