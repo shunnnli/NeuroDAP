@@ -1,12 +1,12 @@
-function processed = demodulatePhotometry(signal,finalFs,options)
+function demodulated = demodulatePhotometry(signal,options)
 
 % Shun Li, 2023/10/15
 % Adapted from code written by Bernardo Sabatini
 
 arguments
     signal (1,:) {mustBeNumeric}
-    finalFs double
-    
+
+    options.finalFs double = 50
     options.modFreq double = 167; % Hz (green labjack mod frequency)
     options.originalFs double = 2000; % Hz
     options.pointsToEstimateCarrier double = 1e6; % samples
@@ -15,7 +15,7 @@ arguments
     
     options.removeTwoEnds logical = false;    % nan values for the first half of the first spectral window and last half of the last spectural window
     options.resample logical = true;          % resample to finalFs when demodulation didn't produce finalFs
-    options.plotFFT logical = true;
+    options.plotFFT logical = false;
 end
 
 %% Setup
@@ -50,7 +50,7 @@ end
 %% do the demodulation for the non-detrended data
 
 % Calculate demodulation params
-options.nSampPerDemodBin = (1/finalFs)*options.originalFs; % =40 if labjackFs=2000Hz; previously finalDownSample
+options.nSampPerDemodBin = (1/options.finalFs)*options.originalFs; % =40 if labjackFs=2000Hz; previously finalDownSample
 if mod(options.nSampPerDemodBin,1) ~= 0
     warning('Demodulation: nSampPerDemodBin is not integer, use the nearest floor instead!');
     options.nSampPerDemodBin = floor(options.nSampPerDemodBin);
@@ -61,39 +61,39 @@ options.spectralWindowOverlap = options.nSampPerDemodBin; % previously: options.
 
 % Calculte demodulation window
 % ensures that it is an integer multiple of the sampling window
-detrendWindowSamples_rawFs = 2*floor(options.detrendWindow*options.originalFs/2); 
-detrendWindowSamples_finalFs = 2*floor(options.detrendWindow*finalFs/2);
+options.detrendWindowSamples_rawFs = 2*floor(options.detrendWindow*options.originalFs/2); 
+options.detrendWindowSamples_finalFs = 2*floor(options.detrendWindow*options.finalFs/2);
 
 % Demod without detrend
 [spectVals, ~, dmTimes] = spectrogram(signal, options.spectralWindow, options.spectralWindowOverlap, options.spectralFrequencies, options.originalFs);
-processed.demodData_nodetrend = mean(abs(spectVals),1);    % save raw demodulated (not detrended)
-processed.demodTimes = dmTimes;                              % save time points
+demodulated.demodData_nodetrend = mean(abs(spectVals),1);    % save raw demodulated (not detrended)
+demodulated.demodTimes = dmTimes;                              % save time points
 
 % Demod with detrend
-signal_detrended = rollingZ(signal, detrendWindowSamples_rawFs);
+signal_detrended = rollingZ(signal, options.detrendWindowSamples_rawFs);
 
 [spectVals, ~, ~] = spectrogram(signal_detrended, options.spectralWindow, options.spectralWindowOverlap, options.spectralFrequencies, options.originalFs);
 dmData = mean(abs(spectVals),1); % convert spectrogram to power    
 
-dmData = rollingZ(dmData, detrendWindowSamples_finalFs);
+dmData = rollingZ(dmData, options.detrendWindowSamples_finalFs);
 if options.removeTwoEnds
-    dmData(1:(detrendWindowSamples_finalFs/2)) = nan;
-    dmData((end-detrendWindowSamples_finalFs/2):end) = nan;
+    dmData(1:(options.detrendWindowSamples_finalFs/2)) = nan;
+    dmData((end-options.detrendWindowSamples_finalFs/2):end) = nan;
 end
-processed.demodData = dmData;
+demodulated.demodData = [nan,dmData];
 
 % Resample to targetFs if neccessary
-demodFs = length(dmData)/(length(signal)/options.originalFs);
-if options.resample && (finalFs ~= demodFs)
+demodFs = length(demodulated.demodData)/(length(signal)/options.originalFs);
+if options.resample && (options.finalFs ~= demodFs)
     disp(['     Demodulation: length(demod)=',num2str(length(dmData))]);
-    disp(['     Demodulation: length(idealDemod)=',num2str((length(signal)/options.originalFs)*finalFs)]);
-    [p,q] = rat(finalFs/demodFs);
+    disp(['     Demodulation: length(idealDemod)=',num2str((length(signal)/options.originalFs)*options.finalFs)]);
+    [p,q] = rat(options.finalFs/demodFs);
     % n = 10; beta = 5; % n: length of filter window (default 10); beta: smoothing (default 5)
-    processed.demodData = resample(dmData,p,q);
+    demodulated.demodData = resample(dmData,p,q);
     disp('     Demodulation: resampled demod data to downsampleFs');
 else; options.resample = false; 
 end
 
-processed.options = options;
+demodulated.options = options;
 
 end

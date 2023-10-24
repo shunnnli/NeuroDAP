@@ -6,9 +6,12 @@ arguments
    % Reload options (unfinished)
    options.reloadAll logical = false       % If false, skip the whole function if sync_.mat is found
    options.reloadNI logical = false     % If false, skip loading NI and use previous loaded ones
-   options.reloadLJ logical = true     % If false, skip loading LJ and use previous loaded ones
+   options.reloadLJ logical = false     % If false, skip loading LJ and use previous loaded ones
    options.reloadCam logical = false    % If false, skip loading Cam and use previous loaded ones
    options.reloadImec logical = false   % If false, skip loading Imec and use previous loaded ones
+
+   % Stimulation digital line params
+   options.invertStim logical = true % Invert signal from arduino for stimulation
    
    % Photometry related params
    options.nSampPerDemodBin double = 1 % for labjack demod (originally specturalWindowNew)
@@ -173,8 +176,13 @@ if options.reloadAll || options.reloadNI
     rightSolenoidRaw = digitalNI(4,:);
     leftToneRaw = digitalNI(5,:);
     rightToneRaw = digitalNI(6,:);
-    redLaserRaw = digitalNI(7,:); % or ENL
-    blueLaserRaw = digitalNI(8,:);
+    if options.invertStim
+        redLaserRaw = ~digitalNI(7,:); % or ENL
+        blueLaserRaw = ~digitalNI(8,:);
+    else
+        redLaserRaw = digitalNI(7,:); % or ENL
+        blueLaserRaw = digitalNI(8,:);
+    end
     
     % Calculate length of each pulse
     airpuff = temp(1,:) .* getConsecutive(airpuffRaw)./nidq.Fs;
@@ -207,7 +215,7 @@ if options.reloadAll || options.reloadNI
                             removeTwoEnds=options.removeTwoEnds);
 
             % Store process information
-            photometryNI = demodulate_NI.demodData;
+            PMT_NI = demodulate_NI.demodData;
             if options.downsampleFs ~= length(demodulate_NI.demodData) / totalDuration_NI
                 warning("Desired downsampleFs is different from calculated Fs! Used calculated Fs instead!");
             end
@@ -216,15 +224,13 @@ if options.reloadAll || options.reloadNI
 
         else
             % Downsample
-            ds_photometry = downsamplePhotometry(photometry_raw,options.downsampleFs,nidq.Fs,...
+            downsampled_NI = downsamplePhotometry(photometry_raw,options.downsampleFs,nidq.Fs,...
                                          movingAvergeFilter=options.movingAvergeFilter,...
                                          movingAverageWindowSize=options.movingAverageWindowSize,...
                                          dsMethod=options.dsMethod);
-            % Rolling z score
-            rollingSize = options.rollingWindowTime; % rolling window in sec
-            photometryNI = rollingZ(ds_photometry,rollingSize);
             
             % Store params
+            PMT_NI = downsampled_NI.finalData;
             params.sync.ni_photometryFs = options.downsampleFs;
             totalDuration_NI = length(allTones) / params.sync.behaviorFs;
             disp('Finished: NI photometry processing');
@@ -244,7 +250,7 @@ if options.reloadAll || options.reloadNI
             % Plot processed green
             yyaxis right
             plotSamples = params.sync.ni_photometryFs * plotDuration;
-            plot(linspace(1,plotDuration,plotSamples),photometryNI(1:plotSamples),...
+            plot(linspace(1,plotDuration,plotSamples),PMT_NI(1:plotSamples),...
                 LineWidth=2); hold on
             legend({'Raw NI green','Processed NI green'}); xlabel('Time (s)');
             saveas(gcf,strcat(session.path,'\Photometry_NI_processed',sessionName,'.png'))
@@ -289,7 +295,7 @@ if options.reloadAll || options.reloadNI
             'airpuff','leftLick','rightLick','leftTone','rightTone',....
             'leftSolenoid','rightSolenoid','allTones','blink','gyro',...
             'photometry_raw','blueLaser','redLaser',...
-            'photometryNI','-append');
+            'PMT_NI','-append');
     else
         save(strcat(session.path,filesep,'sync_',sessionName),...
             'airpuff','leftLick','rightLick','leftTone','rightTone',....
@@ -393,7 +399,9 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
     %% Concatenate raw.mat files
 
     disp("Ongoing: concatenate and save raw photometry data");
-    concatLabjack(session.path,save=true,plot=false);
+    if isempty(dir(fullfile(session.path,filesep,'photometryLJ_raw.mat')))
+        concatLabjack(session.path,save=true,plot=false);
+    end
     load(strcat(session.path,filesep,'photometryLJ_raw.mat'));
     disp('Finished: concatenate and saved raw photometry data');
 
@@ -402,10 +410,12 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
     params.sync.labjackFs = labjack.samplerate;
     totalDuration_LJ = length(sync_labjack) / params.sync.labjackFs;
     params.photometry.totalDuration = totalDuration_LJ;
+    params.sync.photometryFs = [];
+
+    % Remove PMT if neccessary
+    if ~options.withPhotometryNI; labjack.nSignals = labjack.nSignals-1; end
 
     %% Loop through all signals
-    signals = cell(labjack.nSignals,1);
-    params.photometry.processingOptions = cell(labjack.nSignals,1);
 
     if options.plotPhotometry
         initializeFig(1,0.67); tiledlayout(labjack.nSignals,1);
@@ -414,19 +424,31 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
     end
 
     for i = 1:labjack.nSignals
-        if labjack.mod(i)
-            demodulated = demodulatePhotometry(labjack.raw(i,:),options.downsampleFs,...
-                            originalFs=params.sync.labjackFs,...
-                            modFreq=labjack.modFreq(2),...
-                            removeTwoEnds=options.removeTwoEnds);
+        if ~options.withPhotometryNI && strcmp(labjack.name{i},'PMT')
+            continue
+        end
 
-            % Store process information NAc
-            signals{i} = demodulated.demodData;
-            if options.downsampleFs ~= length(signals{i}) / totalDuration_LJ
+        if labjack.mod(i)
+            demodulated = demodulatePhotometry(labjack.raw(i,:),...
+                            finalFs=options.downsampleFs,...
+                            originalFs=params.sync.labjackFs,...
+                            modFreq=labjack.modFreq(i),...
+                            removeTwoEnds=options.removeTwoEnds,...
+                            detrendWindow=options.rollingWindowTime);
+
+            % Check final Fs
+            finalFs = length(demodulated.demodData) / totalDuration_LJ;
+            if options.downsampleFs ~= finalFs
                 warning([labjack.name{i},': Desired downsampleFs is different from calculated Fs! Used calculated Fs instead!']);
             end
-            params.sync.photometryFs = length(signals{i}) / totalDuration_LJ;
-            params.photometry.processingOptions{i} = demodulated.options;
+            params.sync.photometryFs = [finalFs, params.sync.photometryFs];
+
+            % Store process information
+            processed(i).name = labjack.name{i};
+            processed(i).signal = demodulated.demodData;
+            processed(i).finalFs = finalFs;
+            processed(i).system = 'LJ';
+            processed(i).options = demodulated.options;
             
             if options.plotPhotometry
                 nexttile;
@@ -436,8 +458,8 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
                 plot(linspace(1,plotDuration,plotSamples),rawTrace(1:plotSamples)); hold on
                 legend('Raw green');
                 yyaxis right % Processed
-                plotSamples = floor(params.sync.photometryFs * plotDuration);
-                plot(linspace(1,plotDuration,plotSamples),signals{i}(1:plotSamples),...
+                plotSamples = floor(processed(i).finalFs * plotDuration);
+                plot(linspace(1,plotDuration,plotSamples),processed(i).signal(1:plotSamples),...
                     LineWidth=2); hold on
                 legend({'Raw','Processed'}); xlabel('Time (s)');
                 title(labjack.name{i});
@@ -446,17 +468,30 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
         else
             disp("Ongoing: Process unmodulated photometry data");
             % Downsample
-            dsGreen = downsamplePhotometry(labjack.raw(i,:),options.downsampleFs,params.sync.labjackFs,...
-                             dsMethod='resample');
-            if options.downsampleFs ~= length(dsGreen) / totalDuration_LJ
+            downsampled = downsamplePhotometry(labjack.raw(i,:),...
+                        targetFs=options.downsampleFs,...
+                        originalFs=params.sync.labjackFs,...
+                        rollingZ=true,rollingWindowTime=options.rollingWindowTime,...
+                        dsMethod='resample');
+            
+            % Check final Fs
+            finalFs = length(downsampled.data) / totalDuration_LJ;
+            if options.downsampleFs ~= finalFs
                 warning("   Desired downsampleFs is different from calculated Fs! Used calculated Fs instead!");
             end
-            params.sync.photometryFs = length(dsGreen) / totalDuration_LJ;
-            disp("Finished: no modulation, skip demodulation and downsampled");
+            params.sync.photometryFs = [finalFs, params.sync.photometryFs];
         
             % Rolling zscore for demodGreen and demodRed
             params.photometry.signalDetrendWindow = floor(options.rollingWindowTime*params.sync.photometryFs);
-            signals{i} = rollingZ(dsGreen,params.photometry.signalDetrendWindow);
+            dsData = rollingZ(dsGreen,params.photometry.signalDetrendWindow);
+            
+            % Store process information
+            processed(i).name = labjack.name{i};
+            processed(i).signal = dsData;
+            processed(i).finalFs = finalFs;
+            processed(i).system = 'LJ';
+            processed(i).options = downsampled.options;
+            disp("Finished: no modulation, skip demodulation and downsampled");
         
             % Low pass filter data (skip by default)
             if options.LPFreq > 0
@@ -479,8 +514,8 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
                 plotSamples = params.sync.labjackFs * plotDuration;
                 plot(linspace(1,plotDuration,plotSamples),rawTrace(1:plotSamples)); hold on
                 yyaxis right % Plot processed green
-                plotSamples = params.sync.photometryFs * plotDuration;
-                plot(linspace(1,plotDuration,plotSamples),signals{i}(1:plotSamples),...
+                plotSamples = floor(processed(i).finalFs * plotDuration);
+                plot(linspace(1,plotDuration,plotSamples),processed(i).signal(1:plotSamples),...
                     LineWidth=2); hold on
                 legend({'Raw','Processed'}); xlabel('Time (s)');
                 title(labjack.name{i});
@@ -493,133 +528,8 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
         saveas(gcf,strcat(session.path,'\Photometry_LJ_processed',sessionName,'.png')); 
     end
     save(strcat(session.path,filesep,'sync_',sessionName),...
-        'signals','-append');
+        'processed','-append');
     disp("Finished: processed and saved photometry data");
-
-    %% Downsample (no freq mod)
-    % disp("Ongoing: Process unmodulated photometry data");
-    % if ~params.photometry.freqMod
-    % 
-    %     % Downsample
-    %     demodGreen = downsamplePhotometry(rawGreen,options.downsampleFs,params.sync.labjackFs,...
-    %                      dsMethod='resample');
-    %     if options.downsampleFs ~= length(demodGreen) / totalDuration_LJ
-    %         warning("   Desired downsampleFs is different from calculated Fs! Used calculated Fs instead!");
-    %     end
-    %     params.sync.photometryFs = length(demodGreen) / totalDuration_LJ;
-    %     disp("Finished: no modulation, skip demodulation and downsampled");
-    % 
-    %     % Rolling zscore for demodGreen and demodRed
-    %     params.photometry.signalDetrendWindow = floor(options.rollingWindowTime*params.sync.photometryFs);
-    %     rollingGreen = rollingZ(demodGreen,params.photometry.signalDetrendWindow);
-    % 
-    %     % Low pass filter data (skip by default)
-    %     if options.LPFreq > 0
-    %         params.photometry.nSampPerDemodBin = 41;
-    %         params.photometry.filtCut = options.LPFreq;
-    %         lpFilt = designfilt('lowpassiir','FilterOrder',8, 'PassbandFrequency',params.photometry.filtCut,...
-    %             'PassbandRipple',0.01, 'Samplerate',params.sync.labjackFs/params.photometry.nSampPerDemodBin);
-    %         % Lowpass filter
-    %         demodGreenLP = filtfilt(lpFilt,double(demodGreen));
-    %         rollingGreenLP = rollingZ(demodGreenLP,params.photometry.signalDetrendWindow);
-    % 
-    %         save(strcat(session.path,filesep,'sync_',sessionName),'demodGreenLP','rollingGreenLP','-append');
-    %     end
-    % 
-    %     % Plot processed vs raw (30sec)
-    %     if options.plotPhotometry
-    %         initializeFig(0.67,0.5); tiledlayout('flow');
-    %         if totalDuration_LJ < 30; plotDuration = totalDuration_LJ; 
-    %         else; plotDuration = 30; end % in sec
-    % 
-    %         nexttile;
-    %         % Plot raw green
-    %         yyaxis left
-    %         plotSamples = params.sync.labjackFs * plotDuration;
-    %         plot(linspace(1,plotDuration,plotSamples),rawGreen(1:plotSamples)); hold on
-    %         % Plot processed green
-    %         yyaxis right
-    %         plotSamples = params.sync.photometryFs * plotDuration;
-    %         plot(linspace(1,plotDuration,plotSamples),rollingGreen(1:plotSamples),...
-    %             LineWidth=2); hold on
-    %         legend({'Raw LJ green','Processed LJ green'}); xlabel('Time (s)');
-    %         saveas(gcf,strcat(session.path,'\Photometry_LJ_processed',sessionName,'.png'))
-    %     end
-    % 
-    %     % Save green channels
-    %     save(strcat(session.path,filesep,'sync_',sessionName), ...
-    %         'demodGreen','rollingGreen','-append');
-    %     disp("Finished: processed and saved photometry data");
-    % end
-
-    %% Demodulation (with freq mod)
-    % disp("Ongoing: Process modulated photometry data");
-    % if params.photometry.freqMod
-    %     demodulated = demodulatePhotometry(rawGreen,options.downsampleFs,...
-    %                         originalFs=params.sync.labjackFs,...
-    %                         modFreq=params.photometry.modFreq1,...
-    %                         removeTwoEnds=options.removeTwoEnds);
-    % 
-    %     demodulate_green2 = demodulatePhotometry(rawGreen2,options.downsampleFs,...
-    %                         originalFs=params.sync.labjackFs,...
-    %                         modFreq=params.photometry.modFreq2,...
-    %                         removeTwoEnds=options.removeTwoEnds);
-    % 
-    %     % Store process information NAc
-    %     rollingGreen = demodulate_green.demodData;
-    %     if options.downsampleFs ~= length(rollingGreen) / totalDuration_LJ
-    %         warning("Green 1: Desired downsampleFs is different from calculated Fs! Used calculated Fs instead!");
-    %     end
-    %     params.sync.photometryFs = length(rollingGreen) / totalDuration_LJ;
-    %     params.photometry.demodParams_LJGreen1 = demodulate_green.options;
-    %     % Store process information for LHb
-    %     rollingGreen2 = demodulate_green2.demodData;
-    %     if options.downsampleFs ~= length(rollingGreen2) / totalDuration_LJ
-    %         warning("Green 1: Desired downsampleFs is different from calculated Fs! Used calculated Fs instead!");
-    %     end
-    %     params.sync.photometryFs = length(rollingGreen2) / totalDuration_LJ;
-    %     params.photometry.demodParams_LJGreen2 = demodulate_green.options;
-    % 
-    %     if options.plotPhotometry
-    %         initializeFig(0.67,0.5); tiledlayout('flow');
-    %         if totalDuration_LJ < 30; plotDuration = totalDuration_LJ; 
-    %         else; plotDuration = 30; end % in sec
-    % 
-    %         % Plot green NAc
-    %         nexttile;
-    %         % Raw
-    %         yyaxis left
-    %         plotSamples = floor(params.sync.labjackFs * plotDuration);
-    %         plot(linspace(1,plotDuration,plotSamples),rawGreen(1:plotSamples)); hold on
-    %         legend('Raw green');
-    %         % Processed
-    %         yyaxis right
-    %         plotSamples = floor(params.sync.photometryFs * plotDuration);
-    %         plot(linspace(1,plotDuration,plotSamples),rollingGreen(1:plotSamples),...
-    %             LineWidth=2); hold on
-    %         legend({'Raw green NAc','Processed green NAc'}); xlabel('Time (s)');
-    % 
-    %         % Plot green LHb
-    %         nexttile;
-    %         % Raw
-    %         yyaxis left
-    %         plotSamples = floor(params.sync.labjackFs * plotDuration);
-    %         plot(linspace(1,plotDuration,plotSamples),rawGreen2(1:plotSamples)); hold on
-    %         legend('Raw green');
-    %         % Processed
-    %         yyaxis right
-    %         plotSamples = floor(params.sync.photometryFs * plotDuration);
-    %         plot(linspace(1,plotDuration,plotSamples),rollingGreen2(1:plotSamples),...
-    %             LineWidth=2); hold on
-    %         legend({'Raw green LHb','Processed green LHb'}); xlabel('Time (s)');
-    %         saveas(gcf,strcat(session.path,'\Photometry_LJ_processed',sessionName,'.png'));
-    %     end
-    % 
-    %     % Save green channels
-    %     save(strcat(session.path,filesep,'sync_',sessionName),...
-    %         'rollingGreen','rollingGreen2','-append');
-    %     disp("Finished: processed and saved photometry data");
-    % end
 end
 
 %% Read camera data
@@ -977,6 +887,7 @@ end
 % 6.2.1. Only nidq
 if ~(withRecording || withPhotometry || withCamera)
     syncNI_first = find(syncNI_diff>0,1);
+    disp("   Finished: NI timestamp assigned");
 end
 
 % 6.2.2. Fill in the baseline time
@@ -986,12 +897,14 @@ if withRecording
     end
     idx_Imec = find(syncImec_diff(ImecNI_imec:end)==1)+ImecNI_imec-1;
     t0 = timeImec(ImecNI_imec);
+    disp("   Finished: Imec/NI timestamp assigned");
 else
     for i=1:length(syncNI)
         timeNI(i) = (i-syncNI_first)/params.sync.behaviorFs; % Time of each timebin of NI in sec
     end
     idx_NI = find(syncNI_diff(syncNI_first:end)==1)+syncNI_first-1;
     t0 = timeNI(syncNI_first);
+    disp("   Finished: Imec/NI timestamp assigned");
 end
 
 
@@ -1008,6 +921,7 @@ if withCamera
         [timeCamera,l_CamNI] = assignTimeStamp(timeCamera,timeNI,idx_Cam,idx_NI,params.sync.camFs);
         timeCamera = timeCamera - t0; % align timeCamera to timeNI
     end
+    disp("   Finished: camera timestamp assigned");
 end
 
 % 6.2.4. Fill in photometry
@@ -1023,6 +937,7 @@ if withPhotometry
         [timePhotometry,l_LJNI] = assignTimeStamp(timePhotometry,timeNI,idx_LJ,idx_NI,params.sync.labjackFs);
         timePhotometry = timePhotometry - t0; % align timePhotometry to timeNI
     end
+    disp("   Finished: labjack timestamp assigned");
 end
 
 % 6.2.5. Fill in NI if withRecording == true
@@ -1037,6 +952,7 @@ if withRecording
     idx_LFP = find(syncLFP_diff(LFPNI_lfp:end)==1)+LFPNI_lfp-1;
     [timeLFP,l_LFPImec] = assignTimeStamp(timeLFP,timeImec,idx_LFP,idx_Imec,params.sync.lfpFs);
     timeLFP = timeLFP - t0; % align timePhotometry to timeNI
+    disp("   Finished: LFP timestamp assigned");
 end
 
 % Align to common start pulse

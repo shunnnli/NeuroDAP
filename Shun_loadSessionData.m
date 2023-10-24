@@ -21,7 +21,7 @@ format(3,1).type   = 'list'; format(3,1).style = 'popupmenu';
 format(3,1).items  = {'true','false'}; format(3,1).size  = [150 20];
 format(4,1).type   = 'list'; format(4,1).style = 'popupmenu';
 format(4,1).items  = {'true','false'}; format(4,1).size  = [150 20];
-defaultanswers = {1, 2, 1, 1}; %index from the items in the list
+defaultanswers = {2, 2, 1, 1}; %index from the items in the list
 [answer, ~] = inputsdlg(prompt, 'Set analysis params', format, defaultanswers);
 % Set analysis params
 withPhotometryNI = (answer{1} == 1);
@@ -32,6 +32,7 @@ plotLicks = (answer{4} == 1);
 % Select session params
 taskList = cell(size(sessionList));
 stimPatternList = cell(size(sessionList));
+invertStim = nan(size(sessionList));
 % Build dlg box
 prompt_task = cell(length(sessionList),1);
 prompt_opto = cell(length(sessionList),1);
@@ -53,7 +54,7 @@ for s = 1:length(sessionList)
 
     format_opto(s,1).type   = 'list';
     format_opto(s,1).style = 'popupmenu';
-    format_opto(s,1).items  = {'Opto start','Opto pattern'};
+    format_opto(s,1).items  = {'Pattern inverted','Pattern normal','Trigger'};
     format_opto(s,1).size  = [150 20];
 end
 [answer_task, canceled1] = inputsdlg(prompt_task, 'Session task', format_task, default_task);
@@ -68,20 +69,21 @@ for s = 1:length(sessionList)
         case 3; taskList{s} = "punish pairing";
     end
     switch answer_opto{s}
-        case 1; stimPatternList{s} = {'2','500','500'};
-        case 2; stimPatternList{s} = {'40','5','500'};
+        case 1; stimPatternList{s} = {'20','5','500'}; invertStim(s) = true;
+        case 2; stimPatternList{s} = {'20','5','500'}; invertStim(s) = false;
+        case 3; stimPatternList{s} = {'2','500','500'}; invertStim(s) = false;
     end
 end
 
 % Run each session
 for s = 1:length(sessionList)
     close all;
-    clearvars -except s sessionList taskList stimPatternList withPhotometryNI plotPhotometry reloadAll plotLicks
+    clearvars -except s sessionList taskList stimPatternList withPhotometryNI plotPhotometry reloadAll plotLicks invertStim
     
     dirsplit = strsplit(sessionList{s},filesep); 
     sessionName = dirsplit{end}; clear dirsplit
     try
-        loadSessions(sessionList{s},reloadAll=reloadAll,...
+        loadSessions(sessionList{s},reloadAll=reloadAll,invertStim=invertStim(s),...
             withPhotometryNI=withPhotometryNI,photometryNI_mod=false,...
             rollingWindowTime=180);
         analyzeSessions_optoPair(sessionList{s},taskList{s},stimPatternList{s},...

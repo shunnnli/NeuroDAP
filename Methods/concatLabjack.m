@@ -28,7 +28,7 @@ if ~exist('labjack','var')
 
     % Find number of signals
     labjack.nSignals = 2; % NAc green + NAc red
-    labjack.name = {"NAc green","NAc red"};
+    labjack.name = {'NAc_green','NAc_red'};
     labjack.mod = zeros(1,labjack.nSignals);
     labjack.modFreq = zeros(1,labjack.nSignals);
     labjack.LEDpower = zeros(1,labjack.nSignals);
@@ -69,11 +69,16 @@ modPMT = output(mod(1:totalLen,numChannels)==6);     % PMT -green galvo (unfinis
 labjack.raw = nan(labjack.nSignals,length(sync_labjack));
 labjack.modulation = nan(labjack.nSignals,length(sync_labjack));
 labjack.sync = nan(1,length(sync_labjack));
+
 % Log signal to corresponding row
 labjack.raw(1,:) = rawGreen;    labjack.modulation(1,:) = modGreen;
 labjack.raw(2,:) = rawGreen2;   labjack.modulation(2,:) = modGreen2;
 labjack.raw(3,:) = rawPMT;      labjack.modulation(3,:) = modPMT;
 labjack.sync = sync_labjack;
+% Replace space in name with underscore
+for i = 1:labjack.nSignals
+    labjack.name{i} = strrep(labjack.name{i}, ' ', '-');
+end
 
 % Plot photometry summary plot (skipped)
 if options.plot
@@ -94,5 +99,4 @@ if options.save
         'labjack','numChannels','sync_labjack','-v7.3');
 end
 
-disp('Finished: reading photometry data');
 end

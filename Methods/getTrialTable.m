@@ -153,9 +153,9 @@ for i=1:length(allTrials)
 end
 
 % Sanity check
-disp(['Total hit = ',num2str(length(hit))]);
-disp(['Total miss = ',num2str(length(miss))]);
-disp(['Total FA = ',num2str(length(fa))]);
-disp(['Total CR = ',num2str(length(cr))]);
+% disp(['     Total hit = ',num2str(length(hit))]);
+% disp(['     Total miss = ',num2str(length(miss))]);
+% disp(['     Total FA = ',num2str(length(fa))]);
+% disp(['     Total CR = ',num2str(length(cr))]);
 
 end

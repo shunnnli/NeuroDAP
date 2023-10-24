@@ -13,8 +13,10 @@ arguments
     signal double
     color
     params struct
+
     options.eventSystem string = 'ni'
-    options.signalSystem string = 'labjack'
+    options.signalSystem string = 'lj'
+    options.signalFs double = nan
 
     options.smooth double = 0; % 0: no smoothing, else is samples of smooth data
     options.smoothMethod string = 'movmean';
@@ -26,35 +28,49 @@ end
 
 % 1. Initialize event and signal system time
 % 1.1 Define event system time
-if strcmp(options.eventSystem,'ni')
+if strcmpi(options.eventSystem,'ni')
     timeRef = params.sync.timeNI; 
-elseif strcmp(options.eventSystem,'labjack')
+elseif strcmpi(options.eventSystem,'lj')
     timeRef = params.sync.timePhotometry; 
-elseif strcmp(options.eventSystem,'camera')
+elseif strcmpi(options.eventSystem,'camera')
     timeRef = params.sync.timeCamera; 
-elseif strcmp(options.eventSystem,'imec')
+elseif strcmpi(options.eventSystem,'imec')
     timeRef = params.sync.timeImec; 
 end
 % 1.2 Define signal system time
-if strcmp(options.signalSystem,'ni')
+if strcmpi(options.signalSystem,'ni')
     timeTarget = params.sync.timeNI; 
-    if isfield(params.sync,'ni_photometryFs'); signalFs = params.sync.ni_photometryFs;
-    else; signalFs = 50; end
+    if ~isnan(options.signalFs); signalFs = options.signalFs;
+    else
+        if isfield(params.sync,'ni_photometryFs'); signalFs = params.sync.ni_photometryFs;
+        else; signalFs = 50; end
+        disp(['     plotTraces: signalFs not provided, set to ',num2str(signalFs)]);
+    end
     syncFs = params.sync.behaviorFs;
-elseif strcmp(options.signalSystem,'labjack')
+elseif strcmpi(options.signalSystem,'lj')
     timeTarget = params.sync.timePhotometry;
-    if isfield(params.sync,'photometryFs'); signalFs = params.sync.photometryFs;
-    else; signalFs = 50; end
+    if ~isnan(options.signalFs); signalFs = options.signalFs;
+    else
+        if isfield(params.sync,'photometryFs'); signalFs = mode(params.sync.photometryFs);
+        else; signalFs = 50; end
+        disp(['     plotTraces: signalFs not provided, set to ',num2str(signalFs)]);
+    end
     syncFs = params.sync.labjackFs;
-elseif strcmp(options.signalSystem,'camera')
+elseif strcmpi(options.signalSystem,'camera')
     timeTarget = params.sync.timeCamera;
-    if isfield(params.sync,'camFs'); signalFs = params.sync.camFs;
-    else; signalFs = 100; end
+    if ~isnan(options.signalFs); signalFs = options.signalFs;
+    else
+        if isfield(params.sync,'camFs'); signalFs = params.sync.camFs;
+        else; signalFs = 100; end
+    end
     syncFs = signalFs;
-elseif strcmp(options.signalSystem,'imec')
+elseif strcmpi(options.signalSystem,'imec')
     timeTarget = params.sync.timeImec;
-    if isfield(params.sync,'apFs'); signalFs = params.sync.apFs;
-    else; signalFs = 30000; end
+    if ~isnan(options.signalFs); signalFs = options.signalFs;
+    else
+        if isfield(params.sync,'apFs'); signalFs = params.sync.apFs;
+        else; signalFs = 30000; end
+    end
     syncFs = signalFs;
 end
 

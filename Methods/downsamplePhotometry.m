@@ -1,11 +1,16 @@
-function photometry_downsample = downsamplePhotometry(rawTraces,targetFs,originalFs,options)
+function downsampled = downsamplePhotometry(rawTraces,options)
 
 arguments
     rawTraces double % raw traces
-    targetFs double % target Fs to downsampled to
-    originalFs double % original sampling freq of the rawTraces
+    
+    options.targetFs double = 50 % target Fs to downsampled to
+    options.originalFs double = 2000 % original sampling freq of the rawTraces
+    
     options.movingAvergeFilter logical = false
     options.movingAverageWindowSize double = 2
+
+    options.rollingZ logical = true
+    options.rollingWindowTime double = 180
 
     % Ways to downsample if targetFs and originalFs aren't divided by an
     % integer (nSampPerBin is not an integer)
@@ -35,6 +40,7 @@ if mod(nSampPerBin,1) == 0
         a = 1;
         photometry_downsample = filter(b,a,photometry_downsample);
     end
+    downsampled.dsData = photometry_downsample;
 
 % If sampleFs can't be divided by integer
 else
@@ -61,6 +67,16 @@ else
         % n = 10; beta = 5; % n: length of filter window (default 10); beta: smoothing (default 5)
         photometry_downsample = resample(rawTraces,p,q);
     end
+    downsampled.dsData = photometry_downsample;
 end
+
+% Rolling z score
+if options.rollingZ
+    % Rolling zscore for demodGreen and demodRed
+    options.signalDetrendWindow = floor(options.rollingWindowTime*options.originalFs);
+    downsampled.finalData = rollingZ(downsampled.dsData,options.signalDetrendWindow);
+end
+
+downsampled.options = options;
 
 end

@@ -19,8 +19,6 @@ end
 % 2023/07/28: packaged trial table into a function
 % 2023/09/02: added camera plotting
 % 2023/09/05: changed baselineIdx to selecting baseline licks 
-% 2023/10/23: changed how to plot photometry signal, assume everything
-% recorded in labjack
 
 %% Load data
 
@@ -44,15 +42,8 @@ disp(['Session ',sessionName,' loaded']);
 params.stim.pulseFreq = str2double(stimPattern{1}); 
 params.stim.pulseDuration = str2double(stimPattern{2}); 
 params.stim.stimDuration = str2double(stimPattern{3});
-params.stim.nPulsesPerStim = (params.stim.stimDuration/1000) * params.stim.pulseFreq;
+params.stim.nPulsesPerStim = (params.stim.pulseDuration/1000) * params.stim.pulseFreq;
 params.stim.pulseInterval = (1/params.stim.pulseFreq) - params.stim.pulseDuration;
-
-% Invert ShutterRed and ShutterBlue if neccessary
-% params.stim.invertedSignal = str2double(stimPattern{4});
-% if params.stim.invertedSignal
-%     redLaser = ~redLaser;
-%     blueLaser = ~blueLaser;
-% end
 
 %% Preprocess outcome and opto data
 
@@ -80,27 +71,27 @@ else
 end
 
 
-% Find start of opto cue
-if ~exist('optoCue','var') || options.redo
+% Find start of opto
+if ~exist('firstPulse','var') || options.redo
     if ~isempty(find(redLaser, 1))
         % Find the first pulse of each stim pattern if nPulsePerPattern>1
         if params.stim.nPulsesPerStim > 1
             allPulses = find(redLaser);
             intervalThreshold = 10000;
             temp_interval = [100000,diff(allPulses)];
-            optoCue = allPulses(temp_interval > intervalThreshold);
+            firstPulse = allPulses(temp_interval > intervalThreshold);
     
             % Save first pulse data
-            save(strcat(sessionpath,filesep,'sync_',session.name),"optoCue",'-append');
+            save(strcat(sessionpath,filesep,'sync_',session.name),"firstPulse",'-append');
         else
-            optoCue = find(redLaser);
-            save(strcat(sessionpath,filesep,'sync_',session.name),"optoCue",'-append');
+            firstPulse = find(redLaser);
+            save(strcat(sessionpath,filesep,'sync_',session.name),"firstPulse",'-append');
         end
-        disp('Finished: saved optoCue data');
+        disp('Finished: first pulse data');
     else 
-        optoCue = [];
+        firstPulse = [];
     end
-    save(strcat(sessionpath,filesep,'sync_',session.name),"optoCue",'-append');
+    save(strcat(sessionpath,filesep,'sync_',session.name),"firstPulse",'-append');
 end
 
 
@@ -119,12 +110,12 @@ airpuffIdx = find(airpuff_rounded);
 
 if ~exist('trials','var') || options.redo
     if strcmp(task,'random')
-        [allTrials,~] = getTrials(find(leftTone),optoCue,...
+        [allTrials,~] = getTrials(find(leftTone),firstPulse,...
                              waterIdx,airpuffIdx);
     elseif contains(task,'punish')
-        [allTrials,~] = getTrials(find(leftTone),optoCue,waterIdx);
+        [allTrials,~] = getTrials(find(leftTone),firstPulse,waterIdx);
     else
-        [allTrials,~] = getTrials(find(leftTone),optoCue);
+        [allTrials,~] = getTrials(find(leftTone),firstPulse);
     end
     save(strcat(sessionpath,filesep,'sync_',session.name),"allTrials",'-append');
 end
@@ -143,7 +134,7 @@ if (~exist('trials','var') || options.redo)
     events{3} = waterIdx;
     events{4} = rightLickON;
     events{5} = find(leftTone);
-    events{6} = optoCue;
+    events{6} = firstPulse;
 
     trials = getTrialTable(task,events,rightSolenoid_rounded,airpuff_rounded);
 
@@ -167,7 +158,7 @@ if strcmp(task,'random')
     
     % Select event idx
     toneIdx = find(leftTone);
-    stimIdx = optoCue;
+    stimIdx = firstPulse;
 
     % Select baseline idx (align to each baseline lick)
     baselineLicks = cell2mat(trials{~cellfun(@isempty,trials{:,'BaselineLicks'}),'BaselineLicks'});
@@ -180,10 +171,6 @@ if strcmp(task,'random')
     events = {waterIdx,airpuffIdx,toneIdx,stimIdx,baselineIdx};
     labels = {'Water','Airpuff','Tone','Stim','Baseline'};
     taskLegend = getLegend(events,labels);
-    
-    for i = 1:length(events)
-        disp(['Total ',labels{i},': ',num2str(length(events{i}))]);
-    end
 
 else
     % Select baseline idx (align to each baseline lick)
@@ -237,69 +224,81 @@ else
     events = {waterIdx,toneIdx,stimIdx,pairIdx,airpuffIdx,baselineIdx};
     labels = {'Water','Tone only','Stim only','Pair','Airpuff','Baseline'};
     taskLegend = getLegend(events,labels);
-
-    for i = 1:length(events)
-        disp(['Total ',labels{i},': ',num2str(length(events{i}))]);
-    end
-
 end
 
 %% Plot photometry summary plots
 
 if options.plotPhotometry
-    %% Plot pre-processing steps
-    nSignals = size(processed,2);
-
-    initializeFig(.67,.67); tiledlayout('flow');
     
-    for i = 1:nSignals
-        nexttile;
-        histogram(normrnd(0,1,size(processed(i).signal)),200); hold on
-        histogram(processed(i).signal,200); hold on
-        box off
+    %% Set photometry signal to use (esp for LJ)
+    % photometryNI = photometryNI;
+    if session.withPhotometry; photometryLJ = rollingGreen; end
 
-        skew_lj = skewness(processed(i).signal); 
-        kur_lj = kurtosis(processed(i).signal);
-        xlabel('z-score'); ylabel('Count'); legend({'Normal distribution',processed(i).name});
-        
-        title(processed(i).name);
-        subtitle(strcat("Skewness: ",num2str(skew_lj),", Kurtosis: ",num2str(kur_lj)));
+    %% Plot pre-processing steps
+
+    if session.withPhotometryNI && session.withPhotometry
+        initializeFig(.5,.5);
+        histogram(normrnd(0,1,size(photometryLJ)),200); hold on
+        histogram(photometryLJ,200); hold on
+        histogram(photometryNI,200); hold on
+        skew_lj = skewness(photometryLJ); kur_lj = kurtosis(photometryLJ);
+        skew_ni = skewness(photometryNI); kur_ni = kurtosis(photometryNI);
+        xlabel('z-score'); ylabel('Count'); legend({'Normal distribution','LJ Photometry','NI Photometry'});
+        dim = [0.8205 0.58 0.55 0.27];
+        str = {strcat("NI Skewness: ",num2str(skew_ni)),strcat("NI Kurtosis: ",num2str(kur_ni)),...
+            strcat("LJ Skewness: ",num2str(skew_lj)),strcat("LJ Kurtosis: ",num2str(kur_lj))};
+        annotation('textbox',dim,'String',str,'FitBoxToText','on');
+        title('Histogram of photometry traces');
+    
+    elseif session.withPhotometryNI && ~session.withPhotometry
+        initializeFig(.5,.5);
+        histogram(normrnd(0,1,size(photometryNI)),200); hold on
+        histogram(photometryNI,200); hold on
+        xlabel('z-score'); ylabel('Count'); legend({'Normal distribution','Photometry'});
+        dim = [0.8205 0.001 0.25 0.27];
+        str = {strcat("Skewness: ",num2str(skewness(photometryNI))),strcat("Kurtosis: ",num2str(kurtosis(photometryNI)))};
+        annotation('textbox',dim,'String',str,'FitBoxToText','on');
+        title('Histogram of z-scored photometry');
+    
+    else
+        initializeFig(.5,.5);
+        histogram(normrnd(0,1,size(rollingGreen)),200); hold on
+        histogram(rollingGreen,200); hold on
+        skew = skewness(rollingGreen); kur = kurtosis(rollingGreen);
+        xlabel('z-score'); ylabel('Count'); legend({'Normal distribution','Photometry'});
+        dim = [0.8205 0.6 0.55 0.27];
+        str = {strcat("Skewness: ",num2str(skew)),strcat("Kurtosis: ",num2str(kur))};
+        annotation('textbox',dim,'String',str,'FitBoxToText','on');
+        title(['Histogram of ',getVarName(rollingGreen)]);
     end
     
     % Save figure
-    saveas(gcf,strcat(sessionpath,filesep,'Summary_photometry_distribution.png'));
+    saveas(gcf,strcat(sessionpath,filesep,'Summary_signal_',session.name,'.png'));
 
-    %% Loop through processed struct
-    for photometry = 1:nSignals
 
-        % Load signal of interest
-        signal = processed(photometry).signal;
-        finalFs = processed(photometry).finalFs;
-        system = processed(photometry).system;
-        
-        %% Plot combined PSTH
+    %% (LJ) Plot combined photometry PSTHs
+    
+    if session.withPhotometry
         timeRange = [-1,5]; lick_binSize = 0.2;
+        
         % 2. Plot traces
         % Determine figure layout 
         if params.session.withCamera && params.session.withEyeTracking
-            initializeFig(0.5, 1); tiledlayout(4,1);
+            initializeFig(0.5, 1);
+            tiledlayout(4,1);
         else
-            initializeFig(0.5,0.5); tiledlayout(2,1);
+            initializeFig(0.5,0.5);
+            tiledlayout(2,1);
         end
-
+    
         if strcmp(task,'random')
             % 2.1 Plot photometry traces
             nexttile
-            [~,~] = plotTraces(waterIdx,timeRange,signal,bluePurpleRed(1,:),params,...
-                        signalFs=finalFs,signalSystem=system);
-            [~,~] = plotTraces(airpuffIdx,timeRange,signal,[0.2, 0.2, 0.2],params,...
-                        signalFs=finalFs,signalSystem=system);
-            [~,~] = plotTraces(toneIdx,timeRange,signal,bluePurpleRed(350,:),params,...
-                        signalFs=finalFs,signalSystem=system);
-            [~,~] = plotTraces(stimIdx,timeRange,signal,bluePurpleRed(end,:),params,...
-                        signalFs=finalFs,signalSystem=system);
-            [~,~] = plotTraces(baselineIdx,timeRange,signal,[.75 .75 .75],params,...
-                        signalFs=finalFs,signalSystem=system);
+            [~,~] = plotTraces(waterIdx,timeRange,photometryLJ,bluePurpleRed(1,:),params);
+            [~,~] = plotTraces(airpuffIdx,timeRange,photometryLJ,[0.2, 0.2, 0.2],params);
+            [~,~] = plotTraces(toneIdx,timeRange,photometryLJ,bluePurpleRed(350,:),params);
+            [~,~] = plotTraces(stimIdx,timeRange,photometryLJ,bluePurpleRed(end,:),params);
+            [~,~] = plotTraces(baselineIdx,timeRange,photometryLJ,[.75 .75 .75],params);
             plotEvent('',0);
             xlabel('Time (s)'); ylabel('z-score');
             legend(taskLegend,'Location','northeast');
@@ -390,9 +389,14 @@ if options.plotPhotometry
                 legend(taskLegend,'Location','northeast');
             end
         end 
-        saveas(gcf,strcat(sessionpath,filesep,'Summary_events_',processed(photometry).name,'.png'));
-
-        %% Plot single stimulus PSTH
+        
+        saveas(gcf,strcat(sessionpath,filesep,'Summary_events_LJ_',session.name,'.png'));
+    end
+    
+    %% (LJ) Plot single stimulus PSTH
+    
+    if session.withPhotometry
+    
         if strcmp(task,'random')
             eventIdxes = {stimIdx,waterIdx,toneIdx,airpuffIdx};
             labels = {'Stim','Water','Tone','Airpuff'};
@@ -404,17 +408,15 @@ if options.plotPhotometry
             for event = 1:length(eventIdxes)
                 eventIdx = eventIdxes{event};
                 if isempty(eventIdx); continue; end
-                label = labels{event}; eventDuration = eventDurations(event); 
-                groupSize = groupSizes(event); % num of trials to plot in one line
+                label = labels{event}; eventDuration = eventDurations(event); groupSize = groupSizes(event); % num of trials to plot in one line
                 
-                initializeFig(0.67,1); tiledlayout(4,4);
+                initializeFig(0.67,1);
+                tiledlayout(4,4);
                 
                 % Plot short timescale
                 nexttile(3,[1 2]);
-                [traces,t] = plotTraces(eventIdx,shortTimeRange,signal,bluePurpleRed(1,:),params,...
-                                signalFs=finalFs,signalSystem=system);
-                [~,~] = plotTraces(baselineIdx,shortTimeRange,signal,[.75 .75 .75],params,...
-                                signalFs=finalFs,signalSystem=system);
+                [traces,t] = plotTraces(eventIdx,shortTimeRange,photometryLJ,bluePurpleRed(1,:),params);
+                [~,~] = plotTraces(baselineIdx,shortTimeRange,photometryLJ,[.75 .75 .75],params);
                 plotEvent(label,eventDuration); 
                 xlabel('Time (s)'); ylabel('z-score'); 
                 legend({[label,' (n=',num2str(length(eventIdx)),')'],...
@@ -436,6 +438,7 @@ if options.plotPhotometry
                 xlabel('Time (s)'); ylabel('z-score');
                 legend(legendList);
 
+
                 % Plot heatmap
                 nexttile(1,[4 2]);
                 imagesc(t,1:length(eventIdx),traces); 
@@ -444,13 +447,10 @@ if options.plotPhotometry
                 plotEvent(label,eventDuration);
                 xlabel('Time (s)'); ylabel('Trials');
 
-
                 % Plot long timescale
                 nexttile(11,[1 2]);
-                [traces,t] = plotTraces(eventIdx,longTimeRange,signal,bluePurpleRed(1,:),params,...
-                                signalFs=finalFs,signalSystem=system);
-                [~,~] = plotTraces(baselineIdx,longTimeRange,signal,[.75 .75 .75],params,...
-                                signalFs=finalFs,signalSystem=system);
+                [traces,t] = plotTraces(eventIdx,longTimeRange,photometryLJ,bluePurpleRed(1,:),params);
+                [~,~] = plotTraces(baselineIdx,longTimeRange,photometryLJ,[.75 .75 .75],params);
                 plotEvent(label,eventDuration);
                 xlabel('Time (s)'); ylabel('z-score');
                 legend({[label,' (n=',num2str(length(eventIdx)),')'],...
@@ -472,7 +472,7 @@ if options.plotPhotometry
                 xlabel('Time (s)'); ylabel('z-score');
                 legend(legendList);
                 
-                saveas(gcf,strcat(sessionpath,filesep,'Events_',processed(photometry).name,'_',label,'.png'));
+                saveas(gcf,strcat(sessionpath,filesep,'Events_LJ_',label,'_',session.name,'.png'));
             end
         else
             eventIdxes = {stimIdx,pairIdx,toneIdx,waterIdx,airpuffIdx};
@@ -494,12 +494,9 @@ if options.plotPhotometry
 
                 % Plot short time scale
                 nexttile(3,[1 2]);
-                [traces,t] = plotTraces(eventIdx,shortTimeRange,signal,bluePurpleRed(1,:),params,...
-                                signalFs=finalFs,signalSystem=system);
-                [~,~] = plotTraces(baselineIdx,shortTimeRange,signal,[.75 .75 .75],params,...
-                                signalFs=finalFs,signalSystem=system);
-                [~,~] = plotTraces(omissionIdx,shortTimeRange,signal,[0.3, 0.3, 0.3],params,...
-                                signalFs=finalFs,signalSystem=system);
+                [traces,t] = plotTraces(eventIdx,shortTimeRange,photometryLJ,bluePurpleRed(1,:),params);
+                [~,~] = plotTraces(baselineIdx,shortTimeRange,photometryLJ,[.75 .75 .75],params);
+                [~,~] = plotTraces(omissionIdx,shortTimeRange,photometryLJ,[0.3, 0.3, 0.3],params);
                 plotEvent(label,eventDuration);
                 xlabel('Time (s)'); ylabel('z-score'); 
                 legend({[label,' (n=',num2str(length(eventIdx)),')'],...
@@ -532,12 +529,9 @@ if options.plotPhotometry
 
                 % Plot long time scale
                 nexttile(11,[1 2]);
-                [traces,t] = plotTraces(eventIdx,longTimeRange,signal,bluePurpleRed(1,:),params,...
-                                signalFs=finalFs,signalSystem=system);
-                [~,~] = plotTraces(baselineIdx,longTimeRange,signal,[.75 .75 .75],params,...
-                                signalFs=finalFs,signalSystem=system);
-                [~,~] = plotTraces(omissionIdx,longTimeRange,signal,[0.2, 0.2, 0.2],params,...
-                                signalFs=finalFs,signalSystem=system);
+                [traces,t] = plotTraces(eventIdx,longTimeRange,photometryLJ,bluePurpleRed(1,:),params);
+                [~,~] = plotTraces(baselineIdx,longTimeRange,photometryLJ,[.75 .75 .75],params);
+                [~,~] = plotTraces(omissionIdx,longTimeRange,photometryLJ,[0.2, 0.2, 0.2],params);
                 plotEvent(label,eventDuration);
                 xlabel('Time (s)'); ylabel('z-score');
                 legend({[label,' (n=',num2str(length(eventIdx)),')'],...
@@ -559,10 +553,297 @@ if options.plotPhotometry
                 plotEvent(label,eventDuration);
                 xlabel('Time (s)'); ylabel('z-score');
                 legend(legendList);
+                
+                saveas(gcf,strcat(sessionpath,filesep,'Events_LJ_',label,'_',session.name,'.png'));
             end
         end
-        saveas(gcf,strcat(sessionpath,filesep,'Events_',processed(photometry).name,'_',label,'.png'));
     end
+    
+    %% (NI) Plot combined PSTH
+    
+    if session.withPhotometryNI
+        timeRange = [-1,5]; lick_binSize = 0.2;
+        
+        % 2. Plot traces
+        % Determine figure layout 
+        if params.session.withCamera && params.session.withEyeTracking
+            initializeFig(0.5, 1);
+            tiledlayout(4,1);
+        else
+            initializeFig(0.5,0.5);
+            tiledlayout(2,1);
+        end
+    
+        if strcmp(task,'random')
+            % 2.1 Plot photometry traces
+            nexttile
+            [~,~] = plotTraces(waterIdx,timeRange,photometryNI,bluePurpleRed(1,:),params,signalSystem='ni');
+            [~,~] = plotTraces(airpuffIdx,timeRange,photometryNI,[0.2, 0.2, 0.2],params,signalSystem='ni');
+            [~,~] = plotTraces(toneIdx,timeRange,photometryNI,bluePurpleRed(350,:),params,signalSystem='ni');
+            [~,~] = plotTraces(stimIdx,timeRange,photometryNI,bluePurpleRed(end,:),params,signalSystem='ni');
+            [~,~] = plotTraces(baselineIdx,timeRange,photometryNI,[.75 .75 .75],params,signalSystem='ni');
+            plotEvent('',0);
+            xlabel('Time (s)'); ylabel('z-score'); 
+            legend(taskLegend,'Location','best'); 
+            
+            % 2.2 Plot lick traces
+            nexttile
+            plotLicks(waterIdx,timeRange,lick_binSize,bluePurpleRed(1,:),[],rightLick,params);
+            plotLicks(airpuffIdx,timeRange,lick_binSize,[0.2, 0.2, 0.2],[],rightLick,params);
+            plotLicks(toneIdx,timeRange,lick_binSize,bluePurpleRed(350,:),[],rightLick,params);
+            plotLicks(stimIdx,timeRange,lick_binSize,bluePurpleRed(end,:),[],rightLick,params);
+            plotLicks(baselineIdx,timeRange,lick_binSize,[.75 .75 .75],[],rightLick,params);
+            plotEvent('',0);
+            xlabel('Time (s)'); ylabel('Licks/s'); 
+            legend(taskLegend,'Location','best');
+
+            if params.session.withCamera && params.session.withEyeTracking
+                % 2.3 Plot eye area traces
+                nexttile
+                [~,~] = plotTraces(waterIdx,timeRange,eyeArea_detrend,bluePurpleRed(1,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(airpuffIdx,timeRange,eyeArea_detrend,[0.2, 0.2, 0.2],params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(toneIdx,timeRange,eyeArea_detrend,bluePurpleRed(350,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(stimIdx,timeRange,eyeArea_detrend,bluePurpleRed(end,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(baselineIdx,timeRange,eyeArea_detrend,[.75 .75 .75],params,signalSystem='camera',smooth=15);
+                plotEvent('',0);
+                xlabel('Time (s)'); ylabel('Eye area (z-score)');
+                legend(taskLegend,'Location','northeast');
+    
+                % 2.4 Plot pupil area traces
+                nexttile
+                [~,~] = plotTraces(waterIdx,timeRange,pupilArea_detrend,bluePurpleRed(1,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(airpuffIdx,timeRange,pupilArea_detrend,[0.2, 0.2, 0.2],params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(toneIdx,timeRange,pupilArea_detrend,bluePurpleRed(350,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(stimIdx,timeRange,pupilArea_detrend,bluePurpleRed(end,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(baselineIdx,timeRange,pupilArea_detrend,[.75 .75 .75],params,signalSystem='camera',smooth=15);
+                plotEvent('',0);
+                xlabel('Time (s)'); ylabel('Pupil area (z-score)');
+                legend(taskLegend,'Location','northeast');
+            end
+
+        else
+            % 2.1 Plot photometry traces
+            nexttile
+            [~,~] = plotTraces(waterIdx,timeRange,photometryNI,bluePurpleRed(1,:),params,signalSystem='ni');
+            [~,~] = plotTraces(toneIdx,timeRange,photometryNI,bluePurpleRed(350,:),params,signalSystem='ni');
+            [~,~] = plotTraces(stimIdx,timeRange,photometryNI,bluePurpleRed(end,:),params,signalSystem='ni');
+            [~,~] = plotTraces(pairIdx,timeRange,photometryNI,bluePurpleRed(150,:),params,signalSystem='ni');
+            [~,~] = plotTraces(airpuffIdx,timeRange,photometryNI,[0.2, 0.2, 0.2],params,signalSystem='ni');
+            [~,~] = plotTraces(baselineIdx,timeRange,photometryNI,[.75 .75 .75],params,signalSystem='ni');
+            plotEvent('',0);
+            xlabel('Time (s)'); ylabel('z-score'); 
+            legend(taskLegend,'Location','best'); 
+            
+            % 2.2 Plot lick traces
+            nexttile
+            plotLicks(waterIdx,timeRange,lick_binSize,bluePurpleRed(1,:),[],rightLick,params);
+            plotLicks(toneIdx,timeRange,lick_binSize,bluePurpleRed(350,:),[],rightLick,params);
+            plotLicks(stimIdx,timeRange,lick_binSize,bluePurpleRed(end,:),[],rightLick,params);
+            plotLicks(pairIdx,timeRange,lick_binSize,bluePurpleRed(150,:),[],rightLick,params);
+            plotLicks(airpuffIdx,timeRange,lick_binSize,[0.2, 0.2, 0.2],[],rightLick,params);
+            plotLicks(baselineIdx,timeRange,lick_binSize,[.75 .75 .75],[],rightLick,params);
+            plotEvent('',0);
+            xlabel('Time (s)'); ylabel('Licks/s'); 
+            legend(taskLegend,'Location','best');
+
+            if params.session.withCamera && params.session.withEyeTracking
+                % 2.3 Plot eye area traces
+                nexttile
+                [~,~] = plotTraces(waterIdx,timeRange,eyeArea_detrend,bluePurpleRed(1,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(toneIdx,timeRange,eyeArea_detrend,bluePurpleRed(350,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(stimIdx,timeRange,eyeArea_detrend,bluePurpleRed(end,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(pairIdx,timeRange,eyeArea_detrend,bluePurpleRed(150,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(airpuffIdx,timeRange,eyeArea_detrend,[0.2, 0.2, 0.2],params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(baselineIdx,timeRange,eyeArea_detrend,[.75 .75 .75],params,signalSystem='camera',smooth=15);
+                plotEvent('',0);
+                xlabel('Time (s)'); ylabel('Eye area (z-score)');
+                legend(taskLegend,'Location','northeast');
+    
+                % 2.4 Plot pupil area traces
+                nexttile
+                [~,~] = plotTraces(waterIdx,timeRange,pupilArea_detrend,bluePurpleRed(1,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(toneIdx,timeRange,pupilArea_detrend,bluePurpleRed(350,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(stimIdx,timeRange,pupilArea_detrend,bluePurpleRed(end,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(pairIdx,timeRange,pupilArea_detrend,bluePurpleRed(150,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(airpuffIdx,timeRange,pupilArea_detrend,[0.2, 0.2, 0.2],params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(baselineIdx,timeRange,pupilArea_detrend,[.75 .75 .75],params,signalSystem='camera',smooth=15);
+                plotEvent('',0);
+                xlabel('Time (s)'); ylabel('Pupil area (z-score)');
+                legend(taskLegend,'Location','northeast');
+            end
+        end
+     
+        saveas(gcf,strcat(sessionpath,filesep,'Summary_events_NI_',session.name,'.png'));
+    end
+    
+    %% (NI) Plot single stimulus PSTH
+    
+    if session.withPhotometryNI
+    
+        if strcmp(task,'random')
+            eventIdxes = {stimIdx,waterIdx,toneIdx,airpuffIdx};
+            labels = {'Stim','Water','Tone','Airpuff'};
+            eventDurations = [0.5,0,0.5,0.02];
+            groupSizes = [20,30,10,30];
+            longTimeRange = [-5,10];
+            shortTimeRange = [-1,5]; 
+            
+            for event = 1:length(eventIdxes)
+                eventIdx = eventIdxes{event};
+                if isempty(eventIdx); continue; end
+                label = labels{event}; eventDuration = eventDurations(event); groupSize = groupSizes(event); % num of trials to plot in one line
+                
+                initializeFig(0.67,1);
+                tiledlayout(4,4);
+
+                % Plot short time scale
+                nexttile(3,[1 2]);
+                [traces,t] = plotTraces(eventIdx,shortTimeRange,photometryNI,bluePurpleRed(1,:),params,signalSystem='ni');
+                [~,~] = plotTraces(baselineIdx,shortTimeRange,photometryNI,[.75 .75 .75],params,signalSystem='ni');
+                plotEvent(label,eventDuration);
+                xlabel('Time (s)'); ylabel('z-score');
+                legend({[label,' (n=',num2str(length(eventIdx)),')'],...
+                    ['Baseline (n=',num2str(length(baselineIdx)),')']},...
+                    'Location','northeast'); 
+                
+                nexttile(7,[1 2]);
+                nLines = ceil(size(traces,1)/groupSize);
+                legendList = cell(nLines,1);
+                nColors = round(linspace(1,size(bluePurpleRed,1),nLines));
+                for i = 1:nLines
+                    startTrial = (i-1)*groupSize+1; 
+                    if i == nLines; endTrial = size(traces,1);
+                    else; endTrial = i*groupSize; end
+                    plotSEM(t,traces(startTrial:endTrial,:),bluePurpleRed(nColors(i),:));
+                    legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial)];
+                end
+                plotEvent(label,eventDuration);
+                xlabel('Time (s)'); ylabel('z-score');
+                legend(legendList);
+
+                % Plot heatmap
+                nexttile(1,[4 2]);
+                imagesc(t,1:length(eventIdx),traces);
+                set(gca,'YDir','normal');
+                colorbar; box off
+                plotEvent(label,eventDuration);
+                xlabel('Time (s)'); ylabel('Trials');
+
+
+                % Plot long time scale
+                nexttile(11,[1 2]);
+                [traces,t] = plotTraces(eventIdx,longTimeRange,photometryNI,bluePurpleRed(1,:),params,signalSystem='ni');
+                [~,~] = plotTraces(baselineIdx,longTimeRange,photometryNI,[.75 .75 .75],params,signalSystem='ni');
+                plotEvent(label,eventDuration);
+                xlabel('Time (s)'); ylabel('z-score');
+                legend({[label,' (n=',num2str(length(eventIdx)),')'],...
+                    ['Baseline (n=',num2str(length(baselineIdx)),')']},...
+                    'Location','northeast'); 
+                
+                nexttile(15,[1 2]);
+                nLines = ceil(size(traces,1)/groupSize);
+                legendList = cell(nLines,1);
+                nColors = round(linspace(1,size(bluePurpleRed,1),nLines));
+                for i = 1:nLines
+                    startTrial = (i-1)*groupSize+1; 
+                    if i == nLines; endTrial = size(traces,1);
+                    else; endTrial = i*groupSize; end
+                    plotSEM(t,traces(startTrial:endTrial,:),bluePurpleRed(nColors(i),:));
+                    legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial)];
+                end
+                plotEvent(label,eventDuration);
+                xlabel('Time (s)'); ylabel('z-score');
+                legend(legendList);
+                
+                
+                saveas(gcf,strcat(sessionpath,filesep,'Events_NI_',label,'_',session.name,'.png'));
+            end
+        else
+            eventIdxes = {stimIdx,pairIdx,toneIdx,waterIdx,airpuffIdx};
+            omissionIdxes = {stimOmissionIdx, pairOmissionIdx,toneOmissionIdx,[],[]};
+            labels = {'Stim','Pair','Tone','Water','Airpuff'};
+            eventDurations = [0.5,0.5,0.5,0,0.02];
+            groupSizes = [10,10,10,30,30];
+            longTimeRange = [-5,10];
+            shortTimeRange = [-1,5]; 
+            
+            for event = 1:length(eventIdxes)
+                eventIdx = eventIdxes{event};
+                omissionIdx = omissionIdxes{event};
+                if isempty(eventIdx); continue; end
+                label = labels{event}; eventDuration = eventDurations(event); groupSize = groupSizes(event); % num of trials to plot in one line
+                
+                initializeFig(0.67,1);
+                tiledlayout(4,4);
+
+                % Plot short time scale
+                nexttile(3,[1 2]);
+                [traces,t] = plotTraces(eventIdx,shortTimeRange,photometryNI,bluePurpleRed(1,:),params,signalSystem='ni');
+                [~,~] = plotTraces(baselineIdx,shortTimeRange,photometryNI,[.75 .75 .75],params,signalSystem='ni');
+                [~,~] = plotTraces(omissionIdx,shortTimeRange,photometryNI,[0.2, 0.2, 0.2],params,signalSystem='ni');
+                plotEvent(label,eventDuration);
+                xlabel('Time (s)'); ylabel('z-score');
+                legend({[label,' (n=',num2str(length(eventIdx)),')'],...
+                        ['Baseline (n=',num2str(length(baselineIdx)),')'],...
+                        [label,' omission (n=',num2str(length(omissionIdxes)),')']},...
+                        'Location','northeast');
+                
+                nexttile(7,[1 2]);
+                nLines = ceil(size(traces,1)/groupSize);
+                legendList = cell(nLines,1);
+                nColors = round(linspace(1,size(bluePurpleRed,1),nLines));
+                for i = 1:nLines
+                    startTrial = (i-1)*groupSize+1; 
+                    if i == nLines; endTrial = size(traces,1);
+                    else; endTrial = i*groupSize; end
+                    plotSEM(t,traces(startTrial:endTrial,:),bluePurpleRed(nColors(i),:));
+                    legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial)];
+                end
+                plotEvent(label,eventDuration);
+                xlabel('Time (s)'); ylabel('z-score');
+                legend(legendList);
+
+                % Plot heatmap
+                nexttile(1,[4 2]);
+                imagesc(t,1:length(eventIdx),traces);
+                set(gca,'YDir','normal');
+                colorbar; box off
+                plotEvent(label,eventDuration);
+                xlabel('Time (s)'); ylabel('Trials');
+
+                % Plot long time scale
+                nexttile(11,[1 2]);
+                [traces,t] = plotTraces(eventIdx,longTimeRange,photometryNI,bluePurpleRed(1,:),params,signalSystem='ni');
+                [~,~] = plotTraces(baselineIdx,longTimeRange,photometryNI,[.75 .75 .75],params,signalSystem='ni');
+                [~,~] = plotTraces(omissionIdx,longTimeRange,photometryNI,[0.2, 0.2, 0.2],params,signalSystem='ni');
+                plotEvent(label,eventDuration);
+                xlabel('Time (s)'); ylabel('z-score');
+                legend({[label,' (n=',num2str(length(eventIdx)),')'],...
+                        ['Baseline (n=',num2str(length(baselineIdx)),')'],...
+                        [label,' omission (n=',num2str(length(omissionIdxes)),')']},...
+                        'Location','northeast');
+                
+                nexttile(15,[1 2]);
+                nLines = ceil(size(traces,1)/groupSize);
+                legendList = cell(nLines,1);
+                nColors = round(linspace(1,size(bluePurpleRed,1),nLines));
+                for i = 1:nLines
+                    startTrial = (i-1)*groupSize+1; 
+                    if i == nLines; endTrial = size(traces,1);
+                    else; endTrial = i*groupSize; end
+                    plotSEM(t,traces(startTrial:endTrial,:),bluePurpleRed(nColors(i),:));
+                    legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial)];
+                end
+                plotEvent(label,eventDuration);
+                xlabel('Time (s)'); ylabel('z-score');
+                legend(legendList);
+                
+                saveas(gcf,strcat(sessionpath,filesep,'Events_NI_',label,'_',session.name,'.png'));
+            end
+        end    
+    end
+
+
 end
 
 %% Plot behavior related plots
