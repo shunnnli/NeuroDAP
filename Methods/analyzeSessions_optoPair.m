@@ -4,6 +4,10 @@ arguments
     sessionpath string
     task string
     stimPattern cell
+
+    options.pavlovian logical = true
+    options.reactionTime double = 1.5
+
     options.redo logical = true % Recalculate trial table and all preprocessing
     options.round logical = false % Round reward/airpuff/tone to get duration data
     options.performing logical = false; % Only plot traces where the animal performs
@@ -145,7 +149,8 @@ if (~exist('trials','var') || options.redo)
     events{5} = find(leftTone);
     events{6} = optoCue;
 
-    trials = getTrialTable(task,events,rightSolenoid_rounded,airpuff_rounded);
+    trials = getTrialTable(task,events,rightSolenoid_rounded,airpuff_rounded,...
+                pavlovian=options.pavlovian,reactionTime=options.reactionTime);
 
     % Calculate performance cutoff
     if contains(task,'reward'); [trials,cutoff_sample] = getSessionCutoff(trials,"->reward");
@@ -210,7 +215,9 @@ else
             pairOmissionIdx = trials{trials.isTone == 1 & trials.isStim == 1 & trials.isReward == 0,"CueTime"};
             toneIdx = trials{trials.isTone == 1 & trials.isStim == 0 & trials.isReward == 1,"CueTime"};
             toneOmissionIdx = trials{trials.isTone == 1 & trials.isStim == 0 & trials.isReward == 0,"CueTime"};
-            % if isempty(toneIdx) && 
+            if isempty(toneIdx) && ~isempty(toneOmissionIdx)
+                toneIdx = toneOmissionIdx;
+            end
         end
     elseif contains(task,'punish')
         if options.performing
@@ -231,6 +238,9 @@ else
             pairOmissionIdx = trials{trials.isTone == 1 & trials.isStim == 1 & trials.isPunishment == 0,"CueTime"};
             toneIdx = trials{trials.isTone == 1 & trials.isStim == 0 & trials.isPunishment == 1,"CueTime"};
             toneOmissionIdx = trials{trials.isTone == 1 & trials.isStim == 0 & trials.isPunishment == 0,"CueTime"};
+            if isempty(toneIdx) && ~isempty(toneOmissionIdx)
+                toneIdx = toneOmissionIdx;
+            end
         end
     end
 
@@ -342,12 +352,18 @@ if options.plotPhotometry
         else
             % 2.1 Plot photometry traces
             nexttile
-            [~,~] = plotTraces(waterIdx,timeRange,photometryLJ,bluePurpleRed(1,:),params);
-            [~,~] = plotTraces(toneIdx,timeRange,photometryLJ,bluePurpleRed(350,:),params);
-            [~,~] = plotTraces(stimIdx,timeRange,photometryLJ,bluePurpleRed(end,:),params);
-            [~,~] = plotTraces(pairIdx,timeRange,photometryLJ,bluePurpleRed(150,:),params);
-            [~,~] = plotTraces(airpuffIdx,timeRange,photometryLJ,[0.2, 0.2, 0.2],params);
-            [~,~] = plotTraces(baselineIdx,timeRange,photometryLJ,[.75 .75 .75],params);
+            [~,~] = plotTraces(waterIdx,timeRange,signal,bluePurpleRed(1,:),params,...
+                        signalFs=finalFs,signalSystem=system);
+            [~,~] = plotTraces(toneIdx,timeRange,signal,bluePurpleRed(350,:),params,...
+                        signalFs=finalFs,signalSystem=system);
+            [~,~] = plotTraces(stimIdx,timeRange,signal,bluePurpleRed(end,:),params,...
+                        signalFs=finalFs,signalSystem=system);
+            [~,~] = plotTraces(pairIdx,timeRange,signal,bluePurpleRed(150,:),params,...
+                        signalFs=finalFs,signalSystem=system);
+            [~,~] = plotTraces(airpuffIdx,timeRange,signal,[0.2, 0.2, 0.2],params,...
+                        signalFs=finalFs,signalSystem=system);
+            [~,~] = plotTraces(baselineIdx,timeRange,signal,[.75 .75 .75],params,...
+                        signalFs=finalFs,signalSystem=system);
             plotEvent('',0);
             xlabel('Time (s)'); ylabel('z-score');
             legend(taskLegend,'Location','northeast');
@@ -559,9 +575,10 @@ if options.plotPhotometry
                 plotEvent(label,eventDuration);
                 xlabel('Time (s)'); ylabel('z-score');
                 legend(legendList);
+
+                saveas(gcf,strcat(sessionpath,filesep,'Events_',processed(photometry).name,'_',label,'.png'));
             end
         end
-        saveas(gcf,strcat(sessionpath,filesep,'Events_',processed(photometry).name,'_',label,'.png'));
     end
 end
 
@@ -577,12 +594,12 @@ if options.plotLicks
     % Plot lick bout count distribution
     nexttile;
     histogram(lickBout(:,2),30); 
-    xlabel('Licks per lick bout'); ylabel('Occurance'); box off
+    xlabel('Licks per lick bout'); ylabel('Count'); box off
 
     % Plot ITI-ENL distribution
     nexttile;
     histogram(trials{:,'ITI'},30); 
-    xlabel('ITI (s)'); ylabel('Occurance'); box off
+    xlabel('ITI (s)'); ylabel('Count'); box off
 
     % Plot lick per trial vs trials
     nexttile;
@@ -596,13 +613,12 @@ if options.plotLicks
     xlabel('Trials'); ylabel('Time (s)'); ylim([0,Inf]); box off
     legend({'ENL','ITI-ENL'});
 
-    saveas(gcf,strcat(sessionpath,filesep,'Summary_ITI&Bout_',session.name,'.png'));
-
+    saveas(gcf,strcat(sessionpath,filesep,'Behavior_ITI&LickBout.png'));
 end
 
 if options.plotLicks && contains(task,'pairing')
         
-    %% Plot lick raster plot and eye traces
+    %% Plot session overview for licking
     timeRange = [-5,10]; cameraTimeRange = [-1,5];
     markerSize = 20; lick_binSize = 0.2;
 
@@ -622,24 +638,10 @@ if options.plotLicks && contains(task,'pairing')
     [toneLickRate,~,toneLicks] = getLicks(timeRange,toneIdx(:,2),lick_binSize,[],rightLick,...
                                 params.sync.behaviorFs,params.sync.timeNI);
 
-
-    % Plot overall raster plot (color coded by trial type)
-    if params.session.withCamera && params.session.withEyeTracking
-        initializeFig(1,1); nCols = 5;
-        % get camera trace by trial type
-        [stimEyeArea,t_cam] = plotTraces(stimIdx(:,2),cameraTimeRange,eyeArea_detrend,[0,0,0],params,plot=false,signalSystem='camera');
-        [pairEyeArea,~] = plotTraces(pairIdx(:,2),cameraTimeRange,eyeArea_detrend,[0,0,0],params,plot=false,signalSystem='camera');
-        [toneEyeArea,~] = plotTraces(toneIdx(:,2),cameraTimeRange,eyeArea_detrend,[0,0,0],params,plot=false,signalSystem='camera');
-        [stimPupilArea,~] = plotTraces(stimIdx(:,2),cameraTimeRange,pupilArea_detrend,[0,0,0],params,plot=false,signalSystem='camera');
-        [pairPupilArea,~] = plotTraces(pairIdx(:,2),cameraTimeRange,pupilArea_detrend,[0,0,0],params,plot=false,signalSystem='camera');
-        [tonePupilArea,~] = plotTraces(toneIdx(:,2),cameraTimeRange,pupilArea_detrend,[0,0,0],params,plot=false,signalSystem='camera');
-    else
-        initializeFig(0.5,0.67); nCols = 3;   
-    end
-    tiledlayout(3,nCols); 
-
-    % Plot lick raster plot for session
-    nexttile([3,2]);
+    % 1. Plot lick raster and trace
+    initializeFig(0.67,0.67); tiledlayout(3,2);
+    % 1.1 Plot lick raster plot for session
+    nexttile([3,1]);
     for i = 1:size(stimLicks,1)
         scatter(stimLicks{i},stimIdx(i,1),markerSize,'filled','MarkerFaceColor',bluePurpleRed(end,:)); hold on
         scatter(stimIdx(i,3),stimIdx(i,1),markerSize+10,bluePurpleRed(1,:),'pentagram','filled'); hold on
@@ -655,8 +657,7 @@ if options.plotLicks && contains(task,'pairing')
     xlabel('Time (s)'); xlim([timeRange(1),timeRange(2)]);
     ylabel('Trial'); ylim([0,size(trials,1)]);
     plotEvent("",0.5);
-
-    % Plot lick traces across session
+    % 1.2 Plot lick traces across session
     traces = {stimLickRate,pairLickRate,toneLickRate};
     labels = {'Stim','Pair','Tone'};
     groupSizes = [20, 20, 10];
@@ -665,7 +666,7 @@ if options.plotLicks && contains(task,'pairing')
         label = labels{event};
         groupSize = groupSizes(event);
 
-        nexttile(3 + nCols*(event-1));
+        nexttile;
         t = linspace(timeRange(1),timeRange(2),size(trace,2));
         nLines = ceil(size(trace,1)/groupSize); legendList = cell(nLines,1);
         nColors = round(linspace(1,size(bluePurpleRed,1),nLines));
@@ -680,9 +681,20 @@ if options.plotLicks && contains(task,'pairing')
         xlabel('Time (s)'); ylabel('Licks/s');
         legend(legendList);
     end
+    saveas(gcf,strcat(sessionpath,filesep,'Behavior_LickOverview.png'));
 
-
+    
+    %% Plot session overview for eye
     if params.session.withCamera && params.session.withEyeTracking
+        initializeFig(0.67,0.67); tiledlayout(3,2); 
+        % get camera trace by trial type
+        [stimEyeArea,t_cam] = plotTraces(stimIdx(:,2),cameraTimeRange,eyeArea_detrend,[0,0,0],params,plot=false,signalSystem='camera');
+        [pairEyeArea,~] = plotTraces(pairIdx(:,2),cameraTimeRange,eyeArea_detrend,[0,0,0],params,plot=false,signalSystem='camera');
+        [toneEyeArea,~] = plotTraces(toneIdx(:,2),cameraTimeRange,eyeArea_detrend,[0,0,0],params,plot=false,signalSystem='camera');
+        [stimPupilArea,~] = plotTraces(stimIdx(:,2),cameraTimeRange,pupilArea_detrend,[0,0,0],params,plot=false,signalSystem='camera');
+        [pairPupilArea,~] = plotTraces(pairIdx(:,2),cameraTimeRange,pupilArea_detrend,[0,0,0],params,plot=false,signalSystem='camera');
+        [tonePupilArea,~] = plotTraces(toneIdx(:,2),cameraTimeRange,pupilArea_detrend,[0,0,0],params,plot=false,signalSystem='camera');
+
         % Plot eye area across session
         traces = {stimEyeArea,pairEyeArea,toneEyeArea};
         labels = {'Stim','Pair','Tone'};
@@ -692,7 +704,7 @@ if options.plotLicks && contains(task,'pairing')
             label = labels{event};
             groupSize = groupSizes(event);
     
-            nexttile(4 + nCols*(event-1));
+            nexttile(1+ 2*(event-1));
             nLines = ceil(size(trace,1)/groupSize); legendList = cell(nLines,1);
             nColors = round(linspace(1,size(bluePurpleRed,1),nLines));
             for i = 1:nLines
@@ -717,7 +729,7 @@ if options.plotLicks && contains(task,'pairing')
             label = labels{event};
             groupSize = groupSizes(event);
     
-            nexttile(5 + nCols*(event-1));
+            nexttile(2+ 2*(event-1));
             nLines = ceil(size(trace,1)/groupSize); legendList = cell(nLines,1);
             nColors = round(linspace(1,size(bluePurpleRed,1),nLines));
             for i = 1:nLines
@@ -731,16 +743,14 @@ if options.plotLicks && contains(task,'pairing')
             xlabel('Time (s)'); ylabel('Pupil area (z-score)');
             legend(legendList);
         end
+        saveas(gcf,strcat(sessionpath,filesep,'Behavior_EyeOverview.png'));
     end
 
-    saveas(gcf,strcat(sessionpath,filesep,'Summary_behavior_',session.name,'.png'));
-
-    %% Plot ENL analysis (whether animal licks to reward specifically or randomlly licking)
-    initializeFig(1,1);
-    tiledlayout(5,3);
-
-    % 1. Bin trials based on ENL length, plot lick trace aligning to ENL start
+    %% Plot ENL aligned lick trace
+    % Bin trials based on ENL length, plot lick trace aligning to ENL start
     % should not smear if animal lick specifically to the cue
+
+    initializeFig(0.67,0.67); tiledlayout(3,3);
     timeRangeENL = [0,10];
     [stimLickRateENL,~,~] = getLicks(timeRangeENL,stimIdx(:,2)-stimIdx(:,4),lick_binSize,[],rightLick,...
                                     params.sync.behaviorFs,params.sync.timeNI);
@@ -809,11 +819,15 @@ if options.plotLicks && contains(task,'pairing')
         end
         xlabel('Time from ENL start (s)'); ylabel('Licks/s');
         legend(legendList);
-        
     end
+    saveas(gcf,strcat(sessionpath,filesep,'Behavior_ENLAlignedLick.png'));
 
+    %% Plot distributions
+    initializeFig(1,1);
+    tiledlayout(4,4);
 
-    % 2. Find out baseline period (eg 5s-10s after reward), bootstrap and
+    % 1. Distribution of baseline licks
+    % Find out baseline period (eg 5s-10s after reward), bootstrap and
     % compare with stim onset
     % (i.e.) how likely I get 2+ licks within a 2s window randomly selected
     % from baseline (a window of 10 secs)?
@@ -825,74 +839,312 @@ if options.plotLicks && contains(task,'pairing')
     hitPercentBaseline = zeros(nboot,1);
     for i = 1:nboot
         % Randomly select columns for 2 sec (2/0.2 = 10)
-        windowInBin = 2 / lick_binSize;
-        baselineSamples = datasample(allLicksBaseline,windowInBin,2,'Replace',false);
+        windowInBin = options.reactionTime / lick_binSize;
+        baselineSamples = datasample(allLicksBaseline,windowInBin,2,'Replace',true);
         hitPercentBaseline(i) = sum(sum(baselineSamples,2) >= 2)/size(baselineSamples,1);
     end
 
-
-    % For stim only
-    % 2.1 Calculate cue window success rate
-    hitPercentCue = length(find(trials.isTone == 0 & trials.isStim == 1 & trials.Outcome == "H"))/size(stimIdx,1);
-    % 2.2 Plot distribution
-    nexttile([2 1]);
-    h = histogram(hitPercentBaseline,nBins);
-    h.FaceColor = bluePurpleRed(end,:); h.EdgeColor = bluePurpleRed(end,:);
-    hold on
-    xline(hitPercentCue,'-r',{'Hit rate of','stim only trials'},...
-        'LineWidth',3,...
-        'LabelOrientation','horizontal');
-    xlim([0,1]); xlabel('Hit rate'); ylabel('Occurance'); box off
-   
-
     % For pair
-    % 2.1 Calculate cue window success rate
-    hitPercentCue = length(find(trials.isTone == 1 & trials.isStim == 1 & trials.Outcome == "H"))/size(pairIdx,1);
-    % 2.2 Plot distribution
-    nexttile([2 1]);
+    % Calculate cue window success rate
+    hitPercentCue = length(find(trials.isTone == 1 & trials.isStim == 1 & trials.nAnticipatoryLicks >= 3))/size(pairIdx,1);
+    % Plot distribution
+    nexttile; title('Distribution of baseline licks for pair trials (bootstrapped)');
     h = histogram(hitPercentBaseline,nBins); 
     h.FaceColor = bluePurpleRed(150,:); h.EdgeColor = bluePurpleRed(150,:);
     hold on
     xline(hitPercentCue,'-r',{'Hit rate of','pair trials'},...
         'LineWidth',3,...
         'LabelOrientation','horizontal');
-    xlim([0,1]); xlabel('Hit rate'); ylabel ('Occurance'); box off
+    xlim([0,1]); xlabel('Hit rate'); ylabel ('Count'); box off
+    title("Baseline licks (pair trials)");
 
+    % For stim only
+    % Calculate cue window success rate
+    hitPercentCue = length(find(trials.isTone == 0 & trials.isStim == 1 & trials.nAnticipatoryLicks >= 3))/size(stimIdx,1);
+    % Plot distribution
+    nexttile; title('Distribution of baseline licks for stim only trials (bootstrapped)');
+    h = histogram(hitPercentBaseline,nBins);
+    h.FaceColor = bluePurpleRed(end,:); h.EdgeColor = bluePurpleRed(end,:);
+    hold on
+    xline(hitPercentCue,'-r',{'Hit rate of','stim only trials'},...
+        'LineWidth',3,...
+        'LabelOrientation','horizontal');
+    xlim([0,1]); xlabel('Hit rate'); ylabel('Count'); box off
+    title("Baseline licks (stim only trials)");
 
     % For tone only
-    % 2.1 Calculate cue window success rate
-    hitPercentCue = length(find(trials.isTone == 1 & trials.isStim == 0 & trials.Outcome == "H"))/size(toneIdx,1);
-    % 2.2 Plot distribution
-    nexttile([2 1]);
+    % Calculate cue window success rate
+    hitPercentCue = length(find(trials.isTone == 1 & trials.isStim == 0 & trials.nAnticipatoryLicks >= 3))/size(toneIdx,1);
+    % Plot distribution
+    nexttile; title('Distribution of baseline licks for tone only trials (bootstrapped)');
     h = histogram(hitPercentBaseline,nBins);
     h.FaceColor = bluePurpleRed(350,:); h.EdgeColor = bluePurpleRed(350,:);
     hold on
     xline(hitPercentCue,'-r',{'Hit rate of','tone only trials'},...
         'LineWidth',3,...
         'LabelOrientation','horizontal');
-    xlim([0,1]); xlabel('Hit rate'); ylabel('Occurance'); box off
+    xlim([0,1]); xlabel('Hit rate'); ylabel('Count'); box off
+    title("Baseline licks (tone only trials)");
 
-    saveas(gcf,strcat(sessionpath,filesep,'Summary_ENL_',session.name,'.png'));
+    % Plot trend
+    nexttile;
+    plot(trials{:,"TrialNumber"},trials{:,"nBaselineLicks"},Color=[0.75,0.75,0.75],LineWidth=2); hold on
+    scatter(pairIdx(:,1),trials{pairIdx(:,1),"nBaselineLicks"},100,bluePurpleRed(150,:),'filled'); hold on
+    scatter(stimIdx(:,1),trials{stimIdx(:,1),"nBaselineLicks"},100,bluePurpleRed(end,:),'filled'); hold on
+    scatter(toneIdx(:,1),trials{toneIdx(:,1),"nBaselineLicks"},100,bluePurpleRed(350,:),'filled'); hold on
+    xlabel("Trials"); ylabel("Baseline licks"); box off
+    title("Baseline licks (all trials)");
+
+
+    
+    stageCutoff = linspace(1,size(trials,1),4);
+    stageCutoff = stageCutoff(2:3);
+    
+    % 2. Distribution of first lick reaction time
+    rt_pair = trials{pairIdx(:,1),["TrialNumber","ReactionTime"]};
+    rt_stim = trials{stimIdx(:,1),["TrialNumber","ReactionTime"]};
+    rt_tone = trials{toneIdx(:,1),["TrialNumber","ReactionTime"]};
+    % For early stage of session
+    % Calculate bootstrap distribution
+    rt_pair_early = rt_pair(rt_pair(:,1)<stageCutoff(1),2);
+    rt_stim_early = rt_pair(rt_stim(:,1)<stageCutoff(1),2);
+    rt_tone_early = rt_pair(rt_tone(:,1)<stageCutoff(1),2);
+    [~,bootsam] = bootstrp(nboot,[],rt_pair_early);
+    rt_pair_early_bs = rt_pair_early(bootsam) / params.sync.behaviorFs;
+    [~,bootsam] = bootstrp(nboot,[],rt_stim_early);
+    rt_stim_early_bs = rt_stim_early(bootsam) / params.sync.behaviorFs;
+    [~,bootsam] = bootstrp(nboot,[],rt_tone_early);
+    rt_tone_early_bs = rt_tone_early(bootsam) / params.sync.behaviorFs;
+    % Plot distribution
+    nexttile; title("Cue reaction time distribution during early stage of session (bootstrapped)");
+    h = histogram(rt_pair_early_bs,nBins); 
+    h.FaceColor = bluePurpleRed(150,:); h.EdgeColor = bluePurpleRed(150,:); hold on
+    h = histogram(rt_stim_early_bs,nBins); 
+    h.FaceColor = bluePurpleRed(end,:); h.EdgeColor = bluePurpleRed(end,:); hold on
+    h = histogram(rt_tone_early_bs,nBins); 
+    h.FaceColor = bluePurpleRed(350,:); h.EdgeColor = bluePurpleRed(350,:); hold on
+    xlabel('First lick reaction time (s)'); ylabel('Count'); box off
+    title("First lick reaction time (early stage)");
+
+    % For middle stage of session
+    % Calculate bootstrap distribution
+    rt_pair_mid = rt_pair(rt_pair(:,1)>=stageCutoff(1) & rt_pair(:,1)<stageCutoff(2),2);
+    rt_stim_mid = rt_pair(rt_stim(:,1)>=stageCutoff(1) & rt_stim(:,1)<stageCutoff(2),2);
+    rt_tone_mid = rt_pair(rt_tone(:,1)>=stageCutoff(1) & rt_tone(:,1)<stageCutoff(2),2);
+    [~,bootsam] = bootstrp(nboot,[],rt_pair_mid);
+    rt_pair_mid_bs = rt_pair_mid(bootsam) / params.sync.behaviorFs;
+    [~,bootsam] = bootstrp(nboot,[],rt_stim_mid);
+    rt_stim_mid_bs = rt_stim_mid(bootsam) / params.sync.behaviorFs;
+    [~,bootsam] = bootstrp(nboot,[],rt_tone_mid);
+    rt_tone_mid_bs = rt_tone_mid(bootsam) / params.sync.behaviorFs;
+    % Plot distribution
+    nexttile; title("Cue reaction time distribution during middle stage of session (bootstrapped)");
+    h = histogram(rt_pair_mid_bs,nBins); 
+    h.FaceColor = bluePurpleRed(150,:); h.EdgeColor = bluePurpleRed(150,:); hold on
+    h = histogram(rt_stim_mid_bs,nBins); 
+    h.FaceColor = bluePurpleRed(end,:); h.EdgeColor = bluePurpleRed(end,:); hold on
+    h = histogram(rt_tone_mid_bs,nBins); 
+    h.FaceColor = bluePurpleRed(350,:); h.EdgeColor = bluePurpleRed(350,:); hold on
+    xlabel('First lick reaction time (s)'); ylabel('Count'); box off
+    title("First lick reaction time (middle stage)");
+
+    % For late stage of session
+    % Calculate bootstrap distribution
+    rt_pair_late = rt_pair(rt_pair(:,1)<=stageCutoff(2),2);
+    rt_stim_late = rt_pair(rt_stim(:,1)<=stageCutoff(2),2);
+    rt_tone_late = rt_pair(rt_tone(:,1)<=stageCutoff(2),2);
+    [~,bootsam] = bootstrp(nboot,[],rt_pair_late);
+    rt_pair_late_bs = rt_pair_late(bootsam) / params.sync.behaviorFs;
+    [~,bootsam] = bootstrp(nboot,[],rt_stim_late);
+    rt_stim_late_bs = rt_stim_late(bootsam) / params.sync.behaviorFs;
+    [~,bootsam] = bootstrp(nboot,[],rt_tone_late);
+    rt_tone_late_bs = rt_tone_late(bootsam) / params.sync.behaviorFs;
+    % Plot distribution
+    nexttile; title("Cue reaction time distribution during late stage of session (bootstrapped)");
+    h = histogram(rt_pair_late_bs,nBins); 
+    h.FaceColor = bluePurpleRed(150,:); h.EdgeColor = bluePurpleRed(150,:); hold on
+    h = histogram(rt_stim_late_bs,nBins); 
+    h.FaceColor = bluePurpleRed(end,:); h.EdgeColor = bluePurpleRed(end,:); hold on
+    h = histogram(rt_tone_late_bs,nBins); 
+    h.FaceColor = bluePurpleRed(350,:); h.EdgeColor = bluePurpleRed(350,:); hold on
+    xlabel('First lick reaction time (s)'); ylabel('Count'); box off
+    title("First lick reaction time (late stage)");
+
+    % Plot trend
+    nexttile;
+    plot(trials{:,"TrialNumber"},trials{:,"ReactionTime"}/params.sync.behaviorFs,Color=[0.75,0.75,0.75],LineWidth=2); hold on
+    scatter(pairIdx(:,1),trials{pairIdx(:,1),"ReactionTime"}/params.sync.behaviorFs,100,bluePurpleRed(150,:),'filled'); hold on
+    scatter(stimIdx(:,1),trials{stimIdx(:,1),"ReactionTime"}/params.sync.behaviorFs,100,bluePurpleRed(end,:),'filled'); hold on
+    scatter(toneIdx(:,1),trials{toneIdx(:,1),"ReactionTime"}/params.sync.behaviorFs,100,bluePurpleRed(350,:),'filled'); hold on
+    xlabel("Trials"); ylabel("Reaction time (s)"); box off
+    title("First lick reaction time (all trials)");
+
+
+    % 3. Distribution of anticipatory licks
+    al_pair = trials{pairIdx(:,1),["TrialNumber","nAnticipatoryLicks"]};
+    al_stim = trials{stimIdx(:,1),["TrialNumber","nAnticipatoryLicks"]};
+    al_tone = trials{toneIdx(:,1),["TrialNumber","nAnticipatoryLicks"]};
+    % For early stage of session
+    % Calculate bootstrap distribution
+    al_pair_early = al_pair(al_pair(:,1)<stageCutoff(1),2);
+    al_stim_early = al_pair(al_stim(:,1)<stageCutoff(1),2);
+    al_tone_early = al_pair(al_tone(:,1)<stageCutoff(1),2);
+    [~,bootsam] = bootstrp(nboot,[],al_pair_early);
+    al_pair_early_bs = al_pair_early(bootsam);
+    [~,bootsam] = bootstrp(nboot,[],al_stim_early);
+    al_stim_early_bs = al_stim_early(bootsam);
+    [~,bootsam] = bootstrp(nboot,[],al_tone_early);
+    al_tone_early_bs = al_tone_early(bootsam);
+    % Plot distribution
+    nexttile; title("Cue reaction time distribution during early stage of session (bootstrapped)");
+    h = histogram(al_pair_early_bs,nBins); 
+    h.FaceColor = bluePurpleRed(150,:); h.EdgeColor = bluePurpleRed(150,:); hold on
+    h = histogram(al_stim_early_bs,nBins); 
+    h.FaceColor = bluePurpleRed(end,:); h.EdgeColor = bluePurpleRed(end,:); hold on
+    h = histogram(al_tone_early_bs,nBins); 
+    h.FaceColor = bluePurpleRed(350,:); h.EdgeColor = bluePurpleRed(350,:); hold on
+    xlabel('Anticipatory licks'); ylabel('Count'); box off
+    title("Anticipatory licks (early stage)");
+
+    % For middle stage of session
+    % Calculate bootstrap distribution
+    al_pair_mid = al_pair(al_pair(:,1)>=stageCutoff(1) & al_pair(:,1)<stageCutoff(2),2);
+    al_stim_mid = al_pair(al_stim(:,1)>=stageCutoff(1) & al_stim(:,1)<stageCutoff(2),2);
+    al_tone_mid = al_pair(al_tone(:,1)>=stageCutoff(1) & al_tone(:,1)<stageCutoff(2),2);
+    [~,bootsam] = bootstrp(nboot,[],al_pair_mid);
+    al_pair_mid_bs = al_pair_mid(bootsam);
+    [~,bootsam] = bootstrp(nboot,[],al_stim_mid);
+    al_stim_mid_bs = al_stim_mid(bootsam);
+    [~,bootsam] = bootstrp(nboot,[],al_tone_mid);
+    al_tone_mid_bs = al_tone_mid(bootsam);
+    % Plot distribution
+    nexttile; title("Cue reaction time distribution during middle stage of session (bootstrapped)");
+    h = histogram(al_pair_mid_bs,nBins); 
+    h.FaceColor = bluePurpleRed(150,:); h.EdgeColor = bluePurpleRed(150,:); hold on
+    h = histogram(al_stim_mid_bs,nBins); 
+    h.FaceColor = bluePurpleRed(end,:); h.EdgeColor = bluePurpleRed(end,:); hold on
+    h = histogram(al_tone_mid_bs,nBins); 
+    h.FaceColor = bluePurpleRed(350,:); h.EdgeColor = bluePurpleRed(350,:); hold on
+    xlabel('Anticipatory licks'); ylabel('Count'); box off
+    title("Anticipatory licks (middle stage)");
+
+    % For late stage of session
+    % Calculate bootstrap distribution
+    al_pair_late = al_pair(al_pair(:,1)<=stageCutoff(2),2);
+    al_stim_late = al_pair(al_stim(:,1)<=stageCutoff(2),2);
+    al_tone_late = al_pair(al_tone(:,1)<=stageCutoff(2),2);
+    [~,bootsam] = bootstrp(nboot,[],al_pair_late);
+    al_pair_late_bs = al_pair_late(bootsam);
+    [~,bootsam] = bootstrp(nboot,[],al_stim_late);
+    al_stim_late_bs = al_stim_late(bootsam);
+    [~,bootsam] = bootstrp(nboot,[],al_tone_late);
+    al_tone_late_bs = al_tone_late(bootsam);
+    % Plot distribution
+    nexttile; title("Cue reaction time distribution during late stage of session (bootstrapped)");
+    h = histogram(al_pair_late_bs,nBins); 
+    h.FaceColor = bluePurpleRed(150,:); h.EdgeColor = bluePurpleRed(150,:); hold on
+    h = histogram(al_stim_late_bs,nBins); 
+    h.FaceColor = bluePurpleRed(end,:); h.EdgeColor = bluePurpleRed(end,:); hold on
+    h = histogram(al_tone_late_bs,nBins); 
+    h.FaceColor = bluePurpleRed(350,:); h.EdgeColor = bluePurpleRed(350,:); hold on
+    xlabel('Anticipatory licks'); ylabel('Count'); box off
+    title("Anticipatory licks (late stage)");
+
+    % Plot trend
+    nexttile;
+    plot(trials{:,"TrialNumber"},trials{:,"nAnticipatoryLicks"},Color=[0.75,0.75,0.75],LineWidth=2); hold on
+    scatter(pairIdx(:,1),trials{pairIdx(:,1),"nAnticipatoryLicks"},100,bluePurpleRed(150,:),'filled'); hold on
+    scatter(stimIdx(:,1),trials{stimIdx(:,1),"nAnticipatoryLicks"},100,bluePurpleRed(end,:),'filled'); hold on
+    scatter(toneIdx(:,1),trials{toneIdx(:,1),"nAnticipatoryLicks"},100,bluePurpleRed(350,:),'filled'); hold on
+    xlabel("Trials"); ylabel("Anticipatory licks"); box off
+    title("Anticipatory licks (all trials)");
+
+
+    % 4. Distribution of reward rection time
+    ort_pair = trials{pairIdx(:,1),["TrialNumber","OutcomeReactionTime"]};
+    ort_stim = trials{stimIdx(:,1),["TrialNumber","OutcomeReactionTime"]};
+    ort_tone = trials{toneIdx(:,1),["TrialNumber","OutcomeReactionTime"]};
+    % For early stage of session
+    % Calculate bootstrap distribution
+    ort_pair_early = ort_pair(ort_pair(:,1)<stageCutoff(1),2);
+    ort_stim_early = ort_pair(ort_stim(:,1)<stageCutoff(1),2);
+    ort_tone_early = ort_pair(ort_tone(:,1)<stageCutoff(1),2);
+    [~,bootsam] = bootstrp(nboot,[],ort_pair_early);
+    ort_pair_early_bs = ort_pair_early(bootsam) / params.sync.behaviorFs;
+    [~,bootsam] = bootstrp(nboot,[],ort_stim_early);
+    ort_stim_early_bs = ort_stim_early(bootsam) / params.sync.behaviorFs;
+    [~,bootsam] = bootstrp(nboot,[],ort_tone_early);
+    ort_tone_early_bs = ort_tone_early(bootsam) / params.sync.behaviorFs;
+    % Plot distribution
+    nexttile; title("Cue reaction time distribution during early stage of session (bootstrapped)");
+    h = histogram(ort_pair_early_bs,nBins); 
+    h.FaceColor = bluePurpleRed(150,:); h.EdgeColor = bluePurpleRed(150,:); hold on
+    h = histogram(ort_stim_early_bs,nBins); 
+    h.FaceColor = bluePurpleRed(end,:); h.EdgeColor = bluePurpleRed(end,:); hold on
+    h = histogram(ort_tone_early_bs,nBins); 
+    h.FaceColor = bluePurpleRed(350,:); h.EdgeColor = bluePurpleRed(350,:); hold on
+    xlim([0,5]); xlabel('Outcome reaction time (s)'); ylabel('Count'); box off
+    title("Outcome reaction time (early stage)");
+
+    % For middle stage of session
+    % Calculate bootstrap distribution
+    ort_pair_mid = ort_pair(ort_pair(:,1)>=stageCutoff(1) & ort_pair(:,1)<stageCutoff(2),2);
+    ort_stim_mid = ort_pair(ort_stim(:,1)>=stageCutoff(1) & ort_stim(:,1)<stageCutoff(2),2);
+    ort_tone_mid = ort_pair(ort_tone(:,1)>=stageCutoff(1) & ort_tone(:,1)<stageCutoff(2),2);
+    [~,bootsam] = bootstrp(nboot,[],ort_pair_mid);
+    ort_pair_mid_bs = ort_pair_mid(bootsam) / params.sync.behaviorFs;
+    [~,bootsam] = bootstrp(nboot,[],ort_stim_mid);
+    ort_stim_mid_bs = ort_stim_mid(bootsam) / params.sync.behaviorFs;
+    [~,bootsam] = bootstrp(nboot,[],ort_tone_mid);
+    ort_tone_mid_bs = ort_tone_mid(bootsam) / params.sync.behaviorFs;
+    % Plot distribution
+    nexttile; title("Cue reaction time distribution during middle stage of session (bootstrapped)");
+    h = histogram(ort_pair_mid_bs,nBins); 
+    h.FaceColor = bluePurpleRed(150,:); h.EdgeColor = bluePurpleRed(150,:); hold on
+    h = histogram(ort_stim_mid_bs,nBins); 
+    h.FaceColor = bluePurpleRed(end,:); h.EdgeColor = bluePurpleRed(end,:); hold on
+    h = histogram(ort_tone_mid_bs,nBins); 
+    h.FaceColor = bluePurpleRed(350,:); h.EdgeColor = bluePurpleRed(350,:); hold on
+    xlim([0,5]); xlabel('Outcome reaction time (s)'); ylabel('Count'); box off
+    title("Outcome reaction time (middle stage)");
+
+    % For late stage of session
+    % Calculate bootstrap distribution
+    ort_pair_late = ort_pair(ort_pair(:,1)<=stageCutoff(2),2);
+    ort_stim_late = ort_pair(ort_stim(:,1)<=stageCutoff(2),2);
+    ort_tone_late = ort_pair(ort_tone(:,1)<=stageCutoff(2),2);
+    [~,bootsam] = bootstrp(nboot,[],ort_pair_late);
+    ort_pair_late_bs = ort_pair_late(bootsam) / params.sync.behaviorFs;
+    [~,bootsam] = bootstrp(nboot,[],ort_stim_late);
+    ort_stim_late_bs = ort_stim_late(bootsam) / params.sync.behaviorFs;
+    [~,bootsam] = bootstrp(nboot,[],ort_tone_late);
+    ort_tone_late_bs = ort_tone_late(bootsam) / params.sync.behaviorFs;
+    % Plot distribution
+    nexttile; 
+    h = histogram(ort_pair_late_bs,nBins); 
+    h.FaceColor = bluePurpleRed(150,:); h.EdgeColor = bluePurpleRed(150,:); hold on
+    h = histogram(ort_stim_late_bs,nBins); 
+    h.FaceColor = bluePurpleRed(end,:); h.EdgeColor = bluePurpleRed(end,:); hold on
+    h = histogram(ort_tone_late_bs,nBins); 
+    h.FaceColor = bluePurpleRed(350,:); h.EdgeColor = bluePurpleRed(350,:); hold on
+    xlim([0,5]); xlabel('Outcome reaction time (s)'); ylabel('Count'); box off
+    title("Outcome reaction time (late stage)");
+
+    % Plot trend
+    nexttile;
+    plot(trials{:,"TrialNumber"},trials{:,"OutcomeReactionTime"}/params.sync.behaviorFs,Color=[0.75,0.75,0.75],LineWidth=2); hold on
+    scatter(pairIdx(:,1),trials{pairIdx(:,1),"OutcomeReactionTime"}/params.sync.behaviorFs,100,bluePurpleRed(150,:),'filled'); hold on
+    scatter(stimIdx(:,1),trials{stimIdx(:,1),"OutcomeReactionTime"}/params.sync.behaviorFs,100,bluePurpleRed(end,:),'filled'); hold on
+    scatter(toneIdx(:,1),trials{toneIdx(:,1),"OutcomeReactionTime"}/params.sync.behaviorFs,100,bluePurpleRed(350,:),'filled'); hold on
+    ylim([0,5]); xlabel("Trials"); ylabel("Outcome reaction time (s)"); box off
+    title("Outcome reaction time (all trials)");
+
+    
+    saveas(gcf,strcat(sessionpath,filesep,'Summary_Distributions.png'));
 
 end
 
 % save(strcat(session.path,filesep,'sync_',sessionName),'params','-append');
 return
 
-% %% test
-% 
-% waterIdx = find(rightSolenoid); 
-% timeRange = [-1, 5];
-% 
-% initializeFig(0.67,0.4); tiledlayout(1,4);
-% nexttile;
-% [~,~] = plotTraces(waterIdx,timeRange,detrendGreen,bluePurpleRed(1,:),params);
-% nexttile;
-% [~,~] = plotTraces(waterIdx,timeRange,demodGreen,bluePurpleRed(150,:),params);
-% nexttile;
-% [~,~] = plotTraces(waterIdx,timeRange,rollingGreen,bluePurpleRed(350,:),params);
-% nexttile;
-% [~,~] = plotTraces(waterIdx,timeRange,rollingGreenLP,bluePurpleRed(500,:),params);
-
-return
 end

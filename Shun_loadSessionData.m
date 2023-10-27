@@ -88,7 +88,8 @@ for s = 1:length(sessionList)
             rollingWindowTime=180);
         analyzeSessions_optoPair(sessionList{s},taskList{s},stimPatternList{s},...
             redo=true,round=false,performing=false,...
-            plotPhotometry=plotPhotometry,plotLicks=plotLicks);
+            plotPhotometry=plotPhotometry,plotLicks=plotLicks,...
+            pavlovian=true,reactionTime=1.5);
     catch ME
         disp(getReport(ME));
         warning(['Session ', sessionName, ' have an error, skipped for now!!!!']);

@@ -160,7 +160,8 @@ if options.reloadAll || options.reloadNI
     
     blink = (analogNI(3,:)> (max(analogNI(3,:))/2));
     temp = [false, diff(blink)];
-    blink = (temp==1);
+    blinkRaw = (temp==1);
+    blink = find(blinkRaw);
     
     % temperature = analogNI(3,:);
     gyro = single(analogNI(4:6,:));
@@ -253,7 +254,8 @@ if options.reloadAll || options.reloadNI
             plot(linspace(1,plotDuration,plotSamples),PMT_NI(1:plotSamples),...
                 LineWidth=2); hold on
             legend({'Raw NI green','Processed NI green'}); xlabel('Time (s)');
-            saveas(gcf,strcat(session.path,'\Photometry_NI_processed',sessionName,'.png'))
+            saveas(gcf,strcat(session.path,filesep,'Photometry_NI_processed.png')); 
+            saveas(gcf,strcat(session.path,filesep,'Photometry_NI_processed.fig'));
         end 
     end
     
@@ -291,12 +293,14 @@ if options.reloadAll || options.reloadNI
     
     %% Save behavioral data
     if options.withPhotometryNI
+        % save(strcat(session.path,filesep,'Raw_NI'),'');
         save(strcat(session.path,filesep,'sync_',sessionName),...
             'airpuff','leftLick','rightLick','leftTone','rightTone',....
             'leftSolenoid','rightSolenoid','allTones','blink','gyro',...
             'photometry_raw','blueLaser','redLaser',...
             'PMT_NI','-append');
     else
+        % save(strcat(session.path,filesep,'Raw_NI'),'');
         save(strcat(session.path,filesep,'sync_',sessionName),...
             'airpuff','leftLick','rightLick','leftTone','rightTone',....
             'leftSolenoid','rightSolenoid','allTones','blink','gyro',...
@@ -399,10 +403,10 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
     %% Concatenate raw.mat files
 
     disp("Ongoing: concatenate and save raw photometry data");
-    if isempty(dir(fullfile(session.path,filesep,'photometryLJ_raw.mat')))
+    if isempty(dir(fullfile(session.path,filesep,'Raw_labjack.mat')))
         concatLabjack(session.path,save=true,plot=false);
     end
-    load(strcat(session.path,filesep,'photometryLJ_raw.mat'));
+    load(strcat(session.path,filesep,'Raw_labjack.mat'));
     disp('Finished: concatenate and saved raw photometry data');
 
     % Store relevant info
@@ -525,7 +529,8 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
 
     % Save channels
     if options.plotPhotometry
-        saveas(gcf,strcat(session.path,'\Photometry_LJ_processed',sessionName,'.png')); 
+        saveas(gcf,strcat(session.path,filesep,'Photometry_',labjack.name{i},'_processed.png')); 
+        saveas(gcf,strcat(session.path,filesep,'Photometry_',labjack.name{i},'_processed.fig'));
     end
     save(strcat(session.path,filesep,'sync_',sessionName),...
         'processed','-append');
@@ -887,7 +892,7 @@ end
 % 6.2.1. Only nidq
 if ~(withRecording || withPhotometry || withCamera)
     syncNI_first = find(syncNI_diff>0,1);
-    disp("   Finished: NI timestamp assigned");
+    disp("Finished: NI timestamp assigned");
 end
 
 % 6.2.2. Fill in the baseline time
@@ -897,14 +902,14 @@ if withRecording
     end
     idx_Imec = find(syncImec_diff(ImecNI_imec:end)==1)+ImecNI_imec-1;
     t0 = timeImec(ImecNI_imec);
-    disp("   Finished: Imec/NI timestamp assigned");
+    disp("Finished: Imec/NI timestamp assigned");
 else
     for i=1:length(syncNI)
         timeNI(i) = (i-syncNI_first)/params.sync.behaviorFs; % Time of each timebin of NI in sec
     end
     idx_NI = find(syncNI_diff(syncNI_first:end)==1)+syncNI_first-1;
     t0 = timeNI(syncNI_first);
-    disp("   Finished: Imec/NI timestamp assigned");
+    disp("Finished: Imec/NI timestamp assigned");
 end
 
 
@@ -921,7 +926,7 @@ if withCamera
         [timeCamera,l_CamNI] = assignTimeStamp(timeCamera,timeNI,idx_Cam,idx_NI,params.sync.camFs);
         timeCamera = timeCamera - t0; % align timeCamera to timeNI
     end
-    disp("   Finished: camera timestamp assigned");
+    disp("Finished: camera timestamp assigned");
 end
 
 % 6.2.4. Fill in photometry
@@ -937,7 +942,7 @@ if withPhotometry
         [timePhotometry,l_LJNI] = assignTimeStamp(timePhotometry,timeNI,idx_LJ,idx_NI,params.sync.labjackFs);
         timePhotometry = timePhotometry - t0; % align timePhotometry to timeNI
     end
-    disp("   Finished: labjack timestamp assigned");
+    disp("Finished: labjack timestamp assigned");
 end
 
 % 6.2.5. Fill in NI if withRecording == true
@@ -952,7 +957,7 @@ if withRecording
     idx_LFP = find(syncLFP_diff(LFPNI_lfp:end)==1)+LFPNI_lfp-1;
     [timeLFP,l_LFPImec] = assignTimeStamp(timeLFP,timeImec,idx_LFP,idx_Imec,params.sync.lfpFs);
     timeLFP = timeLFP - t0; % align timePhotometry to timeNI
-    disp("   Finished: LFP timestamp assigned");
+    disp("Finished: LFP timestamp assigned");
 end
 
 % Align to common start pulse
@@ -973,10 +978,12 @@ if withRecording
     subplot(1,4,2); plot(diff(timeNI)); title('d(timeNI)');
     subplot(1,4,3); plot(timeImec(idx_Imec(1:l_NIImec))-timeNI(idx_NI(1:l_NIImec))); title('Imec-NI');
     subplot(1,4,4); plot(timeLFP(idx_LFP(1:l_LFPImec))-timeLFP(idx_LFP(1:l_LFPImec))); title('LFP-NI');
+    disp("Finished: Imec/NI timestamp plotted");
 else
     figure; 
     subplot(1,2,1); plot(timeNI); title('NI time in sec');
     subplot(1,2,2); plot(diff(timeNI)); title('d(timeNI)');
+    disp("Finished: Imec/NI timestamp plotted");
 end
 
 if withCamera
@@ -988,6 +995,7 @@ if withCamera
     else
         subplot(1,3,3); plot(timeNI(idx_NI(1:l_CamNI))-timeCamera(idx_Cam(1:l_CamNI))); title('NI-cam');
     end
+    disp("Finished: camera timestamp plotted");
 end
 if withPhotometry
     figure; title('Labjack vs Imec/NI');
@@ -998,6 +1006,7 @@ if withPhotometry
     else
         subplot(1,3,3); plot(timeNI(idx_NI(1:l_LJNI))-timePhotometry(idx_LJ(1:l_LJNI))); title('NI-photometry');
     end
+    disp("Finished: Labjack timestamp plotted");
 end
 autoArrangeFigures();
 

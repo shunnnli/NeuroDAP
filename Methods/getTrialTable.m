@@ -5,9 +5,11 @@ arguments
     events cell
     rightSolenoid_rounded double
     airpuff_rounded double
+
     options.behaviorFs double = 10000 % in Hz
-    options.reactionTime double = 2 % in seconds
+    options.reactionTime double = 1.5 % in seconds
     options.minLicks double = 2 
+    options.pavlovian logical = true
 end
 
 % Load events as separte vectors
@@ -24,25 +26,28 @@ stimON = events{6};
 % BaselineLicks (in session time), others are in trial time
 varTypes = {'double','double','string',...
             'logical','logical','logical','logical',...
-            'double','double','double','double','double','double','double',...
-            'double','double','double','double',...
+            'double','double','double','double','double','double','double','double',...
+            'double','double','double','double','double','double',...
             'cell','cell','cell','cell'};
 varNames = {'TrialNumber','Choice','Outcome',...
             'isTone','isStim','isReward','isPunishment',...
-            'CueTime','NextCue','ENL','ITI','ReactionTime','OutcomeTime','LastLickTime',...
-            'RewardSize','PunishSize','nLicks','nAnticipatoryLicks',...
+            'CueTime','NextCue','ENL','ITI','ReactionTime','OutcomeTime','OutcomeReactionTime','LastLickTime',...
+            'RewardSize','PunishSize','nLicks','nAnticipatoryLicks','nOutcomeLicks','nBaselineLicks',...
             'TrialLicks','AnticipatoryLicks','OutcomeLicks','BaselineLicks'};
 
 % Initialize trial subtypes
 trials = table('Size',[length(allTrials) length(varNames)],...
     'VariableTypes',varTypes,'VariableNames',varNames);
-go = []; nogo = [];
-hit = []; miss = []; fa = []; cr = [];
+
+if ~options.pavlovian
+    go = []; nogo = [];
+    hit = []; miss = []; fa = []; cr = [];
+end
 
 % Define session related params
 gracePeriod = floor(0.2 * options.behaviorFs);
 reactionTimeSamp = options.reactionTime * options.behaviorFs;
-
+outcome = nan; choice = nan; outcomeReactionTime = nan;
 
 % Loop over all trials
 for i=1:length(allTrials)
@@ -118,37 +123,43 @@ for i=1:length(allTrials)
     end
 
     % Trial choice (1: go; 0: nogo)
-    if isempty(choiceLicks); nogo = [nogo;cur_cue]; choice = 0;
-    else
-        if consecLicks(end) >= options.minLicks
-            go = [go;cur_cue]; 
-            choice = 1;
-        else; nogo = [nogo;cur_cue]; choice = 0;
+    if ~options.pavlovian
+        if isempty(choiceLicks); nogo = [nogo;cur_cue]; choice = 0;
+        else
+            if consecLicks(end) >= options.minLicks
+                go = [go;cur_cue]; 
+                choice = 1;
+            else; nogo = [nogo;cur_cue]; choice = 0;
+            end
+        end
+
+        % Update outcomeTime for omission trials (no outcome but licked)
+        if ~(isReward || isPunishment) && (choice ~= 0)
+            choiceLicks_idx = find(consecLicks>=options.minLicks,options.minLicks);
+            choiceLicks = choiceLicks(1:choiceLicks_idx(end),:);
+            outcomeTime = min(outcomeTime,choiceLicks(end,1));
         end
     end
 
-    % Update outcomeTime for omission trials (no outcome but licked)
-    if ~(isReward || isPunishment) && (choice ~= 0)
-        choiceLicks_idx = find(consecLicks>=options.minLicks,options.minLicks);
-        choiceLicks = choiceLicks(1:choiceLicks_idx(end),:);
-        outcomeTime = min(outcomeTime,choiceLicks(end,1));
-    end
 
-    % Trial outcome
+    % Trial outcome & outcome reaction time
     if contains(task,'reward')
-        if choice == 1; hit = [hit; cur_cue]; outcome = 'H';
-        elseif choice == 0; miss = [miss; cur_cue]; outcome = 'M';
+        if ~options.pavlovian
+            if choice == 1; hit = [hit; cur_cue]; outcome = 'H';
+            elseif choice == 0; miss = [miss; cur_cue]; outcome = 'M'; end
         end
+        outcomeReactionTime = rightLickON(find(rightLickON>outcomeTime+cur_cue,1)) - (cur_cue+outcomeTime);
+        if isempty(outcomeReactionTime); outcomeReactionTime = nan; end
     else
-        outcome = 'H';
+        if ~options.pavlovian; outcome = 'H'; end
+        outcomeReactionTime = nan;
     end
-
 
     % Trial table
     trials(i,:) = {i,choice,outcome,...
         isTone,isStim,isReward,isPunishment,...
-        cur_cue,next_cue,ENL,ITI,reactionTime,outcomeTime,lastLickTime,...
-        rewardSize,punishSize,nLicks,nAnticipatoryLicks,...
+        cur_cue,next_cue,ENL,ITI,reactionTime,outcomeTime,outcomeReactionTime,lastLickTime,...
+        rewardSize,punishSize,nLicks,nAnticipatoryLicks,size(outcomeLicks,1),size(baselineLicks,1),...
         num2cell(trialLicks,[1 2]),num2cell(choiceLicks,[1 2]),num2cell(outcomeLicks,[1 2]),num2cell(baselineLicks,[1 2])};
 end
 

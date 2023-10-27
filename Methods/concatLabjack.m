@@ -78,6 +78,7 @@ labjack.sync = sync_labjack;
 % Replace space in name with underscore
 for i = 1:labjack.nSignals
     labjack.name{i} = strrep(labjack.name{i}, ' ', '-');
+    labjack.name{i} = strrep(labjack.name{i}, '_', '-');
 end
 
 % Plot photometry summary plot (skipped)
@@ -95,7 +96,7 @@ end
 
 % Save concat files
 if options.save
-    save(strcat(sessionpath,filesep,'photometryLJ_raw'),...
+    save(strcat(sessionpath,filesep,'Raw_labjack'),...
         'labjack','numChannels','sync_labjack','-v7.3');
 end
 
