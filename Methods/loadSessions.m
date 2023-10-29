@@ -29,7 +29,7 @@ arguments
    options.photometryNI_modFreq double = 223
 
    % Sync related params
-   options.syncPulseWindow double = 200 % #of sync pulse to xcorr
+   options.syncPulseWindow double = 5000 % #of sync pulse to xcorr
    
 end
 
@@ -809,6 +809,7 @@ if withRecording
 end
 
 % 4. Find the max of xcorr
+initializeFig(0.67,0.67); tiledlayout('flow');
 CamNI_ni = 0; LJNI_ni = 0; ImecNI_ni = 0; LFPNI_ni = 0;
 CamNI_niIdx = 0; LJNI_niIdx = 0; ImecNI_niIdx = 0; LFPNI_niIdx = 0;
 if withCamera
@@ -816,14 +817,14 @@ if withCamera
     if lags_cam >= 0; CamNI_cam = cam_idx(1); CamNI_ni = ni_idx(1+lags_cam);
     else; CamNI_cam = cam_idx(1-lags_cam); CamNI_ni = ni_idx(1); end
     CamNI_niIdx = max([1+lags_cam,1]); CamNI_camIdx = max([1-lags_cam,1]);
-    figure; stem(l_cam,r_cam)
+    nexttile; stem(l_cam,r_cam)
 end
 if withPhotometry
     [~,maxIdx] = max(r_lj); lags_lj = l_lj(maxIdx); 
     if lags_lj >= 0; LJNI_lj = lj_idx(1); LJNI_ni = ni_idx(1+lags_lj);
     else; LJNI_lj = lj_idx(1-lags_lj); LJNI_ni = ni_idx(1); end
     LJNI_niIdx = max([1+lags_lj,1]); LJNI_ljIdx = max([1-lags_lj,1]);
-    figure; stem(l_lj,r_lj)
+    nexttile; stem(l_lj,r_lj)
 end
 if withRecording
     [~,maxIdx] = max(r_imec); lags_imec = l_imec(maxIdx); 
@@ -837,7 +838,6 @@ if withRecording
     end
     ImecNI_niIdx = max([1+lags_imec,1]); ImecNI_imecIdx = max([1-lags_imec,1]);
     LFPNI_niIdx = max([1+lags_lfp,1]); LFPNI_lfpIdx = max([1-lags_lfp,1]);
-    initializeFig(0.66,0.5); tiledlayout(1,2);
     nexttile; stem(l_imec,r_imec); title('Imec time xcor');
     nexttile; stem(l_lfp,r_lfp); title('LFP time xcor');
 end
@@ -966,49 +966,48 @@ else; timeNI = timeNI - t0; end
 
 % 7. Plot summary plot
 if withRecording
-    figure; tiledlayout(2,2); title('LFP vs Imec');
+    title('LFP vs Imec');
     nexttile; plot(timeImec); title('Imec time in sec');
     nexttile; plot(timeLFP); title('LFP time in sec');
     nexttile; plot(diff(timeImec)); title('d(timeImec)');
     nexttile; plot(diff(timeLFP)); title('d(timeLFP)');
     
     
-    figure; title('NI vs Imec');
-    subplot(1,4,1); plot(timeNI); title('NI time in sec');
-    subplot(1,4,2); plot(diff(timeNI)); title('d(timeNI)');
-    subplot(1,4,3); plot(timeImec(idx_Imec(1:l_NIImec))-timeNI(idx_NI(1:l_NIImec))); title('Imec-NI');
-    subplot(1,4,4); plot(timeLFP(idx_LFP(1:l_LFPImec))-timeLFP(idx_LFP(1:l_LFPImec))); title('LFP-NI');
+    nexttile; title('NI vs Imec');
+    nexttile; plot(timeNI); title('NI time in sec');
+    nexttile; plot(diff(timeNI)); title('d(timeNI)');
+    nexttile; plot(timeImec(idx_Imec(1:l_NIImec))-timeNI(idx_NI(1:l_NIImec))); title('Imec-NI');
+    nexttile; plot(timeLFP(idx_LFP(1:l_LFPImec))-timeLFP(idx_LFP(1:l_LFPImec))); title('LFP-NI');
     disp("Finished: Imec/NI timestamp plotted");
 else
-    figure; 
-    subplot(1,2,1); plot(timeNI); title('NI time in sec');
-    subplot(1,2,2); plot(diff(timeNI)); title('d(timeNI)');
+    nexttile; plot(timeNI); title('NI time in sec');
+    nexttile; plot(diff(timeNI)); title('d(timeNI)');
     disp("Finished: Imec/NI timestamp plotted");
 end
 
 if withCamera
-    figure; title('Camera vs Imec/NI');
-    subplot(1,3,1); plot(timeCamera); title('Camera time in sec'); 
-    subplot(1,3,2); plot(diff(timeCamera)); title('d(timeCamera)');
+    title('Camera vs Imec/NI');
+    nexttile; plot(timeCamera); title('Camera time in sec'); 
+    nexttile; plot(diff(timeCamera)); title('d(timeCamera)');
     if withRecording
-        subplot(1,3,3); plot(timeImec(idx_Imec(1:l_CamImec))-timeCamera(idx_Cam(1:l_CamImec))); title('Imec-cam');
+        nexttile; plot(timeImec(idx_Imec(1:l_CamImec))-timeCamera(idx_Cam(1:l_CamImec))); title('Imec-cam');
     else
-        subplot(1,3,3); plot(timeNI(idx_NI(1:l_CamNI))-timeCamera(idx_Cam(1:l_CamNI))); title('NI-cam');
+        nexttile; plot(timeNI(idx_NI(1:l_CamNI))-timeCamera(idx_Cam(1:l_CamNI))); title('NI-cam');
     end
     disp("Finished: camera timestamp plotted");
 end
 if withPhotometry
-    figure; title('Labjack vs Imec/NI');
-    subplot(1,3,1); plot(timePhotometry); title('Photometry time in sec'); 
-    subplot(1,3,2); plot(diff(timePhotometry)); title('d(timePhotometry)');
+    title('Labjack vs Imec/NI');
+    nexttile; plot(timePhotometry); title('Photometry time in sec'); 
+    nexttile; plot(diff(timePhotometry)); title('d(timePhotometry)');
     if withRecording
-        subplot(1,3,3); plot(timeImec(idx_Imec(1:l_LJImec))-timePhotometry(idx_LJ(1:l_LJImec))); title('Imec-photometry');
+        nexttile; plot(timeImec(idx_Imec(1:l_LJImec))-timePhotometry(idx_LJ(1:l_LJImec))); title('Imec-photometry');
     else
-        subplot(1,3,3); plot(timeNI(idx_NI(1:l_LJNI))-timePhotometry(idx_LJ(1:l_LJNI))); title('NI-photometry');
+        nexttile; plot(timeNI(idx_NI(1:l_LJNI))-timePhotometry(idx_LJ(1:l_LJNI))); title('NI-photometry');
     end
     disp("Finished: Labjack timestamp plotted");
 end
-autoArrangeFigures();
+saveas(gcf,strcat(session.path,filesep,'Syncing_timestamp.png'));
 
 %% (Ver5) Save sync and other data
 

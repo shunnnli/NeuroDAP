@@ -839,7 +839,7 @@ if options.plotLicks && contains(task,'pairing')
     hitPercentBaseline = zeros(nboot,1);
     for i = 1:nboot
         % Randomly select columns for 2 sec (2/0.2 = 10)
-        windowInBin = options.reactionTime / lick_binSize;
+        windowInBin = round(options.reactionTime / lick_binSize);
         baselineSamples = datasample(allLicksBaseline,windowInBin,2,'Replace',true);
         hitPercentBaseline(i) = sum(sum(baselineSamples,2) >= 2)/size(baselineSamples,1);
     end
@@ -896,7 +896,6 @@ if options.plotLicks && contains(task,'pairing')
     title("Baseline licks (all trials)");
 
 
-    
     stageCutoff = linspace(1,size(trials,1),4);
     stageCutoff = stageCutoff(2:3);
     
@@ -1083,7 +1082,7 @@ if options.plotLicks && contains(task,'pairing')
     h.FaceColor = bluePurpleRed(end,:); h.EdgeColor = bluePurpleRed(end,:); hold on
     h = histogram(ort_tone_early_bs,nBins); 
     h.FaceColor = bluePurpleRed(350,:); h.EdgeColor = bluePurpleRed(350,:); hold on
-    xlim([0,5]); xlabel('Outcome reaction time (s)'); ylabel('Count'); box off
+    xlabel('Outcome reaction time (s)'); ylabel('Count'); box off
     title("Outcome reaction time (early stage)");
 
     % For middle stage of session
@@ -1105,7 +1104,7 @@ if options.plotLicks && contains(task,'pairing')
     h.FaceColor = bluePurpleRed(end,:); h.EdgeColor = bluePurpleRed(end,:); hold on
     h = histogram(ort_tone_mid_bs,nBins); 
     h.FaceColor = bluePurpleRed(350,:); h.EdgeColor = bluePurpleRed(350,:); hold on
-    xlim([0,5]); xlabel('Outcome reaction time (s)'); ylabel('Count'); box off
+    xlabel('Outcome reaction time (s)'); ylabel('Count'); box off
     title("Outcome reaction time (middle stage)");
 
     % For late stage of session
@@ -1127,7 +1126,7 @@ if options.plotLicks && contains(task,'pairing')
     h.FaceColor = bluePurpleRed(end,:); h.EdgeColor = bluePurpleRed(end,:); hold on
     h = histogram(ort_tone_late_bs,nBins); 
     h.FaceColor = bluePurpleRed(350,:); h.EdgeColor = bluePurpleRed(350,:); hold on
-    xlim([0,5]); xlabel('Outcome reaction time (s)'); ylabel('Count'); box off
+    xlabel('Outcome reaction time (s)'); ylabel('Count'); box off
     title("Outcome reaction time (late stage)");
 
     % Plot trend
@@ -1136,7 +1135,7 @@ if options.plotLicks && contains(task,'pairing')
     scatter(pairIdx(:,1),trials{pairIdx(:,1),"OutcomeReactionTime"}/params.sync.behaviorFs,100,bluePurpleRed(150,:),'filled'); hold on
     scatter(stimIdx(:,1),trials{stimIdx(:,1),"OutcomeReactionTime"}/params.sync.behaviorFs,100,bluePurpleRed(end,:),'filled'); hold on
     scatter(toneIdx(:,1),trials{toneIdx(:,1),"OutcomeReactionTime"}/params.sync.behaviorFs,100,bluePurpleRed(350,:),'filled'); hold on
-    ylim([0,5]); xlabel("Trials"); ylabel("Outcome reaction time (s)"); box off
+    xlabel("Trials"); ylabel("Outcome reaction time (s)"); box off
     title("Outcome reaction time (all trials)");
 
     
