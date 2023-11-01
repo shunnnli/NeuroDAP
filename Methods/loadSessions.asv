@@ -29,7 +29,7 @@ arguments
    options.photometryNI_modFreq double = 223
 
    % Sync related params
-   options.syncPulseWindow double = 200 % #of sync pulse to xcorr
+   options.syncPulseWindow double = 5000 % #of sync pulse to xcorr
    
 end
 
@@ -479,19 +479,15 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
                         dsMethod='resample');
             
             % Check final Fs
-            finalFs = length(downsampled.data) / totalDuration_LJ;
+            finalFs = length(downsampled.dsData) / totalDuration_LJ;
             if options.downsampleFs ~= finalFs
                 warning("   Desired downsampleFs is different from calculated Fs! Used calculated Fs instead!");
             end
             params.sync.photometryFs = [finalFs, params.sync.photometryFs];
-        
-            % Rolling zscore for demodGreen and demodRed
-            params.photometry.signalDetrendWindow = floor(options.rollingWindowTime*params.sync.photometryFs);
-            dsData = rollingZ(dsGreen,params.photometry.signalDetrendWindow);
             
             % Store process information
             processed(i).name = labjack.name{i};
-            processed(i).signal = dsData;
+            processed(i).signal = downsampled.dsData;
             processed(i).finalFs = finalFs;
             processed(i).system = 'LJ';
             processed(i).options = downsampled.options;
@@ -512,6 +508,7 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
     
             % Plot processed vs raw (30sec)
             if options.plotPhotometry
+                % Plot 30s sample
                 nexttile;
                 rawTrace = labjack.raw(i,:);
                 yyaxis left % Plot raw green
@@ -523,6 +520,15 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
                     LineWidth=2); hold on
                 legend({'Raw','Processed'}); xlabel('Time (s)');
                 title(labjack.name{i});
+                % Plot all session
+                nexttile;
+                yyaxis left % Plot raw all session
+                plotSamples = params.sync.labjackFs * totalDuration_LJ;
+                plot(linspace(1,totalDuration_LJ,plotSamples),rawTrace); hold on
+                yyaxis right % Plot processed all session
+                plotSamples = floor(processed(i).finalFs * totalDuration_LJ);
+                plot(linspace(1,totalDuration_LJ,plotSamples),processed(i).signal); hold on
+                legend({'Raw','Processed'}); xlabel('Time (s)');
             end
         end
     end
@@ -809,6 +815,7 @@ if withRecording
 end
 
 % 4. Find the max of xcorr
+initializeFig(0.67,0.67); tiledlayout('flow');
 CamNI_ni = 0; LJNI_ni = 0; ImecNI_ni = 0; LFPNI_ni = 0;
 CamNI_niIdx = 0; LJNI_niIdx = 0; ImecNI_niIdx = 0; LFPNI_niIdx = 0;
 if withCamera
@@ -816,14 +823,14 @@ if withCamera
     if lags_cam >= 0; CamNI_cam = cam_idx(1); CamNI_ni = ni_idx(1+lags_cam);
     else; CamNI_cam = cam_idx(1-lags_cam); CamNI_ni = ni_idx(1); end
     CamNI_niIdx = max([1+lags_cam,1]); CamNI_camIdx = max([1-lags_cam,1]);
-    figure; stem(l_cam,r_cam)
+    nexttile; stem(l_cam,r_cam)
 end
 if withPhotometry
     [~,maxIdx] = max(r_lj); lags_lj = l_lj(maxIdx); 
     if lags_lj >= 0; LJNI_lj = lj_idx(1); LJNI_ni = ni_idx(1+lags_lj);
     else; LJNI_lj = lj_idx(1-lags_lj); LJNI_ni = ni_idx(1); end
     LJNI_niIdx = max([1+lags_lj,1]); LJNI_ljIdx = max([1-lags_lj,1]);
-    figure; stem(l_lj,r_lj)
+    nexttile; stem(l_lj,r_lj)
 end
 if withRecording
     [~,maxIdx] = max(r_imec); lags_imec = l_imec(maxIdx); 
@@ -837,7 +844,6 @@ if withRecording
     end
     ImecNI_niIdx = max([1+lags_imec,1]); ImecNI_imecIdx = max([1-lags_imec,1]);
     LFPNI_niIdx = max([1+lags_lfp,1]); LFPNI_lfpIdx = max([1-lags_lfp,1]);
-    initializeFig(0.66,0.5); tiledlayout(1,2);
     nexttile; stem(l_imec,r_imec); title('Imec time xcor');
     nexttile; stem(l_lfp,r_lfp); title('LFP time xcor');
 end
@@ -965,7 +971,6 @@ if withRecording; timeImec = timeImec - t0;
 else; timeNI = timeNI - t0; end
 
 % 7. Plot summary plot
-initializeFig(0.67,0.67); tiledlayout('flow');
 if withRecording
     title('LFP vs Imec');
     nexttile; plot(timeImec); title('Imec time in sec');
@@ -1008,7 +1013,7 @@ if withPhotometry
     end
     disp("Finished: Labjack timestamp plotted");
 end
-saveas(gcf,strcat(session.path,filesep,'Syncing_',labjack.name{i},'_processed.png'));
+saveas(gcf,strcat(session.path,filesep,'Syncing_timestamp.png'));
 
 %% (Ver5) Save sync and other data
 

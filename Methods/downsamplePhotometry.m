@@ -20,7 +20,7 @@ arguments
 end
 
 % Calculate nSampPerBin
-nSampPerBin = (1/targetFs)*originalFs;
+nSampPerBin = (1/options.targetFs)*options.originalFs;
 
 % Determine downsample approach based on whether targetFs and
 % originalFs can be divided by integer
@@ -63,7 +63,7 @@ else
         end
     elseif strcmp(options.dsMethod,'resample')
         % Unfinished, see reason in loadSessions.m
-        [p,q] = rat(targetFs/originalFs);
+        [p,q] = rat(options.targetFs/options.originalFs);
         % n = 10; beta = 5; % n: length of filter window (default 10); beta: smoothing (default 5)
         photometry_downsample = resample(rawTraces,p,q);
     end
@@ -73,8 +73,8 @@ end
 % Rolling z score
 if options.rollingZ
     % Rolling zscore for demodGreen and demodRed
-    options.signalDetrendWindow = floor(options.rollingWindowTime*options.originalFs);
-    downsampled.finalData = rollingZ(downsampled.dsData,options.signalDetrendWindow);
+    options.signalDetrendWindow = floor(options.rollingWindowTime*options.targetFs);
+    downsampled.dsData = rollingZ(downsampled.dsData,options.signalDetrendWindow);
 end
 
 downsampled.options = options;

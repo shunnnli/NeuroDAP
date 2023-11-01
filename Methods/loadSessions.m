@@ -422,7 +422,7 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
     %% Loop through all signals
 
     if options.plotPhotometry
-        initializeFig(1,0.67); tiledlayout(labjack.nSignals,1);
+        initializeFig(1,0.67); tiledlayout(labjack.nSignals,2);
         if totalDuration_LJ < 30; plotDuration = totalDuration_LJ; 
         else; plotDuration = 30; end % in sec
     end
@@ -467,6 +467,16 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
                     LineWidth=2); hold on
                 legend({'Raw','Processed'}); xlabel('Time (s)');
                 title(labjack.name{i});
+                % Plot all session
+                nexttile;
+                yyaxis left % Plot raw all session
+                plotSamples = params.sync.labjackFs * totalDuration_LJ;
+                plot(linspace(1,totalDuration_LJ,plotSamples),rawTrace); hold on
+                yyaxis right % Plot processed all session
+                plotSamples = floor(processed(i).finalFs * totalDuration_LJ);
+                plot(linspace(1,totalDuration_LJ,plotSamples),processed(i).signal); hold on
+                legend({'Raw','Processed'}); xlabel('Time (s)');
+                title(labjack.name{i});
             end
     
         else
@@ -479,19 +489,15 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
                         dsMethod='resample');
             
             % Check final Fs
-            finalFs = length(downsampled.data) / totalDuration_LJ;
+            finalFs = length(downsampled.dsData) / totalDuration_LJ;
             if options.downsampleFs ~= finalFs
                 warning("   Desired downsampleFs is different from calculated Fs! Used calculated Fs instead!");
             end
             params.sync.photometryFs = [finalFs, params.sync.photometryFs];
-        
-            % Rolling zscore for demodGreen and demodRed
-            params.photometry.signalDetrendWindow = floor(options.rollingWindowTime*params.sync.photometryFs);
-            dsData = rollingZ(dsGreen,params.photometry.signalDetrendWindow);
             
             % Store process information
             processed(i).name = labjack.name{i};
-            processed(i).signal = dsData;
+            processed(i).signal = downsampled.dsData;
             processed(i).finalFs = finalFs;
             processed(i).system = 'LJ';
             processed(i).options = downsampled.options;
@@ -512,6 +518,7 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
     
             % Plot processed vs raw (30sec)
             if options.plotPhotometry
+                % Plot 30s sample
                 nexttile;
                 rawTrace = labjack.raw(i,:);
                 yyaxis left % Plot raw green
@@ -521,6 +528,16 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
                 plotSamples = floor(processed(i).finalFs * plotDuration);
                 plot(linspace(1,plotDuration,plotSamples),processed(i).signal(1:plotSamples),...
                     LineWidth=2); hold on
+                legend({'Raw','Processed'}); xlabel('Time (s)');
+                title(labjack.name{i});
+                % Plot all session
+                nexttile;
+                yyaxis left % Plot raw all session
+                plotSamples = params.sync.labjackFs * totalDuration_LJ;
+                plot(linspace(1,totalDuration_LJ,plotSamples),rawTrace); hold on
+                yyaxis right % Plot processed all session
+                plotSamples = floor(processed(i).finalFs * totalDuration_LJ);
+                plot(linspace(1,totalDuration_LJ,plotSamples),processed(i).signal); hold on
                 legend({'Raw','Processed'}); xlabel('Time (s)');
                 title(labjack.name{i});
             end

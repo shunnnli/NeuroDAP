@@ -6,14 +6,18 @@ arguments
     stimPattern cell
 
     options.pavlovian logical = true
-    options.reactionTime double = 1.5
+    options.reactionTime double = 1
+    options.minLicks double = 2 % min licks to get reward if operant
+    options.minLicks_pav double = 2 % min licks to get big reward if pav
 
     options.redo logical = true % Recalculate trial table and all preprocessing
     options.round logical = false % Round reward/airpuff/tone to get duration data
-    options.performing logical = false; % Only plot traces where the animal performs
+    options.performing logical = false % Only plot traces where the animal performs
     
     options.plotPhotometry logical = true % Plot photometry summary plot
     options.plotLicks logical = true % Plot lick raster summary plot
+
+    options.lick_binSize double = 0.1
 end
 
 %% Notes
@@ -288,7 +292,7 @@ if options.plotPhotometry
         system = processed(photometry).system;
         
         %% Plot combined PSTH
-        timeRange = [-1,5]; lick_binSize = 0.2;
+        timeRange = [-1,5];
         % 2. Plot traces
         % Determine figure layout 
         if params.session.withCamera && params.session.withEyeTracking
@@ -316,11 +320,11 @@ if options.plotPhotometry
             
             % 2.2 Plot lick traces
             nexttile
-            plotLicks(waterIdx,timeRange,lick_binSize,bluePurpleRed(1,:),[],rightLick,params);
-            plotLicks(airpuffIdx,timeRange,lick_binSize,[0.2, 0.2, 0.2],[],rightLick,params);
-            plotLicks(toneIdx,timeRange,lick_binSize,bluePurpleRed(350,:),[],rightLick,params);
-            plotLicks(stimIdx,timeRange,lick_binSize,bluePurpleRed(end,:),[],rightLick,params);
-            plotLicks(baselineIdx,timeRange,lick_binSize,[.75 .75 .75],[],rightLick,params);
+            plotLicks(waterIdx,timeRange,options.lick_binSize,bluePurpleRed(1,:),[],rightLick,params);
+            plotLicks(airpuffIdx,timeRange,options.lick_binSize,[0.2, 0.2, 0.2],[],rightLick,params);
+            plotLicks(toneIdx,timeRange,options.lick_binSize,bluePurpleRed(350,:),[],rightLick,params);
+            plotLicks(stimIdx,timeRange,options.lick_binSize,bluePurpleRed(end,:),[],rightLick,params);
+            plotLicks(baselineIdx,timeRange,options.lick_binSize,[.75 .75 .75],[],rightLick,params);
             plotEvent('',0);
             xlabel('Time (s)'); ylabel('Licks/s'); 
             legend(taskLegend,'Location','best');
@@ -370,12 +374,12 @@ if options.plotPhotometry
             
             % 2.2 Plot lick traces
             nexttile
-            plotLicks(waterIdx,timeRange,lick_binSize,bluePurpleRed(1,:),[],rightLick,params);
-            plotLicks(toneIdx,timeRange,lick_binSize,bluePurpleRed(350,:),[],rightLick,params);
-            plotLicks(stimIdx,timeRange,lick_binSize,bluePurpleRed(end,:),[],rightLick,params);
-            plotLicks(pairIdx,timeRange,lick_binSize,bluePurpleRed(150,:),[],rightLick,params);
-            plotLicks(airpuffIdx,timeRange,lick_binSize,[0.2, 0.2, 0.2],[],rightLick,params);
-            plotLicks(baselineIdx,timeRange,lick_binSize,[.75 .75 .75],[],rightLick,params);
+            plotLicks(waterIdx,timeRange,options.lick_binSize,bluePurpleRed(1,:),[],rightLick,params);
+            plotLicks(toneIdx,timeRange,options.lick_binSize,bluePurpleRed(350,:),[],rightLick,params);
+            plotLicks(stimIdx,timeRange,options.lick_binSize,bluePurpleRed(end,:),[],rightLick,params);
+            plotLicks(pairIdx,timeRange,options.lick_binSize,bluePurpleRed(150,:),[],rightLick,params);
+            plotLicks(airpuffIdx,timeRange,options.lick_binSize,[0.2, 0.2, 0.2],[],rightLick,params);
+            plotLicks(baselineIdx,timeRange,options.lick_binSize,[.75 .75 .75],[],rightLick,params);
             plotEvent('',0);
             xlabel('Time (s)'); ylabel('Licks/s'); 
             legend(taskLegend,'Location','best');
@@ -620,7 +624,7 @@ if options.plotLicks && contains(task,'pairing')
         
     %% Plot session overview for licking
     timeRange = [-5,10]; cameraTimeRange = [-1,5];
-    markerSize = 20; lick_binSize = 0.2;
+    markerSize = 20;
 
     % Get event time and number by trial type
     stimIdx = trials{trials.isTone == 0 & trials.isStim == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
@@ -631,11 +635,11 @@ if options.plotLicks && contains(task,'pairing')
     pairIdx(:,3) = pairIdx(:,3)./params.sync.behaviorFs;
 
     % getLicks by trial type
-    [stimLickRate,~,stimLicks] = getLicks(timeRange,stimIdx(:,2),lick_binSize,[],rightLick,...
+    [stimLickRate,~,stimLicks] = getLicks(timeRange,stimIdx(:,2),options.lick_binSize,[],rightLick,...
                                 params.sync.behaviorFs,params.sync.timeNI);
-    [pairLickRate,~,pairLicks] = getLicks(timeRange,pairIdx(:,2),lick_binSize,[],rightLick,...
+    [pairLickRate,~,pairLicks] = getLicks(timeRange,pairIdx(:,2),options.lick_binSize,[],rightLick,...
                                 params.sync.behaviorFs,params.sync.timeNI);
-    [toneLickRate,~,toneLicks] = getLicks(timeRange,toneIdx(:,2),lick_binSize,[],rightLick,...
+    [toneLickRate,~,toneLicks] = getLicks(timeRange,toneIdx(:,2),options.lick_binSize,[],rightLick,...
                                 params.sync.behaviorFs,params.sync.timeNI);
 
     % 1. Plot lick raster and trace
@@ -752,11 +756,11 @@ if options.plotLicks && contains(task,'pairing')
 
     initializeFig(0.67,0.67); tiledlayout(3,3);
     timeRangeENL = [0,10];
-    [stimLickRateENL,~,~] = getLicks(timeRangeENL,stimIdx(:,2)-stimIdx(:,4),lick_binSize,[],rightLick,...
+    [stimLickRateENL,~,~] = getLicks(timeRangeENL,stimIdx(:,2)-stimIdx(:,4),options.lick_binSize,[],rightLick,...
                                     params.sync.behaviorFs,params.sync.timeNI);
-    [pairLickRateENL,~,~] = getLicks(timeRangeENL,pairIdx(:,2)-pairIdx(:,4),lick_binSize,[],rightLick,...
+    [pairLickRateENL,~,~] = getLicks(timeRangeENL,pairIdx(:,2)-pairIdx(:,4),options.lick_binSize,[],rightLick,...
                                 params.sync.behaviorFs,params.sync.timeNI);
-    [toneLickRateENL,~,~] = getLicks(timeRangeENL,toneIdx(:,2)-toneIdx(:,4),lick_binSize,[],rightLick,...
+    [toneLickRateENL,~,~] = getLicks(timeRangeENL,toneIdx(:,2)-toneIdx(:,4),options.lick_binSize,[],rightLick,...
                                 params.sync.behaviorFs,params.sync.timeNI);
 
     nENLBins = [2,3,4];
@@ -831,60 +835,116 @@ if options.plotLicks && contains(task,'pairing')
     % compare with stim onset
     % (i.e.) how likely I get 2+ licks within a 2s window randomly selected
     % from baseline (a window of 10 secs)?
-    timeRangeBaseline = [-10,0]; 
+    timeRangeBaseline = [-10,0]; timeRangeReaction = [0,options.reactionTime];
     nboot = 100000; nBins = 50;
     [~,allLicksBaseline,~] = getLicks(timeRangeBaseline,trials{:,'CueTime'}-trials{:,"ENL"},...
-        lick_binSize,[],rightLick,params.sync.behaviorFs,params.sync.timeNI);
-    % Bootstrap baseline licking success rate
-    hitPercentBaseline = zeros(nboot,1);
-    for i = 1:nboot
-        % Randomly select columns for 2 sec (2/0.2 = 10)
-        windowInBin = round(options.reactionTime / lick_binSize);
-        baselineSamples = datasample(allLicksBaseline,windowInBin,2,'Replace',true);
-        hitPercentBaseline(i) = sum(sum(baselineSamples,2) >= 2)/size(baselineSamples,1);
+        options.lick_binSize,[],rightLick,params.sync.behaviorFs,params.sync.timeNI);
+    [~,reactionLicks,~] = getLicks(timeRangeReaction,pairIdx(:,2),...
+        options.lick_binSize,[],rightLick,params.sync.behaviorFs,params.sync.timeNI);
+    al_pair = sum(reactionLicks,2);
+    [~,reactionLicks,~] = getLicks(timeRangeReaction,stimIdx(:,2),...
+        options.lick_binSize,[],rightLick,params.sync.behaviorFs,params.sync.timeNI);
+    al_stim = sum(reactionLicks,2);
+    [~,reactionLicks,~] = getLicks(timeRangeReaction,toneIdx(:,2),...
+        options.lick_binSize,[],rightLick,params.sync.behaviorFs,params.sync.timeNI);
+    al_tone = sum(reactionLicks,2);
+    if options.pavlovian
+        % Bootstrap baseline licking
+        lickCountBaseline = zeros(size(trials,1),nboot);
+        for i = 1:nboot
+            % Randomly select timepoints (columns) correspond to
+            % reactionTime window
+            windowInBin = round(options.reactionTime / options.lick_binSize);
+            baselineSamples = datasample(allLicksBaseline,windowInBin,2,'Replace',true); 
+            lickCountBaseline(:,i) = sum(baselineSamples,2);
+        end
+        % Plot pair trials anticipatory distribution
+        nexttile; events = al_pair; nboot_event = round(size(trials,1)*nboot/size(events,1));
+        h = histogram(lickCountBaseline,nBins); 
+        h.FaceColor = [0.75,0.75,0.75]; h.EdgeColor = [0.75,0.75,0.75]; hold on
+        [~,bootsam] = bootstrp(nboot_event,[],events);
+        h = histogram(events(bootsam),nBins);
+        h.FaceColor = bluePurpleRed(150,:); h.EdgeColor = bluePurpleRed(150,:);
+        % xline(options.minLicks_pav,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
+        xline(mean(events),'-r',{'Averge anticipatory licks','(pair trials)'},'LineWidth',3,'LabelOrientation','horizontal');
+        xlabel('Anticipatory licks'); ylabel ('Count'); box off
+        title("Baseline licks vs anticipatory licks (pair trials)");
+        % Plot stim trials anticipatory distribution
+        nexttile; events = al_stim; nboot_event = round(size(trials,1)*nboot/size(events,1));
+        h = histogram(lickCountBaseline,nBins); 
+        h.FaceColor = [0.75,0.75,0.75]; h.EdgeColor = [0.75,0.75,0.75]; hold on
+        [~,bootsam] = bootstrp(nboot_event,[],events);
+        h = histogram(events(bootsam),nBins);
+        h.FaceColor = bluePurpleRed(end,:); h.EdgeColor = bluePurpleRed(end,:);
+        % xline(options.minLicks_pav,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
+        xline(mean(events),'-r',{'Averge anticipatory licks','(stim only trials)'},'LineWidth',3,'LabelOrientation','horizontal');
+        xlabel('Anticipatory licks'); ylabel ('Count'); box off
+        title("Baseline licks vs anticipatory licks (stim trials)");
+        % Plot tone trials anticipatory distribution
+        nexttile; events = al_tone; nboot_event = round(size(trials,1)*nboot/size(events,1));
+        h = histogram(lickCountBaseline,nBins); 
+        h.FaceColor = [0.75,0.75,0.75]; h.EdgeColor = [0.75,0.75,0.75]; hold on
+        [~,bootsam] = bootstrp(nboot_event,[],events);
+        h = histogram(events(bootsam),nBins);
+        h.FaceColor = bluePurpleRed(350,:); h.EdgeColor = bluePurpleRed(350,:);
+        % xline(options.minLicks_pav,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
+        xline(mean(events),'-r',{'Averge anticipatory licks','(tone only trials)'},'LineWidth',3,'LabelOrientation','horizontal');
+        xlabel('Anticipatory licks'); ylabel ('Count'); box off
+        title("Baseline licks vs anticipatory licks (tone trials)");
+
+    else
+        % Bootstrap baseline licking success rate
+        hitPercentBaseline = zeros(nboot,1);
+        for i = 1:nboot
+            % Randomly select timepoints (columns) correspond to
+            % reactionTime window
+            windowInBin = round(options.reactionTime / options.lick_binSize);
+            baselineSamples = datasample(allLicksBaseline,windowInBin,2,'Replace',true); 
+            hitPercentBaseline(i) = sum(sum(baselineSamples,2) >= options.minLicks)/size(baselineSamples,1);
+        end
+    
+        % For pair
+        % Calculate cue window success rate
+        hitPercentCue = length(find(trials.isTone == 1 & trials.isStim == 1 & trials.nAnticipatoryLicks >= options.minLicks))/size(pairIdx,1);
+        % Plot distribution
+        nexttile; 
+        h = histogram(hitPercentBaseline,nBins); 
+        h.FaceColor = bluePurpleRed(150,:); h.EdgeColor = bluePurpleRed(150,:);
+        hold on
+        xline(hitPercentCue,'-r',{'Hit rate of','pair trials'},...
+            'LineWidth',3,...
+            'LabelOrientation','horizontal');
+        xlim([0,1]); xlabel('Hit rate'); ylabel ('Count'); box off
+        title("Baseline licks (pair trials)");
+    
+        % For stim only
+        % Calculate cue window success rate
+        hitPercentCue = length(find(trials.isTone == 0 & trials.isStim == 1 & trials.nAnticipatoryLicks >= options.minLicks))/size(stimIdx,1);
+        % Plot distribution
+        nexttile; 
+        h = histogram(hitPercentBaseline,nBins);
+        h.FaceColor = bluePurpleRed(end,:); h.EdgeColor = bluePurpleRed(end,:);
+        hold on
+        xline(hitPercentCue,'-r',{'Hit rate of','stim only trials'},...
+            'LineWidth',3,...
+            'LabelOrientation','horizontal');
+        xlim([0,1]); xlabel('Hit rate'); ylabel('Count'); box off
+        title("Baseline licks (stim only trials)");
+    
+        % For tone only
+        % Calculate cue window success rate
+        hitPercentCue = length(find(trials.isTone == 1 & trials.isStim == 0 & trials.nAnticipatoryLicks >= options.minLicks))/size(toneIdx,1);
+        % Plot distribution
+        nexttile; 
+        h = histogram(hitPercentBaseline,nBins);
+        h.FaceColor = bluePurpleRed(350,:); h.EdgeColor = bluePurpleRed(350,:);
+        hold on
+        xline(hitPercentCue,'-r',{'Hit rate of','tone only trials'},...
+            'LineWidth',3,...
+            'LabelOrientation','horizontal');
+        xlim([0,1]); xlabel('Hit rate'); ylabel('Count'); box off
+        title("Baseline licks (tone only trials)");
     end
-
-    % For pair
-    % Calculate cue window success rate
-    hitPercentCue = length(find(trials.isTone == 1 & trials.isStim == 1 & trials.nAnticipatoryLicks >= 3))/size(pairIdx,1);
-    % Plot distribution
-    nexttile; title('Distribution of baseline licks for pair trials (bootstrapped)');
-    h = histogram(hitPercentBaseline,nBins); 
-    h.FaceColor = bluePurpleRed(150,:); h.EdgeColor = bluePurpleRed(150,:);
-    hold on
-    xline(hitPercentCue,'-r',{'Hit rate of','pair trials'},...
-        'LineWidth',3,...
-        'LabelOrientation','horizontal');
-    xlim([0,1]); xlabel('Hit rate'); ylabel ('Count'); box off
-    title("Baseline licks (pair trials)");
-
-    % For stim only
-    % Calculate cue window success rate
-    hitPercentCue = length(find(trials.isTone == 0 & trials.isStim == 1 & trials.nAnticipatoryLicks >= 3))/size(stimIdx,1);
-    % Plot distribution
-    nexttile; title('Distribution of baseline licks for stim only trials (bootstrapped)');
-    h = histogram(hitPercentBaseline,nBins);
-    h.FaceColor = bluePurpleRed(end,:); h.EdgeColor = bluePurpleRed(end,:);
-    hold on
-    xline(hitPercentCue,'-r',{'Hit rate of','stim only trials'},...
-        'LineWidth',3,...
-        'LabelOrientation','horizontal');
-    xlim([0,1]); xlabel('Hit rate'); ylabel('Count'); box off
-    title("Baseline licks (stim only trials)");
-
-    % For tone only
-    % Calculate cue window success rate
-    hitPercentCue = length(find(trials.isTone == 1 & trials.isStim == 0 & trials.nAnticipatoryLicks >= 3))/size(toneIdx,1);
-    % Plot distribution
-    nexttile; title('Distribution of baseline licks for tone only trials (bootstrapped)');
-    h = histogram(hitPercentBaseline,nBins);
-    h.FaceColor = bluePurpleRed(350,:); h.EdgeColor = bluePurpleRed(350,:);
-    hold on
-    xline(hitPercentCue,'-r',{'Hit rate of','tone only trials'},...
-        'LineWidth',3,...
-        'LabelOrientation','horizontal');
-    xlim([0,1]); xlabel('Hit rate'); ylabel('Count'); box off
-    title("Baseline licks (tone only trials)");
 
     % Plot trend
     nexttile;
@@ -994,11 +1054,12 @@ if options.plotLicks && contains(task,'pairing')
     for s = 1:size(stages,1)
         if isempty(stages{s}); continue; end
         [~,bootsam] = bootstrp(nboot,[],stages{s});
-        bs = stages{s}(bootsam) / params.sync.behaviorFs;
+        bs = stages{s}(bootsam);
 
         h = histogram(bs,nBins); 
         h.FaceColor = colors(s,:); h.EdgeColor = colors(s,:); hold on
     end
+    % xline(options.minLicks_pav,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
     xlabel('Anticipatory licks'); ylabel('Count'); box off
     title("Anticipatory licks (early stage)");
 
@@ -1010,11 +1071,12 @@ if options.plotLicks && contains(task,'pairing')
     for s = 1:size(stages,1)
         if isempty(stages{s}); continue; end
         [~,bootsam] = bootstrp(nboot,[],stages{s});
-        bs = stages{s}(bootsam) / params.sync.behaviorFs;
+        bs = stages{s}(bootsam);
 
         h = histogram(bs,nBins); 
         h.FaceColor = colors(s,:); h.EdgeColor = colors(s,:); hold on
     end
+    % xline(options.minLicks_pav,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
     xlabel('Anticipatory licks'); ylabel('Count'); box off
     title("Anticipatory licks (middle stage)");
 
@@ -1026,16 +1088,18 @@ if options.plotLicks && contains(task,'pairing')
     for s = 1:size(stages,1)
         if isempty(stages{s}); continue; end
         [~,bootsam] = bootstrp(nboot,[],stages{s});
-        bs = stages{s}(bootsam) / params.sync.behaviorFs;
+        bs = stages{s}(bootsam);
 
         h = histogram(bs,nBins); 
         h.FaceColor = colors(s,:); h.EdgeColor = colors(s,:); hold on
     end
+    % xline(options.minLicks_pav,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
     xlabel('Anticipatory licks'); ylabel('Count'); box off
     title("Anticipatory licks (late stage)");
 
     % Plot trend
     nexttile;
+    yline(options.minLicks_pav,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal'); hold on
     plot(trials{:,"TrialNumber"},trials{:,"nAnticipatoryLicks"},Color=[0.75,0.75,0.75],LineWidth=2); hold on
     scatter(pairIdx(:,1),trials{pairIdx(:,1),"nAnticipatoryLicks"},100,bluePurpleRed(150,:),'filled'); hold on
     scatter(stimIdx(:,1),trials{stimIdx(:,1),"nAnticipatoryLicks"},100,bluePurpleRed(end,:),'filled'); hold on
