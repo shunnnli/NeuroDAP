@@ -5,10 +5,9 @@ arguments
     task string
     stimPattern cell
 
-    options.pavlovian logical = true
+    options.pavlovian logical = false
     options.reactionTime double = 1
-    options.minLicks double = 2 % min licks to get reward if operant
-    options.minLicks_pav double = 2 % min licks to get big reward if pav
+    options.minLicks double = 2 % min licks to get reward
 
     options.redo logical = true % Recalculate trial table and all preprocessing
     options.round logical = false % Round reward/airpuff/tone to get duration data
@@ -43,32 +42,34 @@ end
 clear dirsplit
 
 disp(strcat('********** ',sessionName,'**********'));
+load(strcat(sessionpath,filesep,'timeseries_',sessionName,'.mat'));
+load(strcat(sessionpath,filesep,'data_',sessionName,'.mat'));
+load(strcat(sessionpath,filesep,'behavior_',sessionName,'.mat'));
 load(strcat(sessionpath,filesep,'sync_',sessionName,'.mat'));
 if ~isfield(session,'name'); session.name = sessionName; end
 disp(['Session ',sessionName,' loaded']);
-
-% Store opto stim params to sessions
-% Opto stim params
-params.stim.pulseFreq = str2double(stimPattern{1}); 
-params.stim.pulseDuration = str2double(stimPattern{2}); 
-params.stim.stimDuration = str2double(stimPattern{3});
-params.stim.nPulsesPerStim = (params.stim.stimDuration/1000) * params.stim.pulseFreq;
-params.stim.pulseInterval = (1/params.stim.pulseFreq) - params.stim.pulseDuration;
-
-% Invert ShutterRed and ShutterBlue if neccessary
-% params.stim.invertedSignal = str2double(stimPattern{4});
-% if params.stim.invertedSignal
-%     redLaser = ~redLaser;
-%     blueLaser = ~blueLaser;
-% end
 
 %% Preprocess outcome and opto data
 
 disp('Ongoing: preprocess outcome and opto data');
 
+if options.redo || ~isfield(params,'analyze')
+    params.stim.pulseFreq = str2double(stimPattern{1}); 
+    params.stim.pulseDuration = str2double(stimPattern{2}); 
+    params.stim.stimDuration = str2double(stimPattern{3});
+    params.stim.nPulsesPerStim = (params.stim.stimDuration/1000) * params.stim.pulseFreq;
+    params.stim.pulseInterval = (1/params.stim.pulseFreq) - params.stim.pulseDuration;
+    params.analyze = options;
+    save(strcat(sessionpath,filesep,'sync_',session.name),'params','-append');
+else
+    options.pavlovian = params.analyze.pavlovian;
+    options.reactionTime = params.analyze.reactionTime;
+    options.minLicks = params.analyze.minLicks;
+end
+
 % Reward/punishment params
 rewardUnit = 0.012; % 8ms opening to dispense 1ul water
-rewardList = [0 2 5]; % in ul
+rewardList = [0 3 10]; % in ul
 % punishList = [0 0.1];
 % toneList = [0 0.5 1]; % in sec
 if options.round
@@ -79,7 +80,7 @@ if options.round
         airpuff_rounded = roundToTarget(airpuff,punishList); disp('Finished rounding: airpuff');
         
         % Save rounded data
-        save(strcat(sessionpath,filesep,'sync_',session.name),'rightSolenoid_rounded','airpuff_rounded','-append');
+        save(strcat(sessionpath,filesep,'timeseries_',session.name),'rightSolenoid_rounded','airpuff_rounded','-append');
         disp('Finished: rounding cue/outcome data');
     end
 else
@@ -99,16 +100,16 @@ if ~exist('optoCue','var') || options.redo
             optoCue = allPulses(temp_interval > intervalThreshold);
     
             % Save first pulse data
-            save(strcat(sessionpath,filesep,'sync_',session.name),"optoCue",'-append');
+            save(strcat(sessionpath,filesep,'timeseries_',session.name),"optoCue",'-append');
         else
             optoCue = find(redLaser);
-            save(strcat(sessionpath,filesep,'sync_',session.name),"optoCue",'-append');
+            save(strcat(sessionpath,filesep,'timeseries_',session.name),"optoCue",'-append');
         end
         disp('Finished: saved optoCue data');
     else 
         optoCue = [];
     end
-    save(strcat(sessionpath,filesep,'sync_',session.name),"optoCue",'-append');
+    save(strcat(sessionpath,filesep,'timeseries_',session.name),"optoCue",'-append');
 end
 
 
@@ -117,7 +118,7 @@ rightLickON = find(rightLick);
 if ~exist('lickBout','var') || options.redo
     % Get lick bout start time (ILI < 0.5s)
     lickBout = getLickBout(rightLickON);
-    save(strcat(sessionpath,filesep,'sync_',session.name),"lickBout",'-append');
+    save(strcat(sessionpath,filesep,'timeseries_',session.name),"lickBout",'-append');
 end
 
 
@@ -134,28 +135,23 @@ if ~exist('trials','var') || options.redo
     else
         [allTrials,~] = getTrials(find(leftTone),optoCue);
     end
-    save(strcat(sessionpath,filesep,'sync_',session.name),"allTrials",'-append');
+    save(strcat(sessionpath,filesep,'timeseries_',session.name),"allTrials",'-append');
 end
 
 
 disp('Finished: preprocess outcome and opto data');
 
-%% Generate trial table
+%% Generate trial and event table
 
 if (~exist('trials','var') || options.redo)
 
     disp('Ongoing: making trial table');
-    % Find digital events
-    events{1} = allTrials;
-    events{2} = airpuffIdx;
-    events{3} = waterIdx;
-    events{4} = rightLickON;
-    events{5} = find(leftTone);
-    events{6} = optoCue;
+    events{1} = allTrials;      events{2} = airpuffIdx;
+    events{3} = waterIdx;       events{4} = rightLickON;
+    events{5} = find(leftTone); events{6} = optoCue;
 
     trials = getTrialTable(task,events,rightSolenoid_rounded,airpuff_rounded,...
                 pavlovian=options.pavlovian,reactionTime=options.reactionTime);
-
     % Calculate performance cutoff
     if contains(task,'reward'); [trials,cutoff_sample] = getSessionCutoff(trials,"->reward");
     elseif contains(task,'punish'); [trials,cutoff_sample] = getSessionCutoff(trials,"->punish");
@@ -164,8 +160,12 @@ if (~exist('trials','var') || options.redo)
     params.analysis.cutoff_sample = cutoff_sample;
     disp(['Session cutoff calculated: ',num2str(cutoff_sample)]);
 
-    % Save to sync.mat
-    save(strcat(sessionpath,filesep,'sync_',session.name),'trials','-append');
+
+    disp('Ongoing: making event table');
+    eventTable = getEventTable(events,params);
+
+    % Save to behavior_.mat
+    save(strcat(sessionpath,filesep,'behavior_',session.name),'trials','eventTable','-append');
     disp('Finished: trial table saved');
 end
 
@@ -175,15 +175,12 @@ end
 if strcmp(task,'random')
     
     % Select event idx
-    toneIdx = find(leftTone);
-    stimIdx = optoCue;
+    toneIdx = find(leftTone); stimIdx = optoCue;
 
     % Select baseline idx (align to each baseline lick)
     baselineLicks = cell2mat(trials{~cellfun(@isempty,trials{:,'BaselineLicks'}),'BaselineLicks'});
     if isempty(baselineLicks); baselineIdx = [];
     else; baselineIdx = baselineLicks(:,1); end
-    
-    % baselineIdx = trials{:,"ENL"} - 5*params.sync.behaviorFs;
     
     % Create task legend
     events = {waterIdx,airpuffIdx,toneIdx,stimIdx,baselineIdx};
@@ -690,7 +687,17 @@ if options.plotLicks && contains(task,'pairing')
     
     %% Plot session overview for eye
     if params.session.withCamera && params.session.withEyeTracking
-        initializeFig(0.67,0.67); tiledlayout(3,2); 
+        initializeFig(0.67,0.67); tiledlayout(3,4); 
+
+        % Plot eye trace heatmap
+        nexttile([3 2]);
+        [allEyeTraces,t_cam] = plotTraces(trials{:,"CueTime"},cameraTimeRange,eyeArea,[0,0,0],params,plot=false,signalSystem='camera'); 
+        imagesc(t_cam,1:size(trials,1),allEyeTraces);
+        set(gca,'YDir','normal');
+        colorbar; box off
+        plotEvent('Cue',0.5);
+        xlabel('Time (s)'); ylabel('Trials');
+
         % get camera trace by trial type
         [stimEyeArea,t_cam] = plotTraces(stimIdx(:,2),cameraTimeRange,eyeArea_detrend,[0,0,0],params,plot=false,signalSystem='camera');
         [pairEyeArea,~] = plotTraces(pairIdx(:,2),cameraTimeRange,eyeArea_detrend,[0,0,0],params,plot=false,signalSystem='camera');
@@ -708,7 +715,7 @@ if options.plotLicks && contains(task,'pairing')
             label = labels{event};
             groupSize = groupSizes(event);
     
-            nexttile(1+ 2*(event-1));
+            nexttile(3+ 4*(event-1));
             nLines = ceil(size(trace,1)/groupSize); legendList = cell(nLines,1);
             nColors = round(linspace(1,size(bluePurpleRed,1),nLines));
             for i = 1:nLines
@@ -733,7 +740,7 @@ if options.plotLicks && contains(task,'pairing')
             label = labels{event};
             groupSize = groupSizes(event);
     
-            nexttile(2+ 2*(event-1));
+            nexttile(4+ 4*(event-1));
             nLines = ceil(size(trace,1)/groupSize); legendList = cell(nLines,1);
             nColors = round(linspace(1,size(bluePurpleRed,1),nLines));
             for i = 1:nLines
@@ -865,7 +872,7 @@ if options.plotLicks && contains(task,'pairing')
         [~,bootsam] = bootstrp(nboot_event,[],events);
         h = histogram(events(bootsam),nBins);
         h.FaceColor = bluePurpleRed(150,:); h.EdgeColor = bluePurpleRed(150,:);
-        % xline(options.minLicks_pav,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
+        % xline(options.minLicks,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
         xline(mean(events),'-r',{'Averge anticipatory licks','(pair trials)'},'LineWidth',3,'LabelOrientation','horizontal');
         xlabel('Anticipatory licks'); ylabel ('Count'); box off
         title("Baseline licks vs anticipatory licks (pair trials)");
@@ -876,7 +883,7 @@ if options.plotLicks && contains(task,'pairing')
         [~,bootsam] = bootstrp(nboot_event,[],events);
         h = histogram(events(bootsam),nBins);
         h.FaceColor = bluePurpleRed(end,:); h.EdgeColor = bluePurpleRed(end,:);
-        % xline(options.minLicks_pav,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
+        % xline(options.minLicks,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
         xline(mean(events),'-r',{'Averge anticipatory licks','(stim only trials)'},'LineWidth',3,'LabelOrientation','horizontal');
         xlabel('Anticipatory licks'); ylabel ('Count'); box off
         title("Baseline licks vs anticipatory licks (stim trials)");
@@ -887,7 +894,7 @@ if options.plotLicks && contains(task,'pairing')
         [~,bootsam] = bootstrp(nboot_event,[],events);
         h = histogram(events(bootsam),nBins);
         h.FaceColor = bluePurpleRed(350,:); h.EdgeColor = bluePurpleRed(350,:);
-        % xline(options.minLicks_pav,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
+        % xline(options.minLicks,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
         xline(mean(events),'-r',{'Averge anticipatory licks','(tone only trials)'},'LineWidth',3,'LabelOrientation','horizontal');
         xlabel('Anticipatory licks'); ylabel ('Count'); box off
         title("Baseline licks vs anticipatory licks (tone trials)");
@@ -980,7 +987,7 @@ if options.plotLicks && contains(task,'pairing')
     colors = [bluePurpleRed(150,:);bluePurpleRed(end,:);bluePurpleRed(350,:)];
     nexttile;
     for s = 1:size(stages,1)
-        if isempty(stages{s}); continue; end
+        if isempty(stages{s}) || numel(stages{s})==1; continue; end
         [~,bootsam] = bootstrp(nboot,[],stages{s});
         bs = stages{s}(bootsam) / params.sync.behaviorFs;
 
@@ -996,7 +1003,7 @@ if options.plotLicks && contains(task,'pairing')
     colors = [bluePurpleRed(150,:);bluePurpleRed(end,:);bluePurpleRed(350,:)];
     nexttile;
     for s = 1:size(stages,1)
-        if isempty(stages{s}); continue; end
+        if isempty(stages{s}) || numel(stages{s})==1; continue; end
         [~,bootsam] = bootstrp(nboot,[],stages{s});
         bs = stages{s}(bootsam) / params.sync.behaviorFs;
 
@@ -1012,7 +1019,7 @@ if options.plotLicks && contains(task,'pairing')
     colors = [bluePurpleRed(150,:);bluePurpleRed(end,:);bluePurpleRed(350,:)];
     nexttile;
     for s = 1:size(stages,1)
-        if isempty(stages{s}); continue; end
+        if isempty(stages{s}) || numel(stages{s})==1; continue; end
         [~,bootsam] = bootstrp(nboot,[],stages{s});
         bs = stages{s}(bootsam) / params.sync.behaviorFs;
 
@@ -1052,14 +1059,14 @@ if options.plotLicks && contains(task,'pairing')
     colors = [bluePurpleRed(150,:);bluePurpleRed(end,:);bluePurpleRed(350,:)];
     nexttile;
     for s = 1:size(stages,1)
-        if isempty(stages{s}); continue; end
+        if isempty(stages{s}) || numel(stages{s})==1; continue; end
         [~,bootsam] = bootstrp(nboot,[],stages{s});
         bs = stages{s}(bootsam);
 
         h = histogram(bs,nBins); 
         h.FaceColor = colors(s,:); h.EdgeColor = colors(s,:); hold on
     end
-    % xline(options.minLicks_pav,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
+    % xline(options.minLicks,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
     xlabel('Anticipatory licks'); ylabel('Count'); box off
     title("Anticipatory licks (early stage)");
 
@@ -1069,14 +1076,14 @@ if options.plotLicks && contains(task,'pairing')
     colors = [bluePurpleRed(150,:);bluePurpleRed(end,:);bluePurpleRed(350,:)];
     nexttile;
     for s = 1:size(stages,1)
-        if isempty(stages{s}); continue; end
+        if isempty(stages{s}) || numel(stages{s})==1; continue; end
         [~,bootsam] = bootstrp(nboot,[],stages{s});
         bs = stages{s}(bootsam);
 
         h = histogram(bs,nBins); 
         h.FaceColor = colors(s,:); h.EdgeColor = colors(s,:); hold on
     end
-    % xline(options.minLicks_pav,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
+    % xline(options.minLicks,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
     xlabel('Anticipatory licks'); ylabel('Count'); box off
     title("Anticipatory licks (middle stage)");
 
@@ -1086,20 +1093,20 @@ if options.plotLicks && contains(task,'pairing')
     colors = [bluePurpleRed(150,:);bluePurpleRed(end,:);bluePurpleRed(350,:)];
     nexttile;
     for s = 1:size(stages,1)
-        if isempty(stages{s}); continue; end
+        if isempty(stages{s}) || numel(stages{s})==1; continue; end
         [~,bootsam] = bootstrp(nboot,[],stages{s});
         bs = stages{s}(bootsam);
 
         h = histogram(bs,nBins); 
         h.FaceColor = colors(s,:); h.EdgeColor = colors(s,:); hold on
     end
-    % xline(options.minLicks_pav,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
+    % xline(options.minLicks,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
     xlabel('Anticipatory licks'); ylabel('Count'); box off
     title("Anticipatory licks (late stage)");
 
     % Plot trend
     nexttile;
-    yline(options.minLicks_pav,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal'); hold on
+    yline(options.minLicks,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal'); hold on
     plot(trials{:,"TrialNumber"},trials{:,"nAnticipatoryLicks"},Color=[0.75,0.75,0.75],LineWidth=2); hold on
     scatter(pairIdx(:,1),trials{pairIdx(:,1),"nAnticipatoryLicks"},100,bluePurpleRed(150,:),'filled'); hold on
     scatter(stimIdx(:,1),trials{stimIdx(:,1),"nAnticipatoryLicks"},100,bluePurpleRed(end,:),'filled'); hold on
@@ -1128,7 +1135,7 @@ if options.plotLicks && contains(task,'pairing')
     colors = [bluePurpleRed(150,:);bluePurpleRed(end,:);bluePurpleRed(350,:)];
     nexttile;
     for s = 1:size(stages,1)
-        if isempty(stages{s}); continue; end
+        if isempty(stages{s}) || numel(stages{s})==1; continue; end
         [~,bootsam] = bootstrp(nboot,[],stages{s});
         bs = stages{s}(bootsam) / params.sync.behaviorFs;
 
@@ -1144,7 +1151,7 @@ if options.plotLicks && contains(task,'pairing')
     colors = [bluePurpleRed(150,:);bluePurpleRed(end,:);bluePurpleRed(350,:)];
     nexttile;
     for s = 1:size(stages,1)
-        if isempty(stages{s}); continue; end
+        if isempty(stages{s}) || numel(stages{s})==1; continue; end
         [~,bootsam] = bootstrp(nboot,[],stages{s});
         bs = stages{s}(bootsam) / params.sync.behaviorFs;
 
@@ -1160,7 +1167,7 @@ if options.plotLicks && contains(task,'pairing')
     colors = [bluePurpleRed(150,:);bluePurpleRed(end,:);bluePurpleRed(350,:)];
     nexttile;
     for s = 1:size(stages,1)
-        if isempty(stages{s}); continue; end
+        if isempty(stages{s}) || numel(stages{s})==1; continue; end
         [~,bootsam] = bootstrp(nboot,[],stages{s});
         bs = stages{s}(bootsam) / params.sync.behaviorFs;
 
@@ -1183,8 +1190,6 @@ if options.plotLicks && contains(task,'pairing')
     saveas(gcf,strcat(sessionpath,filesep,'Summary_Distributions.png'));
 
 end
-
-% save(strcat(session.path,filesep,'sync_',sessionName),'params','-append');
 return
 
 end

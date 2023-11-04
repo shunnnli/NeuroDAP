@@ -63,6 +63,11 @@ if ~isempty(dir(fullfile(session.path,"sync_*.mat")))
     end
 else
     options.reloadAll = true;
+    % Initialize all .mat files
+    save(strcat(session.path,filesep,'sync_',sessionName),'sessionName','session','-v7.3');
+    save(strcat(session.path,filesep,'timeseries_',sessionName),'sessionName','session','-v7.3');
+    save(strcat(session.path,filesep,'data_',sessionName),'sessionName','session','-v7.3');
+    save(strcat(session.path,filesep,'behavior_',sessionName),'sessionName','session','-v7.3');
 end
 
 withRecording = ~isempty(dir(fullfile(session.path,'catgt_*\*imec*.ap.bin')));
@@ -133,17 +138,9 @@ dw = 1;
 digitalNI = ExtractDigital(nidqData, nidq.meta, dw, d_ch_list);
 syncNI = digitalNI(2,:); % Save sync channel from NIDAQ data separately
 
-
-%% Save retrieved data
-
-if options.reloadAll || isempty(dir(fullfile(session.path,"sync_*.mat")))
-    save(strcat(session.path,filesep,'sync_',sessionName),...
-        'sessionName','nidq','session','syncNI','-v7.3');
-    disp("Finished: Session data saved");
-end
+close all;
 
 %% Read behavior/photometry (NI) data
-close all;
 
 if options.reloadAll || options.reloadNI
 
@@ -259,56 +256,21 @@ if options.reloadAll || options.reloadNI
         end 
     end
     
-    %% (Unused) Integrate to Bernardo's code
-    %{
-        Ch1: allTrials      Ch2: leftTone;      Ch3: rightTone
-        Ch4: leftLick       Ch5: rightLick
-        Ch6: leftSolenoid   Ch7: rightSolenoid  Ch8: airpuff
-        Ch9: blueLaser      Ch10: redLaser
-        Ch11: gyroX         Ch12: gyroY         Ch13: gyroZ
-        Ch14: photometry    Ch15: blink
-    %}
-    % raw = double([allTones; leftTone; rightTone;...
-    %     leftLick; rightLick; leftSolenoid; rightSolenoid; airpuff;...
-    %     blueLaser; redLaser; gyro(1,:); gyro(2,:); gyro(3,:); ...
-    %     photometry_raw; blink]);
-    
-    % Plotting stuffs
-    % figure(1);
-    % plot(syncNI_diff); title('sync pulse from Imec/NI');
-    % 
-    % figure(2);
-    % plot(leftLick); title('left lick'); hold on
-    % plot(leftSolenoid,'LineWidth',2); hold on
-    % plot(leftTone,'LineWidth',2);
-    %
-    % figure(3);
-    % plot(rightLick); title('right lick'); hold on
-    % plot(rightSolenoid,'LineWidth',2); title('right reward'); hold on
-    % plot(rightTone,'LineWidth',2); title('right tone');
-    %
-    % figure; timewindow = 1:400*nidq.Fs;
-    % plot(airpuff(timewindow)); hold on
-    % plot(rightSolenoid(timewindow)); hold on
-    
     %% Save behavioral data
     if options.withPhotometryNI
-        % save(strcat(session.path,filesep,'Raw_NI'),'');
-        save(strcat(session.path,filesep,'sync_',sessionName),...
+        save(strcat(session.path,filesep,'timeseries_',sessionName),...
             'airpuff','leftLick','rightLick','leftTone','rightTone',....
             'leftSolenoid','rightSolenoid','allTones','blink','gyro',...
             'photometry_raw','blueLaser','redLaser',...
             'PMT_NI','-append');
+        save(strcat(session.path,filesep,'data_',sessionName),'PMT_NI','-append');
     else
-        % save(strcat(session.path,filesep,'Raw_NI'),'');
-        save(strcat(session.path,filesep,'sync_',sessionName),...
+        save(strcat(session.path,filesep,'timeseries_',sessionName),...
             'airpuff','leftLick','rightLick','leftTone','rightTone',....
             'leftSolenoid','rightSolenoid','allTones','blink','gyro',...
             'blueLaser','redLaser','-append');
     end
-    
-    % save(strcat('sync_',sessionName),'omissionTrials','-append');
-    disp("Finished: NIDAQ data saved");
+    disp("Finished: NIDAQ data saved in timeseries_.mat");
 end
 
 %% Read ephys (imec) data
@@ -388,8 +350,8 @@ if withRecording && (options.reloadAll || options.reloadImec)
     toc
     
     %% Save ephys data
-    save(strcat(session.path,filesep,'sync_',sessionName),'ap','lfp','-append');
-    disp('Finished: Neuropixel data loaded');
+    save(strcat(session.path,filesep,'timeseries_',sessionName),'ap','lfp','-append');
+    disp('Finished: Neuropixel data saved in timeseries_.mat');
 end
 
 %% Read photometry data
@@ -406,8 +368,8 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
     if isempty(dir(fullfile(session.path,filesep,'Raw_labjack.mat')))
         concatLabjack(session.path,save=true,plot=false);
     end
-    load(strcat(session.path,filesep,'Raw_labjack.mat'));
-    disp('Finished: concatenate and saved raw photometry data');
+    load(strcat(session.path,filesep,'timeseries_labjack.mat'));
+    disp('Finished: concatenate and saved raw photometry data in timeseries_labjack.mat');
 
     % Store relevant info
     params.photometry.params = labjack;
@@ -513,7 +475,7 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
                 dsGreenLP = filtfilt(lpFilt,double(dsGreen));
                 rollingGreenLP = rollingZ(dsGreenLP,params.photometry.signalDetrendWindow);
         
-                save(strcat(session.path,filesep,'sync_',sessionName),'dsGreenLP','rollingGreenLP','-append');
+                save(strcat(session.path,filesep,'data_',sessionName),'dsGreenLP','rollingGreenLP','-append');
             end
     
             % Plot processed vs raw (30sec)
@@ -549,9 +511,8 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
         saveas(gcf,strcat(session.path,filesep,'Photometry_',labjack.name{i},'_processed.png')); 
         saveas(gcf,strcat(session.path,filesep,'Photometry_',labjack.name{i},'_processed.fig'));
     end
-    save(strcat(session.path,filesep,'sync_',sessionName),...
-        'processed','-append');
-    disp("Finished: processed and saved photometry data");
+    save(strcat(session.path,filesep,'data_',sessionName),'processed','-append');
+    disp("Finished: processed and saved photometry data in data_.mat");
 end
 
 %% Read camera data
@@ -629,10 +590,10 @@ if withCamera && (options.reloadAll || options.reloadCam)
             disp("Finished: detrend eye, pupil area");
 
             % Save camera table
-            save(strcat(session.path,filesep,'sync_',sessionName),'camera',...
+            save(strcat(session.path,filesep,'data_',sessionName),'camera',...
                 'pupilArea','eyeArea','eyeArea_detrend','pupilArea_detrend',...
                 'eyePixelIntensity_detrend','-append');
-            disp("Finished: saved camera csv file");
+            disp("Finished: saved camera csv file in data_.mat");
         else
             disp(['Warning: Too much skipped frames (', num2str(length(skipped_frame)), ') were found, skipped camera anlysis!']);
             withCamera = 0;
@@ -699,9 +660,9 @@ if withCamera && (options.reloadAll || options.reloadCam)
             disp("Finished: detrend eye, pupil area");
 
             % Save camera table
-            save(strcat(session.path,filesep,'sync_',sessionName),'camera',...
+            save(strcat(session.path,filesep,'data_',sessionName),'camera',...
                 'pupilArea','eyeArea','eyeArea_detrend','pupilArea_detrend','-append');
-            disp("Finished: saved camera csv file");
+            disp("Finished: saved camera csv file in data_.mat");
         else
             disp(['Warning: Too much skipped frames (', num2str(length(skipped_frame)), ') were found, skipped camera anlysis!']);
             withCamera = 0;
@@ -1028,20 +989,21 @@ saveas(gcf,strcat(session.path,filesep,'Syncing_timestamp.png'));
 
 %% (Ver5) Save sync and other data
 
+disp("Ongoing: saving common time stamp");
 if withRecording
     params.sync.timeImec = timeImec;
     params.sync.timeLFP = timeLFP;
-    save(strcat(session.path,filesep,'sync_',sessionName),'timeImec','timeLFP','-append');
+    % save(strcat(session.path,filesep,'sync_',sessionName),'timeImec','timeLFP','-append');
 end
 
 if withCamera
     params.sync.timeCamera = timeCamera;
-    save(strcat(session.path,filesep,'sync_',sessionName),'timeCamera','-append');
+    % save(strcat(session.path,filesep,'sync_',sessionName),'timeCamera','-append');
 end
 
 if withPhotometry
     params.sync.timePhotometry = timePhotometry;
-    save(strcat(session.path,filesep,'sync_',sessionName),'timePhotometry','-append');
+    % save(strcat(session.path,filesep,'sync_',sessionName),'timePhotometry','-append');
 end
 
 % Save recording systems involved in this session
@@ -1055,7 +1017,8 @@ params.sync.timeNI = timeNI;
 save(strcat(session.path,filesep,'sync_',sessionName),'params','timeNI','-append');
 save(strcat(session.path,filesep,'sync_',sessionName),'params','session','-append');
 
-disp('Finished: struct params, session saved');
+disp('Finished: struct params, session saved in sync_.mat');
+
 return
 
 end

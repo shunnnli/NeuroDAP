@@ -96,7 +96,7 @@ end
 
 % Save concat files
 if options.save
-    save(strcat(sessionpath,filesep,'Raw_labjack'),...
+    save(strcat(sessionpath,filesep,'timeseries_labjack'),...
         'labjack','numChannels','sync_labjack','-v7.3');
 end
 
