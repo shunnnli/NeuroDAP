@@ -24,9 +24,9 @@ arguments
    options.removeTwoEnds logical = false % see demodulatePhotometry.m
    options.plotPhotometry logical = true % Plot photometry signals or not
 
-   options.withPhotometryNI logical = true
+   options.withPhotometryNI logical = false
    options.photometryNI_mod logical = false
-   options.photometryNI_modFreq double = 223
+   options.photometryNI_modFreq double = 0
 
    % Sync related params
    options.syncPulseWindow double = 5000 % #of sync pulse to xcorr
@@ -162,6 +162,8 @@ if options.reloadAll || options.reloadNI
     
     % temperature = analogNI(3,:);
     gyro = single(analogNI(4:6,:));
+    % Photometry PMT
+    photometry_raw = analogNI(8,:);
     
     % Digital channels
     temp = false(size(digitalNI));
@@ -198,79 +200,19 @@ if options.reloadAll || options.reloadNI
     allTones(leftTone ~= 0) = 1;
     allTones(rightTone ~= 0) = 2;
     
-    % Process NIDAQ photometry data
-    if options.withPhotometryNI == true
-
-        % Extract raw
-        photometry_raw = analogNI(8,:);
-        totalDuration_NI = length(photometry_raw) / params.sync.behaviorFs;
-
-        % Process
-        if options.photometryNI_mod
-            demodulate_NI = demodulatePhotometry(photometry_raw,options.downsampleFs,...
-                            originalFs=nidq.Fs,...
-                            modFreq=options.photometryNI_modFreq,...
-                            removeTwoEnds=options.removeTwoEnds);
-
-            % Store process information
-            PMT_NI = demodulate_NI.demodData;
-            if options.downsampleFs ~= length(demodulate_NI.demodData) / totalDuration_NI
-                warning("Desired downsampleFs is different from calculated Fs! Used calculated Fs instead!");
-            end
-            params.sync.ni_photometryFs = length(demodulate_NI.demodData) / totalDuration_NI;
-            params.photometry.demodParams_NIGreen = demodulate_NI.options;
-
-        else
-            % Downsample
-            downsampled_NI = downsamplePhotometry(photometry_raw,options.downsampleFs,nidq.Fs,...
-                                         movingAvergeFilter=options.movingAvergeFilter,...
-                                         movingAverageWindowSize=options.movingAverageWindowSize,...
-                                         dsMethod=options.dsMethod);
-            
-            % Store params
-            PMT_NI = downsampled_NI.finalData;
-            params.sync.ni_photometryFs = options.downsampleFs;
-            totalDuration_NI = length(allTones) / params.sync.behaviorFs;
-            disp('Finished: NI photometry processing');
-        end
-
-        % Plot processed vs raw (30sec)
-        if options.plotPhotometry
-            initializeFig(0.67,0.5); tiledlayout('flow');
-            if totalDuration_NI < 30; plotDuration = totalDuration_NI; 
-            else; plotDuration = 30; end % in sec
-
-            nexttile;
-            % Plot raw green
-            yyaxis left
-            plotSamples = params.sync.behaviorFs * plotDuration;
-            plot(linspace(1,plotDuration,plotSamples),photometry_raw(1:plotSamples)); hold on
-            % Plot processed green
-            yyaxis right
-            plotSamples = params.sync.ni_photometryFs * plotDuration;
-            plot(linspace(1,plotDuration,plotSamples),PMT_NI(1:plotSamples),...
-                LineWidth=2); hold on
-            legend({'Raw NI green','Processed NI green'}); xlabel('Time (s)');
-            saveas(gcf,strcat(session.path,filesep,'Photometry_NI_processed.png')); 
-            saveas(gcf,strcat(session.path,filesep,'Photometry_NI_processed.fig'));
-        end 
-    end
-    
     %% Save behavioral data
     if options.withPhotometryNI
         save(strcat(session.path,filesep,'timeseries_',sessionName),...
             'airpuff','leftLick','rightLick','leftTone','rightTone',....
             'leftSolenoid','rightSolenoid','allTones','blink','gyro',...
-            'photometry_raw','blueLaser','redLaser',...
-            'PMT_NI','-append');
-        save(strcat(session.path,filesep,'data_',sessionName),'PMT_NI','-append');
+            'photometry_raw','blueLaser','redLaser','-append');
     else
         save(strcat(session.path,filesep,'timeseries_',sessionName),...
             'airpuff','leftLick','rightLick','leftTone','rightTone',....
             'leftSolenoid','rightSolenoid','allTones','blink','gyro',...
             'blueLaser','redLaser','-append');
     end
-    disp("Finished: NIDAQ data saved");
+    disp("Finished: NIDAQ data saved in timeseries_.mat");
 end
 
 %% Read ephys (imec) data
@@ -351,7 +293,7 @@ if withRecording && (options.reloadAll || options.reloadImec)
     
     %% Save ephys data
     save(strcat(session.path,filesep,'timeseries_',sessionName),'ap','lfp','-append');
-    disp('Finished: Neuropixel data loaded');
+    disp('Finished: Neuropixel data saved in timeseries_.mat');
 end
 
 %% Read photometry data
@@ -368,8 +310,8 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
     if isempty(dir(fullfile(session.path,filesep,'Raw_labjack.mat')))
         concatLabjack(session.path,save=true,plot=false);
     end
-    load(strcat(session.path,filesep,'Raw_labjack.mat'));
-    disp('Finished: concatenate and saved raw photometry data');
+    load(strcat(session.path,filesep,'timeseries_labjack.mat'));
+    disp('Finished: concatenate and saved raw photometry data in timeseries_labjack.mat');
 
     % Store relevant info
     params.photometry.params = labjack;
@@ -380,14 +322,9 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
 
     % Remove PMT if neccessary
     if ~options.withPhotometryNI; labjack.nSignals = labjack.nSignals-1; end
+    if options.withPhotometryNI; params.sync.ni_photometry = []; end
 
     %% Loop through all signals
-
-    if options.plotPhotometry
-        initializeFig(1,0.67); tiledlayout(labjack.nSignals,2);
-        if totalDuration_LJ < 30; plotDuration = totalDuration_LJ; 
-        else; plotDuration = 30; end % in sec
-    end
 
     for i = 1:labjack.nSignals
         if ~options.withPhotometryNI && strcmp(labjack.name{i},'PMT')
@@ -416,30 +353,30 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
             processed(i).system = 'LJ';
             processed(i).options = demodulated.options;
             
-            if options.plotPhotometry
-                nexttile;
-                yyaxis left % Raw
-                rawTrace = labjack.raw(i,:);
-                plotSamples = floor(params.sync.labjackFs * plotDuration);
-                plot(linspace(1,plotDuration,plotSamples),rawTrace(1:plotSamples)); hold on
-                legend('Raw green');
-                yyaxis right % Processed
-                plotSamples = floor(processed(i).finalFs * plotDuration);
-                plot(linspace(1,plotDuration,plotSamples),processed(i).signal(1:plotSamples),...
-                    LineWidth=2); hold on
-                legend({'Raw','Processed'}); xlabel('Time (s)');
-                title(labjack.name{i});
-                % Plot all session
-                nexttile;
-                yyaxis left % Plot raw all session
-                plotSamples = params.sync.labjackFs * totalDuration_LJ;
-                plot(linspace(1,totalDuration_LJ,plotSamples),rawTrace); hold on
-                yyaxis right % Plot processed all session
-                plotSamples = floor(processed(i).finalFs * totalDuration_LJ);
-                plot(linspace(1,totalDuration_LJ,plotSamples),processed(i).signal); hold on
-                legend({'Raw','Processed'}); xlabel('Time (s)');
-                title(labjack.name{i});
-            end
+            % if options.plotPhotometry
+            %     nexttile;
+            %     yyaxis left % Raw
+            %     rawTrace = labjack.raw(i,:);
+            %     plotSamples = floor(params.sync.labjackFs * plotDuration);
+            %     plot(linspace(1,plotDuration,plotSamples),rawTrace(1:plotSamples)); hold on
+            %     legend('Raw green');
+            %     yyaxis right % Processed
+            %     plotSamples = floor(processed(i).finalFs * plotDuration);
+            %     plot(linspace(1,plotDuration,plotSamples),processed(i).signal(1:plotSamples),...
+            %         LineWidth=2); hold on
+            %     legend({'Raw','Processed'}); xlabel('Time (s)');
+            %     title(processed(i).name);
+            %     % Plot all session
+            %     nexttile;
+            %     yyaxis left % Plot raw all session
+            %     plotSamples = params.sync.labjackFs * totalDuration_LJ;
+            %     plot(linspace(1,totalDuration_LJ,plotSamples),rawTrace); hold on
+            %     yyaxis right % Plot processed all session
+            %     plotSamples = floor(processed(i).finalFs * totalDuration_LJ);
+            %     plot(linspace(1,totalDuration_LJ,plotSamples),processed(i).signal); hold on
+            %     legend({'Raw','Processed'}); xlabel('Time (s)');
+            %     title(processed(i).name);
+            % end
     
         else
             disp("Ongoing: Process unmodulated photometry data");
@@ -453,7 +390,7 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
             % Check final Fs
             finalFs = length(downsampled.dsData) / totalDuration_LJ;
             if options.downsampleFs ~= finalFs
-                warning("   Desired downsampleFs is different from calculated Fs! Used calculated Fs instead!");
+                warning([labjack.name{i},': Desired downsampleFs is different from calculated Fs! Used calculated Fs instead!']);
             end
             params.sync.photometryFs = [finalFs, params.sync.photometryFs];
             
@@ -478,41 +415,133 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
                 save(strcat(session.path,filesep,'data_',sessionName),'dsGreenLP','rollingGreenLP','-append');
             end
     
-            % Plot processed vs raw (30sec)
-            if options.plotPhotometry
-                % Plot 30s sample
-                nexttile;
-                rawTrace = labjack.raw(i,:);
-                yyaxis left % Plot raw green
-                plotSamples = params.sync.labjackFs * plotDuration;
-                plot(linspace(1,plotDuration,plotSamples),rawTrace(1:plotSamples)); hold on
-                yyaxis right % Plot processed green
-                plotSamples = floor(processed(i).finalFs * plotDuration);
-                plot(linspace(1,plotDuration,plotSamples),processed(i).signal(1:plotSamples),...
-                    LineWidth=2); hold on
-                legend({'Raw','Processed'}); xlabel('Time (s)');
-                title(labjack.name{i});
-                % Plot all session
-                nexttile;
-                yyaxis left % Plot raw all session
-                plotSamples = params.sync.labjackFs * totalDuration_LJ;
-                plot(linspace(1,totalDuration_LJ,plotSamples),rawTrace); hold on
-                yyaxis right % Plot processed all session
-                plotSamples = floor(processed(i).finalFs * totalDuration_LJ);
-                plot(linspace(1,totalDuration_LJ,plotSamples),processed(i).signal); hold on
-                legend({'Raw','Processed'}); xlabel('Time (s)');
-                title(labjack.name{i});
-            end
+            % % Plot processed vs raw (30sec)
+            % if options.plotPhotometry
+            %     % Plot 30s sample
+            %     nexttile;
+            %     rawTrace = labjack.raw(i,:);
+            %     yyaxis left % Plot raw green
+            %     plotSamples = params.sync.labjackFs * plotDuration;
+            %     plot(linspace(1,plotDuration,plotSamples),rawTrace(1:plotSamples)); hold on
+            %     yyaxis right % Plot processed green
+            %     plotSamples = floor(processed(i).finalFs * plotDuration);
+            %     plot(linspace(1,plotDuration,plotSamples),processed(i).signal(1:plotSamples),...
+            %         LineWidth=2); hold on
+            %     legend({'Raw','Processed'}); xlabel('Time (s)');
+            %     title(labjack.name{i});
+            %     % Plot all session
+            %     nexttile;
+            %     yyaxis left % Plot raw all session
+            %     plotSamples = params.sync.labjackFs * totalDuration_LJ;
+            %     plot(linspace(1,totalDuration_LJ,plotSamples),rawTrace); hold on
+            %     yyaxis right % Plot processed all session
+            %     plotSamples = floor(processed(i).finalFs * totalDuration_LJ);
+            %     plot(linspace(1,totalDuration_LJ,plotSamples),processed(i).signal); hold on
+            %     legend({'Raw','Processed'}); xlabel('Time (s)');
+            %     title(labjack.name{i});
+            % end
         end
     end
 
-    % Save channels
+    % Process NIDAQ photometry data
+    if options.withPhotometryNI == true
+        totalDuration_NI = length(photometry_raw) / params.sync.behaviorFs;
+
+        % Process
+        if options.photometryNI_mod
+            demodulate_NI = demodulatePhotometry(photometry_raw,...
+                            finalFs=options.downsampleFs,...
+                            originalFs=nidq.Fs,...
+                            modFreq=options.photometryNI_modFreq,...
+                            removeTwoEnds=options.removeTwoEnds);
+
+            % Check final Fs
+            finalFs = length(demodulate_NI.demodData) / totalDuration_NI;
+            if options.downsampleFs ~= finalFs
+                warning('PMT: Desired downsampleFs is different from calculated Fs! Used calculated Fs instead!');
+            end
+            params.sync.ni_photometryFs = [finalFs, params.sync.ni_photometryFs];
+
+            % Store params
+            processed(i).name = 'PMT';
+            processed(i).signal = demodulate_NI.demodData;
+            processed(i).finalFs = finalFs;
+            processed(i).system = 'NI';
+            processed(i).options = demodulate_NI.options;
+            disp('Finished: NI photometry demodulation');
+
+        else
+            % Downsample
+            downsampled_NI = downsamplePhotometry(photometry_raw,...
+                                targetFs=options.downsampleFs,originalFs=nidq.Fs,...
+                                movingAvergeFilter=options.movingAvergeFilter,...
+                                movingAverageWindowSize=options.movingAverageWindowSize,...
+                                dsMethod=options.dsMethod);
+
+            % Check final Fs
+            finalFs = length(downsampled_NI.dsData) / totalDuration_NI;
+            if options.downsampleFs ~= finalFs
+                disp(['finalFs: ',num2str(finalFs)]);
+                disp(['targetFs: ',num2str(options.downsampleFs)]);
+                warning("PMT: Desired downsampleFs is different from calculated Fs! Used calculated Fs instead!");
+            end
+            params.sync.ni_photometryFs = [finalFs, params.sync.ni_photometryFs];
+            
+            % Store params
+            processed(i).name = 'PMT';
+            processed(i).signal = downsampled_NI.dsData;
+            processed(i).finalFs = finalFs;
+            processed(i).system = 'NI';
+            processed(i).options = downsampled_NI.options;
+            disp('Finished: NI photometry downsampling');
+        end
+    end
+
+    %% Plot signals and save channels
+
     if options.plotPhotometry
-        saveas(gcf,strcat(session.path,filesep,'Photometry_',labjack.name{i},'_processed.png')); 
-        saveas(gcf,strcat(session.path,filesep,'Photometry_',labjack.name{i},'_processed.fig'));
+        initializeFig(1,0.67); tiledlayout(size(processed,1),2);
+        if totalDuration_LJ < 30; plotDuration = totalDuration_LJ; 
+        else; plotDuration = 30; end % in sec
+
+        for i = 1:size(processed,1)
+            if strfind(processed(i).name,'PMT')
+                rawTrace = photometry_raw; 
+                rawFs = params.sync.behaviorFs;
+            else
+                rawTrace = labjack.raw(i,:);
+                rawFs = params.sync.labjackFs;
+            end
+
+            % Plot 30s sample
+            nexttile;
+            yyaxis left % Plot raw green
+            plotSamples = rawFs * plotDuration;
+            plot(linspace(1,plotDuration,plotSamples),rawTrace(1:plotSamples)); hold on
+            yyaxis right % Plot processed green
+            plotSamples = floor(processed(i).finalFs * plotDuration);
+            plot(linspace(1,plotDuration,plotSamples),processed(i).signal(1:plotSamples),...
+                LineWidth=2); hold on
+            legend({'Raw','Processed'}); xlabel('Time (s)');
+            title(processed(i).name);
+            % Plot all session
+            nexttile;
+            yyaxis left % Plot raw all session
+            plotSamples = rawFs * totalDuration_LJ;
+            plot(linspace(1,totalDuration_LJ,plotSamples),rawTrace); hold on
+            yyaxis right % Plot processed all session
+            plotSamples = floor(processed(i).finalFs * totalDuration_LJ);
+            plot(linspace(1,totalDuration_LJ,plotSamples),processed(i).signal); hold on
+            legend({'Raw','Processed'}); xlabel('Time (s)');
+            title(processed(i).name);
+        end
+
+        % Save channels
+        saveas(gcf,strcat(session.path,filesep,'Summary_photometry_processing.png')); 
+        saveas(gcf,strcat(session.path,filesep,'Summary_photometry_processing.fig'));
     end
     save(strcat(session.path,filesep,'data_',sessionName),'processed','-append');
-    disp("Finished: processed and saved photometry data");
+    disp("Finished: processed and saved photometry data in data_.mat");
 end
 
 %% Read camera data
@@ -573,27 +602,35 @@ if withCamera && (options.reloadAll || options.reloadCam)
             % Process eye, pupil area data
             pupilArea = camera{:,5}; eyeArea = camera{:,6}; 
             eyePixelIntensity = -camera{:,8}; % convert sign to make blinking going down
+
+            eyeArea_processed = downsamplePhotometry(eyeArea,...
+                        targetFs=options.downsampleFs,...
+                        originalFs=params.sync.camFs,...
+                        rollingZ=true,rollingWindowTime=options.rollingWindowTime,...
+                        dsMethod='resample');
+
+            pupilArea_processed = downsamplePhotometry(pupilArea,...
+                        targetFs=options.downsampleFs,...
+                        originalFs=params.sync.labjackFs,...
+                        rollingZ=true,rollingWindowTime=options.rollingWindowTime,...
+                        dsMethod='resample');
+
+            eyePixelIntensity_processed = downsamplePhotometry(eyePixelIntensity,...
+                        targetFs=options.downsampleFs,...
+                        originalFs=params.sync.labjackFs,...
+                        rollingZ=true,rollingWindowTime=options.rollingWindowTime,...
+                        dsMethod='resample');
         
-            % Rolling z score (60s window)
-            rollingSize = 60; % in sec
-            rollingmean = movmean(eyeArea,rollingSize*camFs);
-            rollingstd = movstd(eyeArea,rollingSize*camFs);
-            eyeArea_detrend = (eyeArea - rollingmean)./rollingstd;
-            % Rolling z score (60s window)
-            rollingmean = movmean(pupilArea,rollingSize*camFs);
-            rollingstd = movstd(pupilArea,rollingSize*camFs);
-            pupilArea_detrend = (pupilArea - rollingmean)./rollingstd;
-            % Rolling z score (60s window)
-            rollingmean = movmean(eyePixelIntensity,rollingSize*camFs);
-            rollingstd = movstd(eyePixelIntensity,rollingSize*camFs);
-            eyePixelIntensity_detrend = (eyePixelIntensity - rollingmean)./rollingstd;
+            eyeArea_detrend = eyeArea_processed.dsData;
+            pupilArea_detrend = pupilArea_processed.dsData;
+            eyePixelIntensity_detrend = eyePixelIntensity_processed.dsData;
             disp("Finished: detrend eye, pupil area");
 
             % Save camera table
             save(strcat(session.path,filesep,'data_',sessionName),'camera',...
                 'pupilArea','eyeArea','eyeArea_detrend','pupilArea_detrend',...
                 'eyePixelIntensity_detrend','-append');
-            disp("Finished: saved camera csv file");
+            disp("Finished: saved camera csv file in data_.mat");
         else
             disp(['Warning: Too much skipped frames (', num2str(length(skipped_frame)), ') were found, skipped camera anlysis!']);
             withCamera = 0;
@@ -648,21 +685,27 @@ if withCamera && (options.reloadAll || options.reloadCam)
         if isempty(skipped_frame)
             % Process eye, pupil area data
             pupilArea = camera{:,5}; eyeArea = camera{:,6};
-            % Rolling z score (60s window)
-            rollingSize = 60; % in sec
-            rollingmean = movmean(eyeArea,rollingSize*camFs);
-            rollingstd = movstd(eyeArea,rollingSize*camFs);
-            eyeArea_detrend = (eyeArea - rollingmean)./rollingstd;
-            % Rolling z score (60s window)
-            rollingmean = movmean(pupilArea,rollingSize*camFs);
-            rollingstd = movstd(pupilArea,rollingSize*camFs);
-            pupilArea_detrend = (pupilArea - rollingmean)./rollingstd;
+            
+            eyeArea_processed = downsamplePhotometry(eyeArea,...
+                        targetFs=options.downsampleFs,...
+                        originalFs=params.sync.camFs,...
+                        rollingZ=true,rollingWindowTime=options.rollingWindowTime,...
+                        dsMethod='resample');
+
+            pupilArea_processed = downsamplePhotometry(pupilArea,...
+                        targetFs=options.downsampleFs,...
+                        originalFs=params.sync.labjackFs,...
+                        rollingZ=true,rollingWindowTime=options.rollingWindowTime,...
+                        dsMethod='resample');
+        
+            eyeArea_detrend = eyeArea_processed.dsData;
+            pupilArea_detrend = pupilArea_processed.dsData;
             disp("Finished: detrend eye, pupil area");
 
             % Save camera table
-            save(strcat(session.path,filesep,'timeseries_',sessionName),'camera',...
+            save(strcat(session.path,filesep,'data_',sessionName),'camera',...
                 'pupilArea','eyeArea','eyeArea_detrend','pupilArea_detrend','-append');
-            disp("Finished: saved camera csv file");
+            disp("Finished: saved camera csv file in data_.mat");
         else
             disp(['Warning: Too much skipped frames (', num2str(length(skipped_frame)), ') were found, skipped camera anlysis!']);
             withCamera = 0;
@@ -993,17 +1036,14 @@ disp("Ongoing: saving common time stamp");
 if withRecording
     params.sync.timeImec = timeImec;
     params.sync.timeLFP = timeLFP;
-    save(strcat(session.path,filesep,'sync_',sessionName),'timeImec','timeLFP','-append');
 end
 
 if withCamera
     params.sync.timeCamera = timeCamera;
-    save(strcat(session.path,filesep,'sync_',sessionName),'timeCamera','-append');
 end
 
 if withPhotometry
     params.sync.timePhotometry = timePhotometry;
-    save(strcat(session.path,filesep,'sync_',sessionName),'timePhotometry','-append');
 end
 
 % Save recording systems involved in this session
@@ -1017,7 +1057,8 @@ params.sync.timeNI = timeNI;
 save(strcat(session.path,filesep,'sync_',sessionName),'params','timeNI','-append');
 save(strcat(session.path,filesep,'sync_',sessionName),'params','session','-append');
 
-disp('Finished: struct params, session saved');
+disp('Finished: struct params, session saved in sync_.mat');
+
 return
 
 end

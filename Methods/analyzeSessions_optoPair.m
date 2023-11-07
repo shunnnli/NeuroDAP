@@ -49,10 +49,7 @@ load(strcat(sessionpath,filesep,'sync_',sessionName,'.mat'));
 if ~isfield(session,'name'); session.name = sessionName; end
 disp(['Session ',sessionName,' loaded']);
 
-%% Preprocess outcome and opto data
-
-disp('Ongoing: preprocess outcome and opto data');
-
+% Load behaivor params
 if options.redo || ~isfield(params,'analyze')
     params.stim.pulseFreq = str2double(stimPattern{1}); 
     params.stim.pulseDuration = str2double(stimPattern{2}); 
@@ -66,6 +63,13 @@ else
     options.reactionTime = params.analyze.reactionTime;
     options.minLicks = params.analyze.minLicks;
 end
+disp(['Behavior params: pavlovian = ',num2str(params.analyze.pavlovian)]);
+disp(['Behavior params: reactionTime = ',num2str(params.analyze.reactionTime)]);
+disp(['Behavior params: minLicks = ',num2str(params.analyze.minLicks)]);
+
+%% Preprocess outcome and opto data
+
+disp('Ongoing: preprocess outcome and opto data');
 
 % Reward/punishment params
 rewardUnit = 0.012; % 8ms opening to dispense 1ul water
@@ -137,7 +141,6 @@ if ~exist('trials','var') || options.redo
     end
     save(strcat(sessionpath,filesep,'timeseries_',session.name),"allTrials",'-append');
 end
-
 
 disp('Finished: preprocess outcome and opto data');
 
@@ -1187,7 +1190,7 @@ if options.plotLicks && contains(task,'pairing')
     title("Outcome reaction time (all trials)");
 
     
-    saveas(gcf,strcat(sessionpath,filesep,'Summary_Distributions.png'));
+    saveas(gcf,strcat(sessionpath,filesep,'Summary_distributions.png'));
 
 end
 return

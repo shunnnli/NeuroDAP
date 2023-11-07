@@ -31,6 +31,12 @@ if mod(nSampPerBin,1) == 0
         firstBinTime = floor(nSampPerBin*(k-1)+1);
         lastBinTime = floor(nSampPerBin*k);
         photometry_downsample(k) = sum(rawTraces(floor(firstBinTime:lastBinTime)));
+
+        % if k==length(photometry_downsample) && lastBinTime < length(rawTraces)
+        %     firstBinTime = lastBinTime + 1;
+        %     lastBinTime = length(rawTraces);
+        %     photometry_downsample(k+1) = sum(rawTraces(floor(firstBinTime:lastBinTime)));
+        % end
     end
     clear nSampPerBin firstBinTime lastBinTime
 

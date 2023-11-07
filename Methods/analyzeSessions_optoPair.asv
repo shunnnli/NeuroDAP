@@ -51,8 +51,6 @@ disp(['Session ',sessionName,' loaded']);
 
 %% Preprocess outcome and opto data
 
-disp('Ongoing: preprocess outcome and opto data');
-
 if options.redo || ~isfield(params,'analyze')
     params.stim.pulseFreq = str2double(stimPattern{1}); 
     params.stim.pulseDuration = str2double(stimPattern{2}); 
@@ -66,6 +64,8 @@ else
     options.reactionTime = params.analyze.reactionTime;
     options.minLicks = params.analyze.minLicks;
 end
+
+disp('Ongoing: preprocess outcome and opto data');
 
 % Reward/punishment params
 rewardUnit = 0.012; % 8ms opening to dispense 1ul water
@@ -162,10 +162,10 @@ if (~exist('trials','var') || options.redo)
 
 
     disp('Ongoing: making event table');
-    events = getEventTable(events,params);
+    eventTable = getEventTable(events,params);
 
     % Save to behavior_.mat
-    save(strcat(sessionpath,filesep,'behavior_',session.name),'trials','-append');
+    save(strcat(sessionpath,filesep,'behavior_',session.name),'trials','eventTable','-append');
     disp('Finished: trial table saved');
 end
 

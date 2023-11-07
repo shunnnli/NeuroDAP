@@ -6,7 +6,7 @@ function demodulated = demodulatePhotometry(signal,options)
 arguments
     signal (1,:) {mustBeNumeric}
 
-    options.finalFs double = 50
+    options.targetFs double = 50
     options.modFreq double = 167; % Hz (green labjack mod frequency)
     options.originalFs double = 2000; % Hz
     options.pointsToEstimateCarrier double = 1e6; % samples
@@ -14,7 +14,7 @@ arguments
     options.detrendWindow double = 180;      % seconds
     
     options.removeTwoEnds logical = false;    % nan values for the first half of the first spectral window and last half of the last spectural window
-    options.resample logical = true;          % resample to finalFs when demodulation didn't produce finalFs
+    options.resample logical = true;          % resample to targetFs when demodulation didn't produce targetFs
     options.plotFFT logical = false;
 end
 
@@ -50,7 +50,7 @@ end
 %% do the demodulation for the non-detrended data
 
 % Calculate demodulation params
-options.nSampPerDemodBin = (1/options.finalFs)*options.originalFs; % =40 if labjackFs=2000Hz; previously finalDownSample
+options.nSampPerDemodBin = (1/options.targetFs)*options.originalFs; % =40 if labjackFs=2000Hz; previously finalDownSample
 if mod(options.nSampPerDemodBin,1) ~= 0
     warning('Demodulation: nSampPerDemodBin is not integer, use the nearest floor instead!');
     options.nSampPerDemodBin = floor(options.nSampPerDemodBin);
@@ -62,7 +62,7 @@ options.spectralWindowOverlap = options.nSampPerDemodBin; % previously: options.
 % Calculte demodulation window
 % ensures that it is an integer multiple of the sampling window
 options.detrendWindowSamples_rawFs = 2*floor(options.detrendWindow*options.originalFs/2); 
-options.detrendWindowSamples_finalFs = 2*floor(options.detrendWindow*options.finalFs/2);
+options.detrendWindowSamples_targetFs = 2*floor(options.detrendWindow*options.targetFs/2);
 
 % Demod without detrend
 [spectVals, ~, dmTimes] = spectrogram(signal, options.spectralWindow, options.spectralWindowOverlap, options.spectralFrequencies, options.originalFs);
@@ -75,19 +75,19 @@ signal_detrended = rollingZ(signal, options.detrendWindowSamples_rawFs);
 [spectVals, ~, ~] = spectrogram(signal_detrended, options.spectralWindow, options.spectralWindowOverlap, options.spectralFrequencies, options.originalFs);
 dmData = mean(abs(spectVals),1); % convert spectrogram to power    
 
-dmData = rollingZ(dmData, options.detrendWindowSamples_finalFs);
+dmData = rollingZ(dmData, options.detrendWindowSamples_targetFs);
 if options.removeTwoEnds
-    dmData(1:(options.detrendWindowSamples_finalFs/2)) = nan;
-    dmData((end-options.detrendWindowSamples_finalFs/2):end) = nan;
+    dmData(1:(options.detrendWindowSamples_targetFs/2)) = nan;
+    dmData((end-options.detrendWindowSamples_targetFs/2):end) = nan;
 end
 demodulated.demodData = [nan,dmData];
 
 % Resample to targetFs if neccessary
 demodFs = length(demodulated.demodData)/(length(signal)/options.originalFs);
-if options.resample && (options.finalFs ~= demodFs)
+if options.resample && (options.targetFs ~= demodFs)
     disp(['     Demodulation: length(demod)=',num2str(length(dmData))]);
-    disp(['     Demodulation: length(idealDemod)=',num2str((length(signal)/options.originalFs)*options.finalFs)]);
-    [p,q] = rat(options.finalFs/demodFs);
+    disp(['     Demodulation: length(idealDemod)=',num2str((length(signal)/options.originalFs)*options.targetFs)]);
+    [p,q] = rat(options.targetFs/demodFs);
     % n = 10; beta = 5; % n: length of filter window (default 10); beta: smoothing (default 5)
     demodulated.demodData = resample(dmData,p,q);
     disp('     Demodulation: resampled demod data to downsampleFs');
