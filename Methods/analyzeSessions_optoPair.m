@@ -232,8 +232,8 @@ if strcmp(task,'random')
     stageColors = {[.75 .75 .75],bluePurpleRed(1,:)};
     stageLegend = {'Baseline','US'};
     analysisEvents = analysisEvents(~cellfun('isempty',analysisEvents));
-    analysisLabels = analysisLabels(~cellfun('isempty',analysisLabels));
-    analysisColors = analysisColors(~cellfun('isempty',analysisColors));
+    analysisLabels = analysisLabels(~cellfun('isempty',analysisEvents));
+    analysisColors = analysisColors(~cellfun('isempty',analysisEvents));
     
     for i = 1:length(analysisEvents)
         disp(['Total ',analysisLabels{i},': ',num2str(length(analysisEvents{i}))]);
@@ -304,8 +304,8 @@ else
     stageColors = {[.75 .75 .75],bluePurpleRed(end,:),bluePurpleRed(1,:)};
     stageLegend = {'Baseline','CS','US'};
     analysisEvents = analysisEvents(~cellfun('isempty',analysisEvents));
-    analysisLabels = analysisLabels(~cellfun('isempty',analysisLabels));
-    analysisColors = analysisColors(~cellfun('isempty',analysisColors));
+    analysisLabels = analysisLabels(~cellfun('isempty',analysisEvents));
+    analysisColors = analysisColors(~cellfun('isempty',analysisEvents));
 
     for i = 1:length(analysisEvents)
         disp(['Total ',analysisLabels{i},': ',num2str(length(analysisEvents{i}))]);
