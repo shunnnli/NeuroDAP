@@ -202,17 +202,17 @@ if options.reloadAll || options.reloadNI
     
     %% Save behavioral data
     if options.withPhotometryNI
-        save(strcat(session.path,filesep,'timeseries_',sessionName),...
+        save(strcat(session.path,filesep,'data_',sessionName),...
             'airpuff','leftLick','rightLick','leftTone','rightTone',....
             'leftSolenoid','rightSolenoid','allTones','blink','gyro',...
             'photometry_raw','blueLaser','redLaser','-append');
     else
-        save(strcat(session.path,filesep,'timeseries_',sessionName),...
+        save(strcat(session.path,filesep,'data_',sessionName),...
             'airpuff','leftLick','rightLick','leftTone','rightTone',....
             'leftSolenoid','rightSolenoid','allTones','blink','gyro',...
             'blueLaser','redLaser','-append');
     end
-    disp("Finished: NIDAQ data saved in timeseries_.mat");
+    disp("Finished: NIDAQ data saved in data_.mat");
 end
 
 %% Read ephys (imec) data
@@ -292,107 +292,118 @@ if withRecording && (options.reloadAll || options.reloadImec)
     toc
     
     %% Save ephys data
-    save(strcat(session.path,filesep,'timeseries_',sessionName),'ap','lfp','-append');
-    disp('Finished: Neuropixel data saved in timeseries_.mat');
+    save(strcat(session.path,filesep,'data_',sessionName),'ap','lfp','-append');
+    disp('Finished: Neuropixel data saved in data_.mat');
 end
 
 %% Read photometry data
-if withPhotometry && (options.reloadAll || options.reloadLJ)
-    % rawGreen: raw green signals
-    % modGreen: green modulation signal of blue LED
-    % demodGreen: demodulation or downsampled detrendGreen
-    % rollingGreen: rollingZ(demodGreen)
-    % rollingGreenLP: rollingZ(demodGreenLP)
-
+if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options.reloadLJ)
     %% Concatenate raw.mat files
 
-    disp("Ongoing: concatenate and save raw photometry data");
-    if isempty(dir(fullfile(session.path,filesep,'timeseries_labjack.mat')))
-        concatLabjack(session.path,save=true,plot=false);
+    if withPhotometry
+        disp("Ongoing: concatenate and save raw photometry data");
+        if isempty(dir(fullfile(session.path,filesep,'data_labjack.mat')))
+            concatLabjack(session.path,save=true,plot=false);
+        end
+        load(strcat(session.path,filesep,'data_labjack.mat'));
+        disp('Finished: concatenate and saved raw photometry data in data_labjack.mat');
+        disp(labjack);
+    
+        % Store relevant info
+        params.photometry.params = labjack;
+        params.sync.labjackFs = labjack.samplerate;
+        totalDuration_LJ = length(sync_labjack) / params.sync.labjackFs;
+        params.photometry.totalDuration = totalDuration_LJ;
+        params.sync.photometryFs = [];
+
+        % Remove PMT if neccessary
+        if ~options.withPhotometryNI; labjack.nSignals = labjack.nSignals-1; end
     end
-    load(strcat(session.path,filesep,'timeseries_labjack.mat'));
-    disp('Finished: concatenate and saved raw photometry data in timeseries_labjack.mat');
-    disp(labjack);
-
-    % Store relevant info
-    params.photometry.params = labjack;
-    params.sync.labjackFs = labjack.samplerate;
-    totalDuration_LJ = length(sync_labjack) / params.sync.labjackFs;
-    params.photometry.totalDuration = totalDuration_LJ;
-    params.sync.photometryFs = [];
-
-    % Remove PMT if neccessary
-    if ~options.withPhotometryNI; labjack.nSignals = labjack.nSignals-1; end
+    
     if options.withPhotometryNI; params.sync.ni_photometryFs = []; end
 
     %% Loop through all signals
-
-    for i = 1:labjack.nSignals
-        if ~options.withPhotometryNI && strcmp(labjack.name{i},'PMT')
-            continue
-        end
-
-        if labjack.mod(i)
-            demodulated = demodulatePhotometry(labjack.raw(i,:),...
+    i = 1;
+    if withPhotometry
+        for i = 1:labjack.nSignals
+            if ~options.withPhotometryNI && strcmp(labjack.name{i},'PMT')
+                continue
+            end
+    
+            if labjack.mod(i)
+                demodulated = demodulatePhotometry(labjack.raw(i,:),...
+                                targetFs=options.downsampleFs,...
+                                originalFs=params.sync.labjackFs,...
+                                modFreq=labjack.modFreq(i),...
+                                removeTwoEnds=options.removeTwoEnds,...
+                                rollingWindowTime=options.rollingWindowTime);
+    
+                % Check final Fs
+                finalFs = length(demodulated.demodData) / totalDuration_LJ;
+                if options.downsampleFs ~= finalFs
+                    disp(['finalFs: ',num2str(finalFs)]);
+                    disp(['targetFs: ',num2str(options.downsampleFs)]);
+                    warning([labjack.name{i},': Desired downsampleFs is different from calculated Fs! Used calculated Fs instead!']);
+                end
+                params.sync.photometryFs = [finalFs, params.sync.photometryFs];
+    
+                % Store process information
+                timeSeries(i).name = labjack.name{i};
+                timeSeries(i).data = demodulated.demodData;
+                timeSeries(i).finalFs = finalFs;
+                timeSeries(i).system = 'LJ';
+                timeSeries(i).time_offset = NaN;
+                timeSeries(i).demux = true;
+                timeSeries(i).demux_freq = demodulated.options.modFreq;
+                timeSeries(i).detrend = true;
+                timeSeries(i).detrend_type = 'rolling-z';
+                timeSeries(i).detrend_window = demodulated.options.rollingWindowTime;
+                timeSeries(i).options = demodulated.options;
+        
+            else
+                disp("Ongoing: Process unmodulated photometry data");
+                % Downsample
+                downsampled = downsamplePhotometry(labjack.raw(i,:),...
                             targetFs=options.downsampleFs,...
                             originalFs=params.sync.labjackFs,...
-                            modFreq=labjack.modFreq(i),...
-                            removeTwoEnds=options.removeTwoEnds,...
-                            detrendWindow=options.rollingWindowTime);
-
-            % Check final Fs
-            finalFs = length(demodulated.demodData) / totalDuration_LJ;
-            if options.downsampleFs ~= finalFs
-                disp(['finalFs: ',num2str(finalFs)]);
-                disp(['targetFs: ',num2str(options.downsampleFs)]);
-                warning([labjack.name{i},': Desired downsampleFs is different from calculated Fs! Used calculated Fs instead!']);
-            end
-            params.sync.photometryFs = [finalFs, params.sync.photometryFs];
-
-            % Store process information
-            processed(i).name = labjack.name{i};
-            processed(i).signal = demodulated.demodData;
-            processed(i).finalFs = finalFs;
-            processed(i).system = 'LJ';
-            processed(i).options = demodulated.options;
-    
-        else
-            disp("Ongoing: Process unmodulated photometry data");
-            % Downsample
-            downsampled = downsamplePhotometry(labjack.raw(i,:),...
-                        targetFs=options.downsampleFs,...
-                        originalFs=params.sync.labjackFs,...
-                        rollingZ=true,rollingWindowTime=options.rollingWindowTime,...
-                        dsMethod='resample');
+                            rollingZ=true,rollingWindowTime=options.rollingWindowTime,...
+                            dsMethod='resample');
+                
+                % Check final Fs
+                finalFs = length(downsampled.dsData) / totalDuration_LJ;
+                if options.downsampleFs ~= finalFs
+                    disp(['finalFs: ',num2str(finalFs)]);
+                    disp(['targetFs: ',num2str(options.downsampleFs)]);
+                    warning([labjack.name{i},': Desired downsampleFs is different from calculated Fs! Used calculated Fs instead!']);
+                end
+                params.sync.photometryFs = [finalFs, params.sync.photometryFs];
+                
+                % Store process information
+                timeSeries(i).name = labjack.name{i};
+                timeSeries(i).data = downsampled.dsData;
+                timeSeries(i).finalFs = finalFs;
+                timeSeries(i).system = 'LJ';
+                timeSeries(i).time_offset = NaN;
+                timeSeries(i).demux = true;
+                timeSeries(i).demux_freq = NaN;
+                timeSeries(i).detrend = true;
+                timeSeries(i).detrend_type = 'rolling-z';
+                timeSeries(i).detrend_window = downsampled.options.rollingWindowTime;
+                timeSeries(i).options = downsampled.options;
+                disp("Finished: no modulation, skip demodulation and downsampled");
             
-            % Check final Fs
-            finalFs = length(downsampled.dsData) / totalDuration_LJ;
-            if options.downsampleFs ~= finalFs
-                disp(['finalFs: ',num2str(finalFs)]);
-                disp(['targetFs: ',num2str(options.downsampleFs)]);
-                warning([labjack.name{i},': Desired downsampleFs is different from calculated Fs! Used calculated Fs instead!']);
-            end
-            params.sync.photometryFs = [finalFs, params.sync.photometryFs];
+                % Low pass filter data (skip by default)
+                if options.LPFreq > 0
+                    params.photometry.nSampPerDemodBin = 41;
+                    params.photometry.filtCut = options.LPFreq;
+                    lpFilt = designfilt('lowpassiir','FilterOrder',8, 'PassbandFrequency',params.photometry.filtCut,...
+                        'PassbandRipple',0.01, 'Samplerate',params.sync.labjackFs/params.photometry.nSampPerDemodBin);
+                    % Lowpass filter
+                    dsGreenLP = filtfilt(lpFilt,double(dsGreen));
+                    rollingGreenLP = rollingZ(dsGreenLP,options.rollingWindowTime);
             
-            % Store process information
-            processed(i).name = labjack.name{i};
-            processed(i).signal = downsampled.dsData;
-            processed(i).finalFs = finalFs;
-            processed(i).system = 'LJ';
-            processed(i).options = downsampled.options;
-            disp("Finished: no modulation, skip demodulation and downsampled");
-        
-            % Low pass filter data (skip by default)
-            if options.LPFreq > 0
-                params.photometry.nSampPerDemodBin = 41;
-                params.photometry.filtCut = options.LPFreq;
-                lpFilt = designfilt('lowpassiir','FilterOrder',8, 'PassbandFrequency',params.photometry.filtCut,...
-                    'PassbandRipple',0.01, 'Samplerate',params.sync.labjackFs/params.photometry.nSampPerDemodBin);
-                % Lowpass filter
-                dsGreenLP = filtfilt(lpFilt,double(dsGreen));
-                rollingGreenLP = rollingZ(dsGreenLP,params.photometry.signalDetrendWindow);
-        
-                save(strcat(session.path,filesep,'data_',sessionName),'dsGreenLP','rollingGreenLP','-append');
+                    save(strcat(session.path,filesep,'data_',sessionName),'dsGreenLP','rollingGreenLP','-append');
+                end
             end
         end
     end
@@ -407,7 +418,8 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
                             targetFs=options.downsampleFs,...
                             originalFs=nidq.Fs,...
                             modFreq=options.photometryNI_modFreq,...
-                            removeTwoEnds=options.removeTwoEnds);
+                            removeTwoEnds=options.removeTwoEnds,...
+                            rollingWindowTime=options.rollingWindowTime);
 
             % Check final Fs
             finalFs = length(demodulate_NI.demodData) / totalDuration_NI;
@@ -419,19 +431,24 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
             params.sync.ni_photometryFs = [finalFs, params.sync.ni_photometryFs];
 
             % Store params
-            processed(i).name = 'PMT';
-            processed(i).signal = demodulate_NI.demodData;
-            processed(i).finalFs = finalFs;
-            processed(i).system = 'NI';
-            processed(i).options = demodulate_NI.options;
+            timeSeries(i).name = 'PMT';
+            timeSeries(i).data = demodulate_NI.demodData;
+            timeSeries(i).finalFs = finalFs;
+            timeSeries(i).system = 'NI';
+            timeSeries(i).time_offset = 0;
+            timeSeries(i).demux = true;
+            timeSeries(i).demux_freq = demodulate_NI.options.modFreq;
+            timeSeries(i).detrend = true;
+            timeSeries(i).detrend_type = 'rolling-z';
+            timeSeries(i).detrend_window = demodulate_NI.options.rollingWindowTime;
+            timeSeries(i).options = demodulate_NI.options;
             disp('Finished: NI photometry demodulation');
 
         else
             % Downsample
             downsampled_NI = downsamplePhotometry(photometry_raw,...
                                 targetFs=options.downsampleFs,originalFs=nidq.Fs,...
-                                movingAvergeFilter=options.movingAvergeFilter,...
-                                movingAverageWindowSize=options.movingAverageWindowSize,...
+                                rollingWindowTime=options.rollingWindowTime,...
                                 dsMethod=options.dsMethod);
 
             % Check final Fs
@@ -444,11 +461,17 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
             params.sync.ni_photometryFs = [finalFs, params.sync.ni_photometryFs];
             
             % Store params
-            processed(i).name = 'PMT';
-            processed(i).signal = downsampled_NI.dsData;
-            processed(i).finalFs = finalFs;
-            processed(i).system = 'NI';
-            processed(i).options = downsampled_NI.options;
+            timeSeries(i).name = 'PMT';
+            timeSeries(i).data = downsampled_NI.dsData;
+            timeSeries(i).finalFs = finalFs;
+            timeSeries(i).system = 'NI';
+            timeSeries(i).time_offset = 0;
+            timeSeries(i).demux = false;
+            timeSeries(i).demux_freq = NaN;
+            timeSeries(i).detrend = true;
+            timeSeries(i).detrend_type = 'rolling-z';
+            timeSeries(i).detrend_window = downsampled_NI.options.rollingWindowTime;
+            timeSeries(i).options = downsampled_NI.options;
             disp('Finished: NI photometry downsampling');
         end
     end
@@ -456,15 +479,19 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
     %% Plot signals and save channels
 
     if options.plotPhotometry
-        initializeFig(1,1); tiledlayout(size(processed,2),2);
+        initializeFig(1,1); tiledlayout(size(timeSeries,2),2);
 
-        if options.withPhotometryNI; totalDurationMin = min([totalDuration_NI,totalDuration_LJ]);
-        else; totalDurationMin = totalDuration_LJ; end
+        if options.withPhotometryNI && withPhotometry
+            totalDurationMin = min([totalDuration_NI,totalDuration_LJ]);
+        elseif withPhotometry; totalDurationMin = totalDuration_LJ; 
+        else; totalDurationMin = totalDuration_NI; 
+        end
+
         if totalDurationMin < 30; plotDuration = totalDurationMin; 
         else; plotDuration = 30; end % in sec
 
-        for i = 1:size(processed,2)
-            if strcmp(processed(i).system,'NI')
+        for i = 1:size(timeSeries,2)
+            if strcmp(timeSeries(i).system,'NI')
                 rawTrace = photometry_raw; 
                 rawFs = params.sync.behaviorFs;
                 totalDuration = totalDuration_NI;
@@ -473,35 +500,36 @@ if withPhotometry && (options.reloadAll || options.reloadLJ)
                 rawFs = params.sync.labjackFs;
                 totalDuration = totalDuration_LJ;
             end
+            meanTrace = movmean(rawTrace,60*rawFs);
 
             % Plot 30s sample
             nexttile;
             yyaxis left % Plot raw green
             plotSamples = rawFs * plotDuration;
-            plot(linspace(1,plotDuration,plotSamples),rawTrace(1:plotSamples)); hold on
+            plot(linspace(1,plotDuration,plotSamples),rawTrace(1:plotSamples),Color=[0.3010 0.7450 0.9330]); hold on
             yyaxis right % Plot processed green
-            plotSamples = floor(processed(i).finalFs * plotDuration);
-            plot(linspace(1,plotDuration,plotSamples),processed(i).signal(1:plotSamples),...
+            plotSamples = floor(timeSeries(i).finalFs * plotDuration);
+            plot(linspace(1,plotDuration,plotSamples),timeSeries(i).data(1:plotSamples),...
                 LineWidth=2); hold on
             legend({'Raw','Processed'}); xlabel('Time (s)');
-            title(processed(i).name);
+            title(timeSeries(i).name);
             % Plot all session
             nexttile;
             yyaxis left % Plot raw all session
             plotSamples = rawFs * totalDuration;
-            plot(linspace(1,totalDuration,plotSamples),rawTrace); hold on
+            plot(linspace(1,totalDuration,plotSamples),rawTrace,Color=[0.3010 0.7450 0.9330]); hold on
+            plot(linspace(1,totalDuration,length(meanTrace)),meanTrace,Color='b',LineWidth=2); hold on
             yyaxis right % Plot processed all session
-            plotSamples = floor(processed(i).finalFs * totalDuration);
-            plot(linspace(1,totalDuration,plotSamples),processed(i).signal); hold on
-            legend({'Raw','Processed'}); xlabel('Time (s)');
-            title(processed(i).name);
+            plotSamples = floor(timeSeries(i).finalFs * totalDuration);
+            plot(linspace(1,totalDuration,plotSamples),timeSeries(i).data,Color='#D95319',LineWidth=2); hold on
+            legend({'Raw','Mean','Processed'}); xlabel('Time (s)');
+            title(timeSeries(i).name);
         end
 
         % Save channels
         saveas(gcf,strcat(session.path,filesep,'Summary_photometry_processing.png')); 
         saveas(gcf,strcat(session.path,filesep,'Summary_photometry_processing.fig'));
     end
-    save(strcat(session.path,filesep,'data_',sessionName),'processed','-append');
     disp("Finished: processed and saved photometry data in data_.mat");
 end
 
@@ -564,33 +592,34 @@ if withCamera && (options.reloadAll || options.reloadCam)
             pupilArea = camera{:,5}; eyeArea = camera{:,6}; 
             eyePixelIntensity = -camera{:,8}; % convert sign to make blinking going down
 
-            eyeArea_processed = downsamplePhotometry(eyeArea,...
+            traces = {pupilArea; eyeArea; eyePixelIntensity};
+            trace_names = {'pupilArea';'eyeArea';'eyePixelIntensity'};
+            for i = 1:size(traces,1)
+                processed = downsamplePhotometry(traces{i},...
                         targetFs=options.downsampleFs,...
                         originalFs=params.sync.camFs,...
                         rollingZ=true,rollingWindowTime=options.rollingWindowTime,...
                         dsMethod='cloestInteger');
 
-            pupilArea_processed = downsamplePhotometry(pupilArea,...
-                        targetFs=options.downsampleFs,...
-                        originalFs=params.sync.labjackFs,...
-                        rollingZ=true,rollingWindowTime=options.rollingWindowTime,...
-                        dsMethod='cloestInteger');
-
-            eyePixelIntensity_processed = downsamplePhotometry(eyePixelIntensity,...
-                        targetFs=options.downsampleFs,...
-                        originalFs=params.sync.labjackFs,...
-                        rollingZ=true,rollingWindowTime=options.rollingWindowTime,...
-                        dsMethod='cloestInteger');
-        
-            eyeArea_detrend = eyeArea_processed.dsData;
-            pupilArea_detrend = pupilArea_processed.dsData;
-            eyePixelIntensity_detrend = eyePixelIntensity_processed.dsData;
+                % Save to timeseries struct
+                row = size(timeSeries,2) + 1;
+                timeSeries(row).name = trace_names{i};
+                timeSeries(row).data = processed.dsData;
+                timeSeries(row).finalFs = options.downsampleFs;
+                timeSeries(row).system = 'Cam';
+                timeSeries(row).time_offset = 0;
+                timeSeries(row).demux = false;
+                timeSeries(row).demux_freq = NaN;
+                timeSeries(row).detrend = true;
+                timeSeries(row).detrend_type = 'rolling-z';
+                timeSeries(row).detrend_window = processed.options.rollingWindowTime;
+                timeSeries(row).options = processed.options;
+            end
             disp("Finished: detrend eye, pupil area");
 
             % Save camera table
             save(strcat(session.path,filesep,'data_',sessionName),'camera',...
-                'pupilArea','eyeArea','eyeArea_detrend','pupilArea_detrend',...
-                'eyePixelIntensity_detrend','-append');
+                'pupilArea','eyeArea','-append');
             disp("Finished: saved camera csv file in data_.mat");
         else
             disp(['Warning: Too much skipped frames (', num2str(length(skipped_frame)), ') were found, skipped camera anlysis!']);
@@ -646,26 +675,35 @@ if withCamera && (options.reloadAll || options.reloadCam)
         if isempty(skipped_frame)
             % Process eye, pupil area data
             pupilArea = camera{:,5}; eyeArea = camera{:,6};
-            
-            eyeArea_processed = downsamplePhotometry(eyeArea,...
+
+            traces = {pupilArea; eyeArea};
+            trace_names = {'pupilArea';'eyeArea'};
+            for i = 1:size(traces,1)
+                processed = downsamplePhotometry(traces{i},...
                         targetFs=options.downsampleFs,...
                         originalFs=params.sync.camFs,...
                         rollingZ=true,rollingWindowTime=options.rollingWindowTime,...
-                        dsMethod='resample');
+                        dsMethod='cloestInteger');
 
-            pupilArea_processed = downsamplePhotometry(pupilArea,...
-                        targetFs=options.downsampleFs,...
-                        originalFs=params.sync.labjackFs,...
-                        rollingZ=true,rollingWindowTime=options.rollingWindowTime,...
-                        dsMethod='resample');
-        
-            eyeArea_detrend = eyeArea_processed.dsData;
-            pupilArea_detrend = pupilArea_processed.dsData;
+                % Save to timeseries struct
+                row = size(timeSeries,2) + 1;
+                timeSeries(row).name = trace_names{i};
+                timeSeries(row).data = processed.dsData;
+                timeSeries(row).finalFs = options.downsampleFs;
+                timeSeries(row).system = 'Cam';
+                timeSeries(row).time_offset = 0;
+                timeSeries(row).demux = false;
+                timeSeries(row).demux_freq = NaN;
+                timeSeries(row).detrend = true;
+                timeSeries(row).detrend_type = 'rolling-z';
+                timeSeries(row).detrend_window = processed.options.rollingWindowTime;
+                timeSeries(row).options = processed.options;
+            end
             disp("Finished: detrend eye, pupil area");
 
             % Save camera table
             save(strcat(session.path,filesep,'data_',sessionName),'camera',...
-                'pupilArea','eyeArea','eyeArea_detrend','pupilArea_detrend','-append');
+                'pupilArea','eyeArea','-append');
             disp("Finished: saved camera csv file in data_.mat");
         else
             disp(['Warning: Too much skipped frames (', num2str(length(skipped_frame)), ') were found, skipped camera anlysis!']);
@@ -997,14 +1035,24 @@ disp("Ongoing: saving common time stamp");
 if withRecording
     params.sync.timeImec = timeImec;
     params.sync.timeLFP = timeLFP;
+    params.sync.behaviorOffset.Imec = timeImec(1) - timeNI(1);
+    params.sync.behaviorOffset.LFP = timeImec(1) - timeNI(1);
 end
 
 if withCamera
     params.sync.timeCamera = timeCamera;
+    params.sync.behaviorOffset.Camera = timeCamera(1) - timeNI(1);
 end
 
 if withPhotometry
     params.sync.timePhotometry = timePhotometry;
+    params.sync.behaviorOffset.Photometry = timePhotometry(1) - timeNI(1);
+    % Add time_offset to timeSeries data
+    for i = 1:size(timeSeries,2)
+        if strcmp(timeSeries(i).system,'LJ')
+            timeSeries(i).time_offset = params.sync.behaviorOffset.Photometry;
+        end
+    end
 end
 
 % Save recording systems involved in this session
@@ -1017,7 +1065,7 @@ params.session = session;
 params.sync.timeNI = timeNI;
 save(strcat(session.path,filesep,'sync_',sessionName),'params','timeNI','-append');
 save(strcat(session.path,filesep,'sync_',sessionName),'params','session','-append');
-
+save(strcat(session.path,filesep,'timeseries_',sessionName),'timeSeries','-append');
 disp('Finished: struct params, session saved in sync_.mat');
 
 return

@@ -7,11 +7,11 @@ arguments
     signal (1,:) {mustBeNumeric}
 
     options.targetFs double = 50
-    options.modFreq double = 167; % Hz (green labjack mod frequency)
+    options.modFreq double = 200; % Hz (green labjack mod frequency)
     options.originalFs double = 2000; % Hz
     options.pointsToEstimateCarrier double = 1e6; % samples
     options.bandWidth double = 3;            % number of frequency steps by Hz.  Eg 1 means analyze center frequency and +/- 1 Hz
-    options.detrendWindow double = 180;      % seconds
+    options.rollingWindowTime double = 180;      % seconds
     
     options.removeTwoEnds logical = false;    % nan values for the first half of the first spectral window and last half of the last spectural window
     options.resample logical = true;          % resample to targetFs when demodulation didn't produce targetFs
@@ -61,8 +61,8 @@ options.spectralWindowOverlap = options.nSampPerDemodBin; % previously: options.
 
 % Calculte demodulation window
 % ensures that it is an integer multiple of the sampling window
-options.detrendWindowSamples_rawFs = 2*floor(options.detrendWindow*options.originalFs/2); 
-options.detrendWindowSamples_targetFs = 2*floor(options.detrendWindow*options.targetFs/2);
+options.detrendWindowSamples_rawFs = 2*floor(options.rollingWindowTime*options.originalFs/2); 
+options.detrendWindowSamples_targetFs = 2*floor(options.rollingWindowTime*options.targetFs/2);
 
 % Demod without detrend
 [spectVals, ~, dmTimes] = spectrogram(signal, options.spectralWindow, options.spectralWindowOverlap, options.spectralFrequencies, options.originalFs);

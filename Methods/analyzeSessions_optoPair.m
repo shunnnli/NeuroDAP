@@ -41,13 +41,23 @@ elseif isunix; session.projectPath = strcat('/',fullfile(dirsplit{2:end-1}));
 end
 clear dirsplit
 
-disp(strcat('********** ',sessionName,'**********'));
+disp(strcat('**********',sessionName,'**********'));
 load(strcat(sessionpath,filesep,'timeseries_',sessionName,'.mat'));
 load(strcat(sessionpath,filesep,'data_',sessionName,'.mat'));
 load(strcat(sessionpath,filesep,'behavior_',sessionName,'.mat'));
 load(strcat(sessionpath,filesep,'sync_',sessionName,'.mat'));
 if ~isfield(session,'name'); session.name = sessionName; end
-disp(['Session ',sessionName,' loaded']);
+
+% Create analysis.mat
+if ~isempty(dir(fullfile(session.path,"analysis_*.mat")))
+    load(strcat(sessionpath,filesep,'analysis_',sessionName,'.mat'));
+else
+    analysis = struct([]);
+    save(strcat(session.path,filesep,'analysis_',sessionName),'sessionName','session','-v7.3');
+    disp('Finished: analysis_.mat not found, created a new one');
+end
+
+disp(['Finished: Session ',sessionName,' loaded']);
 
 % Load behaivor params
 if options.redo || ~isfield(params,'analyze')
@@ -66,6 +76,10 @@ end
 disp(['Behavior params: pavlovian = ',num2str(params.analyze.pavlovian)]);
 disp(['Behavior params: reactionTime = ',num2str(params.analyze.reactionTime)]);
 disp(['Behavior params: minLicks = ',num2str(params.analyze.minLicks)]);
+
+% Load camera signal
+eyeArea_detrend = timeSeries(find(cellfun(@(x) strcmpi(x,'eyeArea'), {timeSeries.name}))).data;
+pupilArea_detrend = timeSeries(find(cellfun(@(x) strcmpi(x,'pupilArea'), {timeSeries.name}))).data;
 
 %% Preprocess outcome and opto data
 
@@ -142,6 +156,13 @@ if ~exist('trials','var') || options.redo
     save(strcat(sessionpath,filesep,'timeseries_',session.name),"allTrials",'-append');
 end
 
+% Find water lick (first lick in response to water)
+waterLickIdx = nan(size(waterIdx));
+for i = 1:length(waterIdx)
+    nextLick = rightLickON(find(rightLickON>=waterIdx(i),1));
+    if ~isempty(nextLick); waterLickIdx(i) = nextLick; end
+end
+
 disp('Finished: preprocess outcome and opto data');
 
 %% Generate trial and event table
@@ -161,14 +182,28 @@ if (~exist('trials','var') || options.redo)
     else; [trials,cutoff_sample] = getSessionCutoff(trials,"random"); 
     end
     params.analysis.cutoff_sample = cutoff_sample;
-    disp(['Session cutoff calculated: ',num2str(cutoff_sample)]);
+    disp(['     Session cutoff calculated: ',num2str(cutoff_sample)]);
 
 
-    disp('Ongoing: making event table');
+    % For converting to datajoint
+    disp('Ongoing: create tables for datajoint pipeline');
+    % trialTable
+    trialTable = trials(:,1:end-6);
+    trialTable.block = ones(size(trials,1),1);
+    trialTable.session_position = (1:size(trials,1))';
+    parquetwrite(strcat(sessionpath,filesep,'trialTable.parquet'),trialTable);
+    % eventTable
     eventTable = getEventTable(events,params);
+    parquetwrite(strcat(sessionpath,filesep,'eventTable.parquet'),trialTable);
+    % blockTable
+    firstTrial = 1; lastTrial = size(trials,1);
+    blockTable = table(firstTrial,lastTrial);
+    parquetwrite(strcat(sessionpath,filesep,'blockTable.parquet'),trialTable);
+    
 
     % Save to behavior_.mat
-    save(strcat(sessionpath,filesep,'behavior_',session.name),'trials','eventTable','-append');
+    save(strcat(sessionpath,filesep,'behavior_',session.name),'trials',...
+        'eventTable','trialTable','blockTable','-append');
     disp('Finished: trial table saved');
 end
 
@@ -186,12 +221,22 @@ if strcmp(task,'random')
     else; baselineIdx = baselineLicks(:,1); end
     
     % Create task legend
-    events = {waterIdx,airpuffIdx,toneIdx,stimIdx,baselineIdx};
-    labels = {'Water','Airpuff','Tone','Stim','Baseline'};
-    taskLegend = getLegend(events,labels);
+    stageTime = [-2,0;0,2];
+    analysisEvents = {waterIdx,waterLickIdx,airpuffIdx,toneIdx,stimIdx,baselineIdx};
+    analysisLabels = {'Water','Rewarded licks','Airpuff','Tone','Stim','Baseline'};
+    taskLegend = getLegend(analysisEvents,analysisLabels);
+
+    analysisColors = {bluePurpleRed(1,:),bluePurpleRed(1,:),...
+                      [.2 .2 .2],bluePurpleRed(350,:),...
+                      bluePurpleRed(end,:),[.75 .75 .75]};
+    stageColors = {[.75 .75 .75],bluePurpleRed(1,:)};
+    stageLegend = {'Baseline','US'};
+    analysisEvents = analysisEvents(~cellfun('isempty',analysisEvents));
+    analysisLabels = analysisLabels(~cellfun('isempty',analysisLabels));
+    analysisColors = analysisColors(~cellfun('isempty',analysisColors));
     
-    for i = 1:length(events)
-        disp(['Total ',labels{i},': ',num2str(length(events{i}))]);
+    for i = 1:length(analysisEvents)
+        disp(['Total ',analysisLabels{i},': ',num2str(length(analysisEvents{i}))]);
     end
 
 else
@@ -248,48 +293,123 @@ else
         end
     end
 
-    events = {waterIdx,toneIdx,stimIdx,pairIdx,airpuffIdx,baselineIdx};
-    labels = {'Water','Tone only','Stim only','Pair','Airpuff','Baseline'};
-    taskLegend = getLegend(events,labels);
+    stageTime = [-2,0;0,0.5;0.5,5];
+    analysisEvents = {waterIdx,waterLickIdx,toneIdx,stimIdx,pairIdx,airpuffIdx,baselineIdx};
+    analysisLabels = {'Water','Rewarded licks','Tone only','Stim only','Pair','Airpuff','Baseline'};
+    taskLegend = getLegend(analysisEvents,analysisLabels);
 
-    for i = 1:length(events)
-        disp(['Total ',labels{i},': ',num2str(length(events{i}))]);
+    analysisColors = {bluePurpleRed(1,:),bluePurpleRed(1,:),...
+                      bluePurpleRed(350,:),bluePurpleRed(end,:),...
+                      bluePurpleRed(150,:),[.2 .2 .2],[.75 .75 .75]};
+    stageColors = {[.75 .75 .75],bluePurpleRed(end,:),bluePurpleRed(1,:)};
+    stageLegend = {'Baseline','CS','US'};
+    analysisEvents = analysisEvents(~cellfun('isempty',analysisEvents));
+    analysisLabels = analysisLabels(~cellfun('isempty',analysisLabels));
+    analysisColors = analysisColors(~cellfun('isempty',analysisColors));
+
+    for i = 1:length(analysisEvents)
+        disp(['Total ',analysisLabels{i},': ',num2str(length(analysisEvents{i}))]);
     end
 
+    % Save idx to behavior.mat
+    save(strcat(sessionpath,filesep,'behavior_',session.name),'allTrials',...
+        'waterIdx','waterLickIdx','airpuffIdx','toneIdx','stimIdx','pairIdx',...
+        'baselineIdx',...
+        '-append');
+end
+
+%% Save photometry/lick/eye PSTHs
+
+% Find the number of photometry channels
+photometryIdx = [];
+for i = 1:size(timeSeries,2)
+    if contains(timeSeries(i).system,["NI","LJ"],"IgnoreCase",true)
+        photometryIdx = [i,photometryIdx];
+    end
+end
+nSignals = length(photometryIdx);
+disp(['Finished: found ', num2str(nSignals),' photometry signals']);
+  
+if ~exist('analysis','var') || options.redo
+    % Define analysis params
+    analysis = struct([]);
+    timeRange = [-15,15];
+    
+    % Loop through all
+    for signal = 1:size(timeSeries,2)
+        % Load signal of interest
+        data = timeSeries(signal).data;
+        finalFs = timeSeries(signal).finalFs;
+        system = timeSeries(signal).system;
+    
+        % Loop through all events
+        for i = 1:length(analysisEvents)
+            % Save overall traces
+            if isempty(analysisEvents{i}); continue; end
+            [trace,t] = plotTraces(analysisEvents{i},timeRange,data,[1,1,1],params,...
+                            signalFs=finalFs,signalSystem=system,plot=false);
+    
+            % Calculate subtrial averages
+            stageAvg = nan(size(trace,1),size(stageTime,1));
+            stageBin = (stageTime - timeRange(1)) * finalFs;
+            for stage = 1:size(stageTime,1)
+                stageWindow = stageBin(stage,1):stageBin(stage,2);
+                stageAvg(:,stage) = mean(trace(:,stageWindow),2);
+            end
+    
+            % Save traces and anlaysis data
+            row = size(analysis,2) + 1;
+            analysis(row).session = sessionName;
+            analysis(row).label = analysisLabels{i};
+            analysis(row).name = timeSeries(signal).name;
+            analysis(row).system = system;
+            analysis(row).data = trace;
+            analysis(row).timestamp = t;
+            analysis(row).timeRange = timeRange;
+            analysis(row).finalFs = finalFs;
+            analysis(row).stageAvg = stageAvg;
+            analysis(row).stageTime = stageTime;
+            analysis(row).color = analysisColors{i};
+        end
+    end
+    
+    % Save
+    save(strcat(sessionpath,filesep,'analysis_',session.name),'analysis','-append');
+    disp('Finished: analysis struct created and saved');
 end
 
 %% Plot photometry summary plots
 
 if options.plotPhotometry
     %% Plot pre-processing steps
-    nSignals = size(processed,2);
-
     initializeFig(.67,.67); tiledlayout('flow');
     
     for i = 1:nSignals
+        path = photometryIdx(i);
         nexttile;
-        histogram(normrnd(0,1,size(processed(i).signal)),200); hold on
-        histogram(processed(i).signal,200); hold on
+        histogram(normrnd(0,1,size(timeSeries(path).data)),200); hold on
+        histogram(timeSeries(path).data,200); hold on
         box off
 
-        skew_lj = skewness(processed(i).signal); 
-        kur_lj = kurtosis(processed(i).signal);
-        xlabel('z-score'); ylabel('Count'); legend({'Normal distribution',processed(i).name});
+        skew_lj = skewness(timeSeries(path).data); 
+        kur_lj = kurtosis(timeSeries(path).data);
+        xlabel('z-score'); ylabel('Count'); legend({'Normal distribution',timeSeries(path).name});
         
-        title(processed(i).name);
+        title(timeSeries(path).name);
         subtitle(strcat("Skewness: ",num2str(skew_lj),", Kurtosis: ",num2str(kur_lj)));
     end
     
     % Save figure
     saveas(gcf,strcat(sessionpath,filesep,'Summary_photometry_distribution.png'));
 
-    %% Loop through processed struct
+    %% Loop through timeSeries struct
     for photometry = 1:nSignals
 
         % Load signal of interest
-        signal = processed(photometry).signal;
-        finalFs = processed(photometry).finalFs;
-        system = processed(photometry).system;
+        path = photometryIdx(photometry);
+        signal = timeSeries(path).data;
+        finalFs = timeSeries(path).finalFs;
+        system = timeSeries(path).system;
         
         %% Plot combined PSTH
         timeRange = [-1,5];
@@ -304,7 +424,7 @@ if options.plotPhotometry
         if strcmp(task,'random')
             % 2.1 Plot photometry traces
             nexttile
-            [~,~] = plotTraces(waterIdx,timeRange,signal,bluePurpleRed(1,:),params,...
+            [~,~] = plotTraces(waterLickIdx,timeRange,signal,bluePurpleRed(1,:),params,...
                         signalFs=finalFs,signalSystem=system);
             [~,~] = plotTraces(airpuffIdx,timeRange,signal,[0.2, 0.2, 0.2],params,...
                         signalFs=finalFs,signalSystem=system);
@@ -316,47 +436,47 @@ if options.plotPhotometry
                         signalFs=finalFs,signalSystem=system);
             plotEvent('',0);
             xlabel('Time (s)'); ylabel('z-score');
-            legend(taskLegend,'Location','northeast');
+            legend(taskLegend(2:end),'Location','northeast');
             
             % 2.2 Plot lick traces
             nexttile
-            plotLicks(waterIdx,timeRange,options.lick_binSize,bluePurpleRed(1,:),[],rightLick,params);
+            plotLicks(waterLickIdx,timeRange,options.lick_binSize,bluePurpleRed(1,:),[],rightLick,params);
             plotLicks(airpuffIdx,timeRange,options.lick_binSize,[0.2, 0.2, 0.2],[],rightLick,params);
             plotLicks(toneIdx,timeRange,options.lick_binSize,bluePurpleRed(350,:),[],rightLick,params);
             plotLicks(stimIdx,timeRange,options.lick_binSize,bluePurpleRed(end,:),[],rightLick,params);
             plotLicks(baselineIdx,timeRange,options.lick_binSize,[.75 .75 .75],[],rightLick,params);
             plotEvent('',0);
             xlabel('Time (s)'); ylabel('Licks/s'); 
-            legend(taskLegend,'Location','best');
+            legend(taskLegend(2:end),'Location','best');
 
             if params.session.withCamera && params.session.withEyeTracking
                 % 2.3 Plot eye area traces
                 nexttile
-                [~,~] = plotTraces(waterIdx,timeRange,eyeArea_detrend,bluePurpleRed(1,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(waterLickIdx,timeRange,eyeArea_detrend,bluePurpleRed(1,:),params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(airpuffIdx,timeRange,eyeArea_detrend,[0.2, 0.2, 0.2],params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(toneIdx,timeRange,eyeArea_detrend,bluePurpleRed(350,:),params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(stimIdx,timeRange,eyeArea_detrend,bluePurpleRed(end,:),params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(baselineIdx,timeRange,eyeArea_detrend,[.75 .75 .75],params,signalSystem='camera',smooth=15);
                 plotEvent('',0);
                 xlabel('Time (s)'); ylabel('Eye area (z-score)');
-                legend(taskLegend,'Location','northeast');
+                legend(taskLegend(2:end),'Location','northeast');
     
                 % 2.4 Plot pupil area traces
                 nexttile
-                [~,~] = plotTraces(waterIdx,timeRange,pupilArea_detrend,bluePurpleRed(1,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(waterLickIdx,timeRange,pupilArea_detrend,bluePurpleRed(1,:),params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(airpuffIdx,timeRange,pupilArea_detrend,[0.2, 0.2, 0.2],params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(toneIdx,timeRange,pupilArea_detrend,bluePurpleRed(350,:),params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(stimIdx,timeRange,pupilArea_detrend,bluePurpleRed(end,:),params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(baselineIdx,timeRange,pupilArea_detrend,[.75 .75 .75],params,signalSystem='camera',smooth=15);
                 plotEvent('',0);
                 xlabel('Time (s)'); ylabel('Pupil area (z-score)');
-                legend(taskLegend,'Location','northeast');
+                legend(taskLegend(2:end),'Location','northeast');
             end
     
         else
             % 2.1 Plot photometry traces
             nexttile
-            [~,~] = plotTraces(waterIdx,timeRange,signal,bluePurpleRed(1,:),params,...
+            [~,~] = plotTraces(waterLickIdx,timeRange,signal,bluePurpleRed(1,:),params,...
                         signalFs=finalFs,signalSystem=system);
             [~,~] = plotTraces(toneIdx,timeRange,signal,bluePurpleRed(350,:),params,...
                         signalFs=finalFs,signalSystem=system);
@@ -370,11 +490,11 @@ if options.plotPhotometry
                         signalFs=finalFs,signalSystem=system);
             plotEvent('',0);
             xlabel('Time (s)'); ylabel('z-score');
-            legend(taskLegend,'Location','northeast');
+            legend(taskLegend(2:end),'Location','northeast');
             
             % 2.2 Plot lick traces
             nexttile
-            plotLicks(waterIdx,timeRange,options.lick_binSize,bluePurpleRed(1,:),[],rightLick,params);
+            plotLicks(waterLickIdx,timeRange,options.lick_binSize,bluePurpleRed(1,:),[],rightLick,params);
             plotLicks(toneIdx,timeRange,options.lick_binSize,bluePurpleRed(350,:),[],rightLick,params);
             plotLicks(stimIdx,timeRange,options.lick_binSize,bluePurpleRed(end,:),[],rightLick,params);
             plotLicks(pairIdx,timeRange,options.lick_binSize,bluePurpleRed(150,:),[],rightLick,params);
@@ -382,12 +502,12 @@ if options.plotPhotometry
             plotLicks(baselineIdx,timeRange,options.lick_binSize,[.75 .75 .75],[],rightLick,params);
             plotEvent('',0);
             xlabel('Time (s)'); ylabel('Licks/s'); 
-            legend(taskLegend,'Location','best');
+            legend(taskLegend(2:end),'Location','best');
 
             if params.session.withCamera && params.session.withEyeTracking
                 % 2.3 Plot eye area traces
                 nexttile
-                [~,~] = plotTraces(waterIdx,timeRange,eyeArea_detrend,bluePurpleRed(1,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(waterLickIdx,timeRange,eyeArea_detrend,bluePurpleRed(1,:),params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(toneIdx,timeRange,eyeArea_detrend,bluePurpleRed(350,:),params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(stimIdx,timeRange,eyeArea_detrend,bluePurpleRed(end,:),params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(pairIdx,timeRange,eyeArea_detrend,bluePurpleRed(150,:),params,signalSystem='camera',smooth=15);
@@ -395,11 +515,11 @@ if options.plotPhotometry
                 [~,~] = plotTraces(baselineIdx,timeRange,eyeArea_detrend,[.75 .75 .75],params,signalSystem='camera',smooth=15);
                 plotEvent('',0);
                 xlabel('Time (s)'); ylabel('Eye area (z-score)');
-                legend(taskLegend,'Location','northeast');
+                legend(taskLegend(2:end),'Location','northeast');
     
                 % 2.4 Plot pupil area traces
                 nexttile
-                [~,~] = plotTraces(waterIdx,timeRange,pupilArea_detrend,bluePurpleRed(1,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(waterLickIdx,timeRange,pupilArea_detrend,bluePurpleRed(1,:),params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(toneIdx,timeRange,pupilArea_detrend,bluePurpleRed(350,:),params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(stimIdx,timeRange,pupilArea_detrend,bluePurpleRed(end,:),params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(pairIdx,timeRange,pupilArea_detrend,bluePurpleRed(150,:),params,signalSystem='camera',smooth=15);
@@ -407,14 +527,14 @@ if options.plotPhotometry
                 [~,~] = plotTraces(baselineIdx,timeRange,pupilArea_detrend,[.75 .75 .75],params,signalSystem='camera',smooth=15);
                 plotEvent('',0);
                 xlabel('Time (s)'); ylabel('Pupil area (z-score)');
-                legend(taskLegend,'Location','northeast');
+                legend(taskLegend(2:end),'Location','northeast');
             end
         end 
-        saveas(gcf,strcat(sessionpath,filesep,'Summary_events_',processed(photometry).name,'.png'));
+        saveas(gcf,strcat(sessionpath,filesep,'Summary_events_',timeSeries(path).name,'.png'));
 
         %% Plot single stimulus PSTH
         if strcmp(task,'random')
-            eventIdxes = {stimIdx,waterIdx,toneIdx,airpuffIdx};
+            eventIdxes = {stimIdx,waterLickIdx,toneIdx,airpuffIdx};
             labels = {'Stim','Water','Tone','Airpuff'};
             eventDurations = [0.5,0,0.5,0.02];
             groupSizes = [20,30,10,30];
@@ -492,10 +612,10 @@ if options.plotPhotometry
                 xlabel('Time (s)'); ylabel('z-score');
                 legend(legendList);
                 
-                saveas(gcf,strcat(sessionpath,filesep,'Events_',processed(photometry).name,'_',label,'.png'));
+                saveas(gcf,strcat(sessionpath,filesep,'Events_',timeSeries(path).name,'_',label,'.png'));
             end
         else
-            eventIdxes = {stimIdx,pairIdx,toneIdx,waterIdx,airpuffIdx};
+            eventIdxes = {stimIdx,pairIdx,toneIdx,waterLickIdx,airpuffIdx};
             omissionIdxes = {stimOmissionIdx, pairOmissionIdx,toneOmissionIdx,[],[]};
             labels = {'Stim','Pair','Tone','Water','Airpuff'};
             eventDurations = [0.5,0.5,0.5,0,0.02];
@@ -580,10 +700,45 @@ if options.plotPhotometry
                 xlabel('Time (s)'); ylabel('z-score');
                 legend(legendList);
 
-                saveas(gcf,strcat(sessionpath,filesep,'Events_',processed(photometry).name,'_',label,'.png'));
+                saveas(gcf,strcat(sessionpath,filesep,'Events_',timeSeries(path).name,'_',label,'.png'));
             end
         end
     end
+
+    %% Plot trial trend for baseline, CS, US averages
+    % Plot baseline/US response
+    if strcmp(task,'random')
+        initializeFig(0.5,0.5); tiledlayout(nSignals,length(analysisEvents));
+        for i = 1:size(analysis,2)
+            if contains(analysis(i).system,["NI","LJ"])
+                nexttile;
+                for stage = 1:size(stageTime,1)
+                    data = analysis(i).stageAvg(:,stage);
+                    plot(1:length(data),data',Color=stageColors{stage},LineWidth=2); hold on
+                end
+                title(analysis(i).label);
+                xlabel('Trials'); ylabel([analysis(i).name,' signal (z-score)']);
+                legend(stageLegend); box off
+            end
+        end
+    
+    % Plot baseline/CS/US response
+    else
+        initializeFig(0.8,0.8); tiledlayout(nSignals,length(analysisEvents));
+        for i = 1:size(analysis,2)
+            if contains(analysis(i).system,["NI","LJ"])
+                nexttile;
+                for stage = 1:size(stageTime,1)
+                    data = analysis(i).stageAvg(:,stage);
+                    plot(1:length(data),data',Color=stageColors{stage},LineWidth=2); hold on
+                end
+                title(analysis(i).label);
+                xlabel('Trials'); ylabel([analysis(i).name,' signal (z-score)']);
+                legend(stageLegend); box off
+            end
+        end
+    end
+    saveas(gcf,strcat(sessionpath,filesep,'Summary_subtrialStageAverage.png'));
 end
 
 %% Plot behavior related plots
@@ -620,8 +775,8 @@ if options.plotLicks
     saveas(gcf,strcat(sessionpath,filesep,'Behavior_ITI&LickBout.png'));
 end
 
-if options.plotLicks && contains(task,'pairing')
-        
+
+if options.plotLicks && contains(task,'pairing')     
     %% Plot session overview for licking
     timeRange = [-5,10]; cameraTimeRange = [-1,5];
     markerSize = 20;
@@ -732,7 +887,6 @@ if options.plotLicks && contains(task,'pairing')
             xlabel('Time (s)'); ylabel('Eye area (z-score)');
             legend(legendList);
         end
-    
     
         % Plot pupil area across session
         traces = {stimPupilArea,pairPupilArea,tonePupilArea};

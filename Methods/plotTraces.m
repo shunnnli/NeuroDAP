@@ -30,9 +30,9 @@ end
 % 1.1 Define event system time
 if strcmpi(options.eventSystem,'ni')
     timeRef = params.sync.timeNI; 
-elseif strcmpi(options.eventSystem,'lj')
+elseif strcmpi(options.eventSystem,'lj') || strcmpi(options.eventSystem,'labjack')
     timeRef = params.sync.timePhotometry; 
-elseif strcmpi(options.eventSystem,'camera')
+elseif contains(options.eventSystem,'cam','IgnoreCase',true)
     timeRef = params.sync.timeCamera; 
 elseif strcmpi(options.eventSystem,'imec')
     timeRef = params.sync.timeImec; 
@@ -47,7 +47,7 @@ if strcmpi(options.signalSystem,'ni')
         disp(['     plotTraces: signalFs not provided, set to ',num2str(signalFs)]);
     end
     syncFs = params.sync.behaviorFs;
-elseif strcmpi(options.signalSystem,'lj')
+elseif strcmpi(options.signalSystem,'lj') || strcmpi(options.signalSystem,'labjack')
     timeTarget = params.sync.timePhotometry;
     if ~isnan(options.signalFs); signalFs = options.signalFs;
     else
@@ -56,7 +56,7 @@ elseif strcmpi(options.signalSystem,'lj')
         disp(['     plotTraces: signalFs not provided, set to ',num2str(signalFs)]);
     end
     syncFs = params.sync.labjackFs;
-elseif strcmpi(options.signalSystem,'camera')
+elseif contains(options.signalSystem,'cam','IgnoreCase',true)
     timeTarget = params.sync.timeCamera;
     if ~isnan(options.signalFs); signalFs = options.signalFs;
     else
