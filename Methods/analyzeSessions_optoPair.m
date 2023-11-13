@@ -740,7 +740,7 @@ if options.plotPhotometry
             end
         end
     end
-    saveas(gcf,strcat(sessionpath,filesep,'Summary_subtrialStageAverage.png'));
+    saveas(gcf,strcat(sessionpath,filesep,'Summary_subtrial_average.png'));
 end
 
 %% Plot behavior related plots
@@ -1349,6 +1349,7 @@ if options.plotLicks && contains(task,'pairing')
     saveas(gcf,strcat(sessionpath,filesep,'Summary_distributions.png'));
 
 end
+disp('Finished: all plots and struct are plotted and saved!');
 return
 
 end

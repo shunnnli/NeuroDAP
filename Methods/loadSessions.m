@@ -14,6 +14,7 @@ arguments
    options.invertStim logical = true % Invert signal from arduino for stimulation
    
    % Photometry related params
+   options.recordLJ double = [1,1,0]
    options.nSampPerDemodBin double = 1 % for labjack demod (originally specturalWindowNew)
    options.rollingWindowTime double = 60 % in seconds
    options.LPFreq double = 0; % low pass freq (0: no LP)
@@ -303,9 +304,25 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
     if withPhotometry
         disp("Ongoing: concatenate and save raw photometry data");
         if isempty(dir(fullfile(session.path,filesep,'data_labjack.mat')))
-            concatLabjack(session.path,save=true,plot=false);
+            concatLabjack(session.path,save=true,plot=false,record=options.recordLJ);
         end
         load(strcat(session.path,filesep,'data_labjack.mat'));
+        
+        % Reload concatLabjack if labjack.record does not agree
+        if ~isfield(labjack,'record')
+            labjack.record = options.recordLJ; 
+            labjack.nSignals = sum(labjack.record);
+            % Remove non-recorded channels
+            labjack.raw(find(~labjack.record),:) = [];
+            labjack.modulation(find(~labjack.record),:) = [];
+            labjack.name(find(~labjack.record)) = [];
+        end
+        if sum(labjack.record == options.recordLJ) ~= 3
+            disp(['labjack.record: ',labjack.record]);
+            disp(['options.recordLJ: ',options.recordLJ]);
+            warning("labjack.record does not agree with recordLJ, reload using recordLJ"); 
+            concatLabjack(session.path,save=true,plot=false,record=options.recordLJ);
+        end
         disp('Finished: concatenate and saved raw photometry data in data_labjack.mat');
         disp(labjack);
     
@@ -317,19 +334,26 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
         params.sync.photometryFs = [];
 
         % Remove PMT if neccessary
-        if ~options.withPhotometryNI; labjack.nSignals = labjack.nSignals-1; end
+        if ~options.withPhotometryNI
+            PMT_idx = find(cellfun(@(c)strcmp(c,"PMT"),labjack.name));
+            if labjack.record(PMT_idx)
+                labjack.nSignals = labjack.nSignals-1; 
+                labjack.raw(3,:) = [];
+                labjack.modulation(3,:) = [];
+            end
+        else
+            params.sync.ni_photometryFs = [];
+        end
+
+        % Save updated labjack
+        save(strcat(sessionpath,filesep,'data_labjack'),'labjack','-append');
     end
-    
-    if options.withPhotometryNI; params.sync.ni_photometryFs = []; end
 
     %% Loop through all signals
     i = 1;
     if withPhotometry
         for i = 1:labjack.nSignals
-            if ~options.withPhotometryNI && strcmp(labjack.name{i},'PMT')
-                continue
-            end
-    
+            
             if labjack.mod(i)
                 demodulated = demodulatePhotometry(labjack.raw(i,:),...
                                 targetFs=options.downsampleFs,...

@@ -68,6 +68,9 @@ for i = 1:length(D)
     output(((i-1)*length(temp)+1):(i*length(temp))) = temp;
 end
 totalLen = length(output);
+labjack.numChannels = numChannels;
+labjack.totalLen = totalLen;
+labja
 
 % Store sync pulse
 sync_labjack = output(mod(1:totalLen,numChannels)==0);  % sync pulse
@@ -124,13 +127,10 @@ if options.plot
 end
 
 %% Save concat files
-labjack.name(find(~labjack.record)) = [];
-labjack.numChannels = numChannels;
-labjack.totalLen = totalLen;
 labjack.options = options;
-
 if options.save
-    save(strcat(sessionpath,filesep,'data_labjack'),'labjack','sync_labjack','-v7.3');
+    save(strcat(sessionpath,filesep,'data_labjack'),...
+        'labjack','sync_labjack','-v7.3');
 end
 
 end

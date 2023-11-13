@@ -14,6 +14,7 @@ arguments
    options.invertStim logical = true % Invert signal from arduino for stimulation
    
    % Photometry related params
+   options.recordLJ double = [1,1,0]
    options.nSampPerDemodBin double = 1 % for labjack demod (originally specturalWindowNew)
    options.rollingWindowTime double = 60 % in seconds
    options.LPFreq double = 0; % low pass freq (0: no LP)
@@ -303,9 +304,24 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
     if withPhotometry
         disp("Ongoing: concatenate and save raw photometry data");
         if isempty(dir(fullfile(session.path,filesep,'data_labjack.mat')))
-            concatLabjack(session.path,save=true,plot=false);
+            concatLabjack(session.path,save=true,plot=false,record=options.recordLJ);
         end
         load(strcat(session.path,filesep,'data_labjack.mat'));
+        
+        % Reload concatLabjack if labjack.record does not agree
+        if ~isfield(labjack,'record')
+            labjack.record = options.recordLJ; 
+            labjack.nSignals = sum(labjack.record);
+            % Remove non-recorded channels
+            labjack.raw(find(~labjack.record),:) = [];
+            labjack.modulation(find(~labjack.record),:) = [];
+        end
+        if sum(labjack.record == options.recordLJ) ~= 3
+            disp(['labjack.record: ',labjack.record]);
+            disp(['options.recordLJ: ',options.recordLJ]);
+            warning("labjack.record does not agree with recordLJ, reload using recordLJ"); 
+            concatLabjack(session.path,save=true,plot=false,record=options.recordLJ);
+        end
         disp('Finished: concatenate and saved raw photometry data in data_labjack.mat');
         disp(labjack);
     
@@ -317,19 +333,26 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
         params.sync.photometryFs = [];
 
         % Remove PMT if neccessary
-        if ~options.withPhotometryNI; labjack.nSignals = labjack.nSignals-1; end
+        if ~options.withPhotometryNI
+            PMT_idx = find(cellfun(@(c)strcmp(c,"PMT"),labjack.name));
+            if labjack.record(PMT_idx)
+                labjack.nSignals = labjack.nSignals-1; 
+                labjack.raw(3,:) = [];
+                labjack.modulation(3,:) = [];
+            end
+        else
+            params.sync.ni_photometryFs = [];
+        end
+
+        % Save updated labjack
+        save(strcat(sessionpath,filesep,'data_labjack'),'labjack','-append');
     end
-    
-    if options.withPhotometryNI; params.sync.ni_photometryFs = []; end
 
     %% Loop through all signals
     i = 1;
     if withPhotometry
         for i = 1:labjack.nSignals
-            if ~options.withPhotometryNI && strcmp(labjack.name{i},'PMT')
-                continue
-            end
-    
+            
             if labjack.mod(i)
                 demodulated = demodulatePhotometry(labjack.raw(i,:),...
                                 targetFs=options.downsampleFs,...
@@ -593,58 +616,33 @@ if withCamera && (options.reloadAll || options.reloadCam)
             eyePixelIntensity = -camera{:,8}; % convert sign to make blinking going down
 
             traces = {pupilArea; eyeArea; eyePixelIntensity};
-            trace_names = {''};
-
+            trace_names = {'pupilArea';'eyeArea';'eyePixelIntensity'};
             for i = 1:size(traces,1)
-                processed = downsamplePhotometry(eyeArea,...
+                processed = downsamplePhotometry(traces{i},...
                         targetFs=options.downsampleFs,...
                         originalFs=params.sync.camFs,...
                         rollingZ=true,rollingWindowTime=options.rollingWindowTime,...
                         dsMethod='cloestInteger');
 
                 % Save to timeseries struct
-                timeSeries(end+1).name = 'eyeArea';
-                timeSeries(end+1).data = processed.dsData;
-                timeSeries(end+1).finalFs = options.downsampleFs;
-                timeSeries(end+1).system = 'Cam';
-                timeSeries(end+1).time_offset = 0;
-                timeSeries(end+1).demux = false;
-                timeSeries(end+1).demux_freq = NaN;
-                timeSeries(end+1).detrend = true;
-                timeSeries(end+1).detrend_type = 'rolling-z';
-                timeSeries(end+1).detrend_window = processed.options.rollingWindowTime;
-                timeSeries(end+1).options = processed.options;
+                row = size(timeSeries,2) + 1;
+                timeSeries(row).name = trace_names{i};
+                timeSeries(row).data = processed.dsData;
+                timeSeries(row).finalFs = options.downsampleFs;
+                timeSeries(row).system = 'Cam';
+                timeSeries(row).time_offset = 0;
+                timeSeries(row).demux = false;
+                timeSeries(row).demux_freq = NaN;
+                timeSeries(row).detrend = true;
+                timeSeries(row).detrend_type = 'rolling-z';
+                timeSeries(row).detrend_window = processed.options.rollingWindowTime;
+                timeSeries(row).options = processed.options;
             end
-
-            eyeArea_processed = downsamplePhotometry(eyeArea,...
-                        targetFs=options.downsampleFs,...
-                        originalFs=params.sync.camFs,...
-                        rollingZ=true,rollingWindowTime=options.rollingWindowTime,...
-                        dsMethod='cloestInteger');
-
-            pupilArea_processed = downsamplePhotometry(pupilArea,...
-                        targetFs=options.downsampleFs,...
-                        originalFs=params.sync.labjackFs,...
-                        rollingZ=true,rollingWindowTime=options.rollingWindowTime,...
-                        dsMethod='cloestInteger');
-
-            eyePixelIntensity_processed = downsamplePhotometry(eyePixelIntensity,...
-                        targetFs=options.downsampleFs,...
-                        originalFs=params.sync.labjackFs,...
-                        rollingZ=true,rollingWindowTime=options.rollingWindowTime,...
-                        dsMethod='cloestInteger');
-        
-            eyeArea_detrend = eyeArea_processed.dsData;
-            pupilArea_detrend = pupilArea_processed.dsData;
-            eyePixelIntensity_detrend = eyePixelIntensity_processed.dsData;
-
-            
             disp("Finished: detrend eye, pupil area");
 
             % Save camera table
             save(strcat(session.path,filesep,'data_',sessionName),'camera',...
-                'pupilArea','eyeArea','eyeArea_detrend','pupilArea_detrend',...
-                'eyePixelIntensity_detrend','-append');
+                'pupilArea','eyeArea','-append');
             disp("Finished: saved camera csv file in data_.mat");
         else
             disp(['Warning: Too much skipped frames (', num2str(length(skipped_frame)), ') were found, skipped camera anlysis!']);
@@ -700,26 +698,35 @@ if withCamera && (options.reloadAll || options.reloadCam)
         if isempty(skipped_frame)
             % Process eye, pupil area data
             pupilArea = camera{:,5}; eyeArea = camera{:,6};
-            
-            eyeArea_processed = downsamplePhotometry(eyeArea,...
+
+            traces = {pupilArea; eyeArea};
+            trace_names = {'pupilArea';'eyeArea'};
+            for i = 1:size(traces,1)
+                processed = downsamplePhotometry(traces{i},...
                         targetFs=options.downsampleFs,...
                         originalFs=params.sync.camFs,...
                         rollingZ=true,rollingWindowTime=options.rollingWindowTime,...
-                        dsMethod='resample');
+                        dsMethod='cloestInteger');
 
-            pupilArea_processed = downsamplePhotometry(pupilArea,...
-                        targetFs=options.downsampleFs,...
-                        originalFs=params.sync.labjackFs,...
-                        rollingZ=true,rollingWindowTime=options.rollingWindowTime,...
-                        dsMethod='resample');
-        
-            eyeArea_detrend = eyeArea_processed.dsData;
-            pupilArea_detrend = pupilArea_processed.dsData;
+                % Save to timeseries struct
+                row = size(timeSeries,2) + 1;
+                timeSeries(row).name = trace_names{i};
+                timeSeries(row).data = processed.dsData;
+                timeSeries(row).finalFs = options.downsampleFs;
+                timeSeries(row).system = 'Cam';
+                timeSeries(row).time_offset = 0;
+                timeSeries(row).demux = false;
+                timeSeries(row).demux_freq = NaN;
+                timeSeries(row).detrend = true;
+                timeSeries(row).detrend_type = 'rolling-z';
+                timeSeries(row).detrend_window = processed.options.rollingWindowTime;
+                timeSeries(row).options = processed.options;
+            end
             disp("Finished: detrend eye, pupil area");
 
             % Save camera table
             save(strcat(session.path,filesep,'data_',sessionName),'camera',...
-                'pupilArea','eyeArea','eyeArea_detrend','pupilArea_detrend','-append');
+                'pupilArea','eyeArea','-append');
             disp("Finished: saved camera csv file in data_.mat");
         else
             disp(['Warning: Too much skipped frames (', num2str(length(skipped_frame)), ') were found, skipped camera anlysis!']);
