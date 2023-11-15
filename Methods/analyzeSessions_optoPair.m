@@ -39,6 +39,9 @@ sessionName = dirsplit{end};
 if ispc; session.projectPath = strcat('\\',fullfile(dirsplit{2:end-1}));
 elseif isunix; session.projectPath = strcat('/',fullfile(dirsplit{2:end-1}));
 end
+% Get animal name and session date
+dirsplit = strsplit(sessionName,'-');
+date = dirsplit{1}; animal = dirsplit{2};
 clear dirsplit
 
 disp(strcat('**********',sessionName,'**********'));
@@ -46,17 +49,19 @@ load(strcat(sessionpath,filesep,'timeseries_',sessionName,'.mat'));
 load(strcat(sessionpath,filesep,'data_',sessionName,'.mat'));
 load(strcat(sessionpath,filesep,'behavior_',sessionName,'.mat'));
 load(strcat(sessionpath,filesep,'sync_',sessionName,'.mat'));
+
 if ~isfield(session,'name'); session.name = sessionName; end
+if ~isfield(session,'task'); session.task = task; end
+if ~isfield(session,'date'); session.date = date; end
+if ~isfield(session,'animal'); session.animal = animal; end
 
 % Create analysis.mat
 if ~isempty(dir(fullfile(session.path,"analysis_*.mat")))
     load(strcat(sessionpath,filesep,'analysis_',sessionName,'.mat'));
 else
-    analysis = struct([]);
     save(strcat(session.path,filesep,'analysis_',sessionName),'sessionName','session','-v7.3');
     disp('Finished: analysis_.mat not found, created a new one');
 end
-
 disp(['Finished: Session ',sessionName,' loaded']);
 
 % Load behaivor params
@@ -80,6 +85,7 @@ disp(['Behavior params: minLicks = ',num2str(params.analyze.minLicks)]);
 % Load camera signal
 eyeArea_detrend = timeSeries(find(cellfun(@(x) strcmpi(x,'eyeArea'), {timeSeries.name}))).data;
 pupilArea_detrend = timeSeries(find(cellfun(@(x) strcmpi(x,'pupilArea'), {timeSeries.name}))).data;
+
 
 %% Preprocess outcome and opto data
 
@@ -162,6 +168,7 @@ for i = 1:length(waterIdx)
     nextLick = rightLickON(find(rightLickON>=waterIdx(i),1));
     if ~isempty(nextLick); waterLickIdx(i) = nextLick; end
 end
+waterLickIdx = rmmissing(waterLickIdx);
 
 disp('Finished: preprocess outcome and opto data');
 
@@ -216,9 +223,12 @@ if strcmp(task,'random')
     toneIdx = find(leftTone); stimIdx = optoCue;
 
     % Select baseline idx (align to each baseline lick)
-    baselineLicks = cell2mat(trials{~cellfun(@isempty,trials{:,'BaselineLicks'}),'BaselineLicks'});
-    if isempty(baselineLicks); baselineIdx = [];
-    else; baselineIdx = baselineLicks(:,1); end
+    % baselineLicks = cell2mat(trials{~cellfun(@isempty,trials{:,'BaselineLicks'}),'BaselineLicks'});
+    % if isempty(baselineLicks); baselineIdx = [];
+    % else; baselineIdx = baselineLicks(:,1); end
+    randomMinSample = 15*params.sync.behaviorFs;
+    randomMaxSample = length(params.sync.timeNI) - (15*params.sync.behaviorFs);
+    baselineIdx = randi([randomMinSample,randomMaxSample],100);
     
     % Create task legend
     stageTime = [-2,0;0,2];
@@ -242,9 +252,12 @@ if strcmp(task,'random')
 
 else
     % Select baseline idx (align to each baseline lick)
-    baselineLicks = cell2mat(trials{~cellfun(@isempty,trials{:,'BaselineLicks'}),'BaselineLicks'});
-    if isempty(baselineLicks); baselineIdx = round((trials{2:end,"CueTime"} - trials{2:end,"ENL"}) - 5*params.sync.behaviorFs);
-    else; baselineIdx = baselineLicks(:,1); end
+    % baselineLicks = cell2mat(trials{~cellfun(@isempty,trials{:,'BaselineLicks'}),'BaselineLicks'});
+    % if isempty(baselineLicks); baselineIdx = round((trials{2:end,"CueTime"} - trials{2:end,"ENL"}) - 5*params.sync.behaviorFs);
+    % else; baselineIdx = baselineLicks(:,1); end
+    randomMinSample = 15*params.sync.behaviorFs;
+    randomMaxSample = length(params.sync.timeNI) - (15*params.sync.behaviorFs);
+    baselineIdx = randi([randomMinSample,randomMaxSample],100);
 
     if contains(task,'reward')
         if options.performing
@@ -322,65 +335,22 @@ end
 
 %% Save photometry/lick/eye PSTHs
 
-% Find the number of photometry channels
-photometryIdx = [];
-for i = 1:size(timeSeries,2)
-    if contains(timeSeries(i).system,["NI","LJ"],"IgnoreCase",true)
-        photometryIdx = [i,photometryIdx];
-    end
-end
-nSignals = length(photometryIdx);
-disp(['Finished: found ', num2str(nSignals),' photometry signals']);
-  
-if ~exist('analysis','var') || options.redo
-    % Define analysis params
-    analysis = struct([]);
-    timeRange = [-15,15];
-    
-    % Loop through all
-    for signal = 1:size(timeSeries,2)
-        % Load signal of interest
-        data = timeSeries(signal).data;
-        finalFs = timeSeries(signal).finalFs;
-        system = timeSeries(signal).system;
-    
-        % Loop through all events
-        for i = 1:length(analysisEvents)
-            % Save overall traces
-            if isempty(analysisEvents{i}); continue; end
-            [trace,t] = plotTraces(analysisEvents{i},timeRange,data,[1,1,1],params,...
-                            signalFs=finalFs,signalSystem=system,plot=false);
-    
-            % Calculate subtrial averages
-            stageAvg = nan(size(trace,1),size(stageTime,1));
-            stageBin = (stageTime - timeRange(1)) * finalFs;
-            for stage = 1:size(stageTime,1)
-                stageWindow = stageBin(stage,1):stageBin(stage,2);
-                stageAvg(:,stage) = mean(trace(:,stageWindow),2);
-            end
-    
-            % Save traces and anlaysis data
-            row = size(analysis,2) + 1;
-            analysis(row).session = sessionName;
-            analysis(row).label = analysisLabels{i};
-            analysis(row).name = timeSeries(signal).name;
-            analysis(row).system = system;
-            analysis(row).data = trace;
-            analysis(row).timestamp = t;
-            analysis(row).timeRange = timeRange;
-            analysis(row).finalFs = finalFs;
-            analysis(row).stageAvg = stageAvg;
-            analysis(row).stageTime = stageTime;
-            analysis(row).color = analysisColors{i};
-        end
-    end
-    
-    % Save
-    save(strcat(sessionpath,filesep,'analysis_',session.name),'analysis','-append');
-    disp('Finished: analysis struct created and saved');
-end
+params.session = session; % Update params
+analysis = analyzeTraces(timeSeries,rightLick,analysisEvents,analysisLabels,analysisColors,params,...
+                     stageTime=stageTime);
+
+% if ~exist('analysis','var') || options.redo
+%     analysis = analyzeTraces(timeSeries,rightLick,analysisEvents,analysisLabels,analysisColors,params,...
+%                      stageTime=stageTime);
+% end
 
 %% Plot photometry summary plots
+
+% Find the number of photometry channels
+photometryIdx = find(cellfun(@(x) contains(x,["NI","LJ"],"IgnoreCase",true), {timeSeries.system}));
+photometryName = cellfun(@(x) unique(x,'rows'), {timeSeries(photometryIdx).name},'UniformOutput',false);
+nSignals = length(photometryIdx);
+disp(['Finished: found ', num2str(nSignals),' photometry signals']);
 
 if options.plotPhotometry
     %% Plot pre-processing steps
@@ -707,41 +677,86 @@ if options.plotPhotometry
         end
     end
 
-    %% Plot trial trend for baseline, CS, US averages
-    % Plot baseline/US response
-    if strcmp(task,'random')
-        initializeFig(0.5,0.5); tiledlayout(nSignals,length(analysisEvents));
-        for i = 1:size(analysis,2)
-            if contains(analysis(i).system,["NI","LJ"])
-                nexttile;
-                for stage = 1:size(stageTime,1)
-                    data = analysis(i).stageAvg(:,stage);
-                    plot(1:length(data),data',Color=stageColors{stage},LineWidth=2); hold on
-                end
-                title(analysis(i).label);
-                xlabel('Trials'); ylabel([analysis(i).name,' signal (z-score)']);
-                legend(stageLegend); box off
+    %% Plot subtrial average trend for baseline, CS, US
+    nBins = 500;
+    for signal = 1:nSignals
+        % Load current signal name and row in analysis
+        cur_signal = photometryName{signal};
+        signalIdx = find(cellfun(@(x) strcmpi(x,cur_signal), {analysis.name}));
+        eventPlotted = 0;
+        % Plot analysis result for this signal
+        initializeFig(0.8,0.8); tiledlayout(2,length(analysisEvents));
+        for i = 1:length(signalIdx)
+            row = signalIdx(i); eventPlotted = eventPlotted + 1;
+            nexttile;
+            for stage = 1:size(stageTime,1)
+                data = analysis(row).stageAvg.data(:,stage);
+                p = analysis(row).stageAvg.fit(stage,:);
+                x = 1:length(data);
+                scatter(x,data',100,stageColors{stage},'filled',MarkerFaceAlpha=0.5,HandleVisibility='off'); hold on
+                plot(x,polyval(p,x),Color=stageColors{stage},lineWidth=5);
             end
-        end
-    
-    % Plot baseline/CS/US response
-    else
-        initializeFig(0.8,0.8); tiledlayout(nSignals,length(analysisEvents));
-        for i = 1:size(analysis,2)
-            if contains(analysis(i).system,["NI","LJ"])
-                nexttile;
-                for stage = 1:size(stageTime,1)
-                    data = analysis(i).stageAvg(:,stage);
-                    plot(1:length(data),data',Color=stageColors{stage},LineWidth=2); hold on
-                end
-                title(analysis(i).label);
-                xlabel('Trials'); ylabel([analysis(i).name,' signal (z-score)']);
-                legend(stageLegend); box off
+            title(analysis(row).label);
+            xlabel('Trials'); ylabel([analysis(row).name,' signal average (z-score)']);
+            legend(stageLegend); box off
+
+            nexttile(eventPlotted+length(analysisEvents));
+            for stage = 1:size(stageTime,1)
+                h = histogram(analysis(row).stageAvg.stats.bs(stage,:,1),nBins); hold on
+                h.FaceColor = stageColors{stage}; h.EdgeColor = stageColors{stage};
+                h.FaceAlpha = 0.25; h.EdgeAlpha = 0.25;
+                pval = min(analysis(row).stageAvg.stats.pval_slope(stage,:));
+                xline(analysis(row).stageAvg.fit(stage,1),'-',...
+                    {['Slope (',stageLegend{stage},')'],['p=',num2str(pval)]},...
+                    'Color',stageColors{stage},...
+                    'LineWidth',3,...
+                    'LabelOrientation','horizontal');
             end
+            xlabel('Slope distribution (bootstrapped)'); ylabel('Count'); box off
         end
+        % Save
+        saveas(gcf,strcat(sessionpath,filesep,'Summary_',cur_signal,'subtrial_average.png'));
     end
-    saveas(gcf,strcat(sessionpath,filesep,'Summary_subtrial_average.png'));
-end
+
+    %% Plot subtrial peak trend for baseline, CS, US
+    for signal = 1:nSignals
+        % Load current signal name and row in analysis
+        cur_signal = photometryName{signal};
+        signalIdx = find(cellfun(@(x) strcmpi(x,cur_signal), {analysis.name}));
+        eventPlotted = 0;
+        % Plot analysis result for this signal
+        initializeFig(0.8,0.8); tiledlayout(2,length(analysisEvents));
+        for i = 1:length(signalIdx)
+            row = signalIdx(i); eventPlotted = eventPlotted + 1;
+            nexttile;
+            for stage = 1:size(stageTime,1)
+                data = analysis(row).stagePeak.data(:,stage);
+                p = analysis(row).stagePeak.fit(stage,:);
+                x = 1:length(data);
+                scatter(x,data',100,stageColors{stage},'filled',MarkerFaceAlpha=0.5,HandleVisibility='off'); hold on
+                plot(x,polyval(p,x),Color=stageColors{stage},lineWidth=5);
+            end
+            title(analysis(row).label);
+            xlabel('Trials'); ylabel([analysis(row).name,' signal peak (z-score)']);
+            legend(stageLegend); box off
+
+            nexttile(eventPlotted+length(analysisEvents));
+            for stage = 1:size(stageTime,1)
+                h = histogram(analysis(row).stagePeak.stats.bs(stage,:,1),nBins); hold on
+                h.FaceColor = stageColors{stage}; h.EdgeColor = stageColors{stage};
+                h.FaceAlpha = 0.25; h.EdgeAlpha = 0.25;
+                pval = min(analysis(row).stagePeak.stats.pval_slope(stage,:));
+                xline(analysis(row).stagePeak.fit(stage,1),'-',...
+                    {['Slope (',stageLegend{stage},')'],['p=',num2str(pval)]},...
+                    'Color',stageColors{stage},...
+                    'LineWidth',3,...
+                    'LabelOrientation','horizontal');
+            end
+            xlabel('Slope distribution (bootstrapped)'); ylabel('Count'); box off
+        end
+        % Save
+        saveas(gcf,strcat(sessionpath,filesep,'Summary_',cur_signal,'subtrial_peak.png'));
+    end
 
 %% Plot behavior related plots
 
@@ -1344,7 +1359,6 @@ if options.plotLicks && contains(task,'pairing')
     scatter(toneIdx(:,1),trials{toneIdx(:,1),"OutcomeReactionTime"}/params.sync.behaviorFs,100,bluePurpleRed(350,:),'filled'); hold on
     xlabel("Trials"); ylabel("Outcome reaction time (s)"); box off
     title("Outcome reaction time (all trials)");
-
     
     saveas(gcf,strcat(sessionpath,filesep,'Summary_distributions.png'));
 

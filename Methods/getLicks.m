@@ -53,7 +53,6 @@ if isempty(rightLick)
         
         % lickEvents
         lickEvents{i,1} = relativeLeftLickTime;
-
     end
 
 elseif isempty(leftLick)

@@ -310,6 +310,7 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
         
         % Reload concatLabjack if labjack.record does not agree
         if ~isfield(labjack,'record')
+            disp('     Did not find labjack.record, use options.reloadLJ instead');
             labjack.record = options.recordLJ; 
             labjack.nSignals = sum(labjack.record);
             % Remove non-recorded channels
@@ -320,8 +321,7 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
         if sum(labjack.record == options.recordLJ) ~= 3
             disp(['labjack.record: ',labjack.record]);
             disp(['options.recordLJ: ',options.recordLJ]);
-            warning("labjack.record does not agree with recordLJ, reload using recordLJ"); 
-            concatLabjack(session.path,save=true,plot=false,record=options.recordLJ);
+            warning("labjack.record does not agree with recordLJ, use the original one instead"); 
         end
         disp('Finished: concatenate and saved raw photometry data in data_labjack.mat');
         disp(labjack);

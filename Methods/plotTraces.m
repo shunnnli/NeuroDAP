@@ -18,6 +18,7 @@ arguments
     options.signalSystem string = 'lj'
     options.signalFs double = nan
 
+    options.rmmissing logical = true % remove nan rows
     options.smooth double = 0; % 0: no smoothing, else is samples of smooth data
     options.smoothMethod string = 'movmean';
     options.plot logical = true % whether or not to plot traces
@@ -112,6 +113,8 @@ for i = 1:length(eventInSec)
     
     traces(i,:) = trace;
 end
+% 3.1 Remove missing if necessary
+if options.rmmissing; traces = rmmissing(traces); end
 
 % 4. plot traces
 if options.plot

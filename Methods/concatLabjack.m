@@ -54,6 +54,12 @@ if ~isfield(labjack,'record')
     labjack.record = options.record; 
     labjack.nSignals = sum(labjack.record);
 end
+% If input is different from labjack.record
+if sum(labjack.record == options.record) ~= 3
+    disp(['labjack.record: ',labjack.record]);
+    disp(['options.recordLJ: ',options.record]);
+    warning("labjack.record does not agree with recordLJ, reload using labjack.record"); 
+end
 % Replace space in name with underscore
 for i = 1:labjack.nSignals
     labjack.name{i} = strrep(labjack.name{i}, ' ', '-');
@@ -89,20 +95,6 @@ for i = 1:size(labjack.name,2)
         end
     end
 end
-% rawSignal1 = output(mod(1:totalLen,numChannels)==1);      % photodetector #1 -green NAc
-% rawSignal2 = output(mod(1:totalLen,numChannels)==2);        % photodetector #2 -green LHb
-% modSignal1 = output(mod(1:totalLen,numChannels)==3);      % copy of green NAc modulation
-% modSignal2 = output(mod(1:totalLen,numChannels)==4);        % copy of green LHb modulation
-% labjack.raw(1,:) = rawSignal1;    labjack.modulation(1,:) = modSignal1;
-% labjack.raw(2,:) = rawSignal2;   labjack.modulation(2,:) = modSignal2;
-
-% if ~options.rebuildInfo
-%     rawPMT = output(mod(1:totalLen,numChannels)==5);     % PMT -green
-%     modPMT = output(mod(1:totalLen,numChannels)==6);     % PMT -green galvo (unfinished)
-%     labjack.raw(3,:) = rawPMT;      
-%     labjack.modulation(3,:) = modPMT;
-% end
-
 
 %% Plot photometry summary plot (skipped)
 if options.plot
@@ -112,15 +104,7 @@ if options.plot
         nexttile; plot(labjack.raw(i,:)); title(strcat(labjack.name{i},'(raw)')); box off
         nexttile; plot(labjack.modulation(i,:)); title(strcat(labjack.name{i},'(mod)')); box off
     end
-    % nexttile; plot(rawSignal1); title('green NAc raw'); box off
-    % nexttile; plot(rawSignal2); title('green LHb raw'); box off
-    % nexttile; plot(modSignal1); title('green NAc modulation'); box off
-    % nexttile; plot(modSignal2); title('green LHb modulation'); box off
-    % if ~options.rebuildInfo
-    %     nexttile; plot(rawPMT); title('green PMT raw'); box off
-    %     nexttile; plot(modPMT); title('green PMT modulation'); box off
-    % end
-    saveas(gcf,strcat(sessionpath,filesep,'photometryLJ_raw.fig'));
+    saveas(gcf,strcat(sessionpath,filesep,'Summary_labjack_raw.fig'));
 end
 
 %% Save concat files

@@ -1,4 +1,14 @@
-function [Answer,Canceled] = inputAnalysisParams(sessionList)
+function [Answer,Canceled] = inputAnalysisParams(sessionList,options)
+
+arguments
+    sessionList cell
+    options.reloadAll logical = false
+    options.recordLJ  char = '[1,1,0]'
+    options.rollingWindowTime double = 180
+    options.withPhotometryNI logical = false
+    options.plotPhotometry logical = true
+    options.plotLicks logical = true
+end
 
 Prompt = {'Session','reloadAll',...
           'recordLJ','rollingWindowTime',...
@@ -22,12 +32,12 @@ for s = 1:length(sessionList)
     DefAns{1,s} = sessionName(1:end-3);
     
     % Behavior params
-    DefAns{2,s} = false;
-    DefAns{3,s} = '[1,1,0]';
-    DefAns{4,s} = '180';
-    DefAns{5,s} = false;
-    DefAns{6,s} = true;
-    DefAns{7,s} = true;
+    DefAns{2,s} = options.reloadAll;
+    DefAns{3,s} = options.recordLJ;
+    DefAns{4,s} = num2str(options.rollingWindowTime);
+    DefAns{5,s} = options.withPhotometryNI;
+    DefAns{6,s} = options.plotPhotometry;
+    DefAns{7,s} = options.plotLicks;
 end
 DefAns = cell2struct(DefAns,Prompt,1);
 Prompt = repmat(Prompt',1,2);

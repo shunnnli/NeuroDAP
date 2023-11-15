@@ -1,4 +1,18 @@
-function [Answer,Canceled] = inputSessionParams(sessionList)
+function [Answer,Canceled] = inputSessionParams(sessionList,options)
+
+arguments
+    sessionList cell
+    options.paradigm double = 1
+    options.pavlovian logical = false
+    options.reactionTime double = 2
+    options.minLicks double = 2
+
+    options.optoTriggered logical = false
+    options.optoInverted logical = true
+    options.optoPulseFreq double = 20
+    options.optoPulseDuration double = 5
+    options.optoStimDuration double = 500
+end
 
 Prompt = {'Session',...
           'Paradigm','Pavlovian',...
@@ -28,17 +42,17 @@ for s = 1:length(sessionList)
     DefAns{1,s} = sessionName(1:end-3);
     
     % Behavior params
-    DefAns{2,s} = 1; % random
-    DefAns{3,s} = false; % pavlovian or operant
-    DefAns{4,s} = '2'; % reactionTime
-    DefAns{5,s} = '2'; % minLicks
+    DefAns{2,s} = options.paradigm; % random
+    DefAns{3,s} = options.pavlovian; % pavlovian or operant
+    DefAns{4,s} = num2str(options.reactionTime);
+    DefAns{5,s} = num2str(options.minLicks);
 
     % Opto params
-    DefAns{6,s} = false; % opto triggered
-    DefAns{7,s} = true; % opto inverted
-    DefAns{8,s} = '20'; % opto pulse freq
-    DefAns{9,s} = '5';  % opto pulse duration
-    DefAns{10,s} = '500'; % opto stim duration
+    DefAns{6,s} = options.optoTriggered;
+    DefAns{7,s} = options.optoInverted;
+    DefAns{8,s} = num2str(options.optoPulseFreq);
+    DefAns{9,s} = num2str(options.optoPulseDuration);
+    DefAns{10,s} = num2str(options.optoStimDuration);
 end
 DefAns = cell2struct(DefAns,Prompt,1);
 Prompt = repmat(Prompt',1,2);
