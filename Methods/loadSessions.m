@@ -73,6 +73,7 @@ end
 
 withRecording = ~isempty(dir(fullfile(session.path,'catgt_*\*imec*.ap.bin')));
 withCamera = ~isempty(dir(fullfile(session.path,'times_cam1*.csv')));
+% if ~withCamera; 
 withPhotometry = isfolder(fullfile(session.path,'Photometry'));
 session.nSystems = sum([withRecording,withCamera,withPhotometry,1]);
 
@@ -434,6 +435,7 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
 
     % Process NIDAQ photometry data
     if options.withPhotometryNI == true
+        params.sync.ni_photometryFs = [];
         totalDuration_NI = length(photometry_raw) / params.sync.behaviorFs;
         disp("Ongoing: Process NI photometry data");
         % Process

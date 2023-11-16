@@ -1,27 +1,32 @@
-function analysis = analyzeTraces(timeSeries,lick,analysisEvents,analysisLabels,analysisColors,params,options)
+function analysis = analyzeTraces(timeSeries,lick,analysisEvents,analysisLabels,params,options)
 
 arguments
     timeSeries struct
     lick double
     analysisEvents cell
     analysisLabels cell
-    analysisColors cell
     params
 
     options.timeRange double = [-15, 15]
     options.stageTime double = [-2,0;0,2]
     options.lick_binSize double = 0.1
     options.nboot double = 10000
+    options.analysisColors cell = {[0 0 0]}
 end
 
 disp('Ongoing: analyze traces and saved in anlaysis struct');
 
-% Define analysis params
+%% Define analysis params
 analysis = struct([]);
 timeRange = options.timeRange;
 stageTime = options.stageTime;
 
-% Loop through all events
+if length(options.analysisColors) ~= length(analysisEvents)
+    warning('Provided analysisColors does not match with number of analysisEvents, use 0 instead');
+    options.analysisColors = mat2cell(zeros(length(analysisEvents),3),ones(1,length(analysisEvents)),3);
+end
+
+%% Loop through all events
 for i = 1:length(analysisEvents)
     %% 1. Loop through all timeSeries
     for signal = 1:size(timeSeries,2)
@@ -29,7 +34,7 @@ for i = 1:length(analysisEvents)
 
         % Load signal of interest
         data = timeSeries(signal).data;
-        finalFs = timeSeries(signal).finalFs;
+        finalFs = round(timeSeries(signal).finalFs);
         system = timeSeries(signal).system;
 
         % Save overall traces
@@ -50,6 +55,7 @@ for i = 1:length(analysisEvents)
 
             % Fit stageAvg across session
             x = 1:size(trace,1); y = stageAvg(:,stage)';
+            if length(y) <= 1; continue; end
             stageAvgFit(stage,:) = polyfit(x,y,1);
 
             % Test for significance (shuffled individual points, 
@@ -66,30 +72,59 @@ for i = 1:length(analysisEvents)
         end
 
         % Calculate subtrial peaks
-        stagePeak = nan(size(trace,1),size(stageTime,1));
-        stagePeakFit = nan(size(stageTime,1),2);
-        stagePeakFit_bs = nan(size(stageTime,1),options.nboot,2);
-        pPeak_intercept = nan(size(stageTime,1),2);
-        pPeak_slope = nan(size(stageTime,1),2);
+        stageMax = nan(size(trace,1),size(stageTime,1));
+        stageMaxFit = nan(size(stageTime,1),2);
+        stageMaxFit_bs = nan(size(stageTime,1),options.nboot,2);
+        pMax_intercept = nan(size(stageTime,1),2);
+        pMax_slope = nan(size(stageTime,1),2);
         for stage = 1:size(stageTime,1)
             stageWindow = stageBin(stage,1):stageBin(stage,2);
-            stagePeak(:,stage) = max(trace(:,stageWindow),[],2);
+            stageMax(:,stage) = max(trace(:,stageWindow),[],2);
 
-            % Fit stagePeak across session
-            x = 1:size(trace,1); y = stagePeak(:,stage)';
-            stagePeakFit(stage,:) = polyfit(x,y,1);
+            % Fit stageMax across session
+            x = 1:size(trace,1); y = stageMax(:,stage)';
+            if length(y) <= 1; continue; end
+            stageMaxFit(stage,:) = polyfit(x,y,1);
 
             % Test for significance (shuffled individual points, 
             % calculate slope to build distribution, and test significance)
             for sample = 1:options.nboot
                 bs_data = y(randperm(length(y)));
-                stagePeakFit_bs(stage,sample,:) = polyfit(x,bs_data,1);
+                stageMaxFit_bs(stage,sample,:) = polyfit(x,bs_data,1);
             end
             % Calculate one-side p value
-            pPeak_intercept(stage,1) = sum(stagePeakFit_bs(stage,:,end)<=stagePeakFit(stage,end))/options.nboot;
-            pPeak_intercept(stage,2) = sum(stagePeakFit_bs(stage,:,end)>=stagePeakFit(stage,end))/options.nboot;
-            pPeak_slope(stage,1) = sum(stagePeakFit_bs(stage,:,end-1)<=stagePeakFit(stage,end-1))/options.nboot;
-            pPeak_slope(stage,2) = sum(stagePeakFit_bs(stage,:,end-1)>=stagePeakFit(stage,end-1))/options.nboot;
+            pMax_intercept(stage,1) = sum(stageMaxFit_bs(stage,:,end)<=stageMaxFit(stage,end))/options.nboot;
+            pMax_intercept(stage,2) = sum(stageMaxFit_bs(stage,:,end)>=stageMaxFit(stage,end))/options.nboot;
+            pMax_slope(stage,1) = sum(stageMaxFit_bs(stage,:,end-1)<=stageMaxFit(stage,end-1))/options.nboot;
+            pMax_slope(stage,2) = sum(stageMaxFit_bs(stage,:,end-1)>=stageMaxFit(stage,end-1))/options.nboot;
+        end
+
+        % Calculate subtrial troughs
+        stageMin = nan(size(trace,1),size(stageTime,1));
+        stageMinFit = nan(size(stageTime,1),2);
+        stageMinFit_bs = nan(size(stageTime,1),options.nboot,2);
+        pMin_intercept = nan(size(stageTime,1),2);
+        pMin_slope = nan(size(stageTime,1),2);
+        for stage = 1:size(stageTime,1)
+            stageWindow = stageBin(stage,1):stageBin(stage,2);
+            stageMin(:,stage) = min(trace(:,stageWindow),[],2);
+
+            % Fit stageMin across session
+            x = 1:size(trace,1); y = stageMin(:,stage)';
+            if length(y) <= 1; continue; end
+            stageMinFit(stage,:) = polyfit(x,y,1);
+
+            % Test for significance (shuffled individual points, 
+            % calculate slope to build distribution, and test significance)
+            for sample = 1:options.nboot
+                bs_data = y(randperm(length(y)));
+                stageMinFit_bs(stage,sample,:) = polyfit(x,bs_data,1);
+            end
+            % Calculate one-side p value
+            pMin_intercept(stage,1) = sum(stageMinFit_bs(stage,:,end)<=stageMinFit(stage,end))/options.nboot;
+            pMin_intercept(stage,2) = sum(stageMinFit_bs(stage,:,end)>=stageMinFit(stage,end))/options.nboot;
+            pMin_slope(stage,1) = sum(stageMinFit_bs(stage,:,end-1)<=stageMinFit(stage,end-1))/options.nboot;
+            pMin_slope(stage,2) = sum(stageMinFit_bs(stage,:,end-1)>=stageMinFit(stage,end-1))/options.nboot;
         end
 
         % Save traces and anlaysis data
@@ -112,14 +147,22 @@ for i = 1:length(analysisEvents)
         analysis(row).stageAvg.stats.pval_intercept = pAvg_intercept;
         analysis(row).stageAvg.stats.pval_slope = pAvg_slope;
 
-        analysis(row).stagePeak.data = stagePeak;
-        analysis(row).stagePeak.fit = stagePeakFit;
-        analysis(row).stagePeak.stats.bs = stagePeakFit_bs;
-        analysis(row).stagePeak.stats.pval_intercept = pPeak_intercept;
-        analysis(row).stagePeak.stats.pval_slope = pPeak_slope;
+        analysis(row).stageMax.data = stageMax;
+        analysis(row).stageMax.fit = stageMaxFit;
+        analysis(row).stageMax.stats.bs = stageMaxFit_bs;
+        analysis(row).stageMax.stats.pval_intercept = pMax_intercept;
+        analysis(row).stageMax.stats.pval_slope = pMax_slope;
 
-        analysis(row).stageTime = stageTime;
-        analysis(row).color = analysisColors{i};
+        analysis(row).stageMin.data = stageMin;
+        analysis(row).stageMin.fit = stageMinFit;
+        analysis(row).stageMin.stats.bs = stageMinFit_bs;
+        analysis(row).stageMin.stats.pval_intercept = pMin_intercept;
+        analysis(row).stageMin.stats.pval_slope = pMin_slope;
+
+        analysis(row).stageAvg.stageTime = stageTime;
+        analysis(row).stageMax.stageTime = stageTime;
+        analysis(row).stageMin.stageTime = stageTime;
+        analysis(row).color = options.analysisColors{i};
     end
     
     %% 2. Get lick events
@@ -140,6 +183,7 @@ for i = 1:length(analysisEvents)
 
         % Fit stageAvg across session
         x = 1:size(lickRate,1); y = stageAvg_lick(:,stage)';
+        if length(y) <= 1; continue; end
         stageAvgFit_lick(stage,:) = polyfit(x,y,1);
 
         % Test for significance (shuffled individual points, 
@@ -156,30 +200,59 @@ for i = 1:length(analysisEvents)
     end
 
     % Calculate subtrial peaks
-    stagePeak_lick = nan(size(lickRate,1),size(stageTime,1));
-    stagePeakFit_lick = nan(size(stageTime,1),2);
-    stagePeakFit_bs = nan(size(stageTime,1),options.nboot,2);
-    pPeak_intercept = nan(size(stageTime,1),2);
-    pPeak_slope = nan(size(stageTime,1),2);
+    stageMax_lick = nan(size(lickRate,1),size(stageTime,1));
+    stageMaxFit_lick = nan(size(stageTime,1),2);
+    stageMaxFit_bs = nan(size(stageTime,1),options.nboot,2);
+    pMax_intercept = nan(size(stageTime,1),2);
+    pMax_slope = nan(size(stageTime,1),2);
     for stage = 1:size(stageTime,1)
         stageWindow = stageBin(stage,1):stageBin(stage,2);
-        stagePeak_lick(:,stage) = max(lickRate(:,stageWindow),[],2);
+        stageMax_lick(:,stage) = max(lickRate(:,stageWindow),[],2);
 
-        % Fit stageAvg across session
-        x = 1:size(lickRate,1); y = stagePeak_lick(:,stage)';
-        stagePeakFit_lick(stage,:) = polyfit(x,y,1);
+        % Fit stage peak across session
+        x = 1:size(lickRate,1); y = stageMax_lick(:,stage)';
+        if length(y) <= 1; continue; end
+        stageMaxFit_lick(stage,:) = polyfit(x,y,1);
 
         % Test for significance (shuffled individual points, 
         % calculate slope to build distribution, and test significance)
         for sample = 1:options.nboot
             bs_data = y(randperm(length(y)));
-            stagePeakFit_bs(stage,sample,:) = polyfit(x,bs_data,1);
+            stageMaxFit_bs(stage,sample,:) = polyfit(x,bs_data,1);
         end
         % Calculate one-side p value
-        pPeak_intercept(stage,1) = sum(stagePeakFit_bs(stage,:,end)<=stagePeakFit(stage,end))/options.nboot;
-        pPeak_intercept(stage,2) = sum(stagePeakFit_bs(stage,:,end)>=stagePeakFit(stage,end))/options.nboot;
-        pPeak_slope(stage,1) = sum(stagePeakFit_bs(stage,:,end-1)<=stagePeakFit(stage,end-1))/options.nboot;
-        pPeak_slope(stage,2) = sum(stagePeakFit_bs(stage,:,end-1)>=stagePeakFit(stage,end-1))/options.nboot;
+        pMax_intercept(stage,1) = sum(stageMaxFit_bs(stage,:,end)<=stageMaxFit(stage,end))/options.nboot;
+        pMax_intercept(stage,2) = sum(stageMaxFit_bs(stage,:,end)>=stageMaxFit(stage,end))/options.nboot;
+        pMax_slope(stage,1) = sum(stageMaxFit_bs(stage,:,end-1)<=stageMaxFit(stage,end-1))/options.nboot;
+        pMax_slope(stage,2) = sum(stageMaxFit_bs(stage,:,end-1)>=stageMaxFit(stage,end-1))/options.nboot;
+    end
+
+    % Calculate subtrial troughs
+    stageMin_lick = nan(size(lickRate,1),size(stageTime,1));
+    stageMinFit_lick = nan(size(stageTime,1),2);
+    stageMinFit_bs = nan(size(stageTime,1),options.nboot,2);
+    pMin_intercept = nan(size(stageTime,1),2);
+    pMin_slope = nan(size(stageTime,1),2);
+    for stage = 1:size(stageTime,1)
+        stageWindow = stageBin(stage,1):stageBin(stage,2);
+        stageMin_lick(:,stage) = min(lickRate(:,stageWindow),[],2);
+
+        % Fit stage trough across session
+        x = 1:size(lickRate,1); y = stageMin_lick(:,stage)';
+        if length(y) <= 1; continue; end
+        stageMinFit_lick(stage,:) = polyfit(x,y,1);
+
+        % Test for significance (shuffled individual points, 
+        % calculate slope to build distribution, and test significance)
+        for sample = 1:options.nboot
+            bs_data = y(randperm(length(y)));
+            stageMinFit_bs(stage,sample,:) = polyfit(x,bs_data,1);
+        end
+        % Calculate one-side p value
+        pMin_intercept(stage,1) = sum(stageMinFit_bs(stage,:,end)<=stageMinFit(stage,end))/options.nboot;
+        pMin_intercept(stage,2) = sum(stageMinFit_bs(stage,:,end)>=stageMinFit(stage,end))/options.nboot;
+        pMin_slope(stage,1) = sum(stageMinFit_bs(stage,:,end-1)<=stageMinFit(stage,end-1))/options.nboot;
+        pMin_slope(stage,2) = sum(stageMinFit_bs(stage,:,end-1)>=stageMinFit(stage,end-1))/options.nboot;
     end
 
     % Save lick traces
@@ -199,19 +272,26 @@ for i = 1:length(analysisEvents)
 
     analysis(row).stageAvg.data = stageAvg_lick;
     analysis(row).stageAvg.fit = stageAvgFit_lick;
-    analysis(row).stageAvg.stats.bs = stagePeakFit_bs;
+    analysis(row).stageAvg.stats.bs = stageMaxFit_bs;
     analysis(row).stageAvg.stats.pval_intercept = pAvg_intercept;
     analysis(row).stageAvg.stats.pval_slope = pAvg_slope;
     
+    analysis(row).stageMax.data = stageMax_lick;
+    analysis(row).stageMax.fit = stageMaxFit_lick;
+    analysis(row).stageMax.stats.bs = stageMaxFit_bs;
+    analysis(row).stageMax.stats.pval_intercept = pMax_intercept;
+    analysis(row).stageMax.stats.pval_slope = pMax_slope;
 
-    analysis(row).stagePeak.data = stagePeak_lick;
-    analysis(row).stagePeak.fit = stagePeakFit_lick;
-    analysis(row).stagePeak.stats.bs = stagePeakFit_bs;
-    analysis(row).stagePeak.stats.pval_intercept = pPeak_intercept;
-    analysis(row).stagePeak.stats.pval_slope = pPeak_slope;
+    analysis(row).stageMin.data = stageMin_lick;
+    analysis(row).stageMin.fit = stageMinFit_lick;
+    analysis(row).stageMin.stats.bs = stageMinFit_bs;
+    analysis(row).stageMin.stats.pval_intercept = pMin_intercept;
+    analysis(row).stageMin.stats.pval_slope = pMin_slope;
 
-    analysis(row).stageTime = stageTime;
-    analysis(row).color = analysisColors{i};
+    analysis(row).stageAvg.stageTime = stageTime;
+    analysis(row).stageMax.stageTime = stageTime;
+    analysis(row).stageMin.stageTime = stageTime;
+    analysis(row).color = options.analysisColors{i};
 end
 
 % Save
