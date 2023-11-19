@@ -203,14 +203,15 @@ if (~exist('trials','var') || options.redo)
     trialTable = trials(:,1:end-6);
     trialTable.block = ones(size(trials,1),1);
     trialTable.session_position = (1:size(trials,1))';
+    trialTable = replaceNaN(trialTable,-1);
     parquetwrite(strcat(sessionpath,filesep,'trialTable.parquet'),trialTable);
     % eventTable
     eventTable = getEventTable(events,params);
-    parquetwrite(strcat(sessionpath,filesep,'eventTable.parquet'),trialTable);
+    parquetwrite(strcat(sessionpath,filesep,'eventTable.parquet'),eventTable);
     % blockTable
     firstTrial = 1; lastTrial = size(trials,1);
     blockTable = table(firstTrial,lastTrial);
-    parquetwrite(strcat(sessionpath,filesep,'blockTable.parquet'),trialTable);
+    parquetwrite(strcat(sessionpath,filesep,'blockTable.parquet'),blockTable);
     
 
     % Save to behavior_.mat
@@ -699,7 +700,7 @@ if options.plotPhotometry
                     scatter(x,data',100,stageColors{stage},'filled',MarkerFaceAlpha=0.5,HandleVisibility='off'); hold on
                     plot(x,polyval(p,x),Color=stageColors{stage},lineWidth=5);
                 end
-                title(analysis(row).label);
+                title(analysis(row).event);
                 xlabel('Trials'); ylabel([analysis(row).name,' signal average (z-score)']);
                 legend(stageLegend); box off
     
@@ -718,7 +719,7 @@ if options.plotPhotometry
                 xlabel('Slope distribution (bootstrapped)'); ylabel('Count'); box off
             end
             % Save
-            saveas(gcf,strcat(sessionpath,filesep,'Summary_',cur_signal,'subtrial_average.png'));
+            saveas(gcf,strcat(sessionpath,filesep,'Summary_',cur_signal,'_subtrial_average.png'));
         end
     
         %% Plot subtrial peak trend for baseline, CS, US
@@ -739,7 +740,7 @@ if options.plotPhotometry
                     scatter(x,data',100,stageColors{stage},'filled',MarkerFaceAlpha=0.5,HandleVisibility='off'); hold on
                     plot(x,polyval(p,x),Color=stageColors{stage},lineWidth=5);
                 end
-                title(analysis(row).label);
+                title(analysis(row).event);
                 xlabel('Trials'); ylabel([analysis(row).name,' signal peak (z-score)']);
                 legend(stageLegend); box off
     
@@ -758,7 +759,7 @@ if options.plotPhotometry
                 xlabel('Slope distribution (bootstrapped)'); ylabel('Count'); box off
             end
             % Save
-            saveas(gcf,strcat(sessionpath,filesep,'Summary_',cur_signal,'subtrial_peak.png'));
+            saveas(gcf,strcat(sessionpath,filesep,'Summary_',cur_signal,'_subtrial_peak.png'));
         end
     
         %% Plot subtrial trough trend for baseline, CS, US
@@ -779,7 +780,7 @@ if options.plotPhotometry
                     scatter(x,data',100,stageColors{stage},'filled',MarkerFaceAlpha=0.5,HandleVisibility='off'); hold on
                     plot(x,polyval(p,x),Color=stageColors{stage},lineWidth=5);
                 end
-                title(analysis(row).label);
+                title(analysis(row).event);
                 xlabel('Trials'); ylabel([analysis(row).name,' signal trough (z-score)']);
                 legend(stageLegend); box off
     
@@ -798,7 +799,7 @@ if options.plotPhotometry
                 xlabel('Slope distribution (bootstrapped)'); ylabel('Count'); box off
             end
             % Save
-            saveas(gcf,strcat(sessionpath,filesep,'Summary_',cur_signal,'subtrial_trough.png'));
+            saveas(gcf,strcat(sessionpath,filesep,'Summary_',cur_signal,'_subtrial_trough.png'));
         end
     end
 end

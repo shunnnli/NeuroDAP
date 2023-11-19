@@ -12,10 +12,57 @@ r2p_cmap = getColormap([255, 50, 58],[0 0 0],500,'midcol',[255 255 255]);
 p2r_cmap = getColormap([241 160 255],[0 0 0],500,'midcol',[255 255 255]);
 
 % Define result directory
-resultspath = '\\research.files.med.harvard.edu\neurobio\MICROSCOPE\Shun\project valence\Results\';
-% resultspath = uigetdir('\\research.files.med.harvard.edu\neurobio\MICROSCOPE\Shun\','Select Results folder directory');
+resultspath = uigetdir(osPathSwitch('/Volumes/MICROSCOPE/Shun/Project valence/Results/'),'Select Results folder directory');
 
-% For pairing, sessions needs arrange in days then in animal number
+%% Building summary struct from selected sessions
+
+sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/MICROSCOPE/Shun'));
+
+%% Create/modify summary struct
+
+% if ~isempty(dir(fullfile(resultspath,'summary.mat')))
+%     load(strcat(resultspath,filesep,'summary.mat'));
+%     disp('Finished: summary.mat loaded');
+% else
+%     summary = struct([]);
+%     save(strcat(resultspath,filesep,'summary'),'sessionList','-v7.3');
+%     disp('Finished: summary.mat not found, created a new one');
+% end
+
+
+summary = struct([]);
+% trialTables = cell(size(sessionList));
+for s = 1:length(sessionList)
+    % Find sessionName
+    dirsplit = strsplit(sessionList{s},filesep); 
+    sessionName = dirsplit{end}; clear dirsplit
+
+    % Load session
+    load(strcat(sessionList{s},filesep,'analysis_',sessionName,'.mat'));
+    % load(strcat(sessionList{s},filesep,'behavior_',sessionName,'.mat'));
+
+    summary = [summary,analysis];
+    disp(['Finished: session ', sessionName,' loaded']);
+end
+
+%% Plot traces from summary struct
+
+timeRange = [-0.5,3];
+eventRange = "Airpuff";
+animalRange = ["SL133","SL135"];
+taskRange = "All";
+sessionRange = "All";
+trialRange = 1:60; % range of trials in each session
+signalRange = "NAc";
+
+combined = combineTraces(summary,timeRange=timeRange,...
+                            eventRange=eventRange,...
+                            animalRange=animalRange,...
+                            sessionRange=sessionRange,...
+                            trialRange=trialRange,...
+                            signalRange=signalRange);
+
+plotSEM(combined.timestamp,combined.data{1},[.213 .343 .324]);
 
 %% Notes for each animal
 

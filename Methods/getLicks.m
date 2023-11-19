@@ -19,8 +19,10 @@ end
 
 % Initialize lickTraces (number of licks in bin) & lickRate 
 lickTraces = cell(1,2);
-lickTraces_left = zeros(length(eventIdx),round((timeRange(2)-timeRange(1))/binSize));
-lickTraces_right = zeros(length(eventIdx),round((timeRange(2)-timeRange(1))/binSize));
+t_length = length(timeRange(1):binSize:timeRange(2));
+% t_length = round((timeRange(2)-timeRange(1))/binSize); % old version
+lickTraces_left = zeros(length(eventIdx),t_length);
+lickTraces_right = zeros(length(eventIdx),t_length);
 lickRate = lickTraces;
 % Initialize lickEvents (relative time of every lick for every trial)
 % Left side: first column, right side: second column

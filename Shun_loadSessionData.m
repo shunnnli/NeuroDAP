@@ -10,6 +10,7 @@ addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods
 % Select sessions via uipickfiles
 sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/MICROSCOPE/Shun'));
 
+
 % Select anlaysis params
 [analysisParams,canceled] = inputAnalysisParams(sessionList,...
                                 reloadAll=false,...

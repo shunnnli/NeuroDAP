@@ -27,7 +27,8 @@ cur_row = 0;
 for i = 0:length(allTrials)
     % Find NI sample range
     if i == 0; niRange = [0,allTrials(1)];
-    elseif i == length(allTrials); niRange = [allTrials(i),timeNI(end)];
+    elseif i == length(allTrials)
+        niRange = [allTrials(i),length(timeNI)+1];
     else; niRange = [allTrials(i),allTrials(i+1)]; 
     end
 
