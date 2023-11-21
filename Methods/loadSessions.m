@@ -72,12 +72,11 @@ if ~isempty(dir(fullfile(session.path,"sync_*.mat")))
     end
 else
     % Initialize all .mat files
-  if  options.reloadAll == true
+    options.reloadAll = true;
     save(strcat(session.path,filesep,'sync_',sessionName),'sessionName','session','-v7.3');
     save(strcat(session.path,filesep,'timeseries_',sessionName),'sessionName','session','-v7.3');
     save(strcat(session.path,filesep,'data_',sessionName),'sessionName','session','-v7.3');
     save(strcat(session.path,filesep,'behavior_',sessionName),'sessionName','session','-v7.3');
-  end
 end
 
 withNI = ~isempty(dir(fullfile(session.path,'*.nidq.bin')));
