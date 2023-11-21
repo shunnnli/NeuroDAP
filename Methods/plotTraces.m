@@ -21,11 +21,20 @@ arguments
     options.rmmissing logical = true % remove nan rows
     options.smooth double = 0; % 0: no smoothing, else is samples of smooth data
     options.smoothMethod string = 'movmean';
+    options.baselineWindow double = 0 % subtracted by x secs before event time
+
+    % Plot options
     options.plot logical = true % whether or not to plot traces
     options.LineStyle (1,1) string = "-"
     options.LineWidth (1,1) {mustBeNumeric} = 2
-    options.baselineWindow double = 0 % subtracted by x secs before event time
+    options.plotShuffled logical = false
+    options.shuffledColor double = [.75, .75, .75]
+
 end
+
+% 0. Define event system
+if ~isfield(params.session,'baselineSystem'); options.eventSystem = 'ni';
+else; options.eventSystem = params.session.baselineSystem; end
 
 % 1. Initialize event and signal system time
 % 1.1 Define event system time
@@ -127,7 +136,18 @@ if options.plot
         smoothWindow = 0;
     end
 
-    % 4.2 Plot SEM
+    % 4.2 Plot shuffled data
+    if options.plotShuffled
+        shuffled = zeros(size(traces));
+        % Shuffle data
+        for i = 1:size(traces,1)
+            shuffled(i,:) = traces(i,randperm(size(traces,2)));
+        end
+        plotSEM(timestamp,shuffled,options.shuffledColor,smooth=smoothWindow,smoothMethod=options.smoothMethod,...
+        LineStyle=options.LineStyle,LineWidth=options.LineWidth); hold on
+    end
+
+    % 4.3 Plot SEM
     plotSEM(timestamp,traces,color,smooth=smoothWindow,smoothMethod=options.smoothMethod,...
         LineStyle=options.LineStyle,LineWidth=options.LineWidth);
     xlabel('Time (s)'); ylabel('z-score'); hold on

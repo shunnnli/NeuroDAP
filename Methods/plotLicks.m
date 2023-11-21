@@ -20,8 +20,19 @@ arguments
     options.markerSize double = 20
 end
 
+if strcmpi(params.session.baselineSystem,'lj')
+    Fs = params.sync.labjackFs;
+    timeBaseline = params.sync.timePhotometry;
+else
+    Fs = params.sync.behaviorFs;
+    timeBaseline = params.sync.timeNI;
+end
+
+% getLicks
 [lickRate,~,lickEvents] = getLicks(timeRange,eventIdx,binSize,leftLick,rightLick,...
-                                params.sync.behaviorFs,params.sync.timeNI,side=options.side);
+                                Fs,timeBaseline,side=options.side);
+
+% Create time
 if all(options.side == [1 1])
     t = linspace(timeRange(1),timeRange(2),size(lickRate{1},2));
 else
@@ -31,7 +42,6 @@ end
 %if isempty(lickRate{find(options.side)}); return; end
 
 if options.plot
-
     if strcmp(options.mode,'trace')    
         % draw lick rate traces
         if all(options.side == [1 1])

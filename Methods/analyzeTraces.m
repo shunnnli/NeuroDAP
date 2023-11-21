@@ -7,6 +7,7 @@ arguments
     analysisLabels cell
     params
 
+    options.task string = "NaN"
     options.timeRange double = [-15, 15]
     options.stageTime double = [-2,0;0,2]
     options.lick_binSize double = 0.1
@@ -24,6 +25,11 @@ stageTime = options.stageTime;
 if length(options.analysisColors) ~= length(analysisEvents)
     warning('Provided analysisColors does not match with number of analysisEvents, use 0 instead');
     options.analysisColors = mat2cell(zeros(length(analysisEvents),3),ones(1,length(analysisEvents)),3);
+end
+
+% Define tasks and other properties
+if isfield(params.session,'task')
+    options.task = params.session.task;
 end
 
 %% Loop through all events
@@ -132,7 +138,7 @@ for i = 1:length(analysisEvents)
         analysis(row).animal = params.session.animal;
         analysis(row).date = params.session.date;
         analysis(row).session = params.session.name;
-        analysis(row).task = params.session.task;
+        analysis(row).task = options.task;
         analysis(row).event = analysisLabels{i};
         analysis(row).name = timeSeries(signal).name;
         analysis(row).system = system;
@@ -260,7 +266,7 @@ for i = 1:length(analysisEvents)
     analysis(row).animal = params.session.animal;
     analysis(row).date = params.session.date;
     analysis(row).session = params.session.name;
-    analysis(row).task = params.session.task;
+    analysis(row).task = options.task;
     analysis(row).event = analysisLabels{i};
     analysis(row).name = 'Lick';
     analysis(row).system = 'Lick';

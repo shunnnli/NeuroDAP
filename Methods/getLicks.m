@@ -1,5 +1,5 @@
 function [lickRate,lickTraces,lickEvents] = getLicks(timeRange,eventIdx,binSize,...
-                leftLick,rightLick,Fs,timeNI,options)
+                leftLick,rightLick,Fs,timeBaseline,options)
 
 % Get licks around event
 
@@ -10,11 +10,10 @@ arguments
     leftLick 
     rightLick 
     Fs double
-    timeNI double
-    options.side = [0,1]
+    timeBaseline double
+    options.side double = [0,1]
     options.inputLickIdx logical = false % If true, then don't need to find the lick once again
     options.getRate logical = true
-    options.behaviorFs double = 10000 % sample freq for behavior (NI)
 end
 
 % Initialize lickTraces (number of licks in bin) & lickRate 
@@ -45,7 +44,7 @@ if isempty(rightLick)
 
         % Find licks within timeRange
         leftLickTimesinRange = leftLickOnIdx(leftLickOnIdx>niFirstIdx & leftLickOnIdx<niLastIdx);
-        relativeLeftLickTime = timeNI(leftLickTimesinRange)-timeNI(eventIdx(i));
+        relativeLeftLickTime = timeBaseline(leftLickTimesinRange)-timeBaseline(eventIdx(i));
 
         if options.getRate
             % Calculate lick rate
@@ -70,7 +69,7 @@ elseif isempty(leftLick)
 
         % Find licks within timeRange
         rightLickTimesinRange = rightLickOnIdx(rightLickOnIdx>niFirstIdx & rightLickOnIdx<niLastIdx);
-        relativeRightLickTime = timeNI(rightLickTimesinRange)-timeNI(eventIdx(i)); % Can through out error is timeNI(0)
+        relativeRightLickTime = timeBaseline(rightLickTimesinRange)-timeBaseline(eventIdx(i)); % Can through out error is timeBaseline(0)
 
         if options.getRate
             % Calculate lick rate
@@ -100,8 +99,8 @@ else
         % Find licks within timeRange
         leftLickTimesinRange = leftLickOnIdx(leftLickOnIdx>niFirstIdx & leftLickOnIdx<niLastIdx);
         rightLickTimesinRange = rightLickOnIdx(rightLickOnIdx>niFirstIdx & rightLickOnIdx<niLastIdx);
-        relativeLeftLickTime = timeNI(leftLickTimesinRange)-timeNI(eventIdx(i));
-        relativeRightLickTime = timeNI(rightLickTimesinRange)-timeNI(eventIdx(i));
+        relativeLeftLickTime = timeBaseline(leftLickTimesinRange)-timeBaseline(eventIdx(i));
+        relativeRightLickTime = timeBaseline(rightLickTimesinRange)-timeBaseline(eventIdx(i));
 
         if options.getRate
             % Calculate lick rate

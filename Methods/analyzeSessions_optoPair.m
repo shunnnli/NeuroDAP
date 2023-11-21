@@ -1,9 +1,10 @@
-function analyzeSessions_optoPair(sessionpath,task,stimPattern,options)
+function analyzeSessions_optoPair(sessionpath,options)
 
 arguments
     sessionpath string
-    task string
-    stimPattern cell
+    
+    options.task string
+    options.stimPattern cell
 
     options.pavlovian logical = false
     options.reactionTime double = 1
@@ -43,7 +44,7 @@ elseif isunix; projectPath = strcat('/',fullfile(dirsplit{2:end-1}));
 end
 % Get animal name and session date
 dirsplit = strsplit(sessionName,'-');
-date = dirsplit{1}; animal = dirsplit{2};
+date = dirsplit{1}; animal = dirsplit{2}; sessionTask = dirsplit{3};
 clear dirsplit
 
 disp(strcat('**********',sessionName,'**********'));
@@ -53,7 +54,6 @@ load(strcat(sessionpath,filesep,'behavior_',sessionName,'.mat'));
 load(strcat(sessionpath,filesep,'sync_',sessionName,'.mat'));
 
 if ~isfield(params.session,'name'); params.session.name = sessionName; end
-if ~isfield(params.session,'task'); params.session.task = task; end
 if ~isfield(params.session,'date'); params.session.date = date; end
 if ~isfield(params.session,'animal'); params.session.animal = animal; end
 if ~isfield(params.session,'projectPath'); params.session.projectPath = projectPath; end
@@ -68,10 +68,10 @@ end
 disp(['Finished: Session ',sessionName,' loaded']);
 
 % Load behaivor params
-if options.redo || ~isfield(params,'analyze')
-    params.stim.pulseFreq = str2double(stimPattern{1}); 
-    params.stim.pulseDuration = str2double(stimPattern{2}); 
-    params.stim.stimDuration = str2double(stimPattern{3});
+if options.redo || ~isfield(params,'analyze') || ~isempty(options.stimPattern)
+    params.stim.pulseFreq = str2double(options.stimPattern{1}); 
+    params.stim.pulseDuration = str2double(options.stimPattern{2}); 
+    params.stim.stimDuration = str2double(options.stimPattern{3});
     params.stim.nPulsesPerStim = (params.stim.stimDuration/1000) * params.stim.pulseFreq;
     params.stim.pulseInterval = (1/params.stim.pulseFreq) - params.stim.pulseDuration;
     params.analyze = options;
@@ -81,6 +81,30 @@ else
     options.reactionTime = params.analyze.reactionTime;
     options.minLicks = params.analyze.minLicks;
 end
+
+% Load task
+if ~isfield(params.session,'task') && ~isempty(options.task)
+    params.session.task = options.task; 
+elseif isempty(options.task) && isfield(params.session,'task')
+    if ~strcmpi(options.task,params.session.task)
+        options.task = params.session.task;
+        disp('Finished: options.task not provided or differed, use the original one');
+    end
+elseif ~isfield(params.session,'task') && isempty(options.task)
+    if contains(sessionTask,"P",IgnoreCase=false)
+        options.task = "punish pairing";
+        params.session.task = options.task;
+    elseif contains(sessionTask,"Random",IgnoreCase=false)
+        options.task = "random";
+        params.session.task = options.task;
+    elseif contains(sessionTask,"R",IgnoreCase=false)
+        options.task = "reward pairing";
+        params.session.task = options.task;
+    end
+    disp(['Finished: parsing session task as ',options.task]);
+end
+
+disp(['Behavior params: task = ',options.task]);
 disp(['Behavior params: pavlovian = ',num2str(params.analyze.pavlovian)]);
 disp(['Behavior params: reactionTime = ',num2str(params.analyze.reactionTime)]);
 disp(['Behavior params: minLicks = ',num2str(params.analyze.minLicks)]);
@@ -156,10 +180,10 @@ waterIdx = find(rightSolenoid_rounded);
 airpuffIdx = find(airpuff_rounded);
 
 if ~exist('trials','var') || options.redo
-    if strcmp(task,'random')
+    if strcmp(options.task,'random')
         [allTrials,~] = getTrials(find(leftTone),optoCue,...
                              waterIdx,airpuffIdx);
-    elseif contains(task,'punish')
+    elseif contains(options.task,'punish')
         [allTrials,~] = getTrials(find(leftTone),optoCue,waterIdx);
     else
         [allTrials,~] = getTrials(find(leftTone),optoCue);
@@ -186,11 +210,11 @@ if (~exist('trials','var') || options.redo)
     events{3} = waterIdx;       events{4} = rightLickON;
     events{5} = find(leftTone); events{6} = optoCue;
 
-    trials = getTrialTable(task,events,rightSolenoid_rounded,airpuff_rounded,...
+    trials = getTrialTable(options.task,events,rightSolenoid_rounded,airpuff_rounded,...
                 pavlovian=options.pavlovian,reactionTime=options.reactionTime);
     % Calculate performance cutoff
-    if contains(task,'reward'); [trials,cutoff_sample] = getSessionCutoff(trials,"->reward");
-    elseif contains(task,'punish'); [trials,cutoff_sample] = getSessionCutoff(trials,"->punish");
+    if contains(options.task,'reward'); [trials,cutoff_sample] = getSessionCutoff(trials,"->reward");
+    elseif contains(options.task,'punish'); [trials,cutoff_sample] = getSessionCutoff(trials,"->punish");
     else; [trials,cutoff_sample] = getSessionCutoff(trials,"random"); 
     end
     params.analysis.cutoff_sample = cutoff_sample;
@@ -223,7 +247,7 @@ end
 
 %% Task specific params
 
-if strcmp(task,'random')
+if strcmp(options.task,'random')
     
     % Select event idx
     toneIdx = find(leftTone); stimIdx = optoCue;
@@ -265,7 +289,7 @@ else
     randomMaxSample = length(params.sync.timeNI) - (15*params.sync.behaviorFs);
     baselineIdx = randi([randomMinSample,randomMaxSample],100);
 
-    if contains(task,'reward')
+    if contains(options.task,'reward')
         if options.performing
             stimIdx = trials{trials.isTone == 0 & trials.isStim == 1 ...
                 & trials.isReward == 1 & trials.performing == 1, "CueTime"};
@@ -288,7 +312,7 @@ else
                 toneIdx = toneOmissionIdx;
             end
         end
-    elseif contains(task,'punish')
+    elseif contains(options.task,'punish')
         if options.performing
             stimIdx = trials{trials.isTone == 0 & trials.isStim == 1 ...
                 & trials.isPunishment == 1 & trials.performing == 1, "CueTime"};
@@ -396,7 +420,7 @@ if options.plotPhotometry
             initializeFig(0.5,0.5); tiledlayout(2,1);
         end
 
-        if strcmp(task,'random')
+        if strcmp(options.task,'random')
             % 2.1 Plot photometry traces
             nexttile
             [~,~] = plotTraces(waterLickIdx,timeRange,signal,bluePurpleRed(1,:),params,...
@@ -508,7 +532,7 @@ if options.plotPhotometry
         saveas(gcf,strcat(sessionpath,filesep,'Summary_events_',timeSeries(path).name,'.png'));
 
         %% Plot single stimulus PSTH
-        if strcmp(task,'random')
+        if strcmp(options.task,'random')
             eventIdxes = {stimIdx,waterLickIdx,toneIdx,airpuffIdx};
             labels = {'Stim','Water','Tone','Airpuff'};
             eventDurations = [0.5,0,0.5,0.02];
@@ -527,13 +551,14 @@ if options.plotPhotometry
                 % Plot short timescale
                 nexttile(3,[1 2]);
                 [traces,t] = plotTraces(eventIdx,shortTimeRange,signal,bluePurpleRed(1,:),params,...
-                                signalFs=finalFs,signalSystem=system);
-                [~,~] = plotTraces(baselineIdx,shortTimeRange,signal,[.75 .75 .75],params,...
-                                signalFs=finalFs,signalSystem=system);
+                                signalFs=finalFs,signalSystem=system,...
+                                plotShuffled=true);
+                % [~,~] = plotTraces(baselineIdx,shortTimeRange,signal,[.75 .75 .75],params,...
+                %                 signalFs=finalFs,signalSystem=system);
                 plotEvent(label,eventDuration); 
                 xlabel('Time (s)'); ylabel('z-score'); 
                 legend({[label,' (n=',num2str(length(eventIdx)),')'],...
-                    ['Baseline (n=',num2str(length(baselineIdx)),')']},...
+                    ['Shuffled (n=',num2str(length(eventIdx)),')']},...
                     'Location','northeast');
                 
                 nexttile(7,[1 2]);
@@ -563,13 +588,14 @@ if options.plotPhotometry
                 % Plot long timescale
                 nexttile(11,[1 2]);
                 [traces,t] = plotTraces(eventIdx,longTimeRange,signal,bluePurpleRed(1,:),params,...
-                                signalFs=finalFs,signalSystem=system);
-                [~,~] = plotTraces(baselineIdx,longTimeRange,signal,[.75 .75 .75],params,...
-                                signalFs=finalFs,signalSystem=system);
+                                signalFs=finalFs,signalSystem=system,...
+                                plotShuffled=true);
+                % [~,~] = plotTraces(baselineIdx,longTimeRange,signal,[.75 .75 .75],params,...
+                %                 signalFs=finalFs,signalSystem=system);
                 plotEvent(label,eventDuration);
                 xlabel('Time (s)'); ylabel('z-score');
                 legend({[label,' (n=',num2str(length(eventIdx)),')'],...
-                    ['Baseline (n=',num2str(length(baselineIdx)),')']},...
+                    ['Shuffled (n=',num2str(length(eventIdx)),')']},...
                     'Location','northeast');
                 
                 nexttile(15,[1 2]);
@@ -610,15 +636,16 @@ if options.plotPhotometry
                 % Plot short time scale
                 nexttile(3,[1 2]);
                 [traces,t] = plotTraces(eventIdx,shortTimeRange,signal,bluePurpleRed(1,:),params,...
-                                signalFs=finalFs,signalSystem=system);
-                [~,~] = plotTraces(baselineIdx,shortTimeRange,signal,[.75 .75 .75],params,...
-                                signalFs=finalFs,signalSystem=system);
+                                signalFs=finalFs,signalSystem=system,...
+                                plotShuffled=true);
+                % [~,~] = plotTraces(baselineIdx,shortTimeRange,signal,[.75 .75 .75],params,...
+                %                 signalFs=finalFs,signalSystem=system);
                 [~,~] = plotTraces(omissionIdx,shortTimeRange,signal,[0.3, 0.3, 0.3],params,...
                                 signalFs=finalFs,signalSystem=system);
                 plotEvent(label,eventDuration);
                 xlabel('Time (s)'); ylabel('z-score'); 
                 legend({[label,' (n=',num2str(length(eventIdx)),')'],...
-                        ['Baseline (n=',num2str(length(baselineIdx)),')'],...
+                        ['Shuffled (n=',num2str(length(eventIdx)),')'],...
                         [label,' omission (n=',num2str(length(omissionIdxes)),')']},...
                         'Location','northeast');
                 
@@ -648,15 +675,16 @@ if options.plotPhotometry
                 % Plot long time scale
                 nexttile(11,[1 2]);
                 [traces,t] = plotTraces(eventIdx,longTimeRange,signal,bluePurpleRed(1,:),params,...
-                                signalFs=finalFs,signalSystem=system);
-                [~,~] = plotTraces(baselineIdx,longTimeRange,signal,[.75 .75 .75],params,...
-                                signalFs=finalFs,signalSystem=system);
+                                signalFs=finalFs,signalSystem=system,...
+                                plotShuffled=true);
+                % [~,~] = plotTraces(baselineIdx,longTimeRange,signal,[.75 .75 .75],params,...
+                %                 signalFs=finalFs,signalSystem=system);
                 [~,~] = plotTraces(omissionIdx,longTimeRange,signal,[0.2, 0.2, 0.2],params,...
                                 signalFs=finalFs,signalSystem=system);
                 plotEvent(label,eventDuration);
                 xlabel('Time (s)'); ylabel('z-score');
                 legend({[label,' (n=',num2str(length(eventIdx)),')'],...
-                        ['Baseline (n=',num2str(length(baselineIdx)),')'],...
+                        ['Shuffled (n=',num2str(length(eventIdx)),')'],...
                         [label,' omission (n=',num2str(length(omissionIdxes)),')']},...
                         'Location','northeast');
                 
@@ -839,7 +867,7 @@ if options.plotLicks
 end
 
 
-if options.plotLicks && contains(task,'pairing')     
+if options.plotLicks && contains(options.task,'pairing')     
     %% Plot session overview for licking
     timeRange = [-5,10]; cameraTimeRange = [-1,5];
     markerSize = 20;
@@ -1194,14 +1222,14 @@ if options.plotLicks && contains(task,'pairing')
     rt_stim = trials{stimIdx(:,1),["TrialNumber","ReactionTime"]};
     rt_tone = trials{toneIdx(:,1),["TrialNumber","ReactionTime"]};
     rt_pair_early = rt_pair(rt_pair(:,1)<stageCutoff(1),2);
-    rt_stim_early = rt_pair(rt_stim(:,1)<stageCutoff(1),2);
-    rt_tone_early = rt_pair(rt_tone(:,1)<stageCutoff(1),2);
+    rt_stim_early = rt_stim(rt_stim(:,1)<stageCutoff(1),2);
+    rt_tone_early = rt_tone(rt_tone(:,1)<stageCutoff(1),2);
     rt_pair_mid = rt_pair(rt_pair(:,1)>=stageCutoff(1) & rt_pair(:,1)<stageCutoff(2),2);
-    rt_stim_mid = rt_pair(rt_stim(:,1)>=stageCutoff(1) & rt_stim(:,1)<stageCutoff(2),2);
-    rt_tone_mid = rt_pair(rt_tone(:,1)>=stageCutoff(1) & rt_tone(:,1)<stageCutoff(2),2);
+    rt_stim_mid = rt_stim(rt_stim(:,1)>=stageCutoff(1) & rt_stim(:,1)<stageCutoff(2),2);
+    rt_tone_mid = rt_tone(rt_tone(:,1)>=stageCutoff(1) & rt_tone(:,1)<stageCutoff(2),2);
     rt_pair_late = rt_pair(rt_pair(:,1)<=stageCutoff(2),2);
-    rt_stim_late = rt_pair(rt_stim(:,1)<=stageCutoff(2),2);
-    rt_tone_late = rt_pair(rt_tone(:,1)<=stageCutoff(2),2);
+    rt_stim_late = rt_stim(rt_stim(:,1)<=stageCutoff(2),2);
+    rt_tone_late = rt_tone(rt_tone(:,1)<=stageCutoff(2),2);
     
 
     % For early stage of session
@@ -1267,14 +1295,14 @@ if options.plotLicks && contains(task,'pairing')
     al_stim = trials{stimIdx(:,1),["TrialNumber","nAnticipatoryLicks"]};
     al_tone = trials{toneIdx(:,1),["TrialNumber","nAnticipatoryLicks"]};
     al_pair_early = al_pair(al_pair(:,1)<stageCutoff(1),2);
-    al_stim_early = al_pair(al_stim(:,1)<stageCutoff(1),2);
-    al_tone_early = al_pair(al_tone(:,1)<stageCutoff(1),2);
+    al_stim_early = al_stim(al_stim(:,1)<stageCutoff(1),2);
+    al_tone_early = al_tone(al_tone(:,1)<stageCutoff(1),2);
     al_pair_mid = al_pair(al_pair(:,1)>=stageCutoff(1) & al_pair(:,1)<stageCutoff(2),2);
-    al_stim_mid = al_pair(al_stim(:,1)>=stageCutoff(1) & al_stim(:,1)<stageCutoff(2),2);
-    al_tone_mid = al_pair(al_tone(:,1)>=stageCutoff(1) & al_tone(:,1)<stageCutoff(2),2);
+    al_stim_mid = al_stim(al_stim(:,1)>=stageCutoff(1) & al_stim(:,1)<stageCutoff(2),2);
+    al_tone_mid = al_tone(al_tone(:,1)>=stageCutoff(1) & al_tone(:,1)<stageCutoff(2),2);
     al_pair_late = al_pair(al_pair(:,1)<=stageCutoff(2),2);
-    al_stim_late = al_pair(al_stim(:,1)<=stageCutoff(2),2);
-    al_tone_late = al_pair(al_tone(:,1)<=stageCutoff(2),2);
+    al_stim_late = al_stim(al_stim(:,1)<=stageCutoff(2),2);
+    al_tone_late = al_tone(al_tone(:,1)<=stageCutoff(2),2);
 
     % For early stage of session
     % Calculate bootstrap distribution
@@ -1343,14 +1371,14 @@ if options.plotLicks && contains(task,'pairing')
     ort_stim = trials{stimIdx(:,1),["TrialNumber","OutcomeReactionTime"]};
     ort_tone = trials{toneIdx(:,1),["TrialNumber","OutcomeReactionTime"]};
     ort_pair_early = ort_pair(ort_pair(:,1)<stageCutoff(1),2);
-    ort_stim_early = ort_pair(ort_stim(:,1)<stageCutoff(1),2);
-    ort_tone_early = ort_pair(ort_tone(:,1)<stageCutoff(1),2);
+    ort_stim_early = ort_stim(ort_stim(:,1)<stageCutoff(1),2);
+    ort_tone_early = ort_tone(ort_tone(:,1)<stageCutoff(1),2);
     ort_pair_mid = ort_pair(ort_pair(:,1)>=stageCutoff(1) & ort_pair(:,1)<stageCutoff(2),2);
-    ort_stim_mid = ort_pair(ort_stim(:,1)>=stageCutoff(1) & ort_stim(:,1)<stageCutoff(2),2);
-    ort_tone_mid = ort_pair(ort_tone(:,1)>=stageCutoff(1) & ort_tone(:,1)<stageCutoff(2),2);
+    ort_stim_mid = ort_stim(ort_stim(:,1)>=stageCutoff(1) & ort_stim(:,1)<stageCutoff(2),2);
+    ort_tone_mid = ort_tone(ort_tone(:,1)>=stageCutoff(1) & ort_tone(:,1)<stageCutoff(2),2);
     ort_pair_late = ort_pair(ort_pair(:,1)<=stageCutoff(2),2);
-    ort_stim_late = ort_pair(ort_stim(:,1)<=stageCutoff(2),2);
-    ort_tone_late = ort_pair(ort_tone(:,1)<=stageCutoff(2),2);
+    ort_stim_late = ort_stim(ort_stim(:,1)<=stageCutoff(2),2);
+    ort_tone_late = ort_tone(ort_tone(:,1)<=stageCutoff(2),2);
 
     % For early stage of session
     % Calculate bootstrap distribution
