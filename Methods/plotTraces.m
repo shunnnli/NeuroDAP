@@ -29,6 +29,7 @@ arguments
     options.LineWidth (1,1) {mustBeNumeric} = 2
     options.plotShuffled logical = false
     options.shuffledColor double = [.75, .75, .75]
+    options.nShuffle double = 10000
 
 end
 
@@ -73,7 +74,7 @@ elseif contains(options.signalSystem,'cam','IgnoreCase',true)
         if isfield(params.sync,'camFs'); signalFs = params.sync.camFs;
         else; signalFs = 100; end
     end
-    syncFs = signalFs;
+    syncFs = params.sync.camFs;
 elseif strcmpi(options.signalSystem,'imec')
     timeTarget = params.sync.timeImec;
     if ~isnan(options.signalFs); signalFs = options.signalFs;
@@ -81,7 +82,7 @@ elseif strcmpi(options.signalSystem,'imec')
         if isfield(params.sync,'apFs'); signalFs = params.sync.apFs;
         else; signalFs = 30000; end
     end
-    syncFs = signalFs;
+    syncFs = params.sync.apFs;
 end
 
 % 2. Get signal traces around a specific event
@@ -138,11 +139,7 @@ if options.plot
 
     % 4.2 Plot shuffled data
     if options.plotShuffled
-        shuffled = zeros(size(traces));
-        % Shuffle data
-        for i = 1:size(traces,1)
-            shuffled(i,:) = traces(i,randperm(size(traces,2)));
-        end
+        shuffled = shuffleTraces(traces);
         plotSEM(timestamp,shuffled,options.shuffledColor,smooth=smoothWindow,smoothMethod=options.smoothMethod,...
         LineStyle=options.LineStyle,LineWidth=options.LineWidth); hold on
     end

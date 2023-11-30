@@ -7,8 +7,9 @@ clear; close all;
 addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
 
 % Select sessions via uipickfiles
-sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/MICROSCOPE/Shun'));
+% sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/MICROSCOPE/Shun'));
 
+sessionList = uipickfiles('FilterSpec',osPathSwitch('\\research.files.med.harvard.edu\neurobio\MICROSCOPE\Shijia\'));
 
 %% Run each session
 for s = 1:length(sessionList)
@@ -20,8 +21,6 @@ for s = 1:length(sessionList)
     try
         loadSessions(sessionList{s},reloadAll=true,...
             labjackSetup="Shijia",...
-            invertStim=false,...
-            withPhotometryNI=false,photometryNI_mod=false,...
             recordLJ=[1 0 0],...
             rollingWindowTime=180);
         analyzeSessions_Shijia(sessionList{s},...

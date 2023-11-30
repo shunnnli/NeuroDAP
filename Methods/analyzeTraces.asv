@@ -12,14 +12,11 @@ arguments
     options.stageTime double = [-2,0;0,2]
     options.lick_binSize double = 0.1
     options.nboot double = 10000
-    
-    options.trialTable table
-    options.trialNumber cell = cell(size(analysisEvents))
+
 
 end
 
 disp('Ongoing: analyze traces and saved in anlaysis struct');
-options.analysisDate = char(datetime('today','Format','yyyyMMdd'));
 
 %% Define analysis params
 analysis = struct([]);
@@ -168,10 +165,6 @@ for i = 1:length(analysisEvents)
         analysis(row).stageMax.stageTime = stageTime;
         analysis(row).stageMin.stageTime = stageTime;
         
-        analysis(row).trialInfo.trialNumber = options.trialNumber{i};
-        if ~isempty(options.trialTable)
-            analysis(row).trialInfo.trialTable = options.trialTable(options.trialNumber{i},:);
-        end
         analysis(row).options = options;
     end
     
@@ -302,10 +295,6 @@ for i = 1:length(analysisEvents)
     analysis(row).stageMax.stageTime = stageTime;
     analysis(row).stageMin.stageTime = stageTime;
     
-    analysis(row).trialInfo.trialNumber = options.trialNumber{i};
-    if ~isempty(options.trialTable)
-        analysis(row).trialInfo.trialTable = options.trialTable(options.trialNumber{i},:);
-    end
     analysis(row).options = options;
 end
 

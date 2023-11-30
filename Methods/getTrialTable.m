@@ -163,6 +163,12 @@ for i=1:length(allTrials)
         num2cell(trialLicks,[1 2]),num2cell(choiceLicks,[1 2]),num2cell(outcomeLicks,[1 2]),num2cell(baselineLicks,[1 2])};
 end
 
+% Add a row for outside events
+trials(i,:) = {0,0,0,0,0,0,0,...
+        0,0,0,0,0,0,0,0,...
+        0,0,0,0,0,0,...
+        {},{},{},{}};
+
 % Sanity check
 % disp(['     Total hit = ',num2str(length(hit))]);
 % disp(['     Total miss = ',num2str(length(miss))]);

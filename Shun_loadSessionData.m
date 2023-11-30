@@ -8,7 +8,7 @@ clear; close all;
 addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
 
 % Select sessions via uipickfiles
-sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/MICROSCOPE/Shun'));
+sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/MICROSCOPE/Shun/Project valence/Recordings'));
 
 % Select anlaysis params
 [analysisParams,canceled] = inputAnalysisParams(sessionList,...
@@ -29,7 +29,7 @@ end
                                 reactionTime=2);
 if canceled; return; end
 taskList = cell(size(sessionList));
-taskOptions = {"random","reward pairing","punish pairing"};
+taskOptions = {'random','reward pairing','punish pairing'};
 stimPatternList = cell(size(sessionList));
 for s = 1:length(sessionList)
     taskList{s} = taskOptions{sessionParams(s).Paradigm};
@@ -76,7 +76,7 @@ clear; close all;
 addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
 
 % Select sessions via uipickfiles
-sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/MICROSCOPE/Shun'));
+sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/MICROSCOPE/Shun/Project valence/Recordings'));
 
 % Run each session
 for s = 1:length(sessionList)
@@ -94,7 +94,7 @@ for s = 1:length(sessionList)
         analyzeSessions_optoPair(sessionList{s},...
             redo=false,round=false,performing=false,...
             analyzeTraces=true,...
-            plotPhotometry=false,...
+            plotPhotometry=true,...
             plotLicks=true,...
             pavlovian=false,...
             reactionTime=2);

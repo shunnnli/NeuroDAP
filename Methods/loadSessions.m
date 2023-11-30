@@ -1152,6 +1152,12 @@ if withCamera
     elseif strcmpi(session.baselineSystem,'LJ')
         params.sync.behaviorOffset.Camera = timeCamera(1) - timePhotometry(1);
     end
+    % Add time_offset to timeSeries data
+    for i = 1:size(timeSeries,2)
+        if strcmp(timeSeries(i).system,'Cam')
+            timeSeries(i).time_offset = params.sync.behaviorOffset.Camera;
+        end
+    end
 end
 
 if withPhotometry

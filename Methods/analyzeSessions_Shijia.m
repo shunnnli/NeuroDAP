@@ -32,7 +32,7 @@ if ispc; projectPath = strcat('\\',fullfile(dirsplit{2:end-1}));
 elseif isunix; projectPath = strcat('/',fullfile(dirsplit{2:end-1}));
 end
 % Get animal name and session date
-dirsplit = strsplit(sessionName,'-');
+dirsplit = strsplit(sessionName,'_'); % 20231122 shijia changed '-' to '_'
 date = dirsplit{1}; animal = dirsplit{2};
 clear dirsplit
 
@@ -63,12 +63,15 @@ waterIdx = find(labjack.solenoid);
 cueIdx = find(labjack.cue);
 lickIdx = find(labjack.lick);
 
-if options.analyzeTraces
-    analysisEvents = {waterIdx,cueIdx,lickIdx};
-    analysisLabels = {'Water','Cue','Lick'};
+analysisEvents = {waterIdx,cueIdx,lickIdx};
+analysisLabels = {'Water','Cue','Lick'};
+taskLegend = getLegend(analysisEvents,analysisLabels);
 
+if options.analyzeTraces
     analysis = analyzeTraces(timeSeries,labjack.lick,analysisEvents,analysisLabels,params);
 end
+
+%% Datajoint stuff
 
 
 %% Test plotting traces
@@ -91,18 +94,31 @@ if options.plotPhotometry
         system = timeSeries(path).system;
 
         initializeFig(.5,.5); tiledlayout('flow');
+        nexttile
         [~,~] = plotTraces(waterIdx,timeRange,signal,bluePurpleRed(1,:),params,...
                                 signalFs=finalFs,...
                                 signalSystem=system,eventSystem=params.session.baselineSystem);
-        [~,~] = plotTraces(cueIdx,timeRange,signal,bluePurpleRed(2,:),params,...
+        [~,~] = plotTraces(cueIdx,timeRange,signal,bluePurpleRed(500,:),params,...
                         signalFs=finalFs,...
                         signalSystem=system,eventSystem=params.session.baselineSystem);
-        [~,~] = plotTraces(lickIdx,timeRange,signal,bluePurpleRed(3,:),params,...
+        [~,~] = plotTraces(lickIdx,timeRange,signal,[.5,.5,.5],params,...
                 signalFs=finalFs,...
                 signalSystem=system,eventSystem=params.session.baselineSystem);
-
+        plotEvent('',0);
+        xlabel('Time (s)'); ylabel('z-score');
+        legend(taskLegend,'Location','northeast');
+        
+        nexttile
         plotLicks(waterIdx,timeRange,options.lick_binSize,bluePurpleRed(1,:),[],labjack.lick,params);
-    end
+        plotLicks(cueIdx,timeRange,options.lick_binSize,bluePurpleRed(500,:),[],labjack.lick,params);
+        plotLicks(lickIdx,timeRange,options.lick_binSize,[.5,.5,.5],[],labjack.lick,params);
+        plotEvent('',0);
+        xlabel('Time (s)'); ylabel('Licks/s');
+        legend(taskLegend,'Location','northeast');
 
+        saveas(gcf,strcat(sessionpath,filesep,'Summary_events_',timeSeries(path).name,'.png'));
+    end
 end
-% signalSystem is LJ (or PMT), eventSystem is LJ (or NIDQ)
+
+%% Plot lick scatter plot
+

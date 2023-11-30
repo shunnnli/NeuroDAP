@@ -71,7 +71,7 @@ end
 %% Load all data
 numChannels = length(temp)/labjack.samplerate;
 output = zeros(1,(length(D)*length(temp)));
-for i = 2:length(D)
+for i = 1:length(D)
     load(strcat(pathPhotometry,filename{i}));
     output(((i-1)*length(temp)+1):(i*length(temp))) = temp;
 end
@@ -88,9 +88,8 @@ cue_labjack_allRisingEdges = (temp==1);
 risingEdges = find(cue_labjack_allRisingEdges);
 a = [max(diff(risingEdges)),diff(risingEdges)];
 risingEdges2 = risingEdges(a>(max(diff(risingEdges))/2));
-cue_labjack_use = zeros(size(cue_labjack));
-cue_labjack_use(risingEdges2) = 1;
-labjack.cue = cue_labjack_use;
+cue_labjack(risingEdges2) = 1;
+labjack.cue = cue_labjack;
 
 lick_labjack = output(mod(1:totalLen,numChannels)==7);  
 temp = [false, diff(lick_labjack)];
