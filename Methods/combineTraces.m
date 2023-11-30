@@ -7,11 +7,37 @@ arguments
     options.animalRange string = 'All'
     options.taskRange string = 'All'
     options.sessionRange string = 'All'
-    options.trialRange = 'All'
     options.signalRange string = 'All'
+    options.totalTrialRange = 'All'
+    options.trialRange = 'All' % index from totalTrialRange
+
+    % trialRange idx explainer:
+    % if options.totalTrialRange = [10,50]; found 10 trials [13,15,29,32,..,36,40,60]
+    % Normal usecase:
+    % if options.trialRange = [1,3]; get trials [13,15,29]
+    % if options.trialRange = [-3,0]; get trials [36,40,60]
+    % if options.trialRange = [-3,-1]; get trials [36,40]
+    % Edge scenarios:
+    % if options.trialRange = [2,20]; get trials [15,29,...60]
+    % if options.trialRange = [20,23]; get trials [36,40,60]
+    % if options.trialRange = [20,53]; get all 10 trials
+    % if options.trialRange = [0/-1,3]; get trials [13,15,29,32] (ie get [1,3-0/3-(-1)])
 
     options.statsType string = 'All'
 end
+
+%% Check input
+if options.timeRange(1) >= options.timeRange(2)
+    error('Input timeRange error: timeRange(1) >= timeRange(2)');
+end
+if ~strcmpi(options.trialRange,'All') && options.trialRange(1) >= options.trialRange(2)
+    error('Input trialRange error: trialRange(1) >= trialRange(2)');
+end
+if ~strcmpi(options.totalTrialRange,'All') && options.totalTrialRange(1) >= options.totalTrialRange(2)
+    error('Input totalTrialRange error: totalTrialRange(1) >= totalTrialRange(2)');
+end
+
+%% Select rows based on input range
 
 % Select rows based on animalRange
 if ~strcmpi(options.animalRange,'All')
@@ -56,7 +82,7 @@ for type = 1:length(options.statsType)
 end
 
 
-% Concat .data in each selected rows into a array for plotting
+%% Concat .data in each selected rows into a array for plotting
 data = cell(length(options.signalRange),1);
 for signal = 1:length(options.signalRange)
 
@@ -76,6 +102,8 @@ for signal = 1:length(options.signalRange)
     % Loop through to combine data
     for i = 1:length(signalIdx)
         row = summary(signalIdx(i));
+        if strcmpi(row.system,'Lick'); rowData = row.data.lickRate;
+        else; rowData = row.data; end
         
         % Check timeRange is valid
         if row.timeRange(1) > options.timeRange(1) || row.timeRange(2) < options.timeRange(2)
@@ -89,14 +117,39 @@ for signal = 1:length(options.signalRange)
         t = row.timestamp(firstSample:lastSample);
 
         % Find trialRange
-        if strcmpi(options.trialRange,'All')
-            if strcmpi(row.system,'Lick'); rowData = row.data.lickRate;
-            else; rowData = row.data; end
+        if strcmpi(options.trialRange,'All') & strcmpi(options.totalTrialRange,'All')
             trialRange = 1:size(rowData,1); 
-        else
-            if strcmpi(row.system,'Lick'); rowData = row.data.lickRate;
-            else; rowData = row.data; end
+        elseif strcmpi(options.trialRange,'All') & ~strcmpi(options.totalTrialRange,'All')
+            trialRange = find(row.trialInfo.trialNumber >= options.totalTrialRange(1) & row.trialInfo.trialNumber <= options.totalTrialRange(2));
+        elseif ~strcmpi(options.trialRange,'All') & strcmpi(options.totalTrialRange,'All')
             trialRange = max(1,options.trialRange(1)):min(options.trialRange(end),size(rowData,1));
+        elseif ~strcmpi(options.trialRange,'All') & ~strcmpi(options.totalTrialRange,'All')
+            totalTrialRange = find(row.trialInfo.trialNumber >= options.totalTrialRange(1) & row.trialInfo.trialNumber <= options.totalTrialRange(2));
+            if options.trialRange(1) <= 0
+                if options.trialRange(2) <= 0
+                    trialRange = totalTrialRange(end+options.trialRange(1)+1:end+options.trialRange(2));
+                else
+                    warning('trialRange format error: input something like [-4,1], changed to [1,6]');
+                    options.trialRange = options.trialRange + abs(options.trialRange(1)) + 1;
+                    trialRange = totalTrialRange(options.trialRange(1):min(options.trialRange(2),length(totalTrialRange)));
+                end
+            else
+                if options.trialRange(1) >= length(totalTrialRange)
+                    if options.trialRange(2)-options.trialRange(1) <= length(totalTrialRange)
+                        warning('trialRange format error: input something like [end,end+3], changed to [end-3,0]');
+                        options.trialRange = [options.trialRange(1)-options.trialRange(2),0];
+                        trialRange = totalTrialRange(end+options.trialRange(1)+1:end+options.trialRange(2));
+                    else
+                        warning('trialRange format error: input something like [end,end+10000], changed to All');
+                        trialRange = totalTrialRange;
+                    end
+                elseif options.trialRange(2) > length(totalTrialRange)
+                    warning('trialRange format error: input something like [2,end+10], changed to [2,end]');
+                    trialRange = totalTrialRange(options.trialRange(1):length(totalTrialRange));
+                else
+                    trialRange = totalTrialRange(options.trialRange(1):options.trialRange(2));
+                end
+            end
         end
     
         % Combined .data
@@ -112,6 +165,7 @@ for signal = 1:length(options.signalRange)
     end
 end
 
+%% Save
 combined.data = data;
 combined.stats = stats;
 combined.timestamp = t;
