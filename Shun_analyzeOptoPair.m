@@ -49,7 +49,7 @@ end
 
 %% Create/modify summary struct
 
-regroup = false;
+regroup = true;
 
 if groupSessions
     % Create/modify summary struct
@@ -71,25 +71,15 @@ if groupSessions
         disp(['Finished: session ', sessionName,' loaded (',...
               num2str(s),'/',num2str(length(sessionList)),')']);
     end
-
-    % Save
-    disp('Ongoing: saving summary.mat');
-    save(strcat(resultspath,filesep,'summary_',today),'summary','sessionList','-v7.3');
-    disp('Finished: saved summary.mat');
 end
 
-%% Make changes if needed
+%% Make changes to summary if needed
 
 for i = 1:1279
     if isstring(summary(i).name) 
         summary(i).name = convertStringsToChars(summary(i).name);
     end
 end
-
-% Save updated summary.mat
-disp('Ongoing: saving summary.mat');
-save(strcat(resultspath,filesep,'summary_',today),'summary','sessionList','-v7.3');
-disp('Finished: saved summary.mat');
 
 %% Create animals struct
 
@@ -137,18 +127,27 @@ if isempty(dir(fullfile(resultspath,'animals*.mat'))) || regroupAnimals
                     animals(row).timestamp = combined.timestamp;
                     animals(row).timeRange = combined.options.timeRange;
                     animals(row).finalFs = combined.options.finalFs;
+                    animals(row).trialInfo.trialNumber = combined.trialNumber{1};
+                    animals(row).trialInfo.trialTable = combined.trialTable{1};
                     animals(row).options = combined.options;
                 end
             end
         end
     end
-    
-    % Save
-    disp('Ongoing: saving animals.mat');
-    save(strcat(resultspath,filesep,'animals_',today),'animals','sessionList','-v7.3');
-    disp('Finished: saved animals.mat');
 end
 
+
+%% Save animals and summary struct (time consumming!!!)
+
+% Save animals.mat
+disp(['Ongoing: saving animals.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
+save(strcat(resultspath,filesep,'animals_',today),'animals','sessionList','-v7.3');
+disp(['Finished: saved animals.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
+
+% Save summary.mat
+disp(['Ongoing: saving summary.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
+save(strcat(resultspath,filesep,'summary_',today),'summary','sessionList','-v7.3');
+disp(['Finished: saved summary.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
 
 %% Test: Plot traces from summary struct
 
@@ -252,7 +251,76 @@ for event = 1:length(eventRange)
     legend(legendList,'Location','northeast');
 end
 
+%% Baseline -> reward: plot lick trace
+
+timeRange = [-0.5,3];
+eventRange = {'Stim','Pair'};
+animalRange = {'SL133','SL135','SL136'};%'All';
+taskRange = 'punish->reward';
+trialRange = {[1,10;11,20;21,30;31,40;41,50],...
+              [1,20;21,40;41,60;61,80;81,100],...
+              [1,10;11,20;21,30;31,40;41,50]};
+% trialRange = {[1,20;21,50;51,70;71,100;101,110],...
+%               [1,40;41,100;101,140;141,200;201,240],...
+%               [1,20;21,50;51,70;71,100;101,110]};
+signalRange = 'lick';
+
+colorList = [1,100,200,300,400,500];
+eventDuration = [0,.1,.5,.5];
+
+initializeFig(.5,.5); tiledlayout('flow');
+for event = 1:length(eventRange)
+    nexttile; legendList = cell(size(trialRange,1),1);
+    for t = 1:size(trialRange{event},1)
+        combined = combineTraces(animals,timeRange=timeRange,...
+                                    eventRange=eventRange{event},...
+                                    animalRange=animalRange,...
+                                    taskRange=taskRange,...
+                                    trialRange=trialRange{event}(t,:),...
+                                    signalRange=signalRange);
+        plotSEM(combined.timestamp,combined.data{1},bluePurpleRed(colorList(t),:));
+        legendList{t} = ['Trial ', num2str(trialRange{event}(t,1)),'-',num2str(trialRange{event}(t,2)),...
+                        ' (n=',num2str(size(combined.data{1},1)),')'];
+    end
+    plotEvent(eventRange{event},.5,color=bluePurpleRed(500,:));
+    xlabel('Time (s)'); ylabel([signalRange,' z-score']);
+    legend(legendList,'Location','northeast');
+end
+
 %% Baseline -> reward: plot anticipatory lick changes
+
+timeRange = [-0.5,3];
+eventRange = {'Stim','Pair'};
+animalRange = {'SL133','SL135','SL136'};%'All';
+taskRange = 'punish->reward';
+trialRange = {[1,10;11,20;21,30;31,40;41,50],...
+              [1,20;21,40;41,60;61,80;81,100],...
+              [1,10;11,20;21,30;31,40;41,50]};
+% trialRange = {[1,20;21,50;51,70;71,100;101,110],...
+%               [1,40;41,100;101,140;141,200;201,240],...
+%               [1,20;21,50;51,70;71,100;101,110]};
+signalRange = 'lick';
+
+colorList = [1,100,200,300,400,500];
+eventDuration = [0,.1,.5,.5];
+
+initializeFig(.5,.5); tiledlayout('flow');
+for event = 1:length(eventRange)
+    nexttile;
+    for t = 1:size(trialRange{event},1)
+        combined = combineTraces(animals,timeRange=timeRange,...
+                                    eventRange=eventRange{event},...
+                                    animalRange=animalRange,...
+                                    taskRange=taskRange,...
+                                    trialRange=trialRange{event}(t,:),...
+                                    signalRange=signalRange);
+        % al = combined.
+        
+    end
+    plotEvent(eventRange{event},.5,color=bluePurpleRed(500,:));
+    xlabel('Time (s)'); ylabel([signalRange,' z-score']);
+    legend(legendList,'Location','northeast');
+end
 
 %% Baseline -> reward: plot stage scatter for NAc during/after paAIP2
 
@@ -262,8 +330,9 @@ end
 
 eventRange = {'Stim','Pair'};
 animalRange = {'SL133','SL135','SL136'};%,'SL137'};%'All';
-taskRange = 'baseline->reward'; conditionRange = {[1,20;21,40],[1,40;41,80]};
-% taskRange = 'punish->reward'; conditionRange = {[1,20;21,40],[1,20;21,40]};
+taskRange = 'baseline->reward'; 
+% taskRange = 'punish->reward';
+conditionRange = [1,60;61,150];
 signalRange = 'NAc';
 conditionLabels = {'paAIP2','Control'};
 conditionColors = {blueWhiteRed(50,:),[.75,.75,.75]};
@@ -273,18 +342,18 @@ stageColors = {[.75 .75 .75],bluePurpleRed(end,:),bluePurpleRed(1,:)};
 animalColors = {bluePurpleRed(50,:),bluePurpleRed(200,:),bluePurpleRed(350,:),bluePurpleRed(500,:)};
 
 % get subtrial stats
-stageFit = cell(length(eventRange),size(conditionRange{1},1),length(animalRange),length(stageColors));
+stageFit = cell(length(eventRange),size(conditionRange,1),length(animalRange),length(stageColors));
 for event = 1:length(eventRange)
-    for t = 1:size(conditionRange{event},1)
+    for t = 1:size(conditionRange,1)
         for animal = 1:length(animalRange)
             combined = combineTraces(summary,statsType=statsType,...
                                         eventRange=eventRange{event},...
                                         animalRange=animalRange{animal},...
                                         taskRange=taskRange,...
-                                        trialRange=conditionRange{event}(t,:),...
+                                        totalTrialRange=conditionRange(t,:),...
                                         signalRange=signalRange);
             statsData = combined.stats.(statsType){1};
-            trialWindowLength = conditionRange{event}(t,2)-conditionRange{event}(t,1) + 1;
+            trialWindowLength = conditionRange(t,2)-conditionRange(t,1) + 1;
             nSessions = sum(combined.options.signalRows);
     
             % Fit stageAvg across session
@@ -308,8 +377,8 @@ for i = 1:1%length(fitLabels)
     for event = 1:length(eventRange)
         for stage = 1:size(statsData,2)
             nexttile;
-            allSessions = cell(size(conditionRange{event},1),1);
-            for t = 1:size(conditionRange{event},1)
+            allSessions = cell(size(conditionRange,1),1);
+            for t = 1:size(conditionRange,1)
                 % Plot bar plot
                 allSessions{t} = cell2mat({stageFit{event,t,:,stage}}');
                 boxchart(ones(size(allSessions{t},1),1)*t,allSessions{t}(:,i),...
