@@ -7,7 +7,7 @@ arguments
     airpuff_rounded double
 
     options.behaviorFs double = 10000 % in Hz
-    options.reactionTime double = 1.5 % in seconds
+    options.reactionTime double = 2 % in seconds
     options.minLicks double = 2 
     options.pavlovian logical = true
 end
@@ -164,10 +164,10 @@ for i=1:length(allTrials)
 end
 
 % Add a row for outside events
-trials(i,:) = {0,0,0,0,0,0,0,...
-        0,0,0,0,0,0,0,0,...
-        0,0,0,0,0,0,...
-        {},{},{},{}};
+trials(i+1,:) = {0,0,0,0,0,0,0,...
+                 0,0,0,0,0,0,0,0,...
+                 0,0,0,0,0,0,...
+                 {},{},{},{}};
 
 % Sanity check
 % disp(['     Total hit = ',num2str(length(hit))]);

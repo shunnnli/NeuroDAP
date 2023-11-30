@@ -83,8 +83,6 @@ data = cell(length(options.signalRange),1);
 for type = 1:length(options.statsType)
     stats.(options.statsType{type}) = cell(length(options.signalRange),1);
 end
-trialNumData = cell(length(options.signalRange),1);
-trialTableData = cell(length(options.signalRange),1);
 
 
 %% Concat .data in each selected rows into a array for plotting
@@ -167,8 +165,7 @@ for signal = 1:length(options.signalRange)
         end
 
         % Combine getTrialNum
-        trialNumData{signal} = [trialNumData{signal}; row.trialInfo.trialNumber(trialRange)];
-        trialTableData{signal} = [trialNumData{signal}; row.trialInfo.trialTable(trialRange,:)];
+        trialNumData =
     end
 end
 
@@ -176,8 +173,6 @@ end
 combined.data = data;
 combined.stats = stats;
 combined.timestamp = t;
-combined.trialNumber = trialNumData;
-combined.trialTable = trialTableData;
 combined.options = options;
 
 

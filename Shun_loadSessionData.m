@@ -9,6 +9,7 @@ addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods
 
 % Select sessions via uipickfiles
 sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/MICROSCOPE/Shun/Project valence/Recordings'));
+errorSessionIdx = [];
 
 % Select anlaysis params
 [analysisParams,canceled] = inputAnalysisParams(sessionList,...
@@ -42,7 +43,7 @@ end
 % Run each session
 for s = 1:length(sessionList)
     close all;
-    clearvars -except s sessionList analysisParams sessionParams taskList stimPatternList withPhotometryNI plotPhotometry reloadAll plotLicks
+    clearvars -except s sessionList errorSessionIdx analysisParams sessionParams taskList stimPatternList withPhotometryNI plotPhotometry reloadAll plotLicks
     
     dirsplit = strsplit(sessionList{s},filesep); 
     sessionName = dirsplit{end}; clear dirsplit
@@ -62,6 +63,7 @@ for s = 1:length(sessionList)
             pavlovian=sessionParams(s).Pavlovian,...
             reactionTime=sessionParams(s).ReactionTime);
     catch ME
+        errorSessionIdx(end+1) = s;
         disp(getReport(ME));
         warning(['Session ', sessionName, ' have an error, skipped for now!!!!']);
         continue
@@ -77,11 +79,12 @@ addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods
 
 % Select sessions via uipickfiles
 sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/MICROSCOPE/Shun/Project valence/Recordings'));
+errorSessionIdx = [];
 
 % Run each session
 for s = 1:length(sessionList)
     close all;
-    clearvars -except s sessionList analysisParams sessionParams taskList stimPatternList withPhotometryNI plotPhotometry reloadAll plotLicks
+    clearvars -except s sessionList errorSessionIdx
     
     dirsplit = strsplit(sessionList{s},filesep); 
     sessionName = dirsplit{end}; clear dirsplit
@@ -94,11 +97,12 @@ for s = 1:length(sessionList)
         analyzeSessions_optoPair(sessionList{s},...
             redo=false,round=false,performing=false,...
             analyzeTraces=true,...
-            plotPhotometry=true,...
-            plotLicks=true,...
+            plotPhotometry=false,...
+            plotLicks=false,...
             pavlovian=false,...
             reactionTime=2);
     catch ME
+        errorSessionIdx(end+1) = s;
         disp(getReport(ME));
         warning(['Session ', sessionName, ' have an error, skipped for now!!!!']);
         continue

@@ -87,7 +87,7 @@ temp = [false, diff(cue_labjack)];
 cue_labjack_allRisingEdges = (temp==1);
 risingEdges = find(cue_labjack_allRisingEdges);
 a = [max(diff(risingEdges)),diff(risingEdges)];
-risingEdges2 = risingEdges(a>(max(diff(risingEdges))/2));
+risingEdges2 = risingEdges(a>(max(diff(risingEdges))/10));
 cue_labjack_use = zeros(size(cue_labjack));
 cue_labjack_use(risingEdges2) = 1;
 labjack.cue = cue_labjack_use;
