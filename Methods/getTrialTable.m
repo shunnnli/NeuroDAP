@@ -47,7 +47,6 @@ end
 % Define session related params
 gracePeriod = floor(0.2 * options.behaviorFs);
 reactionTimeSamp = options.reactionTime * options.behaviorFs;
-outcome = nan; choice = nan; outcomeReactionTime = nan;
 
 % Loop over all trials
 for i=1:length(allTrials)
@@ -57,7 +56,7 @@ for i=1:length(allTrials)
     ITI = (next_cue - cur_cue) / options.behaviorFs;
 
     % Trial related
-    % trialType = sum(leftTone_rounded(cur_cue-gracePeriod:cur_cue+gracePeriod));
+    outcome = nan; choice = nan; outcomeReactionTime = nan;
 
     % Trial cue/stim
     toneTime = toneON(toneON >= cur_cue-gracePeriod & toneON < next_cue-gracePeriod) - cur_cue;
