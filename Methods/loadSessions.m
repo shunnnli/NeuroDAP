@@ -1162,8 +1162,12 @@ end
 
 if withPhotometry
     params.sync.timePhotometry = timePhotometry;
-    if withNI; params.sync.behaviorOffset.Photometry = timePhotometry(1) - timeNI(1);
-    else; params.sync.behaviorOffset.Photometry = 0; end
+    if withNI
+        params.sync.behaviorOffset.Photometry = timePhotometry(1) - timeNI(1);
+    else
+        params.sync.behaviorFs = params.sync.labjackFs;
+        params.sync.behaviorOffset.Photometry = 0;
+    end
     % Add time_offset to timeSeries data
     for i = 1:size(timeSeries,2)
         if strcmp(timeSeries(i).system,'LJ')

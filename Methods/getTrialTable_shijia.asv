@@ -104,16 +104,6 @@ for i=1:length(allTrials)
         end
     end
 
-
-    % Calculate ENL
-%     lastLickPrevTrial = rightLickON(rightLickON < cur_cue); 
-%     if isempty(lastLickPrevTrial)
-%         ENL = 0;
-%     else
-%         if i == 1; last_cue = 0; else; last_cue = allTrials(i-1); end
-%         ENL = cur_cue - max(lastLickPrevTrial(end),last_cue); 
-%     end
-
     % Get trial type
     if outcome && isReward; trialType = 'Rewarded';
     elseif outcome && ~isReward; trialType = 'Omission';

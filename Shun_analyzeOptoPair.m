@@ -10,16 +10,12 @@ addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods
 [~,~,~,blueGreenYellow,blueWhiteRed,~,bluePurpleRed,purpleWhiteRed] = loadColors;
 r2p_cmap = getColormap([255, 50, 58],[0 0 0],500,'midcol',[255 255 255]);
 p2r_cmap = getColormap([241 160 255],[0 0 0],500,'midcol',[255 255 255]);
-
-% Define result directory
-% resultspath = uigetdir(osPathSwitch('/Volumes/MICROSCOPE/Shun/Project valence/Results/'),'Select Results folder directory');
-resultspath = osPathSwitch('/Volumes/MICROSCOPE/Shun/Project valence/Results');
-
-% Get date
 today = char(datetime('today','Format','yyyyMMdd'));
 
-%% Building summary struct from selected sessions
+% Define result directory
+resultspath = osPathSwitch('/Volumes/MICROSCOPE/Shun/Project valence/Results');
 
+% Building summary struct from selected sessions
 answer = questdlg('Group sessions or load summary?','Select load sources',...
                   'Group single sessions','Load summary struct','Load summary struct');
 
@@ -79,6 +75,22 @@ for i = 1:1279
     if isstring(summary(i).name) 
         summary(i).name = convertStringsToChars(summary(i).name);
     end
+end
+
+for i = 1:211
+    summary(i).task = 'baseline';
+end
+
+for i = 212:499
+    summary(i).task = 'baseline->reward';
+end
+
+for i = 500:919
+    summary(i).task = 'reward->punish';
+end
+
+for i = 920:1279
+    summary(i).task = 'punish->reward';
 end
 
 %% Create animals struct
@@ -155,13 +167,15 @@ timeRange = [-0.5,3];
 eventRange = 'Water';
 animalRange = ["SL133","SL135"];
 taskRange = 'baseline';
-trialRange = 1:60; % range of trials in each session
+totalTrialRange = 'All';
+trialRange = 'All'; % range of trials in each session
 signalRange = 'NAc';
 
 combined = combineTraces(summary,timeRange=timeRange,...
                             eventRange=eventRange,...
                             animalRange=animalRange,...
                             taskRange=taskRange,...
+                            totalTrialRange=totalTrialRange,...
                             trialRange=trialRange,...
                             signalRange=signalRange);
 
@@ -173,13 +187,15 @@ timeRange = [-0.5,3];
 eventRange = 'Water';
 animalRange = ["SL133","SL135"];
 taskRange = 'baseline';
-trialRange = 1:60; % range of trials in each session
+totalTrialRange = 'All';
+trialRange = 'All'; % range of trials in each session
 signalRange = 'NAc';
 
 combined = combineTraces(animals,timeRange=timeRange,...
                             eventRange=eventRange,...
                             animalRange=animalRange,...
                             taskRange=taskRange,...
+                            totalTrialRange=totalTrialRange,...
                             trialRange=trialRange,...
                             signalRange=signalRange);
 
@@ -192,6 +208,7 @@ eventRange = {'Water','Airpuff','Stim','Tone'};
 animalRange = 'All';
 taskRange = 'baseline';
 trialRange = 'All'; % range of trials in each session
+totalTrialRange = 'All';
 signalRange = 'NAc';
 
 colorList = {bluePurpleRed(1,:),[.2,.2,.2],bluePurpleRed(500,:),bluePurpleRed(350,:)};
@@ -204,6 +221,7 @@ for i = 1:length(eventRange)
                                 eventRange=eventRange{i},...
                                 animalRange=animalRange,...
                                 taskRange=taskRange,...
+                                totalTrialRange=trialRange,...
                                 trialRange=trialRange,...
                                 signalRange=signalRange);
     plotSEM(combined.timestamp,shuffleTraces(combined.data{1}),[.75,.75,.75]);
@@ -219,18 +237,15 @@ end
 
 timeRange = [-0.5,3];
 eventRange = {'Stim','Pair'};
-animalRange = {'SL133','SL135','SL136'};%'All';
+animalRange = {'SL133'};%,'SL135','SL136'};%'All';
 taskRange = 'punish->reward';
+totalTrialRange = 'All';
 trialRange = {[1,10;11,20;21,30;31,40;41,50],...
               [1,20;21,40;41,60;61,80;81,100],...
               [1,10;11,20;21,30;31,40;41,50]};
-% trialRange = {[1,20;21,50;51,70;71,100;101,110],...
-%               [1,40;41,100;101,140;141,200;201,240],...
-%               [1,20;21,50;51,70;71,100;101,110]};
 signalRange = 'NAc';
 
 colorList = [1,100,200,300,400,500];
-eventDuration = [0,.1,.5,.5];
 
 initializeFig(.5,.5); tiledlayout('flow');
 for event = 1:length(eventRange)
@@ -240,6 +255,7 @@ for event = 1:length(eventRange)
                                     eventRange=eventRange{event},...
                                     animalRange=animalRange,...
                                     taskRange=taskRange,...
+                                    totalTrialRange=totalTrialRange,...
                                     trialRange=trialRange{event}(t,:),...
                                     signalRange=signalRange);
         plotSEM(combined.timestamp,combined.data{1},bluePurpleRed(colorList(t),:));
@@ -249,6 +265,40 @@ for event = 1:length(eventRange)
     plotEvent(eventRange{event},.5,color=bluePurpleRed(500,:));
     xlabel('Time (s)'); ylabel([signalRange,' z-score']);
     legend(legendList,'Location','northeast');
+end
+
+%% Baseline -> reward: plot overall to show animal learned (w or w/o paAIP2)
+
+timeRange = [-0.5,3];
+eventRange = {'Stim','Pair'};
+animalRange = {'SL133','SL135','SL136'};%'All';
+taskRange = 'baseline->reward';
+totalTrialRange = [1,60;60,150];
+trialRange = 'All';
+signalRange = 'NAc';
+
+groupSizeList = [10,20;10,20];
+nGroupsList = [10,10;50,50];
+eventColor = {blueWhiteRed(1,:),bluePurpleRed(350,:)};
+
+initializeFig(.5,.5); tiledlayout('flow');
+for t = 1:size(totalTrialRange,1)
+    for event = 1:length(eventRange)
+        nexttile; 
+        combined = combineTraces(animals,timeRange=timeRange,...
+                                    eventRange=eventRange{event},...
+                                    animalRange=animalRange,...
+                                    taskRange=taskRange,...
+                                    totalTrialRange=totalTrialRange(t,:),...
+                                    trialRange=trialRange,...
+                                    signalRange=signalRange);
+        legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,...
+                        groupSize=groupSizeList(t,event),nGroups=nGroupsList(t,event),...
+                        animalStartIdx=combined.options.animalStartIdx);
+        plotEvent(eventRange{event},.5,color=eventColor{t});
+        xlabel('Time (s)'); ylabel([signalRange,' z-score']);
+        legend(legendList,'Location','northeast');
+    end
 end
 
 %% Baseline -> reward: plot lick trace

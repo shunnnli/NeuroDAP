@@ -277,14 +277,15 @@ if strcmp(options.task,'random')
     stageTime = [-2,0;0,2];
     analysisEvents = {waterIdx,waterLickIdx,airpuffIdx,toneIdx,stimIdx,baselineIdx};
     eventTrialNum = {findTrials(waterIdx,trials),findTrials(waterLickIdx,trials),...
-                    findTrials(toneIdx,trials),findTrials(stimIdx,trials),...
-                    findTrials(airpuffIdx,trials),findTrials(baselineIdx,trials)};
+                    findTrials(airpuffIdx,trials),findTrials(toneIdx,trials),...
+                    findTrials(stimIdx,trials),findTrials(baselineIdx,trials)};
     analysisLabels = {'Water','Rewarded licks','Airpuff','Tone','Stim','Baseline'};
     taskLegend = getLegend(analysisEvents,analysisLabels);
 
     stageColors = {[.75 .75 .75],bluePurpleRed(1,:)};
     stageLegend = {'Baseline','US'};
     
+    eventTrialNum = eventTrialNum(~cellfun('isempty',analysisEvents));
     analysisLabels = analysisLabels(~cellfun('isempty',analysisEvents));
     analysisEvents = analysisEvents(~cellfun('isempty',analysisEvents));
     
@@ -382,6 +383,7 @@ else
     stageColors = {[.75 .75 .75],bluePurpleRed(end,:),bluePurpleRed(1,:)};
     stageLegend = {'Baseline','CS','US'};
 
+    eventTrialNum = eventTrialNum(~cellfun('isempty',analysisEvents));
     analysisLabels = analysisLabels(~cellfun('isempty',analysisEvents));
     analysisEvents = analysisEvents(~cellfun('isempty',analysisEvents));
 
@@ -593,25 +595,24 @@ if options.plotPhotometry
                         'Location','northeast');
                 
                 nexttile(7,[1 2]);
-                nLines = ceil(size(traces,1)/groupSize);
-                legendList = cell(nLines,1);
-                nColors = round(linspace(1,size(bluePurpleRed,1),nLines));
-                for i = 1:nLines
-                    startTrial = (i-1)*groupSize+1; 
-                    if i == nLines; endTrial = size(traces,1);
-                    else; endTrial = i*groupSize; end
-                    plotSEM(t,traces(startTrial:endTrial,:),bluePurpleRed(nColors(i),:));
-                    legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial)];
-                end
+                % nLines = ceil(size(traces,1)/groupSize);
+                % legendList = cell(nLines,1);
+                % nColors = round(linspace(1,size(bluePurpleRed,1),nLines));
+                % for i = 1:nLines
+                %     startTrial = (i-1)*groupSize+1; 
+                %     if i == nLines; endTrial = size(traces,1);
+                %     else; endTrial = i*groupSize; end
+                %     plotSEM(t,traces(startTrial:endTrial,:),bluePurpleRed(nColors(i),:));
+                %     legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial)];
+                % end
+                legendList = plotGroupTraces(traces,t,bluePurpleRed,groupSize=10,nGroups=5);
                 plotEvent(label,eventDuration);
                 xlabel('Time (s)'); ylabel('z-score');
                 legend(legendList);
 
                 % Plot heatmap
                 nexttile(1,[4 2]);
-                imagesc(t,1:length(eventIdx),traces); 
-                set(gca,'YDir','normal');
-                colorbar; box off
+                plotHeatmap(traces,t);
                 plotEvent(label,eventDuration);
                 xlabel('Time (s)'); ylabel('Trials');
 
@@ -628,16 +629,17 @@ if options.plotPhotometry
                         'Location','northeast');
                 
                 nexttile(15,[1 2]);
-                nLines = ceil(size(traces,1)/groupSize);
-                legendList = cell(nLines,1);
-                nColors = round(linspace(1,size(bluePurpleRed,1),nLines));
-                for i = 1:nLines
-                    startTrial = (i-1)*groupSize+1; 
-                    if i == nLines; endTrial = size(traces,1);
-                    else; endTrial = i*groupSize; end
-                    plotSEM(t,traces(startTrial:endTrial,:),bluePurpleRed(nColors(i),:));
-                    legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial)];
-                end
+                % nLines = ceil(size(traces,1)/groupSize);
+                % legendList = cell(nLines,1);
+                % nColors = round(linspace(1,size(bluePurpleRed,1),nLines));
+                % for i = 1:nLines
+                %     startTrial = (i-1)*groupSize+1; 
+                %     if i == nLines; endTrial = size(traces,1);
+                %     else; endTrial = i*groupSize; end
+                %     plotSEM(t,traces(startTrial:endTrial,:),bluePurpleRed(nColors(i),:));
+                %     legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial)];
+                % end
+                legendList = plotGroupTraces(traces,t,bluePurpleRed,groupSize=10,nGroups=5);
                 plotEvent(label,eventDuration);
                 xlabel('Time (s)'); ylabel('z-score');
                 legend(legendList);
@@ -677,25 +679,24 @@ if options.plotPhotometry
                         'Location','northeast');
                 
                 nexttile(7,[1 2]);
-                nLines = ceil(size(traces,1)/groupSize);
-                legendList = cell(nLines,1);
-                nColors = round(linspace(1,size(bluePurpleRed,1),nLines));
-                for i = 1:nLines
-                    startTrial = (i-1)*groupSize+1; 
-                    if i == nLines; endTrial = size(traces,1);
-                    else; endTrial = i*groupSize; end
-                    plotSEM(t,traces(startTrial:endTrial,:),bluePurpleRed(nColors(i),:));
-                    legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial)];
-                end
+                % nLines = ceil(size(traces,1)/groupSize);
+                % legendList = cell(nLines,1);
+                % nColors = round(linspace(1,size(bluePurpleRed,1),nLines));
+                % for i = 1:nLines
+                %     startTrial = (i-1)*groupSize+1; 
+                %     if i == nLines; endTrial = size(traces,1);
+                %     else; endTrial = i*groupSize; end
+                %     plotSEM(t,traces(startTrial:endTrial,:),bluePurpleRed(nColors(i),:));
+                %     legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial)];
+                % end
+                legendList = plotGroupTraces(traces,t,bluePurpleRed,groupSize=10,nGroups=5);
                 plotEvent(label,eventDuration);
                 xlabel('Time (s)'); ylabel('z-score');
                 legend(legendList);
 
                 % Plot heatmap
                 nexttile(1,[4 2]);
-                imagesc(t,1:length(eventIdx),traces);
-                set(gca,'YDir','normal');
-                colorbar; box off
+                plotHeatmap(traces,t);
                 plotEvent(label,eventDuration);
                 xlabel('Time (s)'); ylabel('Trials');
 
@@ -714,16 +715,17 @@ if options.plotPhotometry
                         'Location','northeast');
                 
                 nexttile(15,[1 2]);
-                nLines = ceil(size(traces,1)/groupSize);
-                legendList = cell(nLines,1);
-                nColors = round(linspace(1,size(bluePurpleRed,1),nLines));
-                for i = 1:nLines
-                    startTrial = (i-1)*groupSize+1; 
-                    if i == nLines; endTrial = size(traces,1);
-                    else; endTrial = i*groupSize; end
-                    plotSEM(t,traces(startTrial:endTrial,:),bluePurpleRed(nColors(i),:));
-                    legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial)];
-                end
+                % nLines = ceil(size(traces,1)/groupSize);
+                % legendList = cell(nLines,1);
+                % nColors = round(linspace(1,size(bluePurpleRed,1),nLines));
+                % for i = 1:nLines
+                %     startTrial = (i-1)*groupSize+1; 
+                %     if i == nLines; endTrial = size(traces,1);
+                %     else; endTrial = i*groupSize; end
+                %     plotSEM(t,traces(startTrial:endTrial,:),bluePurpleRed(nColors(i),:));
+                %     legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial)];
+                % end
+                legendList = plotGroupTraces(traces,t,bluePurpleRed,groupSize=10,nGroups=5);
                 plotEvent(label,eventDuration);
                 xlabel('Time (s)'); ylabel('z-score');
                 legend(legendList);

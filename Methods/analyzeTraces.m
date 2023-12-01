@@ -14,7 +14,7 @@ arguments
     options.nboot double = 10000
     
     options.trialTable table
-    options.trialNumber cell = cell(size(analysisEvents))
+    options.trialNumber cell
 
 end
 
@@ -31,8 +31,25 @@ if isfield(params.session,'task')
     options.task = params.session.task;
 end
 
+% Make sure trialTable and trialNumber is provided
+if ~isfield(options,'trialNumber') || ~isfield(options,'trialTable')
+    warning('analyzeTraces: Strongly recommend to include trialTable and trialNumber!')
+    disp('Ongoing: starting a 30s timer, stop and modify the code if needed!');
+    pause(30);
+    disp('Finished: 30s timer passed, code resume as is');
+end
+
+% Change all trialNumber to nx1 vector
+for i = 1:length(options.trialNumber)
+    options.trialNumber{i} = reshape(options.trialNumber{i},[length(options.trialNumber{i}),1]);
+end
+
 %% Loop through all events
 for i = 1:length(analysisEvents)
+    if isempty(analysisEvents{i})
+        disp(['     Ongoing: ',analysisLabels{i},' is empty, skipped!']);
+        continue
+    end
     %% 1. Loop through all timeSeries
     for signal = 1:size(timeSeries,2)
         disp(['     Ongoing: analyze ',analysisLabels{i},' in ',timeSeries(signal).name,' signal']);
@@ -43,7 +60,6 @@ for i = 1:length(analysisEvents)
         system = timeSeries(signal).system;
 
         % Save overall traces
-        if isempty(analysisEvents{i}); continue; end
         [trace,t] = plotTraces(analysisEvents{i},timeRange,data,[1,1,1],params,...
                         signalFs=finalFs,signalSystem=system,plot=false);
 
