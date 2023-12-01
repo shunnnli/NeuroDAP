@@ -81,11 +81,8 @@ end
 %% Make changes to summary
 
 for i = 1:211; summary(i).task = 'baseline'; end
-
 for i = 212:499; summary(i).task = 'baseline->reward'; end
-
 for i = 500:919; summary(i).task = 'reward->punish'; end
-
 for i = 920:1279; summary(i).task = 'punish->reward'; end
 
 %% Create animals struct
@@ -109,27 +106,7 @@ disp(['Finished: saved animals.mat (',char(datetime('now','Format','HH:mm:ss')),
 % save(strcat(resultspath,filesep,'summary_',today),'summary','sessionList','-v7.3');
 % disp(['Finished: saved summary.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
 
-%% Test: Plot traces from summary struct
-
-timeRange = [-0.5,3];
-eventRange = 'Water';
-animalRange = ["SL133","SL135"];
-taskRange = 'baseline';
-totalTrialRange = 'All';
-trialRange = 'All'; % range of trials in each session
-signalRange = 'NAc';
-
-combined = combineTraces(summary,timeRange=timeRange,...
-                            eventRange=eventRange,...
-                            animalRange=animalRange,...
-                            taskRange=taskRange,...
-                            totalTrialRange=totalTrialRange,...
-                            trialRange=trialRange,...
-                            signalRange=signalRange);
-
-plotSEM(combined.timestamp,combined.data{1},[.213 .543 .324]);
-
-%% Test: Plot traces from animals struct
+%% Test: Plot traces from summary/animals struct
 
 timeRange = [-0.5,3];
 eventRange = 'Water';
@@ -146,8 +123,7 @@ combined = combineTraces(animals,timeRange=timeRange,...
                             totalTrialRange=totalTrialRange,...
                             trialRange=trialRange,...
                             signalRange=signalRange);
-
-plotSEM(combined.timestamp,combined.data{1},bluePurpleRed(1,:));
+plotSEM(combined.timestamp,combined.data{1},[.213 .543 .324]);
 
 %% Baseline: plot water, airpuff, stim, tone
 
