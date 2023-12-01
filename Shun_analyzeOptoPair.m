@@ -45,8 +45,7 @@ end
 
 %% Create/modify summary struct (only need to do this for initial loading)
 
-regroup = true;
-
+regroup = false;
 if groupSessions
     % Create/modify summary struct
     if isempty(dir(fullfile(resultspath,'summary*.mat'))) || regroup
@@ -67,33 +66,27 @@ if groupSessions
         disp(['Finished: session ', sessionName,' loaded (',...
               num2str(s),'/',num2str(length(sessionList)),')']);
     end
+end
 
-    % Check summary format ()
+% Check summary format (should all be chars NOT strings)
+stringColumnsLabels = {'animal','date','session','task','event','name','system'};
+for i = 1:length(stringColumnsLabels)
+    for row = 1:length(summary)
+        if isstring(summary(row).(stringColumnsLabels{i})) 
+            summary(row).(stringColumnsLabels{i}) = convertStringsToChars(summary(row).(stringColumnsLabels{i}));
+        end
+    end
 end
 
 %% Make changes to summary
 
-for i = 1:1279
-    if isstring(summary(i).name) 
-        summary(i).name = convertStringsToChars(summary(i).name);
-    end
-end
+for i = 1:211; summary(i).task = 'baseline'; end
 
-for i = 1:211
-    summary(i).task = 'baseline';
-end
+for i = 212:499; summary(i).task = 'baseline->reward'; end
 
-for i = 212:499
-    summary(i).task = 'baseline->reward';
-end
+for i = 500:919; summary(i).task = 'reward->punish'; end
 
-for i = 500:919
-    summary(i).task = 'reward->punish';
-end
-
-for i = 920:1279
-    summary(i).task = 'punish->reward';
-end
+for i = 920:1279; summary(i).task = 'punish->reward'; end
 
 %% Create animals struct
 
