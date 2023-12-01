@@ -43,7 +43,7 @@ elseif strcmpi(answer,'Load combined struct')
     end
 end
 
-%% Create/modify summary struct
+%% Create/modify summary struct (only need to do this for initial loading)
 
 regroup = true;
 
@@ -67,6 +67,8 @@ if groupSessions
         disp(['Finished: session ', sessionName,' loaded (',...
               num2str(s),'/',num2str(length(sessionList)),')']);
     end
+
+    % Check summary format ()
 end
 
 %% Make changes to summary
@@ -109,7 +111,7 @@ disp(['Ongoing: saving animals.mat (',char(datetime('now','Format','HH:mm:ss')),
 save(strcat(resultspath,filesep,'animals_',today),'animals','sessionList','-v7.3');
 disp(['Finished: saved animals.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
 
-% Save summary.mat
+% Save summary.mat (not recommend!! Will take forever!!)
 % disp(['Ongoing: saving summary.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
 % save(strcat(resultspath,filesep,'summary_',today),'summary','sessionList','-v7.3');
 % disp(['Finished: saved summary.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
@@ -198,7 +200,6 @@ signalRange = 'NAc';
 
 groupSizeList = [10;20];
 nGroupsList = [5;5];
-colorList = [1,100,200,300,400,500];
 
 initializeFig(.5,.5); tiledlayout('flow');
 for event = 1:length(eventRange)
@@ -322,7 +323,7 @@ end
 
 eventRange = {'Stim','Pair'};
 animalRange = {'SL133','SL135','SL136'};%,'SL137'};%'All';
-taskRange = 'punish->reward'; 
+taskRange = 'baseline->reward'; 
 % taskRange = 'punish->reward';
 conditionRange = [1,60;61,120];
 signalRange = 'NAc';
@@ -345,13 +346,12 @@ for event = 1:length(eventRange)
                                         totalTrialRange=conditionRange(t,:),...
                                         signalRange=signalRange);
             statsData = combined.stats.(statsType){1};
-            nSessions = sum(combined.options.signalRows);
             sessionStartIdx = combined.options.sessionStartIdx{1};
     
             % Fit stageAvg across session
             for stage = 1:size(statsData,2)
-                sessionFit = nan(nSessions,2);
-                for session = 1:nSessions
+                sessionFit = nan(length(sessionStartIdx),2);
+                for session = 1:length(sessionStartIdx)
                     if session == nSessions; lastTrial = length(combined.trialNumber{1}); 
                     else; lastTrial = sessionStartIdx(session+1); end
                     sessionWindow = sessionStartIdx(session):lastTrial;

@@ -199,7 +199,7 @@ for signal = 1:length(options.signalRange)
             warning('combineTraces: empty trialNumber or trialTable found, skipped for now');
         end
     end
-    options.sessionStartIdx{signal} = find([-1; diff(trialNumData{signal})]<0);
+    options.sessionStartIdx{signal} = find([-1; diff(trialNumData{signal})]<0); % Not working for animals
 end
 
 %% Save
