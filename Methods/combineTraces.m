@@ -55,7 +55,7 @@ end
 
 % Select rows based on animalRange
 if ~strcmpi(options.animalRange,'All')
-    animalIdx = find(cellfun(@(x) contains(x,options.animalRange), {summary.animal}));
+    animalIdx = find(cellfun(@(x) contains(x,options.animalRange,IgnoreCase=true), {summary.animal}));
     finalIdx = animalIdx;
 else
     finalIdx = 1:size(summary,2);
@@ -69,7 +69,7 @@ end
 
 % Select rows based on sessionRange
 if ~strcmpi(options.sessionRange,'All')
-    sessionIdx = cellfun(@(x) contains(x,options.sessionRange), {summary(finalIdx).session});
+    sessionIdx = cellfun(@(x) contains(x,options.sessionRange,IgnoreCase=true), {summary(finalIdx).session});
     finalIdx = finalIdx(sessionIdx);
 end
 
@@ -83,7 +83,7 @@ end
 if strcmpi(options.signalRange,'All')
     options.signalRange = unique({summary(finalIdx).name});
 else
-    if sum(cellfun(@(x) contains(x,options.signalRange), {summary(finalIdx).name})) == 0
+    if sum(cellfun(@(x) contains(x,options.signalRange,IgnoreCase=true), {summary(finalIdx).name})) == 0
         error('Did NOT find rows that fits the input range');
     end
 end
@@ -108,7 +108,7 @@ options.sessionStartIdx = cell(length(options.signalRange),1);
 for signal = 1:length(options.signalRange)
 
     % Select rows for the current signal
-    signalRows = cellfun(@(x) contains(x,options.signalRange{signal}), {summary(finalIdx).name});
+    signalRows = cellfun(@(x) contains(x,options.signalRange{signal},IgnoreCase=true), {summary(finalIdx).name});
     signalIdx = finalIdx(signalRows);
     options.signalRows = signalRows;
 
@@ -122,7 +122,7 @@ for signal = 1:length(options.signalRange)
     % Loop through to combine data
     for i = 1:length(signalIdx)
         row = summary(signalIdx(i));
-        if strcmpi(row.system,'Lick'); rowData = row.data.lickRate;
+        if iscell(row.data) && strcmpi(row.system,'Lick'); rowData = row.data.lickRate;
         else; rowData = row.data; end
 
         % If enter a new animal, update animalStartIdx
