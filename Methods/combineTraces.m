@@ -2,6 +2,7 @@ function combined = combineTraces(summary,options)
 
 arguments
     summary struct
+    
     options.timeRange double = [-15,15]
     options.eventRange string = 'All'
     options.animalRange string = 'All'
