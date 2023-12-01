@@ -100,7 +100,8 @@ trialNumData = cell(length(options.signalRange),1);
 trialTableData = cell(length(options.signalRange),1);
 
 % To record session/animal changes
-options.animalStartIdx = []; prev_animal = '';
+options.animalStartIdx = cell(length(options.signalRange),1); prev_animal = '';
+options.sessionStartIdx = cell(length(options.signalRange),1);
 
 %% Concat .data in each selected rows into a array for plotting
 for signal = 1:length(options.signalRange)
@@ -125,7 +126,8 @@ for signal = 1:length(options.signalRange)
 
         % If enter a new animal, update animalStartIdx
         if ~strcmpi(prev_animal,row.animal)
-            options.animalStartIdx = [options.animalStartIdx; size(data{signal},1)+1];
+            options.animalStartIdx{signal} = [options.animalStartIdx{signal}; size(data{signal},1)+1];
+            prev_animal = row.animal;
         end
 
         % Check timeRange is valid
@@ -196,14 +198,17 @@ for signal = 1:length(options.signalRange)
             warning('combineTraces: empty trialNumber or trialTable found, skipped for now');
         end
     end
+    options.sessionStartIdx{signal} = find([-1; diff(trialNumData{signal})]<0);
 end
 
 %% Save
 combined.data = data;
 combined.stats = stats;
 combined.timestamp = t;
+
 combined.trialNumber = trialNumData;
 combined.trialTable = trialTableData;
+
 combined.options = options;
 
 
