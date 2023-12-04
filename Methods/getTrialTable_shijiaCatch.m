@@ -16,16 +16,16 @@ rightLickON = events{3};
 % Selection time: time of last choice lick (before outcome)
 % Reaction time: time of first lick
 % BaselineLicks (in session time), others are in trial time
-varTypes = {'double','logical','string','logical',...
-            'double','double','double','double','double',...
-            'double','double','double','double',...
-            'cell','cell','cell','cell',...
-            'cell'};
-varNames = {'TrialNumber','Outcome','TrialType','isReward',...
-            'CueTime','NextCue','ReactionTime','FirstBoutLastLickTime','TrialLastLickTime',...
-            'nLicks','nChoiceLicks','nOutcomeLicks','nBaselineLicks',...
-            'AllTrialLicks','ChoiceLicks','OutcomeLicks','BaselineLicks',...
-            'boutStartIdx'};
+varTypes = {'double','logical','string','logical','string',...
+    'double','double','double','double','double','double',...
+    'double','double','double','double',...
+    'cell','cell','cell','cell',...
+    'cell'};
+varNames = {'TrialNumber','Outcome','TrialType','isReward','RewardType',...
+    'CueTime','NextCue','RewardTime','ReactionTime','FirstBoutLastLickTime','TrialLastLickTime',...
+    'nLicks','nChoiceLicks','nOutcomeLicks','nBaselineLicks',...
+    'AllTrialLicks','ChoiceLicks','OutcomeLicks','BaselineLicks',...
+    'boutStartIdx'};
 
 
 % Initialize trial subtypes
@@ -44,7 +44,9 @@ for i=1:length(allTrials)
 
     % Initialize trial table params
     outcome = 0;
-    reactionTime = 0; firstBoutLastLickTime = 0; trialLastLickTime = 0;
+    rewardTimeInTrial = 0; reactionTime = 0; firstBoutLastLickTime = 0; trialLastLickTime = 0; 
+    rewardTimeUse = 0; reactionTimeUse = 0; firstBoutLastLickTimeUse = 0; trialLastLickTimeUse = 0; 
+
     choiceLicks = []; outcomeLicks = []; baselineLicks = [];
 
     % Trial outcome
@@ -58,10 +60,56 @@ for i=1:length(allTrials)
     trialLicks_all = trialLicks_all(:,1);
     nLicks = size(trialLicks_all,1);
 
+    %     % plot the licks to see if they are good
+    %     figure;
+    %     data = zeros(size(trialLicks_all));
+    %     data(trialLicks_all)=1;
+    %     scatter(1:length(data),data,'b');
+    %     legend('original licks');
+    %     hold on;
+    %     data2 = zeros(size(trialLicks_all_cleaned));
+    %     data2(trialLicks_all_cleaned)=1;
+    %     scatter(1:length(data2),data2,'r');
+    %     legend('cleaned licks');
+
+
+    % clean the licks with 90ms lick ITI
+    lickITICutoffArduino = 90; % in ms
+
     % Separate licks (i.e. anticipatory licks: licks before outcome)
     if ~isempty(trialLicks_all)
+
+        % clean the licks with 90ms lick ITI
+        previousLickOnset = trialLicks_all(1);
+        trialLicks_all_cleaned = [previousLickOnset];
+        for p = 1:length(trialLicks_all)
+            if trialLicks_all(p)-previousLickOnset>(lickITICutoffArduino/1000*options.behaviorFs)
+                previousLickOnset = trialLicks_all(p);
+                trialLicks_all_cleaned = [trialLicks_all_cleaned previousLickOnset];
+            end
+        end
+        trialLicks_all = trialLicks_all_cleaned';
+
+        if isReward
+
+            %     %     % plot the licks and reward onset to see if they are good
+            %     figure;
+            %     data = zeros(size(trialLicks_all));
+            %     data(trialLicks_all)=1;
+            %     scatter(1:length(data),data,'b');
+            %     legend('original licks');
+            %     hold on;
+            %     data2 = zeros(size(rewardTime));
+            %     data2(rewardTime)=1;
+            %     scatter(1:length(data2),data2,'r');
+            %     legend('water reward');
+        end
+
+
         reactionTime = trialLicks_all(1,1);
         trialLastLickTime = trialLicks_all(end,1);
+        reactionTimeUse = trialLicks_all(1,1) + cur_cue;
+        trialLastLickTimeUse = trialLicks_all(end,1) + cur_cue;
 
         % Find bout cutoff
         ILI = [100; diff(trialLicks_all)/options.behaviorFs];
@@ -79,7 +127,7 @@ for i=1:length(allTrials)
             if length(boutStart) == 1; outcomeLicks = remainingLicks;
             else; outcomeLicks = remainingLicks(boutStart(1):boutStart(2)-1); end
             baselineLicks = setdiff(remainingLicks,outcomeLicks);
-            
+
             if ~isempty(outcomeLicks); firstBoutLastLickTime = outcomeLicks(end);
             else; firstBoutLastLickTime = remainingLicks(end); end
 
@@ -87,9 +135,9 @@ for i=1:length(allTrials)
             outcome = 1;
         else
             choiceLicks = trialLicks_inWindow;
-            if ~isempty(choiceLicks); firstBoutLastLickTime = choiceLicks(end); end
+            if ~isempty(choiceLicks); firstBoutLastLickTime = choiceLicks(end); firstBoutLastLickTimeUse = choiceLicks(end)+cur_cue; end
             remainingLicks = setdiff(trialLicks_all,choiceLicks);
-            
+
             if ~isempty(remainingLicks)
                 % Remove spontaneous licks afterwards
                 ILI = [10; diff(remainingLicks)/options.behaviorFs];
@@ -104,24 +152,35 @@ for i=1:length(allTrials)
         end
     end
 
+
     % Get trial type
     if outcome && isReward; trialType = 'Rewarded';
-    elseif outcome && ~isReward; trialType = 'Omission';
-    else; trialType = 'Miss';
+        rewardTimeInTrial = rewardTime(1);
+        [~,closestLickToReward] = min(abs(rewardTimeInTrial-trialLicks_all));
+        if closestLickToReward == 2
+            RewardType = 'lick2';
+        elseif closestLickToReward == 6
+            RewardType = 'lick6';
+        else
+            RewardType = 'lick4';
+        end
+        rewardTimeUse = rewardTimeInTrial + cur_cue;
+    elseif outcome && ~isReward; trialType = 'Omission'; RewardType = 'NoReward';
+    else; trialType = 'Miss'; RewardType = 'NoReward';
     end
 
     % Trial table
-    trials(i,:) = {i,outcome,trialType,isReward,...
-        cur_cue,next_cue,reactionTime,firstBoutLastLickTime,trialLastLickTime,...
-        nLicks,size(choiceLicks,1),size(outcomeLicks,1),size(baselineLicks,1),...
+    trials(i,:) = {i,outcome,trialType,isReward,RewardType,...
+        cur_cue,next_cue,rewardTimeUse,reactionTimeUse,firstBoutLastLickTimeUse,trialLastLickTimeUse,... % add 'Use': add the time of cur_cue
+        nLicks,size(choiceLicks,1),size(outcomeLicks,1),size(baselineLicks,1),... % for analyzing only the first bout: last lick: outcomeLicks(end); non-last lick: [choiceLicks + outcomeLicks(1:end-1)]
         num2cell(trialLicks_all+cur_cue,[1 2]),num2cell(choiceLicks+cur_cue,[1 2]),num2cell(outcomeLicks+cur_cue,[1 2]),num2cell(baselineLicks+cur_cue,[1 2]),...
         num2cell(boutStartIdx,[1 2])};
 end
 
 % Add a row for outside events
-trials(i+1,:) = {0,0,0,0,...
-                0,0,0,0,0,...
-                0,0,0,0,...
-                {},{},{},{},{}};
+trials(i+1,:) = {0,0,0,0,0,...
+    0,0,0,0,0,0,...
+    0,0,0,0,...
+    {},{},{},{},{}};
 
 end

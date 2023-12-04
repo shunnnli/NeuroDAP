@@ -28,7 +28,7 @@ lickRate = lickTraces;
 lickEvents = cell(length(eventIdx),2);
 
 % Return if there's no licks
-if isempty(find(leftLick,1)) & isempty(find(rightLick, 1)); return; end
+if isempty(find(leftLick,1)) && isempty(find(rightLick, 1)); return; end
 
 % Find licks
 if isempty(rightLick)

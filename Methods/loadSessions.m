@@ -342,7 +342,7 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
             labjack.modulation(find(~labjack.record),:) = [];
             labjack.name(find(~labjack.record)) = [];
         end
-        if sum(labjack.record == options.recordLJ) ~= 3
+        if sum(labjack.record == options.recordLJ) ~= length(labjack.record)
             disp(['labjack.record: ',labjack.record]);
             disp(['options.recordLJ: ',options.recordLJ]);
             warning("labjack.record does not agree with recordLJ, use the original one instead"); 

@@ -6,7 +6,7 @@ arguments
 
     options.plot logical = false % Plot summary figures
     options.save logical = true % save as mat files
-    options.record double = [1,1,0] % Recorded channels
+    options.record double = [1,1] % Recorded channels
     options.rebuildInfo logical = false % rebuild info (old version of the system)
 end
 
@@ -32,9 +32,9 @@ if ~exist('labjack','var')
     end
 
     % Define basic parmas
-    labjack.record = [1,1,0];
+    labjack.record = [1,1];
     labjack.nSignals = sum(labjack.record); % NAc green + NAc red
-    labjack.name = {'NAc_green','NAc_red','PMT'};
+    labjack.name = {'Green','Iso'};
     labjack.mod = zeros(1,labjack.nSignals);
     labjack.modFreq = zeros(1,labjack.nSignals);
     labjack.LEDpower = zeros(1,labjack.nSignals);
@@ -81,6 +81,7 @@ totalLen = length(output);
 sync_labjack = output(mod(1:totalLen,numChannels)==5);  
 labjack.sync = sync_labjack;
 
+% clean cue so that cue doesn't have the 30kHz oscillation
 cue_labjack = output(mod(1:totalLen,numChannels)==6);
 cue_labjack(cue_labjack>1000)=0;
 temp = [false, diff(cue_labjack)];
@@ -109,13 +110,13 @@ labjack.modulation = nan(labjack.nSignals,length(sync_labjack));
 % Log signal to corresponding row
 for i = 1:size(labjack.name,2)
     if labjack.record(i)
-        if contains(labjack.name{i},"PMT",IgnoreCase=true)
-            labjack.raw(3,:) = output(mod(1:totalLen,numChannels)==5);
-            labjack.modulation(3,:) = output(mod(1:totalLen,numChannels)==6);
-        else
+%         if labjack.isosbestic(i)
+%             labjack.raw(i,:) = labjack.raw(i-1,:);
+%             labjack.modulation(i,:) = output(mod(1:totalLen,numChannels)==i+2);
+%         else
             labjack.raw(i,:) = output(mod(1:totalLen,numChannels)==i);
             labjack.modulation(i,:) = output(mod(1:totalLen,numChannels)==i+2);
-        end
+%         end
     end
 end
 
@@ -141,5 +142,5 @@ labjack.options = options;
 if options.save
     save(strcat(sessionpath,filesep,'data_labjack'),'labjack','sync_labjack','-v7.3');
 end
-
+1;
 end

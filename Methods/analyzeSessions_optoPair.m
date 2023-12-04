@@ -34,7 +34,7 @@ end
 
 %% Load data
 
-[~,~,~,~,~,cyanPurplePink,bluePurpleRed] = loadColors;
+[~,~,~,~,~,~,bluePurpleRed] = loadColors;
              
 % 1. Select session via uigetdir
 dirsplit = strsplit(sessionpath,filesep); 
@@ -65,7 +65,7 @@ else
     save(strcat(sessionpath,filesep,'analysis_',sessionName),'sessionName','-v7.3');
     disp('Finished: analysis_.mat not found, created a new one');
 end
-disp(strcat('Finished: Session ',sessionName,' loaded'));
+disp(['Finished: Session ',sessionName,' loaded']);
 
 % Load behaivor params
 if isfield(options,'stimPattern') && (options.redo || ~isfield(params,'stim'))

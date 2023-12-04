@@ -26,6 +26,7 @@ arguments
 
     options.statsType string = 'All'
     options.test cell
+    options.empty logical = false
 end
 
 %% Check input
@@ -84,7 +85,16 @@ if strcmpi(options.signalRange,'All')
     options.signalRange = unique({summary(finalIdx).name});
 else
     if sum(cellfun(@(x) contains(x,options.signalRange,IgnoreCase=true), {summary(finalIdx).name})) == 0
-        error('Did NOT find rows that fits the input range');
+        warning('Did NOT find rows that fits the input range, skipped');
+        options.empty = true;
+        combined.options = options;
+        % combined.data = cell(length(options.signalRange),1);
+        % for type = 1:length(options.statsType)
+        %     combined.stats.(options.statsType{type}) = cell(length(options.signalRange),1);
+        % end
+        % combined.trialNumber = cell(length(options.signalRange),1);
+        % combined.trialTable = cell(length(options.signalRange),1);
+        return
     end
 end
 
@@ -93,6 +103,7 @@ if strcmpi(options.statsType,'All'); options.statsType = {'stageAvg','stageMax',
 if ~iscell(options.statsType); options.statsType = {options.statsType}; end
 
 %% Initialize data/stats/trialNum arrays
+
 data = cell(length(options.signalRange),1);
 for type = 1:length(options.statsType)
     stats.(options.statsType{type}) = cell(length(options.signalRange),1);
@@ -122,8 +133,11 @@ for signal = 1:length(options.signalRange)
     % Loop through to combine data
     for i = 1:length(signalIdx)
         row = summary(signalIdx(i));
-        if iscell(row.data) && strcmpi(row.system,'Lick'); rowData = row.data.lickRate;
-        else; rowData = row.data; end
+        if (iscell(row.data) || isstruct(row.data)) && strcmpi(row.system,'Lick')
+            rowData = row.data.lickRate;
+        else
+            rowData = row.data; 
+        end
 
         % If enter a new animal, update animalStartIdx
         if ~strcmpi(prev_animal,row.animal)
