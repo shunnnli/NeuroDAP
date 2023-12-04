@@ -7,7 +7,7 @@
 
 clear; close all;
 addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
-[~,~,~,blueGreenYellow,blueWhiteRed,pinkPurpleCyan,bluePurpleRed,purpleWhiteRed] = loadColors;
+[~,~,~,~,~,~,bluePurpleRed] = loadColors;
 r2p_cmap = getColormap([255, 50, 58],[0 0 0],500,'midcol',[255 255 255]);
 p2r_cmap = getColormap([241 160 255],[0 0 0],500,'midcol',[255 255 255]);
 today = char(datetime('today','Format','yyyyMMdd'));
@@ -150,8 +150,8 @@ for i = 1:length(eventRange)
                                 signalRange=signalRange);
     plotSEM(combined.timestamp,shuffleTraces(combined.data{1}),[.75,.75,.75]);
     plotSEM(combined.timestamp,combined.data{1},colorList{i});
+    xlabel('Time (s)'); ylabel([signalRange,' z-score']); ylim([-1,3]);
     plotEvent(eventRange{i},eventDuration(i),color=colorList{i});
-    xlabel('Time (s)'); ylabel([signalRange,' z-score']);
     legend({['Shuffled (n=',num2str(size(combined.data{1},1)),')'],...
             [eventRange{i},' (n=',num2str(size(combined.data{1},1)),')']},...
             'Location','northeast');
@@ -162,13 +162,14 @@ end
 timeRange = [-0.5,3];
 eventRange = {'Stim','Pair'};
 animalRange = {'SL133','SL135','SL136'};%'All';
-taskRange = 'baseline->reward';
+% taskRange = 'punish->reward';
+taskRange = 'reward->punish';
 totalTrialRange = 'All';
 trialRange = 'All';
 signalRange = 'NAc';
 
-groupSizeList = [10;20];
-nGroupsList = [5;5];
+groupSizeList = [50;50];
+nGroupsList = [15;15];
 
 initializeFig(.5,.5); tiledlayout('flow');
 for event = 1:length(eventRange)
@@ -193,14 +194,15 @@ end
 timeRange = [-0.5,3];
 eventRange = {'Stim','Pair'};
 animalRange = {'SL133','SL135','SL136'};%'All';
-taskRange = 'reward->punish';
+% taskRange = 'reward->punish';
+taskRange = 'baseline->reward';
 totalTrialRange = [1,60;60,150];
 trialRange = 'All';
 signalRange = 'NAc';
 
-groupSizeList = [10,20;10,20];
+groupSizeList = [20,20;20,20];
 nGroupsList = [10,10;50,50];
-eventColor = {bluePurpleRed(1,:),bluePurpleRed(350,:)};
+eventColor = {bluePurpleRed(1,:),bluePurpleRed(400,:)};
 
 initializeFig(.5,.5); tiledlayout('flow');
 for t = 1:size(totalTrialRange,1)
@@ -215,7 +217,8 @@ for t = 1:size(totalTrialRange,1)
                                     signalRange=signalRange);
         legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,...
                         groupSize=groupSizeList(t,event),nGroups=nGroupsList(t,event),...
-                        animalStartIdx=combined.options.animalStartIdx{1});
+                        animalStartIdx=combined.options.animalStartIdx{1},...
+                        remaining='include');
         plotEvent(eventRange{event},.5,color=eventColor{t});
         xlabel('Time (s)'); ylabel([signalRange,' z-score']);
         legend(legendList,'Location','northeast');
@@ -230,10 +233,10 @@ animalRange = {'SL133','SL135','SL136'};%'All';
 taskRange = 'punish->reward';
 totalTrialRange = 'All';
 trialRange = 'All';
-signalRange = 'lick';
+signalRange = 'Lick';
 
-groupSizeList = [10;20];
-nGroupsList = [5;5];
+groupSizeList = [50;50];
+nGroupsList = [15;15];
 
 initializeFig(.5,.5); tiledlayout('flow');
 for event = 1:length(eventRange)
@@ -255,49 +258,16 @@ end
 
 %% Baseline -> reward: plot anticipatory lick changes
 
-timeRange = [-0.5,3];
-eventRange = {'Stim','Pair'};
-animalRange = {'SL133','SL135','SL136'};%'All';
-taskRange = 'punish->reward';
-totalTrialRange = 'All';
-trialRange = 'All';
-signalRange = 'lick';
-
-groupSizeList = [10;20];
-nGroupsList = [5;5];
-
-initializeFig(.5,.5); tiledlayout('flow');
-for event = 1:length(eventRange)
-    nexttile;
-    combined = combineTraces(animals,timeRange=timeRange,...
-                                eventRange=eventRange{event},...
-                                animalRange=animalRange,...
-                                taskRange=taskRange,...
-                                totalTrialRange=totalTrialRange,...
-                                trialRange=trialRange,...
-                                signalRange=signalRange);
-    legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,...
-                    groupSize=groupSizeList(event),nGroups=nGroupsList(event),...
-                    animalStartIdx=combined.options.animalStartIdx{1});
-    plotEvent(eventRange{event},.5,color=bluePurpleRed(500,:));
-    xlabel('Time (s)'); ylabel([signalRange,' z-score']);
-    legend(legendList,'Location','northeast');
-end
-
-%% Baseline -> reward: plot stage scatter for NAc during/after paAIP2
-
-%% Baseline -> reward: plot best fit line for NAc during/after paAIP2
-
 %% Baseline -> reward: plot slope (bar plot) for NAc during/after paAIP2
 
 eventRange = {'Stim','Pair'};
 animalRange = {'SL133','SL135','SL136'};%,'SL137'};%'All';
-taskRange = 'baseline->reward'; 
-% taskRange = 'punish->reward';
+% taskRange = 'punish->reward'; 
+taskRange = 'reward->punish';
 conditionRange = [1,60;61,120];
 signalRange = 'NAc';
 conditionLabels = {'paAIP2','Control'};
-conditionColors = {blueWhiteRed(1,:),[.75,.75,.75]};
+conditionColors = {bluePurpleRed(1,:),[.213 .543 .324]};
 statsType = 'stageAvg';
 stageLabels = {'Baseline','CS','US'};
 stageColors = {[.75 .75 .75],bluePurpleRed(end,:),bluePurpleRed(1,:)};
@@ -321,8 +291,8 @@ for event = 1:length(eventRange)
             for stage = 1:size(statsData,2)
                 sessionFit = nan(length(sessionStartIdx),2);
                 for session = 1:length(sessionStartIdx)
-                    if session == nSessions; lastTrial = length(combined.trialNumber{1}); 
-                    else; lastTrial = sessionStartIdx(session+1); end
+                    if session == length(sessionStartIdx); lastTrial = length(combined.trialNumber{1}); 
+                    else; lastTrial = sessionStartIdx(session+1)-1; end
                     sessionWindow = sessionStartIdx(session):lastTrial;
                     y = statsData(sessionWindow,stage)';
                     sessionFit(session,:) = polyfit(1:length(sessionWindow),y,1);
@@ -364,6 +334,77 @@ for i = 1:1%length(fitLabels)
         end
     end
 end
+
+%% Plot CS DA response vs trials
+eventRange = {'Stim','Pair'};
+animalRange = {'SL133','SL135','SL136'};%,'SL137'};%'All';
+taskRange = 'punish->reward'; 
+% taskRange = 'reward->punish';
+conditionRange = [1,60;61,150];
+signalRange = 'NAc';
+conditionLabels = {'paAIP2','Control'};
+conditionColors = {bluePurpleRed(1,:),[.213 .543 .324]};
+stageLabels = {'Baseline','CS','US'};
+stageColors = {[.75 .75 .75],bluePurpleRed(end,:),bluePurpleRed(1,:)};
+animalColors = {bluePurpleRed(50,:),bluePurpleRed(200,:),bluePurpleRed(350,:),bluePurpleRed(500,:)};
+
+stage = 2; % Plot CS only
+statsType = 'stageAvg';
+
+% Get subtrial stats
+stats_combined = cell(length(animalRange),length(eventRange));
+for event = 1:length(eventRange)
+    for animal = 1:length(animalRange)
+        for t = 1:size(conditionRange,1)
+            combined = combineTraces(animals,statsType=statsType,...
+                                        eventRange=eventRange{event},...
+                                        animalRange=animalRange{animal},...
+                                        taskRange=taskRange,...
+                                        totalTrialRange=conditionRange(t,:),...
+                                        signalRange=signalRange);
+            statsData = combined.stats.(statsType){1};
+            sessionStartIdx = combined.options.sessionStartIdx{1};
+
+            sessionStats = cell(length(sessionStartIdx),1);
+            totalTrialNum = cell(length(sessionStartIdx),1);
+
+            for session = 1:length(sessionStartIdx)
+                if session == length(sessionStartIdx); lastTrial = length(combined.trialNumber{1}); 
+                else; lastTrial = sessionStartIdx(session+1)-1; end
+                sessionWindow = sessionStartIdx(session):lastTrial;
+
+                sessionStats{session} = [sessionStats{session}; statsData(sessionWindow,:)];
+            end
+            stats_combined{animal,event} = [stats_combined{animal,event}, sessionStats];
+        end
+    end 
+end
+
+% Plot scatter plot and best fit line
+initializeFig(.5,.5); tiledlayout('flow');
+for event = 1:length(eventRange)
+    for animal = 1:length(animalRange)
+        nexttile;
+        data = stats_combined{animal,event};
+        lastTrial = 0;
+        for row = 1:size(data,1)
+            for col = 1:size(data,2)
+                plotData = data{row,col};
+                x = (1:size(plotData,1))+lastTrial;
+                y = plotData(:,stage);
+                scatter(x,y,100,conditionColors{col},"filled",'MarkerFaceAlpha',0.5,HandleVisibility='off'); hold on
+                lastTrial = size(plotData,1)+lastTrial;
+
+                % Calc best fit line of trial vs CS response
+                p = polyfit(x,y',1);
+                plot(x,polyval(p,x),Color=conditionColors{col},lineWidth=5);
+            end
+        end
+        xlabel('Trials'); ylabel([signalRange,' CS response']);
+        title([taskRange, ': ',animalRange{animal},' -> ',eventRange{event}]);
+    end
+end
+
 
 %% Baseline -> reward: plot best fit line for lick during/after paAIP2
 
