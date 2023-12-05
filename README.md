@@ -9,7 +9,17 @@
  3. **Session analysis** (extract trial table for each session; align signals and perform basic analysis of these aligned signals; plot session summary)
  4. **Experiment analysis** (pooled all sessions across all animals; perform data analysis)
 
- Below, key functions and places for customization will be described. Detail implementation please refer to specific code.
+ Please refer to the wiki section for more detial documentation.
+
+ ## Intro of sample data set
+
+The sample data set is recorded by Shun Li in 2023. It contains 4 animals, with 1 animals with off-target expression ('SL137'). dLight signals in NAc, pupil/Eye area, and lick are simultaneously recorded for all sessions.
+
+There are 5 major phases:
+1. Random: water, airpuff, EP stim, and tone (75dB) are delivered randomly
+2. Reward1/2: where EP stim and tone are paired with water
+3. Punish1/2: where EP stim and tone are paired with airpuff
+4. Timeline: Random (2 sessions) -> Reward1 (3 sessions) -> Punish1 (3 sessions) -> Reward2 (3 sessions) -> 1 week rest -> Punish2 (3 sessions but 3 animals)
 
 
  ## Recording phase
@@ -145,17 +155,3 @@
             3. ```options.remaining```
                 There inevitably will be some traces that does not fully form a group (eg 5 traces remaining for a groupSize of 50 traces). These traces, if plotted separately, can induce lines with great variations and error bars. To address this, one can either set ```remaining='include'``` to include these traces to prev group; set to ```remaining='exclude'``` to not plot these traces, or ```remaining='separate'``` if you really want to plot these traces separately
 
-
-
-## Intro of sample data set
-
-The sample data set is recorded by Shun Li in 2023. It contains 4 animals, with 1 animals with off-target expression ('SL137'). dLight signals in NAc, pupil/Eye area, and lick are simultaneously recorded for all sessions.
-
-There are 5 major phases:
-1. Random: water, airpuff, EP stim, and tone (75dB) are delivered randomly
-2. Reward1/2: where EP stim and tone are paired with water
-3. Punish1/2: where EP stim and tone are paired with airpuff
-4. Timeline: Random (2 sessions) -> Reward1 (3 sessions) -> Punish1 (3 sessions) -> Reward2 (3 sessions) -> 1 week rest -> Punish2 (3 sessions but 3 animals)
-
-
-## Functions
