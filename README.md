@@ -11,7 +11,7 @@
  3. **Session analysis** (extract trial table for each session; align signals and perform basic analysis of these aligned signals; plot session summary)
  4. **Experiment analysis** (pooled all sessions across all animals; perform data analysis)
 
- Please refer to the wiki section for more detial documentation.
+ Please refer to the wiki section for more detail documentation.
 
  ## Introduction of sample data set
 
