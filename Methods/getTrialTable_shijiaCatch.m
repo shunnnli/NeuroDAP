@@ -79,7 +79,7 @@ for i=1:length(allTrials)
     % Separate licks (i.e. anticipatory licks: licks before outcome)
     if ~isempty(trialLicks_all)
 
-        % clean the licks with 90ms lick ITI
+        % clean the licks with 90ms lick ITI - no need since we did it in concatLabJack_shijia
         previousLickOnset = trialLicks_all(1);
         trialLicks_all_cleaned = [previousLickOnset];
         for p = 1:length(trialLicks_all)
@@ -90,7 +90,7 @@ for i=1:length(allTrials)
         end
         trialLicks_all = trialLicks_all_cleaned';
 
-        if isReward
+%         if isReward
 
             %     %     % plot the licks and reward onset to see if they are good
             %     figure;
@@ -103,7 +103,7 @@ for i=1:length(allTrials)
             %     data2(rewardTime)=1;
             %     scatter(1:length(data2),data2,'r');
             %     legend('water reward');
-        end
+%         end
 
 
         reactionTime = trialLicks_all(1,1);

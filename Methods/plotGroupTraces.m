@@ -40,7 +40,7 @@ if isfield(options,'startIdx')
 end
 
 % Reorganize traces if animalStartIdx is provided (interleave animals)
-if isfield(options,'animalStartIdx') && sum(strcmpi(options.groupby,["trial","trials"]))
+if length(options.animalStartIdx)>1 && sum(strcmpi(options.groupby,["trial","trials"]))
     traces_animals = cell(1,length(options.animalStartIdx));
     for i = 1:length(options.animalStartIdx)
         startIdx = options.animalStartIdx(i);
@@ -106,13 +106,22 @@ elseif sum(strcmpi(options.groupby,["session","sessions"]))
     if ~isfield(options,'sessionStartIdx') && ~isfield(options.startIdx)
         error('startIdx required if groupby=session');
     end
-    options.nGroups = length(options.sessionStartIdx);
+    % Reorganize to find start and end trials
+    options.nGroups = round(length(options.sessionStartIdx)/length(options.animalStartIdx)); % nSessions per animal
+    trialStart_sessions = nan(length(options.nGroups),length(options.animalStartIdx));
+    trialEnd_sessions = nan(length(options.nGroups),length(options.animalStartIdx));
 
-    % Calculate start and end trials
-    startTrials = options.sessionStartIdx;
-    endTrials = [options.sessionStartIdx(2:options.nGroups); nTraces];
-    if endTrials(end) > nTraces; endTrials(end) = nTraces; end
-
+    sessionInAnimal = 0; animalIdx = 0;
+    for i = 1:length(options.sessionStartIdx)
+        if ismember(options.sessionStartIdx(i),options.animalStartIdx)
+            animalIdx = animalIdx + 1;
+            sessionInAnimal = 0;
+        end
+        sessionInAnimal = sessionInAnimal + 1;
+        trialStart_sessions(sessionInAnimal,animalIdx) = options.sessionStartIdx(i);
+        if i == length(options.sessionStartIdx); trialEnd_sessions(sessionInAnimal,animalIdx) = nTraces;
+        else; trialEnd_sessions(sessionInAnimal,animalIdx) = options.sessionStartIdx(i+1)-1; end
+    end
 else
     error('Input to options.groupby is wrong!');
 end
@@ -123,16 +132,21 @@ legendList = cell(options.nGroups,1);
 nColors = round(linspace(1,size(colormap,1),options.nGroups));
 
 for i = 1:options.nGroups
-    % startTrial = (i-1)*options.groupSize+1; 
-    % if i == options.nGroups; endTrial = min(nTraces,options.groupSize*options.nGroups);
-    % else; endTrial = i*options.groupSize; end
-    startTrial = startTrials(i); endTrial = endTrials(i);
-
-    if isfield(options,'animalStartIdx') && sum(strcmpi(options.groupby,["trial","trials"]))
+    if length(options.animalStartIdx)>1 && sum(strcmpi(options.groupby,["trial","trials"]))
+        startTrial = startTrials(i); endTrial = endTrials(i);
         plotData = cell2mat(cellfun(@(x,dim) x(startTrial:min(endTrial,dim),:),traces_animals,num2cell(traces_animals_dim),'UniformOutput',false)');
         plotSEM(timestamp,plotData,colormap(nColors(i),:),LineStyle=options.LineStyle,LineWidth=options.LineWidth);
         legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial),' (n=',num2str(size(plotData,1)),')'];
+    elseif sum(strcmpi(options.groupby,["session","sessions"]))
+        trialWindow = [];
+        for animal = 1:size(trialStart_sessions,2)
+            trialWindow = [trialWindow,trialStart_sessions(i,animal):trialEnd_sessions(i,animal)];
+        end
+        plotData = traces(trialWindow,:);
+        plotSEM(timestamp,plotData,colormap(nColors(i),:),LineStyle=options.LineStyle,LineWidth=options.LineWidth);
+        legendList{i} = ['Session ', num2str(i),' (n=',num2str(size(plotData,1)),')'];
     else
+        startTrial = startTrials(i); endTrial = endTrials(i);
         plotData = traces(startTrial:endTrial,:);
         plotSEM(timestamp,plotData,colormap(nColors(i),:),LineStyle=options.LineStyle,LineWidth=options.LineWidth);
 
@@ -140,8 +154,6 @@ for i = 1:options.nGroups
             legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial),' (n=',num2str(size(plotData,1)),')'];
         elseif sum(strcmpi(options.groupby,["animal","animals"]))
             legendList{i} = ['Animal ', num2str(i),' (n=',num2str(size(plotData,1)),')'];
-        elseif sum(strcmpi(options.groupby,["session","sessions"]))
-            legendList{i} = ['Session ', num2str(i),' (n=',num2str(size(plotData,1)),')'];
         end
     end
 end

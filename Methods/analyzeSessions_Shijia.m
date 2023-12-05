@@ -266,9 +266,26 @@ analysisLabels_5 = {'Normal 4','Catch 2','Catch 6'};
 taskLegend_5 = getLegend(analysisEvents_5,analysisLabels_5);
 
 % to-do: concatenate analysis events
-analysisEvents = {analysisEvents_1 analysisEvents_2 analysisEvents_3 analysisEvents_4 analysisEvents_5};
-analysisLabels = {analysisLabels_1 analysisLabels_2 analysisLabels_3 analysisLabels_4 analysisLabels_5}; 
-eventTrialNum = {};
+analysisEvents = [analysisEvents_1, analysisEvents_2, analysisEvents_3, analysisEvents_4, analysisEvents_5];
+analysisLabels = [analysisLabels_1, analysisLabels_2, analysisLabels_3, analysisLabels_4, analysisLabels_5]; 
+eventTrialNum = [eventTrialNum_1, eventTrialNum_2, eventTrialNum_3, eventTrialNum_4, eventTrialNum_5];
+
+% clean licks with ITI 90ms, somehow it's not really working for plotting 
+lickFallingEdges = find(labjack.lick);
+previousLickOnset = lickFallingEdges(1);
+lickITICutoffArduino = 90;
+lickFallingEdges_cleaned = [previousLickOnset];
+for p = 1:length(lickFallingEdges)
+    if lickFallingEdges(p)-previousLickOnset>(lickITICutoffArduino/1000*labjack.samplerate)
+        previousLickOnset = lickFallingEdges(p);
+        lickFallingEdges_cleaned = [lickFallingEdges_cleaned previousLickOnset];
+    end
+end
+lick_labjack_zeroed = zeros(size(labjack.lick));
+lick_labjack_zeroed(lickFallingEdges_cleaned)=1;
+labjack.lick = lick_labjack_zeroed;
+% figure;plot(lick_labjack_tmp(25000:30000),'b');hold on;plot(lick_labjack_zeroed(25000:30000),'r');
+
 if options.analyzeTraces
     analysis = analyzeTraces(timeSeries,labjack.lick,analysisEvents,analysisLabels,params,...
                             trialNumber=eventTrialNum,trialTable=trials);

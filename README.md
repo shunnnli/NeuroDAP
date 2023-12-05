@@ -112,11 +112,6 @@ There are 5 major phases:
             - ```stageTime```: define subtrial stages for further analysis. For example, you can define 2s before the event as baseline, 0.5s after the event as Cue period, and everything after that is Response period (```[-2,0;0,0.5;0.5,15]```). ```analyzeTraces()``` will calculate the average, max, and min for each stages and stored in field ```stageAvg.data```,```stageMax.data```,```stageMin.data``` respectively. Moreover, statistical analysis will also conducted within each stage to calculate the best fit line for the current stage across trials (saved in ```stageAvg.fit```), and bootstrap analysis will be done to calculate the p-value of calculated slope and intercept.
     - Design session summary plots and loop through all signals
         - This is highly dependent on specific experiments and analysis needs. See ```analyzeSessions_OptoPair(sessionpath,options)``` for examples. 
-        - Four function will be highly useful:
-            - ```plotTraces()```: 
-            - ```plotLicks()```:
-            - ```plotGroupTraces()```:
-            - ```plotHeatmap()```:
 
  ## Experiment analysis
  1. Key functions: ```analyzeExperiments_XXX(sessionpath,options)```
@@ -130,28 +125,4 @@ There are 5 major phases:
     3. Run ```getAnimalStruct(summary)``` function to recreate ```animals``` struct from ```summary``` struct. This combines all sessions from the same animals together while cutoffs between individual sessions are also recorded.
     4. Save ```animals``` struct if needed. Note: saving ```summary``` struct will take extremely long (>5hrs) so while saving ```animals``` struct is much shorter  (~2min). ```animals``` struct should contain information that satisfies MOST plotting requirements so saving ```summary``` struct is not needed.
     5. Data analysis and plotting. This part is designed to vary across experiments. Thus, following codes are just for demonstration of essential functions.
- - Essential functions
-    - ```getAnimalStruct(summary)```
-        - combine sessions of the same animal, from the same task, of the same event, recorded from the same signal (eg NAc, LHb, cam, Lick) together. As described above, ```animals``` struct will be the MOST IMPORTANT struct that stores information about the experiments.
-    - ```combineTraces(animals,options)```
-        - combine traces and their relevant statstics of selected animals, selected tasks, selected trialRange, selected totalTrialRange, selected signals, and selected events together. The function can take both ```animals``` and ```summary``` struct as inputs. This is the MOST IMPORTANT and USED function in this script. 
-        - Important features are listed as follows:
-            1. the function returns a structure with fields. ```data``` fields stores the data (photometry, cam, lick rate traces) of selected sessions.
-            2. Field stats stores ```stageAvg/Max/Min``` of each traces at selected stage time (often determined when creating ```analysis_sessionName.mat``` but can modify later).
-            3. Field options contains following important variables:
-                - ```options.empty```: true if no session is found that fits the input criteria. Should skip during plotting or further analysis 
-                - ```options.animalStartIdx```: Records index (in field data) of the first trace for each animals. Used in plotGroupTraces
-                - ```options.sessionStartIdx```: Records index (in field data) of the first trace for each session.
-            4. ```totalTrialRange``` and ```trialRange```
-                - ```totalTrialRange``` selects the ACTUAL trial number within each session while ```trialRange``` selects the samples across selected sessions. 
-                - For example: I have 3 session where I inhibit CaMKII activity for the first 60 trials of each session. Within these first 60 trials, 30% of them are stim-only trials. If I want to only plot the 50-100th stim-only trials with CaMKII inhibition across all sessions, I will set ```totalTrialRange=[1,60]``` and ```trialRange=[50,100]```. Detailed description and automatic handling of edge cases is documented within the method.
-
-    - ```plotGroupTraces(combined.data,combined.timestamp,options)```
-        - While ```plotGroupTraces``` is also used in ```analyzeSessions()```; here, we can plot traces across all animal easily (see code below). Key options are as follows:
-            1. ```groupSize``` and ```nGroups```
-                You need to provide either ```groupSize``` or ```nGroups``` for the function to run. If you provide both, ```plotGroupTraces``` will plot to the maximum number of groups based on ```groupSize```. Thus, for a input with 50 trials and ```groupSize = 10```, the function will automatically plot 5 lines even when ```nGroups=10```
-            2. ```options.animalStartIdx```
-                Use this to reorganize input data so that its plotted based on animals. eg when I want to plot Trial 1-10, 11-20 for EACH animal across all sessions
-            3. ```options.remaining```
-                There inevitably will be some traces that does not fully form a group (eg 5 traces remaining for a groupSize of 50 traces). These traces, if plotted separately, can induce lines with great variations and error bars. To address this, one can either set ```remaining='include'``` to include these traces to prev group; set to ```remaining='exclude'``` to not plot these traces, or ```remaining='separate'``` if you really want to plot these traces separately
 

@@ -93,25 +93,28 @@ cue_labjack_use = zeros(size(cue_labjack));
 cue_labjack_use(risingEdges2) = 1;
 labjack.cue = cue_labjack_use;
 
-% clean licks with ITI 90ms 
+% get licks 
 lick_labjack = output(mod(1:totalLen,numChannels)==7);  
 temp = [false, diff(lick_labjack)];
-lick_labjack = (temp==-1); lick_labjack_tmp = lick_labjack;
+lick_labjack = (temp==-1); 
+labjack.lick = lick_labjack;
+% lick_labjack_tmp = lick_labjack;
 
-lickFallingEdges = find(lick_labjack);
-previousLickOnset = lickFallingEdges(1);
-lickITICutoffArduino = 90;
-lickFallingEdges_cleaned = [previousLickOnset];
-for p = 1:length(lickFallingEdges)
-    if lickFallingEdges(p)-previousLickOnset>(lickITICutoffArduino/1000*labjack.samplerate)
-        previousLickOnset = lickFallingEdges(p);
-        lickFallingEdges_cleaned = [lickFallingEdges_cleaned previousLickOnset];
-    end
-end
-lick_labjack_zeroed = zeros(size(lick_labjack));
-lick_labjack_tmp2 = lick_labjack_zeroed(lickFallingEdges_cleaned)==1;
-labjack.lick = lick_labjack_tmp2;
-figure;plot(lick_labjack_tmp,'b');hold on;plot(lick_labjack_tmp2,'r');xlim([0 10000]);
+% % clean licks with ITI 90ms - still do it in getTrialTable
+% lickFallingEdges = find(lick_labjack);
+% previousLickOnset = lickFallingEdges(1);
+% lickITICutoffArduino = 90;
+% lickFallingEdges_cleaned = [previousLickOnset];
+% for p = 1:length(lickFallingEdges)
+%     if lickFallingEdges(p)-previousLickOnset>(lickITICutoffArduino/1000*labjack.samplerate)
+%         previousLickOnset = lickFallingEdges(p);
+%         lickFallingEdges_cleaned = [lickFallingEdges_cleaned previousLickOnset];
+%     end
+% end
+% lick_labjack_zeroed = zeros(size(lick_labjack));
+% lick_labjack_zeroed(lickFallingEdges_cleaned)=1;
+% labjack.lick = lick_labjack_zeroed;
+% % figure;plot(lick_labjack_tmp(25000:30000),'b');hold on;plot(lick_labjack_zeroed(25000:30000),'r');
 
 % solenoid
 solenoid_labjack = output(mod(1:totalLen,numChannels)==0);

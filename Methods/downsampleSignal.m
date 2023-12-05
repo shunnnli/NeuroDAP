@@ -1,4 +1,4 @@
-function downsampled = downsamplePhotometry(rawTraces,options)
+function downsampled = downsampleSignal(rawTraces,options)
 
 arguments
     rawTraces double % raw traces

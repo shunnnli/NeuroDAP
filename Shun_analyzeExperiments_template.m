@@ -162,22 +162,7 @@ end
 %% Optional: Create summary struct (only need to do this for initial loading)
 
 if groupSessions    
-    summary = struct([]);
-    disp('Finished: summary.mat not found, created a new one');
-    
-    % Group sessions to summary
-    for s = 1:length(sessionList)
-        % Find sessionName
-        dirsplit = strsplit(sessionList{s},filesep); 
-        sessionName = dirsplit{end}; clear dirsplit
-    
-        % Load session
-        load(strcat(sessionList{s},filesep,'analysis_',sessionName,'.mat'));
-    
-        summary = [summary,analysis];
-        disp(['Finished: session ', sessionName,' loaded (',...
-              num2str(s),'/',num2str(length(sessionList)),')']);
-    end
+    summary = concatAnalysis(sessionList);
 end
 
 % Check summary format (should all be chars NOT strings)
@@ -274,7 +259,7 @@ saveFigures(gcf,['Summary_random_',signalRange],...
 %% Plot overall to show animal learned
 
 timeRange = [-0.5,3];
-eventRange = {'Stim','Pair'};
+eventRange = {'Pair'};
 animalRange = {'SL133','SL135','SL136'};%'All';
 taskRange = {'Reward1','Punish1','Reward2','Punish2'};
 totalTrialRange = 'All';
@@ -285,7 +270,7 @@ groupSizeList = [50;50];
 nGroupsList = [15;15];
 
 for task = 1:1%length(taskRange)
-    initializeFig(.5,.5); tiledlayout('flow');
+    initializeFig(0.5,0.3); tiledlayout('flow');
     for event = 1:length(eventRange)
         nexttile;
         combined = combineTraces(animals,timeRange=timeRange,...
@@ -297,7 +282,7 @@ for task = 1:1%length(taskRange)
                                     signalRange=signalRange);
         legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,...
                         groupSize=groupSizeList(event),nGroups=nGroupsList(event),...
-                        groupby='trials',startIdx=combined.options.startIdx);
+                        groupby='session',startIdx=combined.options.startIdx);
         plotEvent(eventRange{event},.5,color=bluePurpleRed(500,:));
         xlabel('Time (s)'); ylabel([signalRange,' z-score']);
         legend(legendList,'Location','northeast');

@@ -1,4 +1,4 @@
-function demodulated = demodulatePhotometry(signal,options)
+function demodulated = demodulateSignal(signal,options)
 
 % Shun Li, 2023/10/15
 % Adapted from code written by Bernardo Sabatini

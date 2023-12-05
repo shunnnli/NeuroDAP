@@ -1,7 +1,7 @@
-function combined = combineTraces(summary,options)
+function combined = combineTraces(database,options)
 
 arguments
-    summary struct
+    database struct
     
     options.timeRange double = [-15,15]
     options.eventRange string = 'All'
@@ -25,7 +25,6 @@ arguments
     % if options.trialRange = [0/-1,3]; get trials [13,15,29,32] (ie get [1,3-0/3-(-1)])
 
     options.statsType string = 'All'
-    options.test cell
     options.empty logical = false
 end
 
@@ -56,35 +55,35 @@ end
 
 % Select rows based on animalRange
 if ~strcmpi(options.animalRange,'All')
-    animalIdx = find(cellfun(@(x) contains(x,options.animalRange,IgnoreCase=true), {summary.animal}));
+    animalIdx = find(cellfun(@(x) contains(x,options.animalRange,IgnoreCase=true), {database.animal}));
     finalIdx = animalIdx;
 else
-    finalIdx = 1:size(summary,2);
+    finalIdx = 1:size(database,2);
 end
 
 % Select rows based on options.taskRange
 if ~strcmpi(options.taskRange,'All')
-    taskIdx = cellfun(@(x) strcmpi(x,options.taskRange), {summary(finalIdx).task});
+    taskIdx = cellfun(@(x) strcmpi(x,options.taskRange), {database(finalIdx).task});
     finalIdx = finalIdx(taskIdx);
 end
 
 % Select rows based on sessionRange
 if ~strcmpi(options.sessionRange,'All')
-    sessionIdx = cellfun(@(x) contains(x,options.sessionRange,IgnoreCase=true), {summary(finalIdx).session});
+    sessionIdx = cellfun(@(x) contains(x,options.sessionRange,IgnoreCase=true), {database(finalIdx).session});
     finalIdx = finalIdx(sessionIdx);
 end
 
 % Select rows based on events
 if ~strcmpi(options.eventRange,'All')
-    eventIdx = cellfun(@(x) contains(x,options.eventRange,IgnoreCase=true), {summary(finalIdx).event}); % change to event
+    eventIdx = cellfun(@(x) contains(x,options.eventRange,IgnoreCase=true), {database(finalIdx).event}); % change to event
     finalIdx = finalIdx(eventIdx);
 end
 
 % Select rows based on signal
 if strcmpi(options.signalRange,'All')
-    options.signalRange = unique({summary(finalIdx).name});
+    options.signalRange = unique({database(finalIdx).name});
 else
-    if sum(cellfun(@(x) contains(x,options.signalRange,IgnoreCase=true), {summary(finalIdx).name})) == 0
+    if sum(cellfun(@(x) contains(x,options.signalRange,IgnoreCase=true), {database(finalIdx).name})) == 0
         warning('Did NOT find rows that fits the input range, skipped');
         options.empty = true;
         combined.options = options;
@@ -119,12 +118,12 @@ options.startIdx.session = cell(length(options.signalRange),1);
 for signal = 1:length(options.signalRange)
 
     % Select rows for the current signal
-    signalRows = cellfun(@(x) contains(x,options.signalRange{signal},IgnoreCase=true), {summary(finalIdx).name});
+    signalRows = cellfun(@(x) contains(x,options.signalRange{signal},IgnoreCase=true), {database(finalIdx).name});
     signalIdx = finalIdx(signalRows);
     options.signalRows = signalRows;
 
     % Check whether Fs is the same
-    uniqueFs = unique(cell2mat({summary(signalIdx).finalFs}));
+    uniqueFs = unique(cell2mat({database(signalIdx).finalFs}));
     if length(uniqueFs) > 1
         error('Selected Fs are not consistent!');
         % can add automatic resampling later
@@ -132,7 +131,7 @@ for signal = 1:length(options.signalRange)
 
     % Loop through to combine data
     for i = 1:length(signalIdx)
-        row = summary(signalIdx(i));
+        row = database(signalIdx(i));
         if (iscell(row.data) || isstruct(row.data)) && strcmpi(row.system,'Lick')
             rowData = row.data.lickRate;
         else
