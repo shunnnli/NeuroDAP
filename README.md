@@ -31,19 +31,6 @@ There are 5 major phases:
  - If labjack-based recording is used, there're two important scripts/functions:
     - ```run_labjack.mat```: this script defines the labjack settings (see below) and runs the acquisition of labjack during recording. It will automatically save inside the session folder (ie sessionName/Photometry)
     - ```concatLabjack_setupName.mat```: this function should be customized/edited based on individual rig setup. This defines the content of each channels and fills in empty labjack fields for analysis later.
- - In ```run_labjack.mat```
-    - There should be a labjack struct that contains following information. These information will be used during preprocessing phase for analysis steps like demodulation/detrending/z-score.
-        - ```labjack.name```: name of each recorded channel (eg ```{'NAc','LHb','PMT'}``` or ```{'NAc-green','NAc-Isosbestic'}```)
-        - ```labjack.record```: whether the channel is recorded/use for analysis (eg ```[1,0,0]``` if I don't have LHb recording)
-        - ```labjack.mod```: whether the channel is amplitude modulated (eg ```[1,1,0]```)
-        - ```labjack.modFreq```: what is the frequency of amplitude modulation for each channel (eg ```[200,250,nan]```)
-        - ```labjack.LEDpower1```: average power output of LED1 (calibrate every day)
-        - ```labjack.LEDpower2```: average power output of LED2 (calibrate every day)
-        - ```labjack.LEDpowerMin1```: minimal power output of LED1 (~5uW for me)
-        - ```labjack.LEDpowerMin2```: minimal power output of LED2 (~5uW for me)
-    - User can define at which frequency the signal is modulated at. The script will takes into account to lowest power that user provided (to avoid absolutely no signal) and autocalculate the maximal amplitude of modulation to prevent clipping. The average power will be the same as labjack.LEDpower
- - In ```concatLabjack_setupName.mat```
-    - As this function is heavily dependent on rig setup, please refer to the corresponding code
 
 
  ## Preprocessing phase
