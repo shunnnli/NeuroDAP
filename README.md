@@ -156,3 +156,6 @@ There are 5 major phases:
 2. Reward1/2: where EP stim and tone are paired with water
 3. Punish1/2: where EP stim and tone are paired with airpuff
 4. Timeline: Random (2 sessions) -> Reward1 (3 sessions) -> Punish1 (3 sessions) -> Reward2 (3 sessions) -> 1 week rest -> Punish2 (3 sessions but 3 animals)
+
+
+## Functions
