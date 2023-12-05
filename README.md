@@ -21,17 +21,7 @@ There are 5 major phases:
 3. Punish1/2: where EP stim and tone are paired with airpuff
 4. Timeline: Random (2 sessions) -> Reward1 (3 sessions) -> Punish1 (3 sessions) -> Reward2 (3 sessions) -> 1 week rest -> Punish2 (3 sessions but 3 animals)
 
-
- ## Recording phase
- 1. Key functions: depend on specific rig. For data acquisition using the labjack system, please see ```run_labjack.mat``` and below for details
- 2. Key files: session folder that contains respective data format for each acquisition system
- 
- ### Key points: 
- - a common sync pulse of random inter-pulse interval should be sent to all acquisition system. Otherwise synchronization during preprocessing will not be possible
- - If labjack-based recording is used, there're two important scripts/functions:
-    - ```run_labjack.mat```: this script defines the labjack settings (see below) and runs the acquisition of labjack during recording. It will automatically save inside the session folder (ie sessionName/Photometry)
-    - ```concatLabjack_setupName.mat```: this function should be customized/edited based on individual rig setup. This defines the content of each channels and fills in empty labjack fields for analysis later.
-
+ ***
 
  ## Preprocessing phase
  1. Key functions: ```loadSessions(sessionpath,options)```
@@ -99,17 +89,4 @@ There are 5 major phases:
             - ```stageTime```: define subtrial stages for further analysis. For example, you can define 2s before the event as baseline, 0.5s after the event as Cue period, and everything after that is Response period (```[-2,0;0,0.5;0.5,15]```). ```analyzeTraces()``` will calculate the average, max, and min for each stages and stored in field ```stageAvg.data```,```stageMax.data```,```stageMin.data``` respectively. Moreover, statistical analysis will also conducted within each stage to calculate the best fit line for the current stage across trials (saved in ```stageAvg.fit```), and bootstrap analysis will be done to calculate the p-value of calculated slope and intercept.
     - Design session summary plots and loop through all signals
         - This is highly dependent on specific experiments and analysis needs. See ```analyzeSessions_OptoPair(sessionpath,options)``` for examples. 
-
- ## Experiment analysis
- 1. Key functions: ```analyzeExperiments_XXX(sessionpath,options)```
- 2. Key files: ```analysis_sessionName.mat; data_sessionName.mat, timeSeries_sessionName.mat, sync_sessionName.mat, behavior_sessionName.mat```
- 
- ### Key points: 
- - To start, copy this matlab file and replace template with specific experiments. In theory, there will be a specific analyzeExperiments file for each individual experiments, as the specific needs for analysis varies between different experiments.
- - The analysis pipeline are as follows:
-    1. Select whether to load a previously ```animals``` struct (described below) or select individual session to combine.
-    2. After selecting ALL SESSIONS from an experiments, the pipeline will automatically concatenate ```analysis_sessionName.mat``` for each recording sessions. Rename properties as needed in order to facilitate further analysis.
-    3. Run ```getAnimalStruct(summary)``` function to recreate ```animals``` struct from ```summary``` struct. This combines all sessions from the same animals together while cutoffs between individual sessions are also recorded.
-    4. Save ```animals``` struct if needed. Note: saving ```summary``` struct will take extremely long (>5hrs) so while saving ```animals``` struct is much shorter  (~2min). ```animals``` struct should contain information that satisfies MOST plotting requirements so saving ```summary``` struct is not needed.
-    5. Data analysis and plotting. This part is designed to vary across experiments. Thus, following codes are just for demonstration of essential functions.
 
