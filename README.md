@@ -13,7 +13,7 @@
 
 
  ## Recording phase
- 1. Key functions: depend on specific rig. For data acquisition using the labjack system, please see run_labjack.mat and below for details
+ 1. Key functions: depend on specific rig. For data acquisition using the labjack system, please see ```run_labjack.mat``` and below for details
  2. Key files: session folder that contains respective data format for each acquisition system
  
  ### Key points: 
@@ -44,11 +44,11 @@
  ### Key points: 
  - Use ```loadSessions()``` to perform synchronization and necessary signal preprocessing.
  - ```loadSessions()``` contains following steps
-    1. Detects how many acquisition system exists within the session folder by searching for following files.
+    1. **Detects how many acquisition system exists within the session folder by searching for following files.**
         - NIDAQ and Neuropixel: .ap.bin or .imec.bin
         - Labjack photometry: /Photometry folder
         - Camera: cam1_XXX.avi and times_cam1_XXX.csv
-    2. Run signal preprocessing for each individual acquisition system
+    2. **Run signal preprocessing for each individual acquisition system**
         - For NIDAQ:
             - digital: assigns each digital channel to corresponding events (packaged into function later)
             - analog: threshold and extracts rising edge if licking is recorded, or perform downsample (to ```options.downsampleFs```) if photometry/movement traces are recorded
@@ -66,11 +66,11 @@
         - For camera:
             - read times_cam1_XXX.csv file. Extract sync pulse and camera readings from Bonsai
             - If there is Bonsai-analyzed data like pupil/eye area, perform downsample (```downsamplePhotometry()```) and optional detrending based on user input
-    3. Synchronization (IMPORTANT)
+    3. **Synchronization**
         - Calculate inter-pulse interval of sync pulse recorded in each acquisition system
         - Perform cross-correlation to find the first common sync pulse
         - Assign each sample of each acquisition system with a common timestamp. This timestamp will be used to cross-reference between different acquisition system.
-            - For example: water is delivered at NIDAQ sample 10003240, which corresponding to common time 10.1s. To find the photometry traces in Labjack aligned to this event, I can find the closest timestamp in labjack system (eg. 10.1003s and plot the traces)
+            - For example: water is delivered at NIDAQ sample 10003240, which corresponding to common time 10.1s. To find the photometry traces in Labjack aligned to this event, I can find the closest timestamp in labjack system (eg. 10.1003s) and plot the traces
         - Calculate time offset comparing to behavior (used in sabatini lab datajoint pipeline)
         - Save everything in ```params.sync``` fields and save ```params``` struct in ```sync_sessionName.mat```
 - ```params``` struct in ```sync_sessionName.mat``` will be the struct that stores ALL the key params related to synchronization, acquisition, and behavior type of the session. Following session analysis phase will heavily utilize and refer to this structure.
@@ -103,7 +103,7 @@
     - Design session summary plots and loop through all signals
         - This is highly dependent on specific experiments and analysis needs. See ```analyzeSessions_OptoPair(sessionpath,options)``` for examples. 
         - Four function will be highly useful:
-            - ```plotTraces()```:
+            - ```plotTraces()```: 
             - ```plotLicks()```:
             - ```plotGroupTraces()```:
             - ```plotHeatmap()```:
