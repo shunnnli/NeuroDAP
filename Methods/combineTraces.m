@@ -112,8 +112,8 @@ trialNumData = cell(length(options.signalRange),1);
 trialTableData = cell(length(options.signalRange),1);
 
 % To record session/animal changes
-options.animalStartIdx = cell(length(options.signalRange),1); prev_animal = '';
-options.sessionStartIdx = cell(length(options.signalRange),1);
+options.startIdx.animal = cell(length(options.signalRange),1); prev_animal = '';
+options.startIdx.session = cell(length(options.signalRange),1);
 
 %% Concat .data in each selected rows into a array for plotting
 for signal = 1:length(options.signalRange)
@@ -141,7 +141,7 @@ for signal = 1:length(options.signalRange)
 
         % If enter a new animal, update animalStartIdx
         if ~strcmpi(prev_animal,row.animal)
-            options.animalStartIdx{signal} = [options.animalStartIdx{signal}; size(data{signal},1)+1];
+            options.startIdx.animal{signal} = [options.startIdx.animal{signal}; size(data{signal},1)+1];
             prev_animal = row.animal;
         end
 
@@ -213,7 +213,7 @@ for signal = 1:length(options.signalRange)
             warning('combineTraces: empty trialNumber or trialTable found, skipped for now');
         end
     end
-    options.sessionStartIdx{signal} = find([-1; diff(trialNumData{signal})]<0); % Not working for animals
+    options.startIdx.session{signal} = find([-1; diff(trialNumData{signal})]<0); % Not working for animals
 end
 
 %% Save

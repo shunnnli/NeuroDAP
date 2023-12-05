@@ -99,7 +99,7 @@ elseif sum(strcmpi(options.groupby,["animal","animals"]))
 
     % Calculate start and end trials
     startTrials = options.animalStartIdx;
-    endTrials = [options.animalStartIdx(2:options.nGroups); nTraces];
+    endTrials = [options.animalStartIdx(2:options.nGroups), nTraces];
     if endTrials(end) > nTraces; endTrials(end) = nTraces; end
 
 elseif sum(strcmpi(options.groupby,["session","sessions"]))
@@ -135,13 +135,12 @@ for i = 1:options.nGroups
     else
         plotData = traces(startTrial:endTrial,:);
         plotSEM(timestamp,plotData,colormap(nColors(i),:),LineStyle=options.LineStyle,LineWidth=options.LineWidth);
-
         if sum(strcmpi(options.groupby,["trial","trials"]))
             legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial),' (n=',num2str(size(plotData,1)),')'];
         elseif sum(strcmpi(options.groupby,["animal","animals"]))
-            legendList{i} = ['Animal ', num2str(i),' (n=',num2str(size(plotData,1)),')'];
+            legendList{i} = ['Animal ', num2str(startTrial),'-',num2str(endTrial),' (n=',num2str(size(plotData,1)),')'];
         elseif sum(strcmpi(options.groupby,["session","sessions"]))
-            legendList{i} = ['Session ', num2str(i),' (n=',num2str(size(plotData,1)),')'];
+            legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial),' (n=',num2str(size(plotData,1)),')'];
         end
     end
 end

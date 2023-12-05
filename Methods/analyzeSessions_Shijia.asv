@@ -266,9 +266,9 @@ analysisLabels_5 = {'Normal 4','Catch 2','Catch 6'};
 taskLegend_5 = getLegend(analysisEvents_5,analysisLabels_5);
 
 % to-do: concatenate analysis events
-analysisEvents = {analysisEvents_1 analysisEvents_2 analysisEvents_3 analysisEvents_4 analysisEvents_5};
-analysisLabels = {analysisLabels_1 analysisLabels_2 analysisLabels_3 analysisLabels_4 analysisLabels_5}; 
-eventTrialNum = {};
+analysisEvents = [analysisEvents_1, analysisEvents_2, analysisEvents_3, analysisEvents_4, analysisEvents_5];
+analysisLabels = [analysisLabels_1, analysisLabels_2, analysisLabels_3, analysisLabels_4, analysisLabels_5]; 
+eventTrialNum = [eventTrialNum_1, eventTrialNum_2, eventTrialNum_3, eventTrialNum_4, eventTrialNum_5];
 if options.analyzeTraces
     analysis = analyzeTraces(timeSeries,labjack.lick,analysisEvents,analysisLabels,params,...
                             trialNumber=eventTrialNum,trialTable=trials);
