@@ -11,9 +11,9 @@
 
  Please refer to the wiki section for more detial documentation.
 
- ## Intro of sample data set
+ ## Introduction of sample data set
 
-The sample data set is recorded by Shun Li in 2023. It contains 4 animals, with 1 animals with off-target expression ('SL137'). dLight signals in NAc, pupil/Eye area, and lick are simultaneously recorded for all sessions.
+The sample data set is recorded by Shun Li in 2023. It contains two parts: 1）a sample recording session for showing preprocessing/session analysis phase 2）a sample `animals` struct for showing experiment analysis phase. The `animals` struct contains 4 animals, with 1 animals with off-target expression ('SL137'). dLight signals in NAc, pupil/Eye area, and lick are simultaneously recorded for all sessions.
 
 There are 5 major phases:
 1. Random: water, airpuff, EP stim, and tone (75dB) are delivered randomly
@@ -22,6 +22,4 @@ There are 5 major phases:
 4. Timeline: Random (2 sessions) -> Reward1 (3 sessions) -> Punish1 (3 sessions) -> Reward2 (3 sessions) -> 1 week rest -> Punish2 (3 sessions but 3 animals)
 
  ***
-
-
 
