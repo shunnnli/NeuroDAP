@@ -1,5 +1,7 @@
 # NeuroDAP
- NeuroDAP (Neuroscience Data Analysis Pipeline) for recording, synchronization, preprocessing, and analysis of neuropixel, photometry, camera, and behavior recordings
+ NeuroDAP (Neuroscience Data Analysis Pipeline) is a MATLAB based pipeline for recording, synchronization, preprocessing, and analysis of neuropixel, photometry, camera, and behavior recordings.
+
+ It is developed by Shun Li in Bernardo Sabatini lab, Harvard Medical School.
 
  ## General structure
 
