@@ -11,7 +11,7 @@
  3. [**Session analysis**](https://github.com/shunnnli/NeuroDAP/wiki/1.3-Phase:-session-analysis): extract trial table for each session; align signals and perform basic analysis of these aligned signals; plot session summary
  4. [**Experiment analysis**](https://github.com/shunnnli/NeuroDAP/wiki/1.4-Phase:-experiment-analysis): pooled all sessions across all animals; perform data analysis
 
- Please refer to the wiki section for more detail documentation.
+ Please refer to the wiki section for more detail documentation in the [Wiki](https://github.com/shunnnli/NeuroDAP/wiki).
 
  ## Introduction of sample data set
 
