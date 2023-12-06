@@ -109,8 +109,9 @@ for i = 1:length(eventInSec)
     lastBin = firstBin + length(timestamp) - 1;
     eventBin = floor(eventInSec(i)*signalFs);
     if options.baselineWindow ~= 0
-        firstBin_baseline = floor((eventInSec(i) - options.baselineWindow)*signalFs);
-        baseline = mean(signal(firstBin_baseline:(eventBin-1)));
+        firstBin_baseline = floor((eventInSec(i) + options.baselineWindow(1))*signalFs);
+        lastBin_baseline = floor((eventInSec(i) + options.baselineWindow(2))*signalFs);
+        baseline = mean(signal(firstBin_baseline:lastBin_baseline));
     else
         baseline = 0;
     end

@@ -24,4 +24,3 @@ There are 5 major phases:
 4. Timeline: Random (2 sessions) -> Reward1 (3 sessions) -> Punish1 (3 sessions) -> Reward2 (3 sessions) -> 1 week rest -> Punish2 (3 sessions but 3 animals)
 
  ***
-
