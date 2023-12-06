@@ -218,7 +218,8 @@ combined = combineTraces(animals,timeRange=timeRange,...
                             taskRange=taskRange,...
                             totalTrialRange=totalTrialRange,...
                             trialRange=trialRange,...
-                            signalRange=signalRange);
+                            signalRange=signalRange,...
+                            trialConditions='trials.TrialNumber==1');
 plotSEM(combined.timestamp,combined.data{1},[.213 .543 .324]);
 
 %% Baseline: plot water, airpuff, stim, tone
@@ -269,7 +270,7 @@ signalRange = 'NAc';
 groupSizeList = [50;50];
 nGroupsList = [15;15];
 
-for task = 1:1%length(taskRange)
+for task = 1:length(taskRange)
     initializeFig(0.5,0.3); tiledlayout('flow');
     for event = 1:length(eventRange)
         nexttile;
@@ -282,7 +283,7 @@ for task = 1:1%length(taskRange)
                                     signalRange=signalRange);
         legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,...
                         groupSize=groupSizeList(event),nGroups=nGroupsList(event),...
-                        groupby='session',startIdx=combined.options.startIdx);
+                        groupby='trials',startIdx=combined.options.startIdx,remaining='include');
         plotEvent(eventRange{event},.5,color=bluePurpleRed(500,:));
         xlabel('Time (s)'); ylabel([signalRange,' z-score']);
         legend(legendList,'Location','northeast');
@@ -296,7 +297,7 @@ end
 %% Plot overall to show animal learned (w or w/o paAIP2)
 
 timeRange = [-0.5,3];
-eventRange = {'Stim','Pair'};
+eventRange = {'Pair'};
 animalRange = {'SL133','SL135','SL136'};%'All';
 taskRange = {'Reward1','Punish1','Reward2','Punish2'};
 totalTrialRange = [1,60;60,150];
@@ -307,8 +308,8 @@ groupSizeList = [20,20;20,20];
 nGroupsList = [10,10;50,50];
 eventColor = {bluePurpleRed(1,:),bluePurpleRed(400,:)};
 
-for task = 1:length(taskRange)
-    initializeFig(.5,.5); tiledlayout('flow');
+for task = 1:1%length(taskRange)
+    initializeFig(0.5,0.3); tiledlayout('flow');
     for t = 1:size(totalTrialRange,1)
         for event = 1:length(eventRange)
             nexttile; 
@@ -321,16 +322,15 @@ for task = 1:length(taskRange)
                                         signalRange=signalRange);
             legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,...
                             groupSize=groupSizeList(t,event),nGroups=nGroupsList(t,event),...
-                            groupby='trials',startIdx=combined.options.startIdx,...
-                            remaining='include');
+                            groupby='trials',startIdx=combined.options.startIdx);
             plotEvent(eventRange{event},.5,color=eventColor{t});
             xlabel('Time (s)'); ylabel([signalRange,' z-score']);
             legend(legendList,'Location','northeast');
         end
     end
-    saveFigures(gcf,['Summary_paAIP2_',taskRange{task},'-',eventRange{event},'_',signalRange],...
-        strcat(resultspath),...
-        saveFIG=true,savePDF=true);
+    % saveFigures(gcf,['Summary_paAIP2_',taskRange{task},'-',eventRange{event},'_',signalRange],...
+    %     strcat(resultspath),...
+    %     saveFIG=true,savePDF=true);
 end
 % autoArrangeFigures
 

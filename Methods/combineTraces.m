@@ -26,6 +26,8 @@ arguments
 
     options.statsType string = 'All'
     options.empty logical = false
+
+    options.trialConditions string
 end
 
 %% Check input
@@ -190,6 +192,13 @@ for signal = 1:length(options.signalRange)
                     trialRange = totalTrialRange(options.trialRange(1):options.trialRange(2));
                 end
             end
+        end
+
+        % Check trialConditions in trialTable
+        trials = row.trialInfo.trialTable;
+        if isfield(options,'trialConditions')
+            trialRange = intersect(trialRange,find(eval(options.trialConditions)));
+            if isempty(trialRange); warning('Did not find trials that fits trialConditions! Check expression!'); end
         end
     
         % Combined .data
