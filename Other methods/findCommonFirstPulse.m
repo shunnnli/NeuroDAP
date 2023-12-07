@@ -33,6 +33,6 @@ lowFirstIdx = y_first_idx; lowFirst = lowIdx(y_first_idx);
 % plot(2*low_upsample(scalar*lowIdx(lowFirstIdx):scalar*lowIdx(lowFirstIdx)+l));
 % title([highName,' pulse=',num2str(highFirstIdx), ', ',lowName,' pulse=',num2str(lowFirstIdx),...
 %    ', dotprod: ',num2str(dotprod),', maxdot: ',num2str(maxdot)]);
-autoArrangeFigures();
+% autoArrangeFigures();
 
 end
