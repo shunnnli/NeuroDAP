@@ -9,13 +9,13 @@ arguments
     leftLick logical
     rightLick logical
     params struct
-
+    
     options.mode string = 'trace'
     options.side double = [0 1] % only return right lick
     options.leftSolenoid double
     options.rightSolenoid double
     options.airpuff double
-
+    
     options.plot logical = true
     options.markerSize double = 20
 end

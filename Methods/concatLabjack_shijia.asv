@@ -98,23 +98,23 @@ lick_labjack = output(mod(1:totalLen,numChannels)==7);
 temp = [false, diff(lick_labjack)];
 lick_labjack = (temp==-1); 
 labjack.lick = lick_labjack;
-lick_labjack_tmp = lick_labjack;
+% lick_labjack_tmp = lick_labjack;
 
 % % clean licks with ITI 90ms - still do it in getTrialTable
-lickFallingEdges = find(lick_labjack);
-previousLickOnset = lickFallingEdges(1);
-lickITICutoffArduino = 90;
-lickFallingEdges_cleaned = [previousLickOnset];
-for p = 1:length(lickFallingEdges)
-    if lickFallingEdges(p)-previousLickOnset>(lickITICutoffArduino/1000*labjack.samplerate)
-        previousLickOnset = lickFallingEdges(p);
-        lickFallingEdges_cleaned = [lickFallingEdges_cleaned previousLickOnset];
-    end
-end
-lick_labjack_zeroed = zeros(size(lick_labjack));
-lick_labjack_zeroed(lickFallingEdges_cleaned)=1;
-labjack.lick = lick_labjack_zeroed;
-% figure;plot(lick_labjack_tmp(25000:30000),'b');hold on;plot(lick_labjack_zeroed(25000:30000),'r');
+% lickFallingEdges = find(lick_labjack);
+% previousLickOnset = lickFallingEdges(1);
+% lickITICutoffArduino = 90;
+% lickFallingEdges_cleaned = [previousLickOnset];
+% for p = 1:length(lickFallingEdges)
+%     if lickFallingEdges(p)-previousLickOnset>(lickITICutoffArduino/1000*labjack.samplerate)
+%         previousLickOnset = lickFallingEdges(p);
+%         lickFallingEdges_cleaned = [lickFallingEdges_cleaned previousLickOnset];
+%     end
+% end
+% lick_labjack_zeroed = zeros(size(lick_labjack));
+% lick_labjack_zeroed(lickFallingEdges_cleaned)=1;
+% labjack.lick = lick_labjack_zeroed;
+% % figure;plot(lick_labjack_tmp(25000:30000),'b');hold on;plot(lick_labjack_zeroed(25000:30000),'r');
 
 % solenoid
 solenoid_labjack = output(mod(1:totalLen,numChannels)==0);
@@ -140,11 +140,9 @@ for i = 1:size(labjack.name,2)
 end
 
 figure;
-plot(solenoid_labjack); hold on; plot(cue_labjack); hold on;
-plot(labjack.lick);%hold on; plot(lick_labjack_tmp);
+plot(solenoid_labjack); hold on; plot(cue_labjack); 
 xlim([20000 80000]); title('example cue and solenoid events');
-cd('\\research.files.med.harvard.edu\Neurobio\MICROSCOPE\Shijia\BE28 BE31 Task_photometry\BE29 M164-167\20231205_M167L_4W40O40C10D10_g0');
-saveas(gcf, strcat(extractBefore(sessionName,'_g'),'_ExampleTrialEventRisingEdges.tif'));
+
 %% Plot photometry summary plot (skipped)
 if options.plot
     initializeFig(0.67,0.67); tiledlayout(labjack.nSignals*2 + 3,1);

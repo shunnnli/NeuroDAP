@@ -1,13 +1,14 @@
-function eventTable = getEventTable(events,params)
+function eventTable = getEventTable(events,params,options)
+
+arguments
+    events cell
+    params struct
+    options.typeName cell = {"trialStart","airpuff","water","lick","tone","redStim"} 
+end
 
 % Load events as separte vectors
 allTrials = events{1};
-% airpuffON = events{2};
-% rightSolenoidON = events{3};
-% rightLickON = events{4};
-% toneON = events{5};
-% stimON = events{6};
-typeName = {"trialStart","airpuff","water","lick","tone","redStim"};
+typeName = options.typeName;
 
 % Find total events
 totalEvents = 0;

@@ -6,7 +6,7 @@ arguments
     analysisEvents cell
     analysisLabels cell
     params
-
+    
     options.task string = "NaN"
     options.timeRange double = [-15, 15]
     options.stageTime double = [-2,0;0,2]
@@ -20,6 +20,13 @@ end
 
 disp('Ongoing: analyze traces and saved in anlaysis struct');
 options.analysisDate = char(datetime('today','Format','yyyyMMdd'));
+
+% Remove empty indices
+if isfield(options,'trialNumber')
+    options.trialNumber = options.trialNumber(~cellfun('isempty',analysisEvents));
+end
+analysisLabels = analysisLabels(~cellfun('isempty',analysisEvents));
+analysisEvents = analysisEvents(~cellfun('isempty',analysisEvents));
 
 %% Define analysis params
 analysis = struct([]);

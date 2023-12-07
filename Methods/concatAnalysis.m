@@ -1,5 +1,9 @@
 function summary = concatAnalysis(sessionList)
 
+arguments
+    sessionList cell
+end
+
 summary = struct([]);
 disp('Finished: summary.mat not found, created a new one');
 

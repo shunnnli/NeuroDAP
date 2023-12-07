@@ -1,17 +1,9 @@
-function [traces,timestamp] = plotTraces(eventIdx,timeRange,signal,color,params,options)
+function [traces,timestamp] = getTraces(eventIdx,timeRange,signal,params,options)
 
-%% Notes
-% plotTraces.m, Shun Li
-% 2023/09/02: change to generalize to event or signal streams of choice
-% 2023/09/05: fixed minor error to make it applicable for camera and
-% downsampled LJ photometry
-
-%% Function
 arguments
     eventIdx double
     timeRange double
     signal double
-    color
     params struct
 
     % options.getTraces logical = true
@@ -19,18 +11,7 @@ arguments
     options.signalSystem string = 'lj'
     options.signalFs double = nan
 
-    % Plot options
-    options.plot logical = true % whether or not to plot traces
-    options.LineStyle (1,1) string = "-"
-    options.LineWidth (1,1) {mustBeNumeric} = 2
-    options.plotShuffled logical = false
-    options.shuffledColor double = [.75, .75, .75]
-
     options.rmmissing logical = true % remove nan rows
-    options.smooth double = 0; % 0: no smoothing, else is samples of smooth data
-    options.smoothMethod string = 'movmean';
-    options.baselineWindow double = 0 % subtracted by x secs before event time
-
 end
 
 % 0. Define event system
@@ -127,29 +108,5 @@ end
 % 3.1 Remove missing if necessary
 if options.rmmissing; traces = rmmissing(traces); end
 
-% 4. plot traces
-if options.plot
-    % 4.1 Smooth data if neccessary
-    if options.smooth ~= 0
-        if options.smooth == 1; smoothWindow = 0.1*signalFs;
-        else; smoothWindow = options.smooth;
-        end
-    else
-        smoothWindow = 0;
-    end
-
-    % 4.2 Plot shuffled data
-    if options.plotShuffled
-        shuffled = shuffleTraces(traces);
-        plotSEM(timestamp,shuffled,options.shuffledColor,smooth=smoothWindow,smoothMethod=options.smoothMethod,...
-        LineStyle=options.LineStyle,LineWidth=options.LineWidth); hold on
-    end
-
-    % 4.3 Plot SEM
-    plotSEM(timestamp,traces,color,smooth=smoothWindow,smoothMethod=options.smoothMethod,...
-        LineStyle=options.LineStyle,LineWidth=options.LineWidth);
-    xlabel('Time (s)'); ylabel('z-score'); hold on
-end
 
 end
-

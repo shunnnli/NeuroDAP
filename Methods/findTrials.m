@@ -1,4 +1,4 @@
-function [trialNumber,removeIdx] = findTrials(eventTime,trialTable)
+function trialNumber = findTrials(eventTime,trialTable)
 
 % Given a event time, find which trial this event belongs to
 arguments

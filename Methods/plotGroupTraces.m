@@ -40,7 +40,7 @@ if isfield(options,'startIdx')
 end
 
 % Reorganize traces if animalStartIdx is provided (interleave animals)
-if length(options.animalStartIdx)>1 && sum(strcmpi(options.groupby,["trial","trials"]))
+if isfield(options,'animalStartIdx') && length(options.animalStartIdx)>1 && sum(strcmpi(options.groupby,["trial","trials"]))
     traces_animals = cell(1,length(options.animalStartIdx));
     for i = 1:length(options.animalStartIdx)
         startIdx = options.animalStartIdx(i);
@@ -132,7 +132,7 @@ legendList = cell(options.nGroups,1);
 nColors = round(linspace(1,size(colormap,1),options.nGroups));
 
 for i = 1:options.nGroups
-    if length(options.animalStartIdx)>1 && sum(strcmpi(options.groupby,["trial","trials"]))
+    if isfield(options,'animalStartIdx') && length(options.animalStartIdx)>1 && sum(strcmpi(options.groupby,["trial","trials"]))
         startTrial = startTrials(i); endTrial = endTrials(i);
         plotData = cell2mat(cellfun(@(x,dim) x(startTrial:min(endTrial,dim),:),traces_animals,num2cell(traces_animals_dim),'UniformOutput',false)');
         plotSEM(timestamp,plotData,colormap(nColors(i),:),LineStyle=options.LineStyle,LineWidth=options.LineWidth);

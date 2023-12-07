@@ -219,7 +219,60 @@ rewarded_catch6_sixthLick = cellfun(@(x) x(3),rewarded_catch6_outcomeLicks);
 rewarded_catch6_firstBoutLastLick = cellfun(@(x) x(end),rewarded_catch6_outcomeLicks);
 rewarded_catch6_trialLastLick = cellfun(@(x) x(end),rewarded_catch6_baselineLicks);
 
+
+
+%% for debugging water
+% RewardTimeDebugPlotIdx = rewardedTrials_catch6(:,2);
+RewardTimeDebugPlotIdx = trials{strcmpi(trials.TrialType,'Rewarded'),"RewardTimeDebugPlot"};
+analysisEvents_0 = {RewardTimeDebugPlotIdx};
+analysisLabels_0 = {'DebugWaterReward'};
+taskLegend_0 = getLegend(analysisEvents_0,analysisLabels_0);
+
+timeRange = [-0.5,3];
+
+% Find the number of photometry channels
+% photometryIdx = find(cellfun(@(x) contains(x,["NI","LJ"],"IgnoreCase",true), {timeSeries.system}));
+photometryIdx = find(cellfun(@(x) contains(x,["Green","Iso"],"IgnoreCase",true), {timeSeries.name}));
+
+% photometryName = cellfun(@(x) unique(x,'rows'), {timeSeries(photometryIdx).name},'UniformOutput',false);
+nSignals = length(photometryIdx);
+disp(['Finished: found ', num2str(nSignals),' photometry signals']);
+
+if options.plotPhotometry
+
+    for photometry = 1:nSignals
+        % Load signal of interest
+        path = photometryIdx(photometry);
+        signal = timeSeries(path).data;
+        finalFs = timeSeries(path).finalFs;
+        system = timeSeries(path).system;
+
+%         initializeFig(.5,.5); tiledlayout('flow');
+        initializeFig(.5,1); 
+        % tiledlayout(5,2);
+
+        % Figure set 0: for cue and water events
+        nexttile
+        [~,~] = plotTraces(RewardTimeDebugPlotIdx,timeRange,signal,bluePurpleRed(1,:),params,...
+                                signalFs=finalFs,...
+                                signalSystem=system,eventSystem=params.session.baselineSystem);
+        plotEvent('',0);
+        xlabel('Time to rewardTimeDebug (s)'); ylabel('z-score');
+        legend(taskLegend_0,'Location','northeast');
+        title('rewardTimeDebug, neural');
+        
+        nexttile
+        plotLicks(waterIdx,timeRange,options.lick_binSize,bluePurpleRed(1,:),[],labjack.lick,params);
+        plotEvent('',0);
+        xlabel('Time to rewardTimeDebug (s)'); ylabel('Licks/s');
+        legend(taskLegend_0,'Location','northeast');
+        title('rewardTimeDebug, lick');
+    end
+end
+
+
 %% Analyze traces
+
 % Figure set 1: for cue and water events
 analysisEvents_1 = {waterIdx,rewardedIdx,omissionIdx,missIdx,baselineIdx};
 eventTrialNum_1 = {findTrials(waterIdx,trials),...

@@ -20,8 +20,8 @@ if ~ischar(options.color) && sum(options.color) > 3 && size(options.color,1) == 
     options.color = options.color ./ 255;
 end
 
-if strcmp(options.unit,'ms')
-    duration = duration * 1000;
+if strcmpi(options.unit,'ms')
+    duration = duration / 1000;
 end
 
 % Get current axis limit

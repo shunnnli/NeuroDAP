@@ -7,13 +7,13 @@ arguments
     options.rollingWindowTime double = 180
     options.withPhotometryNI logical = false
     options.plotPhotometry logical = true
-    options.plotLicks logical = true
+    options.plotBehavior logical = true
 end
 
 Prompt = {'Session','reloadAll',...
           'recordLJ','rollingWindowTime',...
           'withPhotometryNI',...
-          'plotPhotometry','plotLicks'};
+          'plotPhotometry','plotBehavior'};
 
 Formats(1,1).enable = 'inactive'; % SessionName, acts as a label
 Formats(2,1).type = 'check';
@@ -21,7 +21,7 @@ Formats(3,1).type = 'edit';       % labjack.record
 Formats(4,1).type = 'edit';       % rollingWindowTime
 Formats(5,1).type = 'check';      % With photometryNI
 Formats(6,1).type = 'check';      % Plot photometry
-Formats(7,1).type = 'check';      % Plot licks
+Formats(7,1).type = 'check';      % Plot behavior
 
 % Create initial answer
 DefAns = cell(size(Prompt,1),length(sessionList));
@@ -37,7 +37,7 @@ for s = 1:length(sessionList)
     DefAns{4,s} = num2str(options.rollingWindowTime);
     DefAns{5,s} = options.withPhotometryNI;
     DefAns{6,s} = options.plotPhotometry;
-    DefAns{7,s} = options.plotLicks;
+    DefAns{7,s} = options.plotBehavior;
 end
 DefAns = cell2struct(DefAns,Prompt,1);
 Prompt = repmat(Prompt',1,2);

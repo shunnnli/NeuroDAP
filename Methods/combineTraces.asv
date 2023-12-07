@@ -210,21 +210,20 @@ for signal = 1:length(options.signalRange)
         end
 
         % Check sessionRange if database do not have field sessions (ie animal struct)
-        % if ~isfield(database,'session') && ~strcmpi(options.sessionRange,'All')
-        %     sessionIdx = cellfun(@(x) contains(x,options.sessionRange,IgnoreCase=true), row.options.sessionList);
-        %     options.sessionList = [options.sessionList,row.options.sessionList(sessionIdx)];
-        %     sessionTrials = [];
-        %     for s = 1:length(sessionIdx)
-        %         startTrial = row.options.startIdx.session(sessionIdx(s));
-        %         if s == length(sessionIdx); endTrial = size(rowData,1);
-        %         else; endTrial = row.options.startIdx.session(sessionIdx(s+1)); end
-        %         sessionTrials = [sessionTrials,startTrial:endTrial];
-        %     end
-        %     trialRange = intersect(trialRange,sessionTrials);
-        %     if isempty(trialRange); warning('Did not find trials that fits the sessionRange!'); end
-        % else
-        %     options.sessionList = [options.sessionList,row.options.sessionList];
-        % end
+        if ~isfield(database,'session') && ~strcmpi(options.sessionRange,'All')
+            sessionIdx = cellfun(@(x) contains(x,options.sessionRange,IgnoreCase=true), row.options.sessionRange);
+
+            sessonTrials = [];
+            for s = 1:length(sessionIdx)
+                startTrial = row.options.startIdx.session(sessionIdx(s));
+                if s == length(sessionIdx); endTrial = size(rowData,1);
+                else; endTrial = row.options.startIdx.session(sessionIdx(s+1)); end
+
+                sessionTrials = [sessionTrials,startTrial:endTrial];
+            end
+            trialRange = intersect(trialRange,sessionTrials);
+            if isempty(trialRange); warning('Did not find trials that fits the sessionRange!'); end
+        end
 
         % Check trialConditions in trialTable
         if isfield(options,'trialConditions')

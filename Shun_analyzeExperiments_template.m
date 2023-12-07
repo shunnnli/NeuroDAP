@@ -111,8 +111,6 @@
 clear; close all;
 addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
 [~,~,~,~,~,~,bluePurpleRed] = loadColors;
-r2p_cmap = getColormap([255, 50, 58],[0 0 0],500,'midcol',[255 255 255]);
-p2r_cmap = getColormap([241 160 255],[0 0 0],500,'midcol',[255 255 255]);
 today = char(datetime('today','Format','yyyyMMdd'));
 
 % Define result directory
@@ -120,7 +118,7 @@ resultspath = osPathSwitch('/Volumes/MICROSCOPE/Shun/Project valence/Results');
 
 % Building summary struct from selected sessions
 answer = questdlg('Group sessions or load summary?','Select load sources',...
-                  'Group single sessions','Load animals struct','Load sample data','Load animals struct');
+                  'Group single sessions','Load combined data','Load sample data','Load combined data');
 
 if strcmpi(answer,'Group single sessions')
     sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/MICROSCOPE/Shun/Project valence/Recordings'));
@@ -131,7 +129,7 @@ if strcmpi(answer,'Group single sessions')
     % Create resultspath if necessary
     if isempty(dir(resultspath)); mkdir(resultspath); end
 
-elseif strcmpi(answer,'Load combined struct')
+elseif strcmpi(answer,'Load combined data')
     fileList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/MICROSCOPE/Shun/Project valence/Results'));
     groupSessions = false;
     % Update resultspath
@@ -163,6 +161,7 @@ end
 
 if groupSessions    
     summary = concatAnalysis(sessionList);
+    trialTables = loadTrialTables(sessionList);
 end
 
 % Check summary format (should all be chars NOT strings)
@@ -183,18 +182,27 @@ for i = 500:919; summary(i).task = 'Punish1'; end
 for i = 920:1279; summary(i).task = 'Reward2'; end
 for i = 1280:1594; summary(i).task = 'Punish2'; end
 
-%% Optional: Create animals struct
+%% Create animals struct
 
 if isempty(dir(fullfile(resultspath,'animals*.mat'))) || groupSessions
     animals = getAnimalsStruct(summary);
 end
 
+%% Optional: update animals struct
+
+for i = 1:length(animals)
+   animals(i).options.startIdx.animal =  animals(i).options.animalStartIdx;
+   animals(i).options.startIdx.session = animals(i).options.sessionStartIdx;
+
+   animals(i).options = rmfield(animals(i).options,'animalStartIdx');
+   animals(i).options = rmfield(animals(i).options,'sessionStartIdx');
+end
 
 %% Save animals struct
 
 % Save animals.mat
 disp(['Ongoing: saving animals.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
-save(strcat(resultspath,filesep,'animals_',today),'animals','sessionList','-v7.3');
+save(strcat(resultspath,filesep,'animals_',today),'animals','trialTables','sessionList','-v7.3');
 disp(['Finished: saved animals.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
 
 % Save summary.mat (not recommend!! Will take forever!!)
@@ -204,23 +212,18 @@ disp(['Finished: saved animals.mat (',char(datetime('now','Format','HH:mm:ss')),
 
 %% Test: Plot traces from summary/animals struct
 
-timeRange = [-0.5,3];
-eventRange = 'Water';
-animalRange = ["SL133","SL135"];
-taskRange = 'Random';
-totalTrialRange = 'All';
-trialRange = 'All'; % range of trials in each session
-signalRange = 'NAc';
-
-combined = combineTraces(animals,timeRange=timeRange,...
-                            eventRange=eventRange,...
-                            animalRange=animalRange,...
-                            taskRange=taskRange,...
-                            totalTrialRange=totalTrialRange,...
-                            trialRange=trialRange,...
-                            signalRange=signalRange,...
-                            trialConditions='trials.TrialNumber==1');
-plotSEM(combined.timestamp,combined.data{1},[.213 .543 .324]);
+initializeFig(0.5,0.3);
+combined = combineTraces(animals,timeRange=[-0.5,3],...
+                            eventRange='Water',...
+                            animalRange="SL133",...
+                            taskRange='Random',...
+                            totalTrialRange='All',...
+                            trialRange='All',...
+                            signalRange='NAc');
+plotSEM(combined.timestamp,shuffleTraces(combined.data{1}),[0.75,0.75,0.75]);
+plotSEM(combined.timestamp,combined.data{1},bluePurpleRed(1,:));
+plotEvent('Water',0,color=bluePurpleRed(1,:))
+xlabel('Time (s)'); ylabel('z-score');
 
 %% Baseline: plot water, airpuff, stim, tone
 
@@ -280,10 +283,11 @@ for task = 1:length(taskRange)
                                     taskRange=taskRange{task},...
                                     totalTrialRange=totalTrialRange,...
                                     trialRange=trialRange,...
-                                    signalRange=signalRange);
+                                    signalRange=signalRange,...
+                                    trialConditions="strcmpi(trials.Outcome,'H') & trials.nAnticipatoryLicks >= 3");
         legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,...
                         groupSize=groupSizeList(event),nGroups=nGroupsList(event),...
-                        groupby='trials',startIdx=combined.options.startIdx,remaining='include');
+                        groupby='trials',startIdx=combined.options.startIdx,remaining='separate');
         plotEvent(eventRange{event},.5,color=bluePurpleRed(500,:));
         xlabel('Time (s)'); ylabel([signalRange,' z-score']);
         legend(legendList,'Location','northeast');

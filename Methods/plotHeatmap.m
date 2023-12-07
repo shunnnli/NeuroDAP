@@ -1,13 +1,15 @@
-function plotHeatmap(traces,t,options)
+function plotHeatmap(traces,timestamp,options)
 
 arguments
     traces double
-    t double
-    options.colormap double
+    timestamp double
+    options.flipYAxis logical = false
 end
 
-imagesc(t,1:size(traces,1),traces);
-set(gca,'YDir','normal');
+imagesc(timestamp,1:size(traces,1),traces);
+if ~options.flipYAxis
+    set(gca,'YDir','normal');
+end
 colorbar; box off
 
 end

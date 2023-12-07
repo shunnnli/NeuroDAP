@@ -3,7 +3,7 @@ function stats = analyzeStages(trace,stageTime,options)
 arguments
     trace double
     stageTime double
-
+    
     options.timeRange double = [-15,15]
     options.nboot double = 10000
     options.finalFs double = 50

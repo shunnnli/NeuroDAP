@@ -44,6 +44,7 @@ else
     ySEM = options.delta;
 end
 
+% Plot
 if strcmp(options.plotStyle,'line')
     if options.plotIndividual
         for i = 1:size(y,1)

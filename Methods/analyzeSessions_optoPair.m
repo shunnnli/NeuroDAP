@@ -17,7 +17,7 @@ arguments
     options.performing logical = false % Only plot traces where the animal performs
     
     options.plotPhotometry logical = true % Plot photometry summary plot
-    options.plotLicks logical = true % Plot lick raster summary plot
+    options.plotBehavior logical = true % Plot lick raster summary plot
 
     options.lick_binSize double = 0.1
 end
@@ -829,7 +829,7 @@ end
 %% Plot behavior related plots
 
 % Plot lick bout distribution
-if options.plotLicks
+if options.plotBehavior
     initializeFig(0.5,0.5); tiledlayout(2,2);
 
     ENLinSec = trials{1:end-1,"ENL"} / params.sync.behaviorFs;
@@ -861,7 +861,7 @@ if options.plotLicks
 end
 
 
-if options.plotLicks && contains(options.task,'pairing')     
+if options.plotBehavior && contains(options.task,'pairing')     
     %% Plot session overview for licking
     timeRange = [-5,10]; cameraTimeRange = [-1,5];
     markerSize = 20;

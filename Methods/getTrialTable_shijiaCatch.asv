@@ -17,12 +17,12 @@ rightLickON = events{3};
 % Reaction time: time of first lick
 % BaselineLicks (in session time), others are in trial time
 varTypes = {'double','logical','string','logical','string',...
-    'double','double','double','double','double','double','double',...
+    'double','double','double','double','double','double',...
     'double','double','double','double',...
     'cell','cell','cell','cell',...
     'cell'};
 varNames = {'TrialNumber','Outcome','TrialType','isReward','RewardType',...
-    'CueTime','NextCue','RewardTimeDebugPlot','RewardTime','ReactionTime','FirstBoutLastLickTime','TrialLastLickTime',...
+    'CueTime','NextCue','RewardTime','ReactionTime','FirstBoutLastLickTime','TrialLastLickTime',...
     'nLicks','nChoiceLicks','nOutcomeLicks','nBaselineLicks',...
     'AllTrialLicks','ChoiceLicks','OutcomeLicks','BaselineLicks',...
     'boutStartIdx'};
@@ -54,11 +54,6 @@ for i=1:length(allTrials)
     rewardTime = rightSolenoidON(rightSolenoidON>=cur_cue & rightSolenoidON<next_cue) - cur_cue;
     isReward = ~isempty(rewardTime);
     outcomeTime = min([reactionTimeSamp, rewardTime]);
-
-    rewardTimeDebug = rightSolenoidON(rightSolenoidON>=cur_cue & rightSolenoidON<next_cue);
-    if ~isempty(rewardTimeDebug)
-        rewardTimeDebugPlot = rewardTimeDebug(1);
-    end
 
     % Trial licks
     trial_licks = (rightLickON(rightLickON > cur_cue & rightLickON < next_cue) - cur_cue)';
@@ -176,54 +171,55 @@ for i=1:length(allTrials)
 
     % Trial table
     trials(i,:) = {i,outcome,trialType,isReward,RewardType,...
-        cur_cue,next_cue,rewardTimeDebugPlot,rewardTimeUse,reactionTimeUse,firstBoutLastLickTimeUse,trialLastLickTimeUse,... % add 'Use': add the time of cur_cue
+        cur_cue,next_cue,rewardTimeUse,reactionTimeUse,firstBoutLastLickTimeUse,trialLastLickTimeUse,... % add 'Use': add the time of cur_cue
         nLicks,size(choiceLicks,1),size(outcomeLicks,1),size(baselineLicks,1),... % for analyzing only the first bout: last lick: outcomeLicks(end); non-last lick: [choiceLicks + outcomeLicks(1:end-1)]
         num2cell(trialLicks_all+cur_cue,[1 2]),num2cell(choiceLicks+cur_cue,[1 2]),num2cell(outcomeLicks+cur_cue,[1 2]),num2cell(baselineLicks+cur_cue,[1 2]),...
         num2cell(boutStartIdx,[1 2])};
 
 
     % For every trial, plot the licks and reward onset to see if they are good
-    exampleTrialIdx = floor(linspace(1,length(allTrials)-1,20));
+    exampleTrialIdx = floor(linspace(1,length(allTrials),20));
 
     if ismember(i,exampleTrialIdx)
-        nexttile;
-        if ~isempty(trialLicks_all)
-            data = zeros(size(trialLicks_all));
-            data(trialLicks_all)=1;
-            scatter(1:length(data),data,'b');
-            hold on;
-        end
+    nexttile;
+    if ~isempty(trialLicks_all)
+    data = zeros(size(trialLicks_all));
+    data(trialLicks_all)=1;
+    scatter(1:length(data),data,'b');
+    hold on;
+    end
+    
+    if ~isempty(rewardTime)
+        data2 = zeros(size(rewardTime));
+        data2(rewardTime)=1;
+        scatter(1:length(data2),data2,'r');
+    hold on;
 
-        if ~isempty(rewardTime)
-            data2 = zeros(size(rewardTime));
-            data2(rewardTime)=1;
-            scatter(1:length(data2),data2,'r');
-            hold on;
+        data3 = zeros(size(rewardTimeInTrial));
+        data3(rewardTimeInTrial)=1;
+        scatter(1:length(data3),data3,'y');
+    hold on;
 
-            data3 = zeros(size(rewardTimeInTrial));
-            data3(rewardTimeInTrial)=1;
-            scatter(1:length(data3),data3,'.y');
-        end
-
-        legend({'original licks','water reward','rewardtimeintrial'});
-        xlim([0 options.behaviorFs*2]);
-        if ~isempty(closestLickToReward)
-            % if exist("closestLickToReward","var")
-            title(['Trial' num2str(i) '_' num2str(closestLickToReward)]);
-        else
-            title(['Trial' num2str(i)]);
-        end
+    data4 = zeros(size(rewardTimeInTrial));
+    data4(rewardTimeInTrial)=1;
+    scatter(1:length(data4),data4,'y');
     end
 
-    % Add a row for outside events
-    trials(i+1,:) = {0,0,0,0,0,...
-        0,0,0,0,0,0,0,...
-        0,0,0,0,...
-        {},{},{},{},{}};
+    legend(['original licks','water reward','rewardtimeintrial']);
+    xlim([0 options.behaviorFs*2]);
+    title(['Trial' num2str(i) closestLickToReward]);
+    
+    end
+    
 
-    closestLickToReward = [];
+% Add a row for outside events
+trials(i+1,:) = {0,0,0,0,0,...
+    0,0,0,0,0,0,...
+    0,0,0,0,...
+    {},{},{},{},{}};
+
 
 end
 
-% cd('\\research.files.med.harvard.edu\Neurobio\MICROSCOPE\Shijia\BE28 BE31 Task_photometry\BE29 M164-167\20231205_M167L_4W40O40C10D10_g0');
-% saveas(gcf, strcat(extractBefore(sessionName,'_g'),'_ExampleTrialEventScatterPlot.tif'));
+cd('\\research.files.med.harvard.edu\Neurobio\MICROSCOPE\Shijia\BE28 BE31 Task_photometry\BE29 M164-167\20231205_M167L_4W40O40C10D10_g0');
+saveas(gcf, strcat(extractBefore(sessionName,'_g'),'_ExampleTrialEventScatterPlot.tif'));

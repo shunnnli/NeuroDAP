@@ -9,9 +9,9 @@ function fig = initializeFig(horizontalPortion,verticalPortion,options)
 arguments
     horizontalPortion double = 0.5
     verticalPortion double = 0.5
-
-    options.FontSize double = 12
-    options.AxesLineWidth double = 0.5
+    
+    options.FontSize double = 20
+    options.AxesLineWidth double = 1.5
 end
 
 narginchk(0,2);
