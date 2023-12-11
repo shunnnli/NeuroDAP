@@ -18,7 +18,7 @@ arguments
     % params struct
     
     % Common options
-    options.signalFs double = nan
+    options.signalFs double = 50
     options.baseline double = 0 % subtracted by x secs before event time
 
     % Extract options
@@ -49,7 +49,7 @@ end
 %% Check inputs
 if nargin == 4
     if ~options.extract
-        warning('extract is false but 4 inputs are provided, changed to true!'); 
+        disp('plotTraces: extract is false but 4 inputs are provided, changed to true!'); 
         options.extract = true;
     end
     options.eventIdx = varargin{1};
@@ -63,7 +63,7 @@ if nargin == 4
     end
 elseif nargin == 5
     if ~options.extract
-        warning('extract is false but 4 inputs are provided, changed to true!'); 
+        disp('plotTraces: extract is false but 4 inputs are provided, changed to true!'); 
         options.extract = true;
     end
     options.eventIdx = varargin{1};
@@ -78,11 +78,15 @@ elseif nargin == 5
     end
 elseif nargin == 2
     if ~options.plot
-        warning('plot is false but 4 inputs are provided, changed to true!'); 
+        disp('plotTraces: plot is false but 2 inputs are provided, changed to true!'); 
         options.plot = true;
     end
-    traces = varargin{1};
-    timestamp = varargin{2};
+    if options.extract
+        disp('plotTraces: extract is true but 2 inputs are provided, changed to false!');
+        options.extract = false;
+    end
+    options.traces = varargin{1};
+    options.timestamp = varargin{2};
     disp(['plotTraces: ',num2str(nargin),' inputs are detected, execute plot']);
 end
 
@@ -94,10 +98,10 @@ if ~options.extract && ~options.plot
     disp(['options.extract: ',num2str(options.extract)]);
     disp(['options.plot: ',num2str(options.plot)]);
 elseif options.plot && ~options.extract
-    if ~isfield(options,'traces'); error('plotTraces: options.traces not provided!'); end
-    if ~isfield(options,'timestamp'); error('plotTraces: options.timestamp not provided!'); end
     traces = options.traces;
     timestamp = options.timestamp;
+    if ~isfield(options,'traces'); error('plotTraces: options.traces not provided!'); end
+    if ~isfield(options,'timestamp'); error('plotTraces: options.timestamp not provided!'); end
 elseif options.extract
     if ~isfield(options,'eventIdx'); error('plotTraces: options.eventIdx not provided!'); end
     if ~isfield(options,'timeRange'); error('plotTraces: options.timeRange not provided!'); end
@@ -105,10 +109,10 @@ elseif options.extract
     if ~isfield(options,'params'); error('plotTraces: options.params not provided!'); end
 end
 
-%% Get traces if needed
 
+%% Get traces if needed
 if options.extract
-    [traces,timestamp,eventBin] = getTraces(options.eventIdx,options.timeRange,...
+    [traces,timestamp,~] = getTraces(options.eventIdx,options.timeRange,...
                                         options.signal,options.params,...
                                         signalSystem=options.signalSystem,...
                                         signalFs=options.signalFs,...
@@ -212,7 +216,7 @@ end
 
 %% Subtract baseline if needed
 
-if ~options.extract && options.baseline ~= 0
+if ~options.extract && any(options.baseline ~= 0)
     % Check input
     if options.baseline(1) < timestamp(1)
         options.baseline(1) = timestamp(1);
@@ -221,10 +225,10 @@ if ~options.extract && options.baseline ~= 0
     end
 
     % Convert to bin
+    [~,eventBin] = min(abs(timestamp-0));
     firstBin_baseline = floor(eventBin + options.baseline(1)*options.signalFs);
     lastBin_baseline = floor(eventBin + options.baseline(2)*options.signalFs);
     baseline = mean(traces(:,firstBin_baseline:lastBin_baseline),2);
-
     traces = traces - baseline;
 end
 
