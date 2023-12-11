@@ -1,4 +1,4 @@
-function [traces,timestamp] = getTraces(eventIdx,timeRange,signal,params,options)
+function [traces,timestamp,eventBin] = getTraces(eventIdx,timeRange,signal,params,options)
 
 arguments
     eventIdx double
@@ -12,6 +12,8 @@ arguments
     options.signalFs double = nan
 
     options.rmmissing logical = true % remove nan rows
+
+    options.baseline double = 0
 end
 
 % 0. Define event system
@@ -89,9 +91,9 @@ for i = 1:length(eventInSec)
     firstBin = floor((eventInSec(i)+timestamp(1))*signalFs);
     lastBin = firstBin + length(timestamp) - 1;
     eventBin = floor(eventInSec(i)*signalFs);
-    if options.baselineWindow ~= 0
-        firstBin_baseline = floor((eventInSec(i) + options.baselineWindow(1))*signalFs);
-        lastBin_baseline = floor((eventInSec(i) + options.baselineWindow(2))*signalFs);
+    if options.baseline ~= 0
+        firstBin_baseline = floor((eventInSec(i) + options.baseline(1))*signalFs);
+        lastBin_baseline = floor((eventInSec(i) + options.baseline(2))*signalFs);
         baseline = mean(signal(firstBin_baseline:lastBin_baseline));
     else
         baseline = 0;
