@@ -44,9 +44,10 @@ arguments
     options.shuffledColor double = [.75, .75, .75]
     
     options.plotIndividual logical = false
-    options.individualColor double = [.75, .75, .75]
+    options.individualColor double = [.8, .8, .8]
 
     options.plotStyle string = 'line'
+    options.meanOnly logical = false
 
     options.smooth double = 0; % 0: no smoothing, else is samples of smooth data
     options.smoothMethod string = 'movmean';
@@ -161,14 +162,15 @@ if options.plot
     if options.plotShuffled
         shuffled = shuffleTraces(traces);
         plotSEM(timestamp,shuffled,options.shuffledColor,smooth=smoothWindow,smoothMethod=options.smoothMethod,...
-        LineStyle=options.LineStyle,LineWidth=options.LineWidth,plotStyle=options.plotStyle); hold on
+        LineStyle=options.LineStyle,LineWidth=options.LineWidth,...
+        plotStyle=options.plotStyle,meanOnly=options.meanOnly); hold on
     end
 
     % 4.3 Plot SEM
     plotSEM(timestamp,traces,options.color,smooth=smoothWindow,smoothMethod=options.smoothMethod,...
         LineStyle=options.LineStyle,LineWidth=options.LineWidth,...
         plotIndividual=options.plotIndividual,individualColor=options.individualColor,...
-        plotStyle=options.plotStyle);
+        plotStyle=options.plotStyle,meanOnly=options.meanOnly);
     xlabel('Time (s)'); ylabel('z-score'); hold on
 end
 
