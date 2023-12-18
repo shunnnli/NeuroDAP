@@ -76,14 +76,14 @@ if sum(strcmpi(options.groupby,["trial","trials"]))
     if endTrials(end) > nTraces; endTrials(end) = nTraces; end
 
     % Update based on remaining number of traces that can not be grouped
-    if strcmpi(options.remaining,'include')
+    if strcmpi(options.remaining,'include') && nTraces > options.groupSize
         nTraces_lastGroup = endTrials(end) - startTrials(end);
         if nTraces_lastGroup > 0 && nTraces_lastGroup < options.groupSize/2
             endTrials(end-1) = nTraces;
             endTrials(end) = [];
             options.nGroups = options.nGroups - 1;
         end
-    elseif strcmpi(options.remaining,'exclude')
+    elseif strcmpi(options.remaining,'exclude') && nTraces > options.groupSize
         nTraces_lastGroup = endTrials(end) - startTrials(end);
         if nTraces_lastGroup > 0 && nTraces_lastGroup < options.groupSize/2
             endTrials(end) = [];

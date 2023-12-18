@@ -3,7 +3,7 @@ function analyzeSessions_optoPair(sessionpath,options)
 arguments
     sessionpath string
     
-    options.task string
+    options.task
     options.stimPattern cell
 
     options.pavlovian logical = false
@@ -87,7 +87,8 @@ if ~isfield(params.session,'task') && isfield(options,'task')
     params.session.task = options.task; 
 elseif isfield(params.session,'task') && isfield(options,'task')
     if ~strcmpi(options.task,params.session.task)
-        options.task = params.session.task;
+        % options.task = params.session.task;
+        params.session.task = options.task;
         disp('Finished: options.task not provided or differed, use the original one');
     end
 elseif ~isfield(params.session,'task') && ~isfield(options,'task')
@@ -121,9 +122,13 @@ if options.redo || ~isfield(params,'analyze')
     options.reactionTime = params.analyze.reactionTime;
     options.minLicks = params.analyze.minLicks;
     save(strcat(sessionpath,filesep,'sync_',params.session.name),'params','-append');
+elseif isfield(params,'analyze')
+    options.pavlovian = params.analyze.pavlovian;
+    options.reactionTime = params.analyze.reactionTime;
+    options.minLicks = params.analyze.minLicks;
 end
 
-disp(['Behavior params: task = ',options.task]);
+disp(['Behavior params: task = ',params.session.task]);
 disp(['Behavior params: pavlovian = ',num2str(params.analyze.pavlovian)]);
 disp(['Behavior params: reactionTime = ',num2str(params.analyze.reactionTime)]);
 disp(['Behavior params: minLicks = ',num2str(params.analyze.minLicks)]);
@@ -134,6 +139,7 @@ if ~isempty(eyeAreaIdx); eyeArea_detrend = timeSeries(eyeAreaIdx).data; end
 pupilAreaIdx = find(cellfun(@(x) strcmpi(x,'pupilArea'), {timeSeries.name}));
 if ~isempty(pupilAreaIdx); pupilArea_detrend = timeSeries(pupilAreaIdx).data; end
 
+save(strcat(sessionpath,filesep,'sync_',params.session.name),'params','-append');
 
 %% Preprocess outcome and opto data
 
@@ -450,6 +456,7 @@ if options.plotPhotometry
         signal = timeSeries(path).data;
         finalFs = timeSeries(path).finalFs;
         system = timeSeries(path).system;
+        name = timeSeries(path).name;
         
         %% Plot combined PSTH
         timeRange = [-1,5];
@@ -475,7 +482,7 @@ if options.plotPhotometry
             [~,~] = plotTraces(baselineIdx,timeRange,signal,[.75 .75 .75],params,...
                         signalFs=finalFs,signalSystem=system);
             plotEvent('',0);
-            xlabel('Time (s)'); ylabel('z-score');
+            xlabel('Time (s)'); ylabel([name,' z-score']);
             legend(taskLegend(2:end),'Location','northeast');
             
             % 2.2 Plot lick traces
@@ -529,7 +536,7 @@ if options.plotPhotometry
             [~,~] = plotTraces(baselineIdx,timeRange,signal,[.75 .75 .75],params,...
                         signalFs=finalFs,signalSystem=system);
             plotEvent('',0);
-            xlabel('Time (s)'); ylabel('z-score');
+            xlabel('Time (s)'); ylabel([name,' z-score']);
             legend(taskLegend(2:end),'Location','northeast');
             
             % 2.2 Plot lick traces
@@ -593,9 +600,9 @@ if options.plotPhotometry
                 nexttile(3,[1 2]);
                 [traces,t] = plotTraces(eventIdx,shortTimeRange,signal,bluePurpleRed(1,:),params,...
                                 signalFs=finalFs,signalSystem=system,...
-                                plotShuffled=true);
+                                plotIndividual=true);
                 plotEvent(label,eventDuration); 
-                xlabel('Time (s)'); ylabel('z-score'); 
+                xlabel('Time (s)'); ylabel([name,' z-score']);
                 legend({['Shuffled (n=',num2str(length(eventIdx)),')'],...
                         [label,' (n=',num2str(length(eventIdx)),')']},...
                         'Location','northeast');
@@ -603,7 +610,7 @@ if options.plotPhotometry
                 nexttile(7,[1 2]);
                 legendList = plotGroupTraces(traces,t,bluePurpleRed,groupSize=groupSize);
                 plotEvent(label,eventDuration);
-                xlabel('Time (s)'); ylabel('z-score');
+                xlabel('Time (s)'); ylabel([name,' z-score']);
                 legend(legendList);
 
                 % Plot heatmap
@@ -617,9 +624,9 @@ if options.plotPhotometry
                 nexttile(11,[1 2]);
                 [traces,t] = plotTraces(eventIdx,longTimeRange,signal,bluePurpleRed(1,:),params,...
                                 signalFs=finalFs,signalSystem=system,...
-                                plotShuffled=true);
+                                plotIndividual=true);
                 plotEvent(label,eventDuration);
-                xlabel('Time (s)'); ylabel('z-score');
+                xlabel('Time (s)'); ylabel([name,' z-score']);
                 legend({['Shuffled (n=',num2str(length(eventIdx)),')'],...
                         [label,' (n=',num2str(length(eventIdx)),')']},...
                         'Location','northeast');
@@ -627,7 +634,7 @@ if options.plotPhotometry
                 nexttile(15,[1 2]);
                 legendList = plotGroupTraces(traces,t,bluePurpleRed,groupSize=groupSize);
                 plotEvent(label,eventDuration);
-                xlabel('Time (s)'); ylabel('z-score');
+                xlabel('Time (s)'); ylabel([name,' z-score']);
                 legend(legendList);
                 
                 saveas(gcf,strcat(sessionpath,filesep,'Events_',timeSeries(path).name,'_',label,'.png'));
@@ -655,11 +662,11 @@ if options.plotPhotometry
                 nexttile(3,[1 2]);
                 [traces,t] = plotTraces(eventIdx,shortTimeRange,signal,bluePurpleRed(1,:),params,...
                                 signalFs=finalFs,signalSystem=system,...
-                                plotShuffled=true);
+                                plotIndividual=true);
                 [~,~] = plotTraces(omissionIdx,shortTimeRange,signal,[0.3, 0.3, 0.3],params,...
                                 signalFs=finalFs,signalSystem=system);
                 plotEvent(label,eventDuration);
-                xlabel('Time (s)'); ylabel('z-score'); 
+                xlabel('Time (s)'); ylabel([name,' z-score']);
                 legend({['Shuffled (n=',num2str(length(eventIdx)),')'],...
                         [label,' (n=',num2str(length(eventIdx)),')'],...
                         [label,' omission (n=',num2str(length(omissionIdxes)),')']},...
@@ -668,7 +675,7 @@ if options.plotPhotometry
                 nexttile(7,[1 2]);
                 legendList = plotGroupTraces(traces,t,bluePurpleRed,groupSize=groupSize);
                 plotEvent(label,eventDuration);
-                xlabel('Time (s)'); ylabel('z-score');
+                xlabel('Time (s)'); ylabel([name,' z-score']);
                 legend(legendList);
 
                 % Plot heatmap
@@ -681,11 +688,11 @@ if options.plotPhotometry
                 nexttile(11,[1 2]);
                 [traces,t] = plotTraces(eventIdx,longTimeRange,signal,bluePurpleRed(1,:),params,...
                                 signalFs=finalFs,signalSystem=system,...
-                                plotShuffled=true);
+                                plotIndividual=true);
                 [~,~] = plotTraces(omissionIdx,longTimeRange,signal,[0.2, 0.2, 0.2],params,...
                                 signalFs=finalFs,signalSystem=system);
                 plotEvent(label,eventDuration);
-                xlabel('Time (s)'); ylabel('z-score');
+                xlabel('Time (s)'); ylabel([name,' z-score']);
                 legend({['Shuffled (n=',num2str(length(eventIdx)),')'],...
                         [label,' (n=',num2str(length(eventIdx)),')'],...
                         [label,' omission (n=',num2str(length(omissionIdxes)),')']},...
@@ -694,7 +701,7 @@ if options.plotPhotometry
                 nexttile(15,[1 2]);
                 legendList = plotGroupTraces(traces,t,bluePurpleRed,groupSize=groupSize);
                 plotEvent(label,eventDuration);
-                xlabel('Time (s)'); ylabel('z-score');
+                xlabel('Time (s)'); ylabel([name,' z-score']);
                 legend(legendList);
 
                 saveas(gcf,strcat(sessionpath,filesep,'Events_',timeSeries(path).name,'_',label,'.png'));
@@ -741,7 +748,7 @@ if options.plotPhotometry
                 xlabel('Slope distribution (bootstrapped)'); ylabel('Count'); box off
             end
             % Save
-            saveas(gcf,strcat(sessionpath,filesep,'Summary_',cur_signal,'_subtrial_average.png'));
+            saveas(gcf,strcat(sessionpath,filesep,'Analysis_',cur_signal,'_subtrial_average.png'));
         end
     
         %% Plot subtrial peak trend for baseline, CS, US
@@ -781,7 +788,7 @@ if options.plotPhotometry
                 xlabel('Slope distribution (bootstrapped)'); ylabel('Count'); box off
             end
             % Save
-            saveas(gcf,strcat(sessionpath,filesep,'Summary_',cur_signal,'_subtrial_peak.png'));
+            saveas(gcf,strcat(sessionpath,filesep,'Analysis_',cur_signal,'_subtrial_peak.png'));
         end
     
         %% Plot subtrial trough trend for baseline, CS, US
@@ -821,7 +828,7 @@ if options.plotPhotometry
                 xlabel('Slope distribution (bootstrapped)'); ylabel('Count'); box off
             end
             % Save
-            saveas(gcf,strcat(sessionpath,filesep,'Summary_',cur_signal,'_subtrial_trough.png'));
+            saveas(gcf,strcat(sessionpath,filesep,'Analysis_',cur_signal,'_subtrial_trough.png'));
         end
     end
 end

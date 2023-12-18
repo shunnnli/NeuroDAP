@@ -96,7 +96,7 @@ for i = 1:size(labjack.name,2)
     end
 end
 
-%% Plot photometry summary plot (skipped)
+%% Plot photometry summary plot (skipped by default)
 if options.plot
     initializeFig(0.67,0.67); tiledlayout(labjack.nSignals*2 + 1,1);
     nexttile; plot(sync_labjack); title('sync'); box off

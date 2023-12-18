@@ -5,7 +5,7 @@ arguments
     lick double
     analysisEvents cell
     analysisLabels cell
-    params
+    params 
     
     options.task string = "NaN"
     options.timeRange double = [-15, 15]

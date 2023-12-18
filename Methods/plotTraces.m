@@ -51,6 +51,8 @@ arguments
 
     options.smooth double = 0; % 0: no smoothing, else is samples of smooth data
     options.smoothMethod string = 'movmean';
+
+    options.print logical = false % print progress message
 end
 
 %% Check inputs
@@ -63,14 +65,18 @@ if nargin == 4
     options.timeRange = varargin{2};
     options.signal = varargin{3};
     options.params = varargin{4};
-    if options.plot
-        disp(['plotTraces: ',num2str(nargin),' inputs are detected, execute extract and plot']);
-    else
-        disp(['plotTraces: ',num2str(nargin),' inputs are detected, execute extract']);
+    if options.print
+        if options.plot
+            disp(['plotTraces: ',num2str(nargin),' inputs are detected, execute extract and plot']);
+        else
+            disp(['plotTraces: ',num2str(nargin),' inputs are detected, execute extract']);
+        end
     end
 elseif nargin == 5
     if ~options.extract
-        disp('plotTraces: extract is false but 4 inputs are provided, changed to true!'); 
+        if options.print
+            disp('plotTraces: extract is false but 4 inputs are provided, changed to true!'); 
+        end
         options.extract = true;
     end
     options.eventIdx = varargin{1};
@@ -78,23 +84,31 @@ elseif nargin == 5
     options.signal = varargin{3};
     options.params = varargin{5};
     if isfield(options,'color'); options.color = varargin{4}; end
-    if options.plot
-        disp(['plotTraces: ',num2str(nargin),' inputs are detected, execute extract and plot']);
-    else
-        disp(['plotTraces: ',num2str(nargin),' inputs are detected, execute extract']);
+    if options.print
+        if options.plot
+            disp(['plotTraces: ',num2str(nargin),' inputs are detected, execute extract and plot']);
+        else
+            disp(['plotTraces: ',num2str(nargin),' inputs are detected, execute extract']);
+        end
     end
 elseif nargin == 2
     if ~options.plot
-        disp('plotTraces: plot is false but 2 inputs are provided, changed to true!'); 
+        if options.print
+            disp('plotTraces: plot is false but 2 inputs are provided, changed to true!'); 
+        end
         options.plot = true;
     end
     if options.extract
-        disp('plotTraces: extract is true but 2 inputs are provided, changed to false!');
+        if options.print
+            disp('plotTraces: extract is true but 2 inputs are provided, changed to false!');
+        end
         options.extract = false;
     end
     options.traces = varargin{1};
     options.timestamp = varargin{2};
-    disp(['plotTraces: ',num2str(nargin),' inputs are detected, execute plot']);
+    if options.print
+        disp(['plotTraces: ',num2str(nargin),' inputs are detected, execute plot']);
+    end
 end
 
 %% Check extract & plot

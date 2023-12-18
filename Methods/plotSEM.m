@@ -48,7 +48,7 @@ end
 if strcmp(options.plotStyle,'line')
     if options.plotIndividual
         for i = 1:size(y,1)
-            plot(x,y(i,:),'Color',options.individualColor,'LineWidth',options.LineWidth-1,'LineStyle',options.LineStyle); hold on
+            plot(x,y(i,:),'Color',options.individualColor,'LineWidth',options.LineWidth-1,'LineStyle',options.LineStyle,'HandleVisibility','off'); hold on
         end
     end
     plot(x,yMean,'Color',color,'LineWidth',options.LineWidth,'LineStyle',options.LineStyle); hold on

@@ -139,12 +139,12 @@ for i = 1:size(labjack.name,2)
     end
 end
 
-figure;
-plot(solenoid_labjack); hold on; plot(cue_labjack); hold on;
-plot(labjack.lick);%hold on; plot(lick_labjack_tmp);
-xlim([20000 80000]); title('example cue and solenoid events');
-cd('\\research.files.med.harvard.edu\Neurobio\MICROSCOPE\Shijia\BE28 BE31 Task_photometry\BE29 M164-167\20231205_M167L_4W40O40C10D10_g0');
-saveas(gcf, strcat(extractBefore(sessionName,'_g'),'_ExampleTrialEventRisingEdges.tif'));
+% figure;
+% plot(solenoid_labjack); hold on; plot(cue_labjack); hold on;
+% plot(labjack.lick);%hold on; plot(lick_labjack_tmp);
+% xlim([20000 80000]); title('example cue and solenoid events');
+% cd('\\research.files.med.harvard.edu\Neurobio\MICROSCOPE\Shijia\BE28 BE31 Task_photometry\BE29 M164-167\20231205_M167L_4W40O40C10D10_g0');
+% saveas(gcf, strcat(extractBefore(sessionName,'_g'),'_ExampleTrialEventRisingEdges.tif'));
 %% Plot photometry summary plot (skipped)
 if options.plot
     initializeFig(0.67,0.67); tiledlayout(labjack.nSignals*2 + 3,1);

@@ -87,7 +87,26 @@ end
 allTrials = cueIdx; allTrials(manualWaterIdx_cue) = [];
 waterIdx(manualWaterIdx_water) = [];
 
+%% Debugging figure 1: plot raw rising edges for cue and water
+% % tmp = rightSolenoidON(rightSolenoidON>=cur_cue & rightSolenoidON<next_cue);
+% % plot the licks to see if they are good
+% figure;
+% data = zeros(size(allTrials));
+% data(allTrials)=1;
+% plot(1:length(data),data,'b');
+% legend('cue');
+% hold on;
+% data2 = zeros(size(waterIdx));
+% data2(waterIdx)=1;
+% plot(1:length(data2),data2,'r');
+% legend('water');
+% hold on;
+% data3 = zeros(size(tmp));
+% data3(tmp)=1;
+% plot(1:length(data3),data3,'g');
+% legend('rewardTimeRaw');
 
+%%
 events{1} = allTrials; events{2} = waterIdx;
 events{3} = lickIdx;
 
@@ -119,42 +138,44 @@ disp('Finished: trial table saved');
 
 rewardedTrials = trials{strcmpi(trials.TrialType,'Rewarded'),["TrialNumber","CueTime"]};
 rewardedIdx = rewardedTrials(:,2);
+rewardedLickTime = trials{strcmpi(trials.TrialType,'Rewarded'),"RewardLickTime"};
+
 rewarded_choiceLicks = trials{strcmpi(trials.TrialType,'Rewarded'),"ChoiceLicks"};
 rewarded_outcomeLicks = trials{strcmpi(trials.TrialType,'Rewarded'),"OutcomeLicks"};
-rewarded_baselineLicks = trials{strcmpi(trials.TrialType,'Rewarded'),"BaselineLicks"};
+rewarded_spontaneousLicks = trials{strcmpi(trials.TrialType,'Rewarded'),"SpontaneousLicks"};
 rewarded_choiceLicks = rewarded_choiceLicks(~cellfun('isempty',rewarded_choiceLicks));
 rewarded_outcomeLicks = rewarded_outcomeLicks(~cellfun('isempty',rewarded_outcomeLicks));
-rewarded_baselineLicks = rewarded_baselineLicks(~cellfun('isempty',rewarded_baselineLicks));
+rewarded_spontaneousLicks = rewarded_spontaneousLicks(~cellfun('isempty',rewarded_spontaneousLicks));
 rewarded_firstLick = cellfun(@(x) x(1),rewarded_choiceLicks);
 rewarded_fourthLick = cellfun(@(x) x(1),rewarded_outcomeLicks);
 rewarded_firstBoutLastLick = cellfun(@(x) x(end),rewarded_outcomeLicks);
-rewarded_trialLastLick = cellfun(@(x) x(end),rewarded_baselineLicks);
+rewarded_trialLastLick = cellfun(@(x) x(end),rewarded_spontaneousLicks);
 
 omissionTrials = trials{strcmpi(trials.TrialType,'Omission'),["TrialNumber","CueTime"]};
 omissionIdx = omissionTrials(:,2);
 omission_choiceLicks = trials{strcmpi(trials.TrialType,'Omission'),"ChoiceLicks"};
 omission_outcomeLicks = trials{strcmpi(trials.TrialType,'Omission'),"OutcomeLicks"};
-omission_baselineLicks = trials{strcmpi(trials.TrialType,'Omission'),"BaselineLicks"};
+omission_spontaneousLicks = trials{strcmpi(trials.TrialType,'Omission'),"SpontaneousLicks"};
 omission_choiceLicks = omission_choiceLicks(~cellfun('isempty',omission_choiceLicks));
 omission_outcomeLicks = omission_outcomeLicks(~cellfun('isempty',omission_outcomeLicks));
-omission_baselineLicks = omission_baselineLicks(~cellfun('isempty',omission_baselineLicks));
+omission_spontaneousLicks = omission_spontaneousLicks(~cellfun('isempty',omission_spontaneousLicks));
 omission_firstLick = cellfun(@(x) x(1),omission_choiceLicks);
 omission_fourthLick = cellfun(@(x) x(1),omission_outcomeLicks);
 omission_firstBoutLastLick = cellfun(@(x) x(end),omission_outcomeLicks);
-omission_trialLastLick = cellfun(@(x) x(end),omission_baselineLicks);
+omission_trialLastLick = cellfun(@(x) x(end),omission_spontaneousLicks);
 
 missTrials = trials{strcmpi(trials.TrialType,'Miss'),["TrialNumber","CueTime"]};
 missIdx = missTrials(:,2);
 miss_choiceLicks = trials{strcmpi(trials.TrialType,'Miss'),"ChoiceLicks"};
 miss_outcomeLicks = trials{strcmpi(trials.TrialType,'Miss'),"OutcomeLicks"};
-miss_baselineLicks = trials{strcmpi(trials.TrialType,'Miss'),"BaselineLicks"};
+miss_spontaneousLicks = trials{strcmpi(trials.TrialType,'Miss'),"SpontaneousLicks"};
 miss_choiceLicks = miss_choiceLicks(~cellfun('isempty',miss_choiceLicks));
 miss_outcomeLicks = miss_outcomeLicks(~cellfun('isempty',miss_outcomeLicks));
-miss_baselineLicks = miss_baselineLicks(~cellfun('isempty',miss_baselineLicks));
+miss_spontaneousLicks = miss_spontaneousLicks(~cellfun('isempty',miss_spontaneousLicks));
 miss_firstLick = cellfun(@(x) x(1),miss_choiceLicks);
 miss_fourthLick = cellfun(@(x) x(1),miss_outcomeLicks);
 miss_firstBoutLastLick = cellfun(@(x) x(end),miss_outcomeLicks);
-miss_trialLastLick = cellfun(@(x) x(end),miss_baselineLicks);
+miss_trialLastLick = cellfun(@(x) x(end),miss_spontaneousLicks);
 
 
 % Get baseline (random sample from the session)
@@ -166,119 +187,153 @@ baselineIdx = randi([randomMinSample,randomMaxSample],100,1);
 %% For catch trials - normal lick 4
 
 rewardedTrials_normal4 = trials{strcmpi(trials.RewardType,'lick4'),["TrialNumber","CueTime"]};
-rewarded_normal4_rewardTime = trials{strcmpi(trials.RewardType,'lick4'),"RewardTime"};
+rewarded_normal4_rewardTime = trials{strcmpi(trials.RewardType,'lick4'),"RewardLickTime"}; %% THIS 'RewardLickTime' (LICK REWARD+1 if exist) IS USED FOR PLOTTING ACROSS EXPERIMENTS!!
 
 rewarded_normal4Idx = rewardedTrials_normal4(:,2);
 rewarded_normal4_choiceLicks = trials{strcmpi(trials.RewardType,'lick4'),"ChoiceLicks"};
 rewarded_normal4_outcomeLicks = trials{strcmpi(trials.RewardType,'lick4'),"OutcomeLicks"};
-rewarded_normal4_baselineLicks = trials{strcmpi(trials.RewardType,'lick4'),"BaselineLicks"};
+rewarded_normal4_spontaneousLicks = trials{strcmpi(trials.RewardType,'lick4'),"SpontaneousLicks"};
 rewarded_normal4_choiceLicks = rewarded_normal4_choiceLicks(~cellfun('isempty',rewarded_normal4_choiceLicks));
 rewarded_normal4_outcomeLicks = rewarded_normal4_outcomeLicks(~cellfun('isempty',rewarded_normal4_outcomeLicks));
-rewarded_normal4_baselineLicks = rewarded_normal4_baselineLicks(~cellfun('isempty',rewarded_normal4_baselineLicks));
+rewarded_normal4_spontaneousLicks = rewarded_normal4_spontaneousLicks(~cellfun('isempty',rewarded_normal4_spontaneousLicks));
 rewarded_normal4_firstLick = cellfun(@(x) x(1),rewarded_normal4_choiceLicks);
 % rewarded_normal4_secondLick = cellfun(@(x) x(2),rewarded_normal4_choiceLicks);
 rewarded_normal4_fourthLick = cellfun(@(x) x(1),rewarded_normal4_outcomeLicks);
+
+% rewarded_normal4_fifthLick = cellfun(@(x) x(2),rewarded_normal4_outcomeLicks);
+
 rewarded_normal4_firstBoutLastLick = cellfun(@(x) x(end),rewarded_normal4_outcomeLicks);
-rewarded_normal4_trialLastLick = cellfun(@(x) x(end),rewarded_normal4_baselineLicks);
+rewarded_normal4_trialLastLick = cellfun(@(x) x(end),rewarded_normal4_spontaneousLicks);
 
 %% For catch trials - catch 2
 
 rewardedTrials_catch2 = trials{strcmpi(trials.RewardType,'lick2'),["TrialNumber","CueTime"]};
-rewarded_catch2_rewardTime = trials{strcmpi(trials.RewardType,'lick2'),"RewardTime"};
+rewarded_catch2_rewardTime = trials{strcmpi(trials.RewardType,'lick2'),"RewardLickTime"};
 
 rewarded_catch2Idx = rewardedTrials_catch2(:,2);
 rewarded_catch2_choiceLicks = trials{strcmpi(trials.RewardType,'lick2'),"ChoiceLicks"};
 rewarded_catch2_outcomeLicks = trials{strcmpi(trials.RewardType,'lick2'),"OutcomeLicks"};
-rewarded_catch2_baselineLicks = trials{strcmpi(trials.RewardType,'lick2'),"BaselineLicks"};
+rewarded_catch2_spontaneousLicks = trials{strcmpi(trials.RewardType,'lick2'),"SpontaneousLicks"};
 rewarded_catch2_choiceLicks = rewarded_catch2_choiceLicks(~cellfun('isempty',rewarded_catch2_choiceLicks));
 rewarded_catch2_outcomeLicks = rewarded_catch2_outcomeLicks(~cellfun('isempty',rewarded_catch2_outcomeLicks));
-rewarded_catch2_baselineLicks = rewarded_catch2_baselineLicks(~cellfun('isempty',rewarded_catch2_baselineLicks));
+rewarded_catch2_spontaneousLicks = rewarded_catch2_spontaneousLicks(~cellfun('isempty',rewarded_catch2_spontaneousLicks));
 rewarded_catch2_firstLick = cellfun(@(x) x(1),rewarded_catch2_choiceLicks);
 rewarded_catch2_secondLick = cellfun(@(x) x(2),rewarded_catch2_choiceLicks);
+
+% rewarded_catch2_thirdLick = cellfun(@(x) x(3),rewarded_catch2_choiceLicks);
+
 rewarded_catch2_fourthLick = cellfun(@(x) x(1),rewarded_catch2_outcomeLicks);
 rewarded_catch2_firstBoutLastLick = cellfun(@(x) x(end),rewarded_catch2_outcomeLicks);
-rewarded_catch2_trialLastLick = cellfun(@(x) x(end),rewarded_catch2_baselineLicks);
+rewarded_catch2_trialLastLick = cellfun(@(x) x(end),rewarded_catch2_spontaneousLicks);
 
 %% For catch trials - catch 6
 
 rewardedTrials_catch6 = trials{strcmpi(trials.RewardType,'lick6'),["TrialNumber","CueTime"]};
-rewarded_catch6_rewardTime = trials{strcmpi(trials.RewardType,'lick6'),"RewardTime"};
+rewarded_catch6_rewardTime = trials{strcmpi(trials.RewardType,'lick6'),"RewardLickTime"};
 
 rewarded_catch6Idx = rewardedTrials_catch6(:,2);
 rewarded_catch6_choiceLicks = trials{strcmpi(trials.RewardType,'lick6'),"ChoiceLicks"};
 rewarded_catch6_outcomeLicks = trials{strcmpi(trials.RewardType,'lick6'),"OutcomeLicks"};
-rewarded_catch6_baselineLicks = trials{strcmpi(trials.RewardType,'lick6'),"BaselineLicks"};
+rewarded_catch6_spontaneousLicks = trials{strcmpi(trials.RewardType,'lick6'),"SpontaneousLicks"};
 rewarded_catch6_choiceLicks = rewarded_catch6_choiceLicks(~cellfun('isempty',rewarded_catch6_choiceLicks));
 rewarded_catch6_outcomeLicks = rewarded_catch6_outcomeLicks(~cellfun('isempty',rewarded_catch6_outcomeLicks));
-rewarded_catch6_baselineLicks = rewarded_catch6_baselineLicks(~cellfun('isempty',rewarded_catch6_baselineLicks));
+rewarded_catch6_spontaneousLicks = rewarded_catch6_spontaneousLicks(~cellfun('isempty',rewarded_catch6_spontaneousLicks));
 rewarded_catch6_firstLick = cellfun(@(x) x(1),rewarded_catch6_choiceLicks);
 rewarded_catch6_secondLick = cellfun(@(x) x(2),rewarded_catch6_choiceLicks);
 rewarded_catch6_fourthLick = cellfun(@(x) x(1),rewarded_catch6_outcomeLicks);
 rewarded_catch6_sixthLick = cellfun(@(x) x(3),rewarded_catch6_outcomeLicks);
 
+% rewarded_catch6_seventhLick = cellfun(@(x) x(4),rewarded_catch6_outcomeLicks);
+
 rewarded_catch6_firstBoutLastLick = cellfun(@(x) x(end),rewarded_catch6_outcomeLicks);
-rewarded_catch6_trialLastLick = cellfun(@(x) x(end),rewarded_catch6_baselineLicks);
+rewarded_catch6_trialLastLick = cellfun(@(x) x(end),rewarded_catch6_spontaneousLicks);
 
 
 
-%% for debugging water
-% RewardTimeDebugPlotIdx = rewardedTrials_catch6(:,2);
-RewardTimeDebugPlotIdx = trials{strcmpi(trials.TrialType,'Rewarded'),"RewardTimeDebugPlot"};
-analysisEvents_0 = {RewardTimeDebugPlotIdx};
-analysisLabels_0 = {'DebugWaterReward'};
-taskLegend_0 = getLegend(analysisEvents_0,analysisLabels_0);
-
-timeRange = [-0.5,3];
-
-% Find the number of photometry channels
-% photometryIdx = find(cellfun(@(x) contains(x,["NI","LJ"],"IgnoreCase",true), {timeSeries.system}));
-photometryIdx = find(cellfun(@(x) contains(x,["Green","Iso"],"IgnoreCase",true), {timeSeries.name}));
-
-% photometryName = cellfun(@(x) unique(x,'rows'), {timeSeries(photometryIdx).name},'UniformOutput',false);
-nSignals = length(photometryIdx);
-disp(['Finished: found ', num2str(nSignals),' photometry signals']);
-
-if options.plotPhotometry
-
-    for photometry = 1:nSignals
-        % Load signal of interest
-        path = photometryIdx(photometry);
-        signal = timeSeries(path).data;
-        finalFs = timeSeries(path).finalFs;
-        system = timeSeries(path).system;
-
-%         initializeFig(.5,.5); tiledlayout('flow');
-        initializeFig(.5,1); 
-        % tiledlayout(5,2);
-
-        % Figure set 0: for cue and water events
-        nexttile
-        [~,~] = plotTraces(RewardTimeDebugPlotIdx,timeRange,signal,bluePurpleRed(1,:),params,...
-                                signalFs=finalFs,...
-                                signalSystem=system,eventSystem=params.session.baselineSystem);
-        plotEvent('',0);
-        xlabel('Time to rewardTimeDebug (s)'); ylabel('z-score');
-        legend(taskLegend_0,'Location','northeast');
-        title('rewardTimeDebug, neural');
-        
-        nexttile
-        plotLicks(waterIdx,timeRange,options.lick_binSize,bluePurpleRed(1,:),[],labjack.lick,params);
-        plotEvent('',0);
-        xlabel('Time to rewardTimeDebug (s)'); ylabel('Licks/s');
-        legend(taskLegend_0,'Location','northeast');
-        title('rewardTimeDebug, lick');
-    end
-end
+%% Debugging figure 2: plot water reward timing
+% % RewardTimeDebugPlotIdx = rewardedTrials_catch6(:,2);
+% RewardTimeDebugPlotIdx = trials{strcmpi(trials.RewardType,'lick6'),"RewardTimeDebugPlot"};
+% analysisEvents_0 = {RewardTimeDebugPlotIdx};
+% analysisLabels_0 = {'DebugWaterReward'};
+% taskLegend_0 = getLegend(analysisEvents_0,analysisLabels_0);
+% 
+% timeRange = [-0.5,3];
+% 
+% % Find the number of photometry channels
+% % photometryIdx = find(cellfun(@(x) contains(x,["NI","LJ"],"IgnoreCase",true), {timeSeries.system}));
+% photometryIdx = find(cellfun(@(x) contains(x,["Green","Iso"],"IgnoreCase",true), {timeSeries.name}));
+% 
+% % photometryName = cellfun(@(x) unique(x,'rows'), {timeSeries(photometryIdx).name},'UniformOutput',false);
+% nSignals = length(photometryIdx);
+% disp(['Finished: found ', num2str(nSignals),' photometry signals']);
+% 
+% if options.plotPhotometry
+% 
+%     for photometry = 1:nSignals
+%         % Load signal of interest
+%         path = photometryIdx(photometry);
+%         signal = timeSeries(path).data;
+%         finalFs = timeSeries(path).finalFs;
+%         system = timeSeries(path).system;
+% 
+% %         initializeFig(.5,.5); tiledlayout('flow');
+%         initializeFig(.5,1); 
+%         % tiledlayout(5,2);
+% 
+%         % Figure set 0: for cue and water events
+%         nexttile
+%         [~,~] = plotTraces(RewardTimeDebugPlotIdx,timeRange,signal,bluePurpleRed(1,:),params,...
+%                                 signalFs=finalFs,...
+%                                 signalSystem=system,eventSystem=params.session.baselineSystem);
+%         plotEvent('',0);
+%         xlabel('Time to rewardTimeDebug (s)'); ylabel('z-score');
+%         legend(taskLegend_0,'Location','northeast');
+%         title('rewardTimeDebug, neural');
+% 
+%         nexttile
+%         plotLicks(RewardTimeDebugPlotIdx,timeRange,options.lick_binSize,bluePurpleRed(1,:),[],labjack.lick,params);
+%         plotEvent('',0);
+%         xlabel('Time to rewardTimeDebug (s)'); ylabel('Licks/s');
+%         legend(taskLegend_0,'Location','northeast');
+%         title('rewardTimeDebug, lick');
+% 
+%         % Figure set 1: for cue and water events
+%         nexttile
+%         [~,~] = plotTraces(waterIdx,timeRange,signal,bluePurpleRed(1,:),params,...
+%                                 signalFs=finalFs,...
+%                                 signalSystem=system,eventSystem=params.session.baselineSystem);
+%         [~,~] = plotTraces(rewardedIdx,timeRange,signal,bluePurpleRed(100,:),params,...
+%                         signalFs=finalFs,...
+%                         signalSystem=system,eventSystem=params.session.baselineSystem);
+%         [~,~] = plotTraces(omissionIdx,timeRange,signal,bluePurpleRed(350,:),params,...
+%                         signalFs=finalFs,...
+%                         signalSystem=system,eventSystem=params.session.baselineSystem);
+% 
+%         plotEvent('',0);
+%         xlabel('Time to cue/water (s)'); ylabel('z-score');
+%         legend(taskLegend_1,'Location','northeast');
+%         title('Cue/water, neural');
+% 
+%         nexttile
+%         plotLicks(waterIdx,timeRange,options.lick_binSize,bluePurpleRed(1,:),[],labjack.lick,params);
+%         plotLicks(rewardedIdx,timeRange,options.lick_binSize,bluePurpleRed(100,:),[],labjack.lick,params);
+%         plotLicks(omissionIdx,timeRange,options.lick_binSize,bluePurpleRed(350,:),[],labjack.lick,params);
+%         plotEvent('',0);
+%         xlabel('Time to cue/water (s)'); ylabel('Licks/s');
+%         legend(taskLegend_1,'Location','northeast');
+%         title('Cue/water, lick');
+%     end
+% end
 
 
 %% Analyze traces
 
 % Figure set 1: for cue and water events
-analysisEvents_1 = {waterIdx,rewardedIdx,omissionIdx,missIdx,baselineIdx};
-eventTrialNum_1 = {findTrials(waterIdx,trials),...
+analysisEvents_1 = {rewardedLickTime,rewardedIdx,omissionIdx,missIdx,baselineIdx};
+eventTrialNum_1 = {findTrials(rewardedLickTime,trials),...
                  rewardedTrials(:,1),omissionTrials(:,1),missTrials(:,1),...
                  findTrials(baselineIdx,trials)};
-analysisLabels_1 = {'Water','Rewarded','Omission','Miss','Baseline'};
+analysisLabels_1 = {'FirstWaterCollectionLick','Rewarded','Omission','Miss','Baseline'};
 taskLegend_1 = getLegend(analysisEvents_1,analysisLabels_1);
 
 % Figure set 2: for first lick
@@ -317,6 +372,15 @@ eventTrialNum_5 = {findTrials(rewarded_normal4_rewardTime,trials),...
                  findTrials(rewarded_catch6_rewardTime,trials)};
 analysisLabels_5 = {'Normal 4','Catch 2','Catch 6'};
 taskLegend_5 = getLegend(analysisEvents_5,analysisLabels_5);
+
+% % Figure set 6: for catch trials, first water collection lick
+% analysisEvents_5 = {rewarded_normal4_rewardTime,rewarded_catch2_rewardTime,rewarded_catch6_rewardTime};
+% eventTrialNum_5 = {findTrials(rewarded_normal4_rewardTime,trials),...
+%                  findTrials(rewarded_catch2_rewardTime,trials),...
+%                  findTrials(rewarded_catch6_rewardTime,trials)};
+% analysisLabels_5 = {'Normal 4','Catch 2','Catch 6'};
+% taskLegend_5 = getLegend(analysisEvents_5,analysisLabels_5);
+% 
 
 % to-do: concatenate analysis events
 analysisEvents = [analysisEvents_1, analysisEvents_2, analysisEvents_3, analysisEvents_4, analysisEvents_5];
@@ -370,7 +434,7 @@ if options.plotPhotometry
 
         % Figure set 1: for cue and water events
         nexttile
-        [~,~] = plotTraces(waterIdx,timeRange,signal,bluePurpleRed(1,:),params,...
+        [~,~] = plotTraces(rewardedLickTime,timeRange,signal,bluePurpleRed(1,:),params,...
                                 signalFs=finalFs,...
                                 signalSystem=system,eventSystem=params.session.baselineSystem);
         [~,~] = plotTraces(rewardedIdx,timeRange,signal,bluePurpleRed(100,:),params,...
@@ -386,18 +450,18 @@ if options.plotPhotometry
                 signalFs=finalFs,...
                 signalSystem=system,eventSystem=params.session.baselineSystem);
         plotEvent('',0);
-        xlabel('Time to cue/water (s)'); ylabel('z-score');
+        xlabel('Time to cue/waterlick (s)'); ylabel('z-score');
         legend(taskLegend_1,'Location','northeast');
         title('Cue/water, neural');
         
         nexttile
-        plotLicks(waterIdx,timeRange,options.lick_binSize,bluePurpleRed(1,:),[],labjack.lick,params);
+        plotLicks(rewardedLickTime,timeRange,options.lick_binSize,bluePurpleRed(1,:),[],labjack.lick,params);
         plotLicks(rewardedIdx,timeRange,options.lick_binSize,bluePurpleRed(100,:),[],labjack.lick,params);
         plotLicks(omissionIdx,timeRange,options.lick_binSize,bluePurpleRed(350,:),[],labjack.lick,params);
         plotLicks(missIdx,timeRange,options.lick_binSize,bluePurpleRed(500,:),[],labjack.lick,params);
         plotLicks(baselineIdx,timeRange,options.lick_binSize,[.5,.5,.5],[],labjack.lick,params);
         plotEvent('',0);
-        xlabel('Time to cue/water (s)'); ylabel('Licks/s');
+        xlabel('Time to cue/waterlick (s)'); ylabel('Licks/s');
         legend(taskLegend_1,'Location','northeast');
         title('Cue/water, lick');
 
@@ -439,7 +503,6 @@ if options.plotPhotometry
         legend(taskLegend_3,'Location','northeast');
         title('Fourth lick, neural');
 
-        
         nexttile
         plotLicks(rewarded_fourthLick,timeRange,options.lick_binSize,bluePurpleRed(1,:),[],labjack.lick,params);
         plotLicks(omission_fourthLick,timeRange,options.lick_binSize,bluePurpleRed(500,:),[],labjack.lick,params);
@@ -472,7 +535,6 @@ if options.plotPhotometry
         legend(taskLegend_4,'Location','northeast');
         title('First bout last lick, lick');
 
-
 %         % Figure set 5: for catch trial reward lick 
 %         nexttile
 %         [~,~] = plotTraces(rewarded_normal4_fourthLick,timeRange,signal,bluePurpleRed(1,:),params,...
@@ -496,7 +558,7 @@ if options.plotPhotometry
 %         legend(taskLegend_5,'Location','northeast');
 %         title('Catch Experiment: reward lick, lick');
 
-        % Figure set 5: for catch trial solenoid onset 
+        % Figure set 5: for catch trial REWARD LICK onset 
         nexttile
         [~,~] = plotTraces(rewarded_normal4_rewardTime,timeRange,signal,bluePurpleRed(1,:),params,...
                                 signalFs=finalFs,...
@@ -509,9 +571,9 @@ if options.plotPhotometry
                 signalSystem=system,eventSystem=params.session.baselineSystem);
         
         plotEvent('',0);
-        xlabel('Time to solenoid onset (s)'); ylabel('z-score');
+        xlabel('Time to first water collection lick onset (s)'); ylabel('z-score');
         legend(taskLegend_5,'Location','northeast');
-        title('Catch Experiment: solenoid onset, neural');
+        title('Catch Experiment: first water collection lick onset, neural');
 
         nexttile
         plotLicks(rewarded_normal4_rewardTime,timeRange,options.lick_binSize,bluePurpleRed(1,:),[],labjack.lick,params);
@@ -519,9 +581,9 @@ if options.plotPhotometry
         plotLicks(rewarded_catch6_rewardTime,timeRange,options.lick_binSize,bluePurpleRed(500,:),[],labjack.lick,params);
 
         plotEvent('',0);
-        xlabel('Time to solenoid onset (s)'); ylabel('Licks/s');
+        xlabel('Time to first water collection lick onset (s)'); ylabel('Licks/s');
         legend(taskLegend_5,'Location','northeast');
-        title('Catch Experiment: solenoid onset, lick');
+        title('Catch Experiment: first water collection lick onset, lick');
 
         saveas(gcf,strcat(sessionpath,filesep,'Summary_events_',timeSeries(path).name,'.png'));
 

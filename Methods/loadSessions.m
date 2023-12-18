@@ -345,7 +345,7 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
         if sum(labjack.record == options.recordLJ) ~= length(labjack.record)
             disp(['labjack.record: ',labjack.record]);
             disp(['options.recordLJ: ',options.recordLJ]);
-            warning("labjack.record does not agree with recordLJ, use the original one instead"); 
+            warning(['labjack.record does not agree with recordLJ, use labjack.record = ',num2str(labjack.record)]); 
         end
         disp('Finished: concatenate and saved raw photometry data in data_labjack.mat');
         disp(labjack);
