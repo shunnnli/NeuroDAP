@@ -28,13 +28,14 @@ if options.sameSystem
     end
     options.syncFs = options.signalFs;
 else
-    if ~isfield(options.params)
+    if ~isfield(options,'params')
         error('getTraces: params is required if sameSystem=false');
     end
 end
+params = options.params;
 
 %% Initialize event and signal system time
-if options.sameSystem
+if ~options.sameSystem
     % 0. Define event system
     if ~isfield(params.session,'baselineSystem'); options.eventSystem = 'ni';
     else; options.eventSystem = params.session.baselineSystem; end

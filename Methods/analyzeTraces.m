@@ -67,7 +67,7 @@ for i = 1:length(analysisEvents)
         system = timeSeries(signal).system;
 
         % Save overall traces
-        [trace,t] = plotTraces(analysisEvents{i},timeRange,data,[1,1,1],params,...
+        [trace,t] = plotTraces(analysisEvents{i},timeRange,data,params,...
                         signalFs=finalFs,signalSystem=system,plot=false);
 
         % analyzeStages
