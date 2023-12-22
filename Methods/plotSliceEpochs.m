@@ -24,7 +24,6 @@ arguments
     options.fitScatter logical = true % fit scatter plot
 
     options.save logical = true; % save peaks and aucs
-    options.parentPath string = '/Volumes/MICROSCOPE/wengang/Exp_withShun/';
     options.resultPath string = '/Volumes/MICROSCOPE/Shun/Project valence/Patch/';
 end
 
@@ -44,7 +43,7 @@ end
 
 % Load epochs.mat file
 if ~combine
-    expName = erase(expPath,osPathSwitch(options.parentPath));
+    dirsplit = split(expPath,filesep); expName = dirsplit{end};
     if isempty(dir(fullfile(expPath,"epochs_*.mat")))
         error("ERROR: epochs_*.mat file NOT found!");
     else
@@ -58,7 +57,7 @@ else
     epochsList = cell(size(expPaths));
     for exp = 1:length(expPaths)
         expPath = expPaths{exp};
-        expName = erase(expPath,osPathSwitch(options.parentPath));
+        dirsplit = split(expPath,filesep); expName = dirsplit{end};
         if isempty(dir(fullfile(expPath,"epochs_*.mat")))
             error("ERROR: epochs_*.mat file NOT found!");
         else

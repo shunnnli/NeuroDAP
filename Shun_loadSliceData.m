@@ -13,7 +13,7 @@ clear; close all;
 addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
 
 % Select sessions for analysis
-parentPath = osPathSwitch('/Volumes/MICROSCOPE/wengang/Exp_withShun/');
+parentPath = osPathSwitch('/Volumes/MICROSCOPE/wengang/Exp_withAlly/');
 expPaths = uipickfiles('FilterSpec',parentPath,'Prompt','Select experiment folders');
 
 % Set comman params
@@ -38,7 +38,7 @@ if ~multipleSessions
     disp(expPaths{1});
     
     epochs = sortrows(epochs, [3 8]);
-    expName = erase(expPaths{1},osPathSwitch(parentPath));
+    dirsplit = split(expPaths{1},filesep); expName = dirsplit{end};
     save(strcat(expPaths{1},filesep,'epochs_',expName),'epochs','-v7.3');
     disp(strcat("Saved: ",expName));
     
@@ -72,7 +72,8 @@ if multipleSessions
                 nArtifactSamples=nArtifactSamples);
             plotSliceEpochs(expPaths{i},...
                 timeRange=timeRange,...
-                nArtifactSamples=nArtifactSamples);
+                nArtifactSamples=nArtifactSamples,...
+                parentPath='/Volumes/MICROSCOPE/wengang/Exp_withAlly/');
         catch ME
             disp(getReport(ME));
             warning(['Session ', erase(expPaths{i},parentPath), ' have an error, skipped for now!!!!']);

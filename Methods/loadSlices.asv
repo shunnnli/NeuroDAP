@@ -132,7 +132,7 @@ for row = 1:length(epochList)
         % Rs
         Rss(k) = getRs();
         % Cm
-        Cms(k) = getCm();
+
 
         % Process trace: mean-subtracted, optional LP
         % Mean subtraction

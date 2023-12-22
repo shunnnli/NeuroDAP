@@ -65,11 +65,9 @@ session.date = date;        session.animal = animal;
 session.sessionTask = sessionTask;
 
 % Decide reload if session has already been loaded and synced
-if ~isempty(dir(fullfile(session.path,"sync_*.mat")))
-    if ~any([options.reloadAll,options.reloadNI,options.reloadLJ,options.reloadCam,options.reloadImec])
-        disp('Loading stop: sync file found.'); 
-        return; 
-    end
+if ~isempty(dir(fullfile(session.path,"sync_*.mat"))) && ~any([options.reloadAll,options.reloadNI,options.reloadLJ,options.reloadCam,options.reloadImec])
+    disp('Loading stop: sync file found.'); 
+    return; 
 else
     % Initialize all .mat files
     options.reloadAll = true;

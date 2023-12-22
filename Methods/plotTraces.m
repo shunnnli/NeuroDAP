@@ -10,13 +10,8 @@ function [traces,timestamp] = plotTraces(varargin,options)
 arguments (Repeating)
     varargin
 end
-arguments
-    % eventIdx double
-    % timeRange double
-    % signal double
-    % color
-    % params struct
-    
+
+arguments    
     % Common options
     options.signalFs double = 50
     options.baseline double = 0 % subtracted by x secs before event time
@@ -27,6 +22,7 @@ arguments
     options.timeRange double
     options.signal doube
     options.params struct
+    options.sameSystem logical = false
     options.eventSystem string = 'ni'
     options.signalSystem string = 'lj'
     options.rmmissing logical = true % remove nan rows
@@ -49,14 +45,21 @@ arguments
     options.plotStyle string = 'line'
     options.meanOnly logical = false
 
-    options.smooth double = 0; % 0: no smoothing, else is samples of smooth data
+    options.smooth double = 0 % 0: no smoothing, else is samples of smooth data
     options.smoothMethod string = 'movmean';
 
     options.print logical = false % print progress message
 end
 
-%% Check inputs
-if nargin == 4
+%% Parse required inputs
+
+% Determine number of inputs (option inputs started as a string)
+nInputs = find(cellfun(@isstring,varargin),1) - 1;
+
+if isempty(nInputs); nInputs = nargin;
+else; error('Input format error: check whether options is correct'); end
+
+if nInputs == 4
     if ~options.extract
         disp('plotTraces: extract is false but 4 inputs are provided, changed to true!'); 
         options.extract = true;
@@ -67,12 +70,12 @@ if nargin == 4
     options.params = varargin{4};
     if options.print
         if options.plot
-            disp(['plotTraces: ',num2str(nargin),' inputs are detected, execute extract and plot']);
+            disp(['plotTraces: ',num2str(nInputs),' inputs are detected, execute extract and plot']);
         else
-            disp(['plotTraces: ',num2str(nargin),' inputs are detected, execute extract']);
+            disp(['plotTraces: ',num2str(nInputs),' inputs are detected, execute extract']);
         end
     end
-elseif nargin == 5
+elseif nInputs == 5
     if ~options.extract
         if options.print
             disp('plotTraces: extract is false but 4 inputs are provided, changed to true!'); 
@@ -86,12 +89,12 @@ elseif nargin == 5
     if isfield(options,'color'); options.color = varargin{4}; end
     if options.print
         if options.plot
-            disp(['plotTraces: ',num2str(nargin),' inputs are detected, execute extract and plot']);
+            disp(['plotTraces: ',num2str(nInputs),' inputs are detected, execute extract and plot']);
         else
-            disp(['plotTraces: ',num2str(nargin),' inputs are detected, execute extract']);
+            disp(['plotTraces: ',num2str(nInputs),' inputs are detected, execute extract']);
         end
     end
-elseif nargin == 2
+elseif nInputs == 2
     if ~options.plot
         if options.print
             disp('plotTraces: plot is false but 2 inputs are provided, changed to true!'); 
@@ -107,9 +110,39 @@ elseif nargin == 2
     options.traces = varargin{1};
     options.timestamp = varargin{2};
     if options.print
-        disp(['plotTraces: ',num2str(nargin),' inputs are detected, execute plot']);
+        disp(['plotTraces: ',num2str(nInputs),' inputs are detected, execute plot']);
     end
+elseif nInputs == 3
+    if ~options.extract
+        if options.print
+            disp('plotTraces: extract is false but 3 inputs are provided, changed to true!'); 
+        end
+        options.extract = true;
+    end
+    options.eventIdx = varargin{1};
+    options.timeRange = varargin{2};
+    options.signal = varargin{3};
+    if options.print
+        if options.plot
+            disp(['plotTraces: ',num2str(nInputs),' inputs are detected, execute extract and plot']);
+        else
+            disp(['plotTraces: ',num2str(nInputs),' inputs are detected, execute extract']);
+        end
+    end
+else
+    error(['Input format error: ', num2str(nInputs),' inputs are detected, should be either 2, 4, 5']);
 end
+
+%% Parse options inputs
+
+% optionIdx = find(cellfun(@isstring,varargin));
+% 
+% for i = 1:length(optionIdx)
+%     if ~isfield(options,varargin{optionIdx(i)})
+%         error(['option input error: can not find corresponding options for ',convertStringsToChars(varargin{optionIdx(i)})]);
+%     end
+%     options.(varargin{optionIdx(i)}) = varargin{optionIdx(i)+1};
+% end
 
 %% Check extract & plot
 if ~options.extract && ~options.plot
@@ -134,10 +167,11 @@ end
 %% Get traces if needed
 if options.extract
     [traces,timestamp] = getTraces(options.eventIdx,options.timeRange,...
-                                        options.signal,options.params,...
+                                        options.signal,params=options.params,...
                                         signalSystem=options.signalSystem,...
                                         signalFs=options.signalFs,...
                                         eventSystem=options.eventSystem,...
+                                        sameSystem=options.sameSystem,...
                                         rmmissing=options.rmmissing,...
                                         baseline=options.baseline);
 end
