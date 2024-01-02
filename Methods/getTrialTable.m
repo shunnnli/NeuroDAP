@@ -147,12 +147,11 @@ for i=1:length(allTrials)
             if choice == 1; hit = [hit; cur_cue]; outcome = 'H';
             elseif choice == 0; miss = [miss; cur_cue]; outcome = 'M'; end
         end
-        outcomeReactionTime = rightLickON(find(rightLickON>outcomeTime+cur_cue,1)) - (cur_cue+outcomeTime);
-        if isempty(outcomeReactionTime); outcomeReactionTime = nan; end
     else
         if ~options.pavlovian; outcome = 'H'; end
-        outcomeReactionTime = nan;
     end
+    outcomeReactionTime = rightLickON(find(rightLickON>outcomeTime+cur_cue,1)) - (cur_cue+outcomeTime);
+    if isempty(outcomeReactionTime); outcomeReactionTime = nan; end
 
     % Trial table
     trials(i,:) = {i,choice,outcome,...

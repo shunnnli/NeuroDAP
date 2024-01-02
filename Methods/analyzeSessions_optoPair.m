@@ -92,16 +92,17 @@ elseif isfield(params.session,'task') && isfield(options,'task')
         disp('Finished: options.task not provided or differed, use the original one');
     end
 elseif ~isfield(params.session,'task') && ~isfield(options,'task')
-    if contains(sessionTask,"P",IgnoreCase=false)
-        options.task = 'punish pairing';
-        params.session.task = options.task;
-    elseif contains(sessionTask,"Random",IgnoreCase=false)
-        options.task = 'random';
-        params.session.task = options.task;
-    elseif contains(sessionTask,"R",IgnoreCase=false)
+    if contains(sessionTask,["R","RP","Reward"],IgnoreCase=false)
         options.task = 'reward pairing';
         params.session.task = options.task;
-    else % contains(sessionTask,"Random",IgnoreCase=false)
+    elseif contains(sessionTask,["P","PP","Punish"],IgnoreCase=false)
+        options.task = 'punish pairing';
+        params.session.task = options.task;
+    elseif contains(sessionTask,["Random","H"],IgnoreCase=false)
+        options.task = 'random';
+        params.session.task = options.task;
+    else
+        warning('Unrecognize session name pattern, set to random');
         options.task = 'random';
         params.session.task = options.task;
     end
@@ -837,7 +838,7 @@ end
 
 % Plot lick bout distribution
 if options.plotBehavior
-    initializeFig(0.5,0.5); tiledlayout(2,2);
+    initializeFig(0.5,0.5); tiledlayout('flow');
 
     ENLinSec = trials{1:end-1,"ENL"} / params.sync.behaviorFs;
     ITIextra = trials{1:end-1,'ITI'} - ENLinSec;
@@ -852,10 +853,10 @@ if options.plotBehavior
     histogram(trials{1:end-1,'ITI'},30); 
     xlabel('ITI (s)'); ylabel('Count'); box off
 
-    % Plot lick per trial vs trials
+    % Plot lick reaction time
     nexttile;
-    plot(trials{1:end-1,'TrialNumber'},trials{1:end-1,'nLicks'},'Color',bluePurpleRed(1,:),LineWidth=2);
-    xlabel('Trials'); ylabel('Licks per trial'); box off
+    histogram(trials{trials.isReward == 1,'OutcomeReactionTime'}/params.sync.behaviorFs,50);
+    xlabel('First lick response time to water (s)'); ylabel('Count'); box off
 
     % Plot ITI-ENL vs trials
     nexttile;
@@ -863,6 +864,11 @@ if options.plotBehavior
     plot(trials{1:end-1,'TrialNumber'},ITIextra,'Color',bluePurpleRed(1,:),LineWidth=2);
     xlabel('Trials'); ylabel('Time (s)'); ylim([0,Inf]); box off
     legend({'ENL','ITI-ENL'});
+
+    % Plot lick per trial vs trials
+    % nexttile;
+    % plot(trials{1:end-1,'TrialNumber'},trials{1:end-1,'nLicks'},'Color',bluePurpleRed(1,:),LineWidth=2);
+    % xlabel('Trials'); ylabel('Licks per trial'); box off
 
     saveas(gcf,strcat(sessionpath,filesep,'Behavior_ITI&LickBout.png'));
 end

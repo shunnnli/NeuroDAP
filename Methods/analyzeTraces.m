@@ -69,6 +69,10 @@ for i = 1:length(analysisEvents)
         % Save overall traces
         [trace,t] = plotTraces(analysisEvents{i},timeRange,data,params,...
                         signalFs=finalFs,signalSystem=system,plot=false);
+        if isempty(trace)
+            disp(['     Ongoing: ',analysisLabels{i},' is empty, skipped!']); 
+            continue; 
+        end
 
         % analyzeStages
         stats = analyzeStages(trace,stageTime,nboot=options.nboot,finalFs=finalFs);

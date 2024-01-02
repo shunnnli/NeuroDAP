@@ -109,6 +109,7 @@ else
         warning('Did NOT find rows that fits the input range, skipped');
         options.empty = true;
         combined.options = options;
+        disp(options);
         return
     end
 end
@@ -228,7 +229,7 @@ for signal = 1:length(options.signalRange)
 
         % Check trialConditions in trialTable
         if isfield(options,'trialConditions')
-            trials = row.trialInfo.trialTable;
+            trials = row.trialInfo.trialTable; % required!!
             trialRange = intersect(trialRange,find(eval(options.trialConditions)));
             if isempty(trialRange); warning('Did not find trials that fits trialConditions! Check expression!'); end
         end
@@ -256,6 +257,7 @@ for signal = 1:length(options.signalRange)
             trialTableData{signal} = [trialTableData{signal}; row.trialInfo.trialTable(trialRange,:)];
         else
             warning('combineTraces: empty trialNumber or trialTable found, skipped for now');
+            disp(options);
         end
     end
     options.startIdx.session{signal} = find([-1; diff(trialNumData{signal})]<0); % Not working for animals

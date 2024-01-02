@@ -31,6 +31,11 @@ end
 
 %% Parse inputs
 
+if isempty(traces)
+    warning('Input traces is empty!'); legendList = {};
+    return; 
+end
+
 if isfield(options,'startIdx') 
     options.animalStartIdx = options.startIdx.animal;
     options.sessionStartIdx = options.startIdx.session;

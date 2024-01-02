@@ -8,6 +8,10 @@ arguments
     options.save logical = true % save as mat files
     options.record double = [1,1,0] % Recorded channels
     options.rebuildInfo logical = false % rebuild info (old version of the system)
+
+    options.saveDuplicate logical = true % Save a duplicate into Photometry folder
+
+    options.followOriginal logical = true % Follow original recorded information
 end
 
 % Load info.mat
@@ -56,9 +60,14 @@ if ~isfield(labjack,'record')
 end
 % If input is different from labjack.record
 if sum(labjack.record == options.record) ~= 3
-    disp(['labjack.record: ',labjack.record]);
-    disp(['options.recordLJ: ',options.record]);
-    warning("labjack.record does not agree with recordLJ, reload using labjack.record"); 
+    disp(['labjack.record: ',num2str(labjack.record)]);
+    disp(['options.recordLJ: ',num2str(options.record)]);
+    if options.followOriginal
+        warning("labjack.record does not agree with recordLJ, reload using labjack.record"); 
+    else
+        labjack.record = options.record;
+        warning("labjack.record does not agree with recordLJ, reload using recordLJ"); 
+    end
 end
 % Replace space in name with underscore
 for i = 1:labjack.nSignals
@@ -84,14 +93,16 @@ labjack.raw = nan(labjack.nSignals,length(sync_labjack));
 labjack.modulation = nan(labjack.nSignals,length(sync_labjack));
 
 % Log signal to corresponding row
+row = 0;
 for i = 1:size(labjack.name,2)
     if labjack.record(i)
+        row = row + 1;
         if contains(labjack.name{i},"PMT",IgnoreCase=true)
-            labjack.raw(3,:) = output(mod(1:totalLen,numChannels)==5);
-            labjack.modulation(3,:) = output(mod(1:totalLen,numChannels)==6);
+            labjack.raw(row,:) = output(mod(1:totalLen,numChannels)==5);
+            labjack.modulation(row,:) = output(mod(1:totalLen,numChannels)==6);
         else
-            labjack.raw(i,:) = output(mod(1:totalLen,numChannels)==i);
-            labjack.modulation(i,:) = output(mod(1:totalLen,numChannels)==i+2);
+            labjack.raw(row,:) = output(mod(1:totalLen,numChannels)==i);
+            labjack.modulation(row,:) = output(mod(1:totalLen,numChannels)==i+2);
         end
     end
 end
@@ -109,12 +120,19 @@ end
 
 %% Save concat files
 labjack.name(find(~labjack.record)) = [];
+labjack.mod(find(~labjack.record)) = [];
+labjack.modFreq(find(~labjack.record)) = [];
+labjack.nSignals = sum(labjack.record);
+
 labjack.numChannels = numChannels;
 labjack.totalLen = totalLen;
 labjack.options = options;
 
 if options.save
     save(strcat(sessionpath,filesep,'data_labjack'),'labjack','sync_labjack','-v7.3');
+    if options.saveDuplicate
+        save(strcat(sessionpath,filesep,'Photometry',filesep,'data_labjack'),'labjack','sync_labjack','-v7.3');
+    end
 end
 
 end

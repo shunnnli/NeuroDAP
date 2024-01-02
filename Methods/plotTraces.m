@@ -65,6 +65,7 @@ if nInputs == 4
         options.extract = true;
     end
     options.eventIdx = varargin{1};
+    % if size(options.eventIdx,1) == 1; options.eventIdx = options.eventIdx'; end
     options.timeRange = varargin{2};
     options.signal = varargin{3};
     options.params = varargin{4};
@@ -83,6 +84,7 @@ elseif nInputs == 5
         options.extract = true;
     end
     options.eventIdx = varargin{1};
+    % if size(options.eventIdx,1) == 1; options.eventIdx = options.eventIdx'; end
     options.timeRange = varargin{2};
     options.signal = varargin{3};
     options.params = varargin{5};
@@ -120,8 +122,10 @@ elseif nInputs == 3
         options.extract = true;
     end
     options.eventIdx = varargin{1};
+    % if size(options.eventIdx,1) == 1; options.eventIdx = options.eventIdx'; end
     options.timeRange = varargin{2};
     options.signal = varargin{3};
+    options.params = struct([]);
     if options.print
         if options.plot
             disp(['plotTraces: ',num2str(nInputs),' inputs are detected, execute extract and plot']);

@@ -10,6 +10,7 @@ arguments
    
    % Labjack concat options
    options.labjackSetup string = 'Shun'
+   options.followOriginal logical = true
    
    % Reload options (unfinished)
    options.reloadAll logical = false       % If false, skip the whole function if sync_.mat is found
@@ -323,7 +324,7 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
         disp("Ongoing: concatenate and save raw photometry data");
         if isempty(dir(fullfile(session.path,filesep,'data_labjack.mat')))
             if strcmpi(options.labjackSetup,"Shun")
-                concatLabjack(session.path,save=true,plot=false,record=options.recordLJ);
+                concatLabjack(session.path,save=true,plot=false,record=options.recordLJ,followOriginal=options.followOriginal);
             elseif strcmpi(options.labjackSetup,"Shijia")
                 concatLabjack_shijia(session.path,save=true,plot=false,record=options.recordLJ);
             end
@@ -373,7 +374,6 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
     end
 
     %% Loop through all signals
-    i = 1;
     if withPhotometry
         for i = 1:labjack.nSignals
             
@@ -460,6 +460,11 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
         params.sync.ni_photometryFs = [];
         totalDuration_NI = length(photometry_raw) / params.sync.behaviorFs;
         disp("Ongoing: Process NI photometry data");
+
+        % Find row to store
+        if ~withPhotometry; i = 1;
+        else; i = size(timeSeries,2) + 1; end
+
         % Process
         if options.photometryNI_mod
             processed = demodulateSignal(photometry_raw,...
@@ -564,12 +569,12 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
             % Plot all session
             nexttile;
             yyaxis left % Plot raw all session
-            plotSamples = rawFs * totalDuration;
-            plot(linspace(1,totalDuration,plotSamples),rawTrace,Color=[0.3010 0.7450 0.9330]); hold on
+            % plotSamples = rawFs * totalDuration;
+            plot(linspace(1,totalDuration,length(rawTrace)),rawTrace,Color=[0.3010 0.7450 0.9330]); hold on
             plot(linspace(1,totalDuration,length(meanTrace)),meanTrace,Color='b',LineWidth=2); hold on
             yyaxis right % Plot processed all session
-            plotSamples = floor(timeSeries(i).finalFs * totalDuration);
-            plot(linspace(1,totalDuration,plotSamples),timeSeries(i).data,Color='#D95319',LineWidth=2); hold on
+            % plotSamples = floor(timeSeries(i).finalFs * totalDuration);
+            plot(linspace(1,totalDuration,length(timeSeries(i).data)),timeSeries(i).data,Color='#D95319',LineWidth=2); hold on
             legend({'Raw','Mean','Processed'}); xlabel('Time (s)');
             title(timeSeries(i).name);
         end

@@ -27,6 +27,10 @@ if options.sameSystem
         options.syncFs = 50;
     end
     options.syncFs = options.signalFs;
+    signalFs = options.signalFs;
+    if ~strcmp(options.eventSystem,options.signalSystem)
+        options.eventSystem = options.signalSystem;
+    end
 else
     if ~isfield(options,'params')
         error('getTraces: params is required if sameSystem=false');
@@ -91,7 +95,7 @@ if ~options.sameSystem
 end
 
 %% Get signal traces around a specific event
-if ~strcmp(options.eventSystem,options.signalSystem)
+if ~strcmp(options.eventSystem,options.signalSystem) || ~options.sameSystem
     % If event system and signal system is different
     eventInSignal = findCorrespondingTime(eventIdx,timeRef,timeTarget);
     eventInSec = eventInSignal / options.syncFs;
@@ -105,7 +109,7 @@ traces = zeros(length(eventInSec),length(timestamp));
 %% Generate traces
 for i = 1:length(eventInSec)
     % If first bin calculated is before recording start, reset to 1
-    if (floor(eventInSec(i)+timeRange(1)) <= 0) || isnan(eventInSec(i))
+    if eventInSec(i)+timeRange(1) < 0 || isnan(eventInSec(i))
         traces(i,:) = nan(1,length(timestamp));
         continue
     end
