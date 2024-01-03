@@ -1,4 +1,4 @@
-function combined = getGroupedTrialStats(animals,statsTypes,options)
+function combinedStats = getGroupedTrialStats(animals,statsTypes,options)
 
 arguments
     animals struct
@@ -15,12 +15,16 @@ arguments
     options.totalTrialRange = 'All'
     options.trialRange = 'All' % index from totalTrialRange
     % options.trialConditions
+
+    options.inTrialTable
 end
 
 %% Parse combineTraces inputs
 if strcmpi(options.animalRange,'All'); options.animalRange = unique({animals.animal}); end
 if strcmpi(options.eventRange,'All'); options.eventRange = unique({animals.event}); end
-if strcmpi(options.taskRange,'All'); options.taskRange = unique({animals.task}); end
+
+if strcmpi(options.taskRange,'All'); options.taskRange = unique({animals.task});
+elseif length(options.taskRange)==1; options.taskRange = {options.taskRange}; end
 
 if strcmpi(options.sessionRange,'All'); options.sessionRange = repelem("All",length(options.taskRange),1); end
 if strcmpi(options.totalTrialRange,'All'); options.totalTrialRange = repelem("All",length(options.taskRange),1); end
@@ -81,7 +85,11 @@ for task = 1:length(options.taskRange)
                     else; lastTrial = sessionStartIdx(session+1)-1; end
                     sessionWindow = sessionStartIdx(session):lastTrial;
         
-                    sessionStats{session} = [sessionStats{session}; statsData(sessionWindow)];
+                    if options.inTrialTable
+                        sessionStats{session} = [sessionStats{session}; statsData(sessionWindow)];
+                    else
+                        sessionStats{session} = [sessionStats{session}; statsData(sessionWindow,:)];
+                    end
                 end
                 stats_combined{animal,event} = [stats_combined{animal,event}, sessionStats];
             end
@@ -90,7 +98,7 @@ for task = 1:length(options.taskRange)
     stats{task} = stats_combined;
 end
 
-combined.stats = stats;
-combined.options = options;
+combinedStats.stats = stats;
+combinedStats.options = options;
 
 end

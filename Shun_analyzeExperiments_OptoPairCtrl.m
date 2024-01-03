@@ -448,8 +448,7 @@ combinedStats = getGroupedTrialStats(animals,statsTypes,...
                             signalRange=signalRange);
 
 initializeFig(.7,.7); tiledlayout('flow');
-plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,color=colorList,...
-                       eventRange=eventRange);
+plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,color=colorList);
 
 % saveFigures(gcf,['Summary_CSvsTrialsGrouped_',taskRange{task},'-',eventRange{event}],...
 %         strcat(resultspath),...
@@ -539,7 +538,7 @@ stage = 2; % Plot CS only
 statsType = 'stageAvg';
 
 % Get subtrial stats
-stats = getGroupedTrialStats(animals,statsType,...
+combinedStats = getGroupedTrialStats(animals,statsType,...
                             eventRange=eventRange,...
                             animalRange=animalRange,...
                             taskRange=taskRange,...
@@ -547,40 +546,9 @@ stats = getGroupedTrialStats(animals,statsType,...
                             signalRange=signalRange,...
                             concatSessions=false);
 
-if strcmpi(animalRange,'All'); animalRange = unique({animals.animal}); end
 for task = 1:length(taskRange)
-    % stats_combined = cell(length(animalRange),length(eventRange));
-    % animalList_task = unique({animals(strcmpi({animals.task},taskRange{task})).animal});
-    % animalList = intersect(animalList_task,animalRange);
-    % for event = 1:length(eventRange)
-    %     for animal = 1:length(animalList)
-    %         for t = 1:size(conditionRange,1)
-    %             combined = combineTraces(animals,statsType=statsType,...
-    %                                         eventRange=eventRange{event},...
-    %                                         animalRange=animalList{animal},...
-    %                                         taskRange=taskRange{task},...
-    %                                         totalTrialRange=conditionRange(t,:),...
-    %                                         signalRange=signalRange);
-    %             if combined.options.empty; continue; end
-    %             statsData = combined.stats.(statsType){1};
-    %             sessionStartIdx = combined.options.startIdx.session{1};
-    % 
-    %             sessionStats = cell(length(sessionStartIdx),1);
-    % 
-    %             for session = 1:length(sessionStartIdx)
-    %                 if session == length(sessionStartIdx); lastTrial = length(combined.trialNumber{1}); 
-    %                 else; lastTrial = sessionStartIdx(session+1)-1; end
-    %                 sessionWindow = sessionStartIdx(session):lastTrial;
-    % 
-    %                 sessionStats{session} = [sessionStats{session}; statsData(sessionWindow,:)];
-    %             end
-    %             stats_combined{animal,event} = [stats_combined{animal,event}, sessionStats];
-    %         end
-    %     end 
-    % end
-    
     % Plot scatter plot and best fit line
-    stats_combined = stats{task};
+    stats_combined = combinedStats.stats{task};
     initializeFig(.7,.7); tiledlayout('flow');
     for event = 1:length(eventRange)
         for animal = 1:length(animalList)

@@ -22,10 +22,14 @@ if ~iscell(ylabels); ylabels = repelem(string(ylabels),length(options.taskRange)
 
 if isstruct(stats)
     options.inTrialTable = stats.options.inTrialTable;
-    stats = stats.stats;
+    options.eventRange = stats.options.eventRange;
+    stats = stats.stats;    
 else
     if ~isfield(options,'inTrialTable')
         error('Need to provide inTrialTable information!');
+    end
+    if ~isfield(options,'eventRange')
+        error('Need to provide eventRange information!');
     end
 end
 
