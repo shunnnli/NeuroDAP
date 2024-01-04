@@ -581,7 +581,7 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
 
         % Save channels
         saveas(gcf,strcat(session.path,filesep,'Summary_photometry_processing.png')); 
-        saveas(gcf,strcat(session.path,filesep,'Summary_photometry_processing.fig'));
+        % saveas(gcf,strcat(session.path,filesep,'Summary_photometry_processing.fig'));
     end
     disp("Finished: processed and saved photometry data in data_.mat");
 end

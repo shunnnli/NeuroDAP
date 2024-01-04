@@ -124,6 +124,10 @@ end
 %% Save concat files
 labjack.name(find(~labjack.record)) = [];
 
+% labjack.mod(find(~labjack.record)) = [];
+% labjack.modFreq(find(~labjack.record)) = [];
+% labjack.nSignals = sum(labjack.record);
+
 labjack.numChannels = numChannels;
 labjack.totalLen = totalLen;
 labjack.options = options;
