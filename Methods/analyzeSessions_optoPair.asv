@@ -313,7 +313,7 @@ else
     % else; baselineIdx = baselineLicks(:,1); end
     randomMinSample = floor(10*params.sync.behaviorFs);
     randomMaxSample = length(params.sync.timeNI) - randomMinSample;
-    baselineIdx = randi([randomMinSample,randomMaxSample],100,1);
+    1baselineIdx = randi([randomMinSample,randomMaxSample],100,1);
 
     if contains(options.task,'reward')
         if options.performing

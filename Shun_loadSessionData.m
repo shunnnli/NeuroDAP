@@ -83,26 +83,22 @@ addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods
 
 % Select sessions via uipickfiles
 sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/MICROSCOPE/Shun/Project valence/Recordings'));
-errorSessionIdx = [];
-errorMessage = {};
 
 % Run each session
+errorSessionIdx = []; errorMessage = {};
 for s = 1:length(sessionList)
     close all;
     clearvars -except s sessionList errorSessionIdx errorMessage
-
-    idx = s; % if loop through all
-    % idx = errorSessionIdx(s); % if loop through error sessions
     
-    dirsplit = strsplit(sessionList{idx},filesep); 
+    dirsplit = strsplit(sessionList{s},filesep); 
     sessionName = dirsplit{end}; clear dirsplit
     try
-        loadSessions(sessionList{idx},reloadAll=true,...
+        loadSessions(sessionList{s},reloadAll=false,...
             invertStim=false,...
             withPhotometryNI=true,photometryNI_mod=false,...
             recordLJ=[1 0 0],...
             rollingWindowTime=180);
-        analyzeSessions_optoPair(sessionList{idx},...
+        analyzeSessions_optoPair(sessionList{s},...
             redo=false,round=false,performing=false,...
             analyzeTraces=true,...
             plotPhotometry=true,...
@@ -110,7 +106,7 @@ for s = 1:length(sessionList)
             pavlovian=false,...
             reactionTime=2);
     catch ME
-        errorSessionIdx = [errorSessionIdx;idx];
+        errorSessionIdx = [errorSessionIdx;s];
         msg = getReport(ME); 
         errorMessage{end+1} = msg; disp(msg);
         warning(['Session ', sessionName, ' have an error, skipped for now!!!!']);
@@ -118,4 +114,5 @@ for s = 1:length(sessionList)
     end 
 end
 
-% sessionList = sessionList(errorSessionIdx); errorSessionIdx = [];
+% sessionList = sessionList(errorSessionIdx);
+

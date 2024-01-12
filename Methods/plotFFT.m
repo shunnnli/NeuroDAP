@@ -1,4 +1,4 @@
-function plotFFT(signal,options)
+function varargout = plotFFT(signal,options)
 
 arguments
     signal double
@@ -23,4 +23,10 @@ set(gca, 'YScale', 'log', 'XScale', 'log');
 
 [~, maxFindex] = max(P1);
 disp(['Discovered modulation frequency is ' num2str(fftFreq(maxFindex)),' Hz']);
+
+
+% Optional output
+varargout{1} = fftFreq;
+varargout{2} = P1;
+
 end

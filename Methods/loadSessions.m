@@ -84,6 +84,15 @@ withCamera = ~isempty(dir(fullfile(session.path,'times_cam1*.csv')));
 withPhotometry = isfolder(fullfile(session.path,'Photometry'));
 session.nSystems = sum([withRecording,withCamera,withPhotometry,withNI]);
 
+% Check whether there's multiple recordings in a session
+if withCamera
+    camerapath = dir(fullfile(session.path,'times_cam1*.csv'));
+    if size(camerapath,1) > 1
+        warning('More than 1 camera recording found. Skipped!');
+        withCamera = 0;
+    end
+end
+
 % Check event systems
 % Either or both Labjack or NIDAQ has to be present
 if ~withNI && ~withPhotometry
@@ -92,6 +101,7 @@ elseif withNI
     session.baselineSystem = 'NI';
 elseif withPhotometry && ~withNI
     session.baselineSystem = 'LJ';
+    options.withPhotometryNI = false;
 end
 
 %% Set up params
@@ -962,13 +972,11 @@ else
             end
         end
     elseif strcmpi(session.baselineSystem,'LJ')
-        if strcmpi(session.baselineSystem,'NI')
-            [firstPulse_inLJ,system] = max(firstSamp);
-            if system ~= 1 % if some system comes online after baseline
-                if withCamera
-                    diffIdx = firstIdx(system) - Cam_inBaselineIdx; 
-                    firstPulse_inCam = cam_idx(firstPulse_inCamIdx + diffIdx);
-                end
+        [firstPulse_inLJ,system] = max(firstSamp);
+        if system ~= 1 % if some system comes online after baseline
+            if withCamera
+                diffIdx = firstIdx(system) - Cam_inBaselineIdx; 
+                firstPulse_inCam = cam_idx(firstPulse_inCamIdx + diffIdx);
             end
         end
     end

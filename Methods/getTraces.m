@@ -114,12 +114,12 @@ for i = 1:length(eventInSec)
         continue
     end
 
-    firstBin = floor((eventInSec(i)+timestamp(1))*signalFs);
+    firstBin = round((eventInSec(i)+timestamp(1))*signalFs);
     lastBin = firstBin + length(timestamp) - 1;
     % eventBin = floor(eventInSec(i)*signalFs);
     if options.baseline ~= 0
-        firstBin_baseline = floor((eventInSec(i) + options.baseline(1))*signalFs);
-        lastBin_baseline = floor((eventInSec(i) + options.baseline(2))*signalFs);
+        firstBin_baseline = round((eventInSec(i) + options.baseline(1))*signalFs);
+        lastBin_baseline = round((eventInSec(i) + options.baseline(2))*signalFs);
         baseline = mean(signal(firstBin_baseline:lastBin_baseline));
     else
         baseline = 0;
