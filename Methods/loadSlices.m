@@ -17,9 +17,14 @@ arguments
     options.baselineWindow double = 1:10000;
     options.peakWindow double = 2; % in ms
 
+    options.rawDataPath string
 end
 
 %% Setup
+
+if ~isfield(options,'rawDataPath')
+    options.rawDataPath = expPath;
+end
 
 % Decide reload if session has already been loaded
 dirsplit = split(expPath,filesep); expName = dirsplit{end};
@@ -33,7 +38,6 @@ else
     options.reload = true;
 end
 
-% Set up
 timeRangeStartSample = options.eventSample + options.outputFs*options.timeRange(1)/1000;
 timeRangeEndSample = options.eventSample + options.outputFs*options.timeRange(2)/1000;
 analysisWindow = (options.eventSample+options.nArtifactSamples) : timeRangeEndSample;
@@ -41,10 +45,10 @@ peakWindowWidth = (options.peakWindow/(2*1000)) * options.outputFs;
 
 %% Grab corresponding recordings through epoch average files
 epochList = sortrows(struct2cell(dir(fullfile(expPath,['AD0_e*','p1avg.mat'])))',3);
-vholdList = sortrows(struct2cell(dir(fullfile(expPath,['AD2_e*','p1avg.mat'])))',3);
+vholdList = sortrows(struct2cell(dir(fullfile(options.rawDataPath,['AD2_e*','p1avg.mat'])))',3);
 
 % Check whether there's AD2 to record Vhold
-withVhold = ~isempty(dir(fullfile(expPath,"AD2*.mat")));
+withVhold = ~isempty(dir(fullfile(options.rawDataPath,"AD2*.mat")));
 withVholdAvg = length(epochList)==length(vholdList);
 
 if withVhold
@@ -72,13 +76,12 @@ else
         'VariableTypes',varTypes,'VariableNames',varNames);
 end
 
-
 %% Load individual epoch
 cellid = 0;
-for row = 1:length(epochList)
+for row = 1:size(epochList,1)
 
     % Load epoch file to find individual sweep.mat
-    load(fullfile(expPath,epochList{row,1}));
+    load(fullfile(options.rawDataPath,epochList{row,1}));
     namesplit = strsplit(epochList{row,1},{'e','p1avg'}); 
     epoch = str2double(namesplit{2});
     sweepAcq = eval(['AD0_e',num2str(epoch),'p1avg.UserData.Components']);
@@ -94,7 +97,7 @@ for row = 1:length(epochList)
 
     % Load Vhold for epoch avg file
     if withVholdAvg && withVhold
-        load(fullfile(expPath,vholdList{row,1}));
+        load(fullfile(options.rawDataPath,vholdList{row,1}));
         namesplit = strsplit(epochList{row,1},{'e','p1avg'}); 
         if epoch ~= str2double(namesplit{2})
             error('Epoch number does not match between AD0 and AD2!!');
@@ -112,9 +115,9 @@ for row = 1:length(epochList)
     for k = 1:length(sweepAcq)
         % Load sweep traces (.data)
         disp(['Loading ',sweepAcq{k},'.mat for epoch ',num2str(epoch)]);
-        try load(fullfile(expPath,strcat(sweepAcq{k},'.mat'))); 
+        try load(fullfile(options.rawDataPath,strcat(sweepAcq{k},'.mat'))); 
         catch
-            warning(strcat("Sweep ",num2str(sweepAcq{k}), "not saved, skipping this sweep!"));
+            warning(strcat("Sweep ",num2str(sweepAcq{k}), " not saved, skipping this sweep!"));
             continue
         end
         raw_trace = eval([sweepAcq{k},'.data']);
@@ -130,9 +133,9 @@ for row = 1:length(epochList)
         % Rin
         Rins(k) = getRin(raw_trace,headerString=eval([sweepAcq{k},'.UserData.headerString']));
         % Rs
-        Rss(k) = getRs();
+        % Rss(k) = getRs();
         % Cm
-        Cms(k) = getCm();
+        % Cms(k) = getCm();
 
         % Process trace: mean-subtracted, optional LP
         % Mean subtraction
@@ -162,9 +165,9 @@ for row = 1:length(epochList)
 
         % Load Vhold traces if needed
         if withVhold
-            try load(fullfile(expPath,strcat(vholdAcq{k},'.mat'))); 
+            try load(fullfile(options.rawDataPath,strcat(vholdAcq{k},'.mat'))); 
             catch
-                warning(strcat("Vhold for sweep ",num2str(vholdAcq{k}), "not saved, skipping this sweep!"));
+                warning(strcat("Vhold for sweep ",num2str(vholdAcq{k}), " not saved, skipping this sweep!"));
                 continue
             end
             vhold_trace = eval([vholdAcq{k},'.data']);
@@ -210,7 +213,7 @@ for row = 1:length(epochList)
     end
 
     %% Store everything in epochs
-    epochs{epoch,'Session'} = string(expPath);
+    epochs{epoch,'Session'} = string(options.rawDataPath);
     epochs{epoch,'Epoch'} = string(epochList{row,1});
     epochs{epoch,'Included'} = num2cell(included,[1 2]);
     epochs{epoch,'Sweep names'} = num2cell(sweepAcq,[1 2]);

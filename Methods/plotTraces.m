@@ -49,6 +49,8 @@ arguments
     options.smoothMethod string = 'movmean';
 
     options.print logical = false % print progress message
+    options.ylabel string = 'z-score'
+    options.xlabel string = 'Time (s)'
 end
 
 %% Parse required inputs
@@ -223,7 +225,11 @@ if options.plot
         LineStyle=options.LineStyle,LineWidth=options.LineWidth,...
         plotIndividual=options.plotIndividual,individualColor=options.individualColor,...
         plotStyle=options.plotStyle,meanOnly=options.meanOnly);
-    xlabel('Time (s)'); ylabel('z-score'); hold on
+    
+    xlabel(options.xlabel); 
+    ylabel(options.ylabel); 
+    
+    hold on
 end
 
 end

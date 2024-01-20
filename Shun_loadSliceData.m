@@ -29,8 +29,15 @@ else; multipleSessions = true; end
 if ~multipleSessions
     epochs = loadSlices(expPaths{1},reload=true,...
                 filterSignal=false,filterSweeps=true,...
-                nArtifactSamples=nArtifactSamples);
+                nArtifactSamples=nArtifactSamples,...
+                rawDataPath=strcat(parentPath,filesep,'20231221_ally'));
 end
+
+%% Optional: save modified epoch file
+
+dirsplit = split(expPaths{1},filesep); expName = dirsplit{end};
+save(strcat(expPaths{1},filesep,'epochs_',expName),'epochs','-v7.3');
+disp(strcat("Saved: ",expName));
 
 %% Save modified epochs if neccessary
 

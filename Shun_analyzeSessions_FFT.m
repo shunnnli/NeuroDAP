@@ -2,7 +2,9 @@
 
 % Shun_analyzeSessions_FFT.m
 
-%% 
+%% Plot single session
+
+% Run this block after loading data_labjack.mat
 initializeFig(0.6,0.5);
 nexttile; [fftFreq_NAc,P1_NAc] = plotFFT(labjack.raw(1,:)); 
 title('NAc'); 

@@ -177,7 +177,7 @@ disp('Finished: summary struct and trialtables loaded');
 
 %% Optional: Make changes to summary for further analysis
 
-% for i = 1:211; summary(i).task = 'Random'; end
+for i = 1:186; summary(i).task = 'Random'; end
 % for i = 212:499; summary(i).task = 'Reward1'; end
 % for i = 500:919; summary(i).task = 'Punish1'; end
 % for i = 920:1279; summary(i).task = 'Reward2'; end
@@ -200,6 +200,17 @@ if isempty(dir(fullfile(resultspath,'animals*.mat'))) || groupSessions
     animals = getAnimalsStruct(summary);
 end
 
+%% (Optional) Modify signal name if needed
+
+for i = 1:length(animals)
+    signal = animals(i).name;
+    if strcmpi('NAc-green',signal)
+        animals(i).name = 'NAc';
+    elseif strcmpi('PMT',signal)
+        animals(i).name = 'VTA';
+    end
+end
+
 %% Save animals struct
 
 % Save animals.mat
@@ -217,41 +228,27 @@ disp(['Finished: saved animals.mat (',char(datetime('now','Format','HH:mm:ss')),
 initializeFig(0.5,0.5);
 combined = combineTraces(animals,timeRange=[-0.5,3],...
                             eventRange='Water',...
-                            animalRange="SL160",...
+                            animalRange="SL118",...
                             taskRange='Punish1',...
                             totalTrialRange='All',...
                             trialRange='All',...
-                            signalRange='LHb',...
+                            signalRange='NAc',...
                             sessionRange='20240101-SL161-P4');
 plotTraces(combined.data{1},combined.timestamp,color=bluePurpleRed(1,:));
 plotEvent('Water',0,color=bluePurpleRed(1,:))
 xlabel('Time (s)'); ylabel('z-score');
 
-%% Optional (calculate LHb weird oscillation frequency)
-endPoint = min(1e6, length(combined.data{1}(2,:)));
-sData_fft = fft(normalize(trace(1:endPoint)));
-P2 = abs(sData_fft/endPoint);
-P1 = P2(1:endPoint/2+1);
-P1(2:end-1) = 2*P1(2:end-1);
-
-% make the frequency bins
-fftFreq = 50 * (0:(endPoint/2))/endPoint;
-
-figure; plot(fftFreq,P1);
-title('FFT'); 
-set(gca, 'YScale', 'log', 'XScale', 'log');
-
 %% Baseline DA: plot water, airpuff, stim, tone
 
 timeRange = [-0.5,3];
-eventRange = {'Water','Airpuff','Stim','Tone'};
-animalRange = {'SL155','SL156','SL157','SL158','SL159'};
+eventRange = {'Water','Airpuff','Tone'};
+animalRange = 'All'; % {'SL155','SL156','SL157','SL158','SL159'};
 taskRange = 'Random';
 trialRange = 'All'; % range of trials in each session
 totalTrialRange = 'All';
 signalRange = {'NAc'};
 
-colorList = {bluePurpleRed(1,:),[.2,.2,.2],bluePurpleRed(500,:),bluePurpleRed(100,:)};
+colorList = {bluePurpleRed(1,:),[.2,.2,.2],bluePurpleRed(100,:)};
 eventDuration = [0,.1,.5,.5];
 
 for s = 1:length(signalRange)
@@ -265,29 +262,29 @@ for s = 1:length(signalRange)
                                     totalTrialRange=totalTrialRange,...
                                     trialRange=trialRange,...
                                     signalRange=signalRange{s});
-        plotTraces(combined.data{1},combined.timestamp,color=colorList{i},plotShuffled=true);
+        plotTraces(combined.data{1},combined.timestamp,color=colorList{i},plotShuffled=false);
         xlabel('Time (s)'); ylabel([signalRange{s},' z-score']); ylim([-1,4]);
         plotEvent(eventRange{i},eventDuration(i),color=colorList{i});
         legend({['Shuffled (n=',num2str(size(combined.data{1},1)),')'],...
                 [eventRange{i},' (n=',num2str(size(combined.data{1},1)),')']},...
                 'Location','northeast');
     end
-    saveFigures(gcf,'Summary_random_dLight',...
+    saveFigures(gcf,'Summary_random_NAc',...
             strcat(resultspath),...
             saveFIG=true,savePDF=true);
 end
 
-%% Baseline GCaMP: plot water, airpuff, stim, tone
+%% Baseline VTA GCaMP: plot water, airpuff, stim, tone
 
 timeRange = [-0.5,3];
-eventRange = {'Water','Airpuff','Stim','Tone'};
-animalRange = {'SL157','SL158','SL159'};
+eventRange = {'Water','Airpuff','Tone'};
+animalRange = 'All';
 taskRange = 'Random';
 trialRange = 'All'; % range of trials in each session
 totalTrialRange = 'All';
-signalRange = {'LHb'};
+signalRange = {'VTA'};
 
-colorList = {bluePurpleRed(1,:),[.2,.2,.2],bluePurpleRed(500,:),bluePurpleRed(100,:)};
+colorList = {bluePurpleRed(1,:),[.2,.2,.2],bluePurpleRed(100,:)};
 eventDuration = [0,.1,.5,.5];
 
 for s = 1:length(signalRange)
@@ -301,86 +298,49 @@ for s = 1:length(signalRange)
                                     totalTrialRange=totalTrialRange,...
                                     trialRange=trialRange,...
                                     signalRange=signalRange);
-        plotTraces(combined.data{1},combined.timestamp,color=colorList{i},plotShuffled=true);
+        plotTraces(combined.data{1},combined.timestamp,color=colorList{i},plotShuffled=false);
         xlabel('Time (s)'); ylabel([signalRange{s},' z-score']); ylim([-1,4]);
         plotEvent(eventRange{i},eventDuration(i),color=colorList{i});
         legend({['Shuffled (n=',num2str(size(combined.data{1},1)),')'],...
                 [eventRange{i},' (n=',num2str(size(combined.data{1},1)),')']},...
                 'Location','northeast');
     end
-    saveFigures(gcf,'Summary_random_GCaMP',...
+    saveFigures(gcf,'Summary_random_VTA',...
             strcat(resultspath),...
             saveFIG=true,savePDF=true);
-end
-
-%% Baseline iGluSnFR: plot water, airpuff, stim, tone
-
-timeRange = [-0.5,3];
-eventRange = {'Water','Airpuff','Stim','Tone'};
-animalRange = {'SL155','SL156'};
-taskRange = 'Punish1';
-trialRange = 'All'; % range of trials in each session
-totalTrialRange = 'All';
-signalRange = {'LHb'};
-
-colorList = {bluePurpleRed(1,:),[.2,.2,.2],bluePurpleRed(500,:),bluePurpleRed(100,:)};
-eventDuration = [0,.1,.5,.5];
-
-for s = 1:length(signalRange)
-    initializeFig(.5,.5); tiledlayout(2,2);
-    for i = 1:length(eventRange)
-        nexttile;
-        combined = combineTraces(animals,timeRange=timeRange,...
-                                    eventRange=eventRange{i},...
-                                    animalRange=animalRange,...
-                                    taskRange=taskRange,...
-                                    totalTrialRange=totalTrialRange,...
-                                    trialRange=trialRange,...
-                                    signalRange=signalRange);
-        plotTraces(combined.data{1},combined.timestamp,color=colorList{i},plotShuffled=true);
-        xlabel('Time (s)'); ylabel([signalRange{s},' z-score']); ylim([-1,4]);
-        plotEvent(eventRange{i},eventDuration(i),color=colorList{i});
-        legend({['Shuffled (n=',num2str(size(combined.data{1},1)),')'],...
-                [eventRange{i},' (n=',num2str(size(combined.data{1},1)),')']},...
-                'Location','northeast');
-    end
-    % saveFigures(gcf,'Summary_random_iGluSnFR',...
-    %         strcat(resultspath),...
-    %         saveFIG=true,savePDF=true);
 end
 
 %% Plot overall to show animal learned
 
 timeRange = [-0.5,3];
-eventRange = {'Stim','Pair','Tone'};
-animalRange = 'All'; %{'SL155','SL156','SL157','SL158'};
+eventRange = {'Tone'};
+animalRange = 'All';
 taskRange = {'Reward1','Punish1'};
 totalTrialRange = 'All';
 trialRange = 'All';
-signalRange = 'NAc';
+signalRange = {'NAc','VTA'};
 
-colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),bluePurpleRed(100,:)};
-groupSizeList = [20;20;20];
-nGroupsList = [15;15;15];
-ylimList = [-1.2,3.5; -1.2,1];
+groupSizeList = 30;
+nGroupsList = 15;
+ylimList = [-1,2.5; -1,2];
 
 for task = 1:length(taskRange)
-    initializeFig(1,0.5); tiledlayout('flow');
-    for event = 1:length(eventRange)
+    initializeFig(0.63,0.5); tiledlayout('flow');
+    for signal = 1:length(signalRange)
         nexttile;
         combined = combineTraces(animals,timeRange=timeRange,...
-                                    eventRange=eventRange{event},...
+                                    eventRange=eventRange,...
                                     animalRange=animalRange,...
                                     taskRange=taskRange{task},...
                                     totalTrialRange=totalTrialRange,...
                                     trialRange=trialRange,...
-                                    signalRange=signalRange);
+                                    signalRange=signalRange{signal});
         legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,...
-                        groupSize=groupSizeList(event),nGroups=nGroupsList(event),...
+                        groupSize=groupSizeList,nGroups=nGroupsList,...
                         groupby='sessions',startIdx=combined.options.startIdx,remaining='separate');
         ylim(ylimList(task,:));
-        plotEvent(eventRange{event},.5,color=colorList{event});
-        xlabel('Time (s)'); ylabel([signalRange,' z-score']);
+        plotEvent(eventRange,.5,color=bluePurpleRed(100,:));
+        xlabel('Time (s)'); ylabel([signalRange{signal},' z-score']);
         legend(legendList,'Location','northeast');
     end
     saveFigures(gcf,['Summary_pairing_',taskRange{task}],...

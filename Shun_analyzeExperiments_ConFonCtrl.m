@@ -177,16 +177,21 @@ disp('Finished: summary struct and trialtables loaded');
 
 %% Optional: Make changes to summary for further analysis
 
-% for i = 1:211; summary(i).task = 'Random'; end
-% for i = 212:499; summary(i).task = 'Reward1'; end
-% for i = 500:919; summary(i).task = 'Punish1'; end
-% for i = 920:1279; summary(i).task = 'Reward2'; end
-% for i = 1280:1594; summary(i).task = 'Punish2'; end
+% for i = 1:72; summary(i).task = 'Random'; end
+for i = 1053:1199; summary(i).task = 'Punish2'; end
+for i = 388:426; summary(i).task = 'Punish1'; end
+for i = 1200:1271; summary(i).task = 'Reward2'; end
+for i = 981:1052; summary(i).task = 'Reward2'; end
 
 for i = 1:length(summary)
     cur_task = summary(i).task;
     if contains('random',cur_task,IgnoreCase=true)
         summary(i).task = 'Random';
+        if strcmpi('Stim only',summary(i).event)
+            summary(i).event = 'Stim';
+        elseif strcmpi('Tone only',summary(i).event)
+            summary(i).event = 'Tone';
+        end
     elseif contains('reward pairing',cur_task,IgnoreCase=true)
         summary(i).task = 'Reward1';
     elseif contains('punish pairing',cur_task,IgnoreCase=true)
@@ -217,12 +222,11 @@ disp(['Finished: saved animals.mat (',char(datetime('now','Format','HH:mm:ss')),
 initializeFig(0.5,0.5);
 combined = combineTraces(animals,timeRange=[-0.5,3],...
                             eventRange='Water',...
-                            animalRange="SL160",...
+                            animalRange="SL108",...
                             taskRange='Punish1',...
                             totalTrialRange='All',...
                             trialRange='All',...
-                            signalRange='LHb',...
-                            sessionRange='20240101-SL161-P4');
+                            signalRange='NAc');
 plotTraces(combined.data{1},combined.timestamp,color=bluePurpleRed(1,:));
 plotEvent('Water',0,color=bluePurpleRed(1,:))
 xlabel('Time (s)'); ylabel('z-score');

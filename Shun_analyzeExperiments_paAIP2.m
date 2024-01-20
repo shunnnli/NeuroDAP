@@ -134,9 +134,9 @@ animalRange = 'All';
 taskRange = 'Random';
 trialRange = 'All'; % range of trials in each session
 totalTrialRange = 'All';
-signalRange = 'NAc';
+signalRange = 'EyeArea';
 
-colorList = {bluePurpleRed(1,:),[.2,.2,.2],bluePurpleRed(500,:),bluePurpleRed(350,:)};
+colorList = {bluePurpleRed(1,:),[.2,.2,.2],bluePurpleRed(500,:),bluePurpleRed(100,:)};
 eventDuration = [0,.1,.5,.5];
 
 initializeFig(.5,.5); tiledlayout(2,2);
@@ -149,33 +149,34 @@ for i = 1:length(eventRange)
                                 totalTrialRange=totalTrialRange,...
                                 trialRange=trialRange,...
                                 signalRange=signalRange);
-    plotSEM(combined.timestamp,shuffleTraces(combined.data{1}),[.75,.75,.75]);
     plotSEM(combined.timestamp,combined.data{1},colorList{i});
-    xlabel('Time (s)'); ylabel([signalRange,' z-score']); ylim([-1,3]);
+    xlabel('Time (s)'); ylabel([signalRange,' z-score']); ylim([-8,1]);
     plotEvent(eventRange{i},eventDuration(i),color=colorList{i});
     legend({['Shuffled (n=',num2str(size(combined.data{1},1)),')'],...
             [eventRange{i},' (n=',num2str(size(combined.data{1},1)),')']},...
             'Location','northeast');
 end
-saveFigures(gcf,['Summary_random_',signalRange],...
-        strcat(resultspath),...
-        saveFIG=true,savePDF=true);
+% saveFigures(gcf,['Summary_random_',signalRange],...
+%         strcat(resultspath),...
+%         saveFIG=true,savePDF=true);
 
 %% Plot overall to show animal learned
 
 timeRange = [-0.5,3];
-eventRange = {'Stim','Pair'};
+eventRange = {'Stim','Pair','Tone'};
 animalRange = {'SL133','SL135','SL136'};%'All';
 taskRange = {'Reward1','Punish1','Reward2','Punish2'};
 totalTrialRange = 'All';
 trialRange = 'All';
 signalRange = 'NAc';
 
-groupSizeList = [50;50];
-nGroupsList = [15;15];
+colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),bluePurpleRed(100,:)};
+groupSizeList = [50;50;10];
+nGroupsList = [15;15;15];
+ylimList = [-1,5; -1,4.5;-1,4; -1,2.5];
 
 for task = 1:length(taskRange)
-    initializeFig(.5,.5); tiledlayout('flow');
+    initializeFig(1,.5); tiledlayout('flow');
     for event = 1:length(eventRange)
         nexttile;
         combined = combineTraces(animals,timeRange=timeRange,...
@@ -187,12 +188,13 @@ for task = 1:length(taskRange)
                                     signalRange=signalRange);
         legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,...
                         groupSize=groupSizeList(event),nGroups=nGroupsList(event),...
-                       groupby='trials',startIdx=combined.options.startIdx);
-        plotEvent(eventRange{event},.5,color=bluePurpleRed(500,:));
+                       groupby='sessions',startIdx=combined.options.startIdx);
+        % ylim(ylimList(task,:));
+        plotEvent(eventRange{event},.5,color=colorList{event});
         xlabel('Time (s)'); ylabel([signalRange,' z-score']);
         legend(legendList,'Location','northeast');
     end
-    % saveFigures(gcf,['Summary_pairing_',taskRange{task},'-',eventRange{event},'_',signalRange],...
+    % saveFigures(gcf,['Summary_pairing_',taskRange{task},'_',signalRange],...
     %     strcat(resultspath),...
     %     saveFIG=true,savePDF=true);
 end
@@ -242,18 +244,20 @@ end
 %% Plot lick trace
 
 timeRange = [-0.5,3];
-eventRange = {'Stim','Pair'};
+eventRange = {'Stim','Pair','Tone'};
 animalRange = {'SL133','SL135','SL136'};%'All';
 taskRange = {'Reward1','Punish1','Reward2','Punish2'};
 totalTrialRange = 'All';
 trialRange = 'All';
 signalRange = 'Lick';
 
-groupSizeList = [50;50];
-nGroupsList = [15;15];
+colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),bluePurpleRed(100,:)};
+groupSizeList = [50;50;10];
+nGroupsList = [15;15;15];
+ylimList = [-1,5; -1,4.5;-1,4; -1,2.5];
 
 for task = 1:length(taskRange)
-    initializeFig(.5,.5); tiledlayout('flow');
+    initializeFig(1,.5); tiledlayout('flow');
     for event = 1:length(eventRange)
         nexttile;
         combined = combineTraces(animals,timeRange=timeRange,...
@@ -265,12 +269,12 @@ for task = 1:length(taskRange)
                                     signalRange=signalRange);
         legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,...
                         groupSize=groupSizeList(event),nGroups=nGroupsList(event),...
-                        groupby='trials',startIdx=combined.options.startIdx);
-        plotEvent(eventRange{event},.5,color=bluePurpleRed(500,:));
+                        groupby='sessions',startIdx=combined.options.startIdx);
+        plotEvent(eventRange{event},.5,color=colorList{event});
         xlabel('Time (s)'); ylabel('Licks/s'); ylim([0 inf]);
         legend(legendList,'Location','northeast');
     end
-    saveFigures(gcf,['Summary_licking_',taskRange{task},'-',eventRange{event},'_',signalRange],...
+    saveFigures(gcf,['Summary_licking_',taskRange{task},'_',signalRange],...
         strcat(resultspath),...
         saveFIG=true,savePDF=true);
 end
@@ -344,6 +348,34 @@ for task = 1:length(taskRange)
         saveFIG=true,savePDF=true);
 end
 % autoArrangeFigures
+
+%% Plot grouped CS DA response (grouped across animal and 10 trials)
+
+eventRange = {'Stim','Pair','Tone'};
+animalRange = 'All';
+taskRange =  {'Reward2','Punish2'}; %{'Reward1','Punish1'};
+signalRange = 'NAc';
+
+colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),bluePurpleRed(100,:)};
+stage = 2; % Plot CS only
+statsTypes = {'stageMax','stageMin','stageMax','stageMin'};
+ylabelList = {'Max DA response during cue','Min DA response during cue',...
+                'Max DA response during cue','Min DA response during cue'};
+
+groupSize = 10; % numbers of trials to calculate average
+
+combinedStats = getGroupedTrialStats(animals,statsTypes,...
+                            eventRange=eventRange,...
+                            animalRange=animalRange,...
+                            taskRange=taskRange,...
+                            signalRange=signalRange);
+
+initializeFig(.7,.7); tiledlayout('flow');
+plotGroupedTrialStats(combinedStats,ylabelList,stage=stage,groupSize=10,color=colorList);
+
+% saveFigures(gcf,['Summary_CSvsTrialsGrouped_Second'],...
+%         strcat(resultspath),...
+%         saveFIG=true,savePDF=true);
 
 %% Plot CS DA response vs trials
 eventRange = {'Stim','Pair'};
