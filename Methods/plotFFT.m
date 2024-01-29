@@ -3,11 +3,18 @@ function varargout = plotFFT(signal,options)
 arguments
     signal double
     options.Fs double = 2000 % sampling frequency of the signal
-    options.pointsToEstimateCarrier double = 1e6
+    options.timeToEstimateCarrier double = 100 % in seconds
     options.xlim double = [0,inf]
+    options.fillmissing logical = true
 end
 
+options.pointsToEstimateCarrier = options.timeToEstimateCarrier * options.Fs;
 endPoint = min(options.pointsToEstimateCarrier, length(signal));
+
+if options.fillmissing
+    signal = fillmissing(signal,'next');
+end
+
 sData_fft = fft(normalize(signal(1:endPoint)));
 P2 = abs(sData_fft/endPoint);
 P1 = P2(1:endPoint/2+1);
@@ -17,7 +24,7 @@ P1(2:end-1) = 2*P1(2:end-1);
 fftFreq = options.Fs * (0:(endPoint/2))/endPoint;
 
 plot(fftFreq,P1); box off
-title('FFT'); xlabel('Frequency (Hz)'); ylabel('Amplitude');
+title('FFT'); xlabel('Frequency (Hz)'); ylabel('Power');
 xlim(options.xlim);
 set(gca, 'YScale', 'log', 'XScale', 'log');
 

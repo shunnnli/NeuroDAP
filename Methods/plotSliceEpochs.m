@@ -118,7 +118,7 @@ if ~combine
             legend(legendList);
             title(strcat('Cell #',num2str(cellList(c))));
         end
-        saveFigures(gcf,'Trace_cell_raw',epochs{1,'Session'});
+        saveFigures(gcf,'Trace_cell_raw',epochs{1,'Session'},saveFIG=true,savePDF=true);
     end
     
     initializeFig(1,1); tiledlayout('flow');
@@ -135,7 +135,7 @@ if ~combine
         ylim([yMin-yPad,yMax+yPad]);
         title(strcat('Epochs #',num2str(e)));
     end
-    saveFigures(gcf,'Trace_epoch_raw',epochs{1,'Session'});
+    saveFigures(gcf,'Trace_epoch_raw',epochs{1,'Session'},saveFIG=true,savePDF=true);
 end
 
 
@@ -178,7 +178,7 @@ if ~combine
             legend(legendList);
             title(strcat('Cell #',num2str(cellList(c))));
         end
-        saveFigures(gcf,'Trace_cell_processed',epochs{1,'Session'});
+        saveFigures(gcf,'Trace_cell_processed',epochs{1,'Session'},saveFIG=true,savePDF=true);
     end
     
     initializeFig(1,1); tiledlayout('flow');
@@ -195,7 +195,7 @@ if ~combine
         ylim([yMin-yPad,yMax+yPad]);
         title(strcat('Epochs #',num2str(e)));
     end
-    saveFigures(gcf,'Trace_epoch_processed',epochs{1,'Session'});
+    saveFigures(gcf,'Trace_epoch_processed',epochs{1,'Session'},saveFIG=true,savePDF=true);
 end
 
 %% Extract EPSC/IPSC statistics
@@ -381,7 +381,7 @@ xticks(groupsList); xticklabels(options.conditions(groupsList+1));
 ylabel('EPSC/IPSC AUC'); ylim([0,10]);
 
 % Save
-if ~combine; saveFigures(gcf,'Summary_EPSCvsIPSC',epochs{1,'Session'});
+if ~combine; saveFigures(gcf,'Summary_EPSCvsIPSC',epochs{1,'Session'},saveFIG=true,savePDF=true);
 else
     saveFigures(gcf,'Summary_EPSCvsIPSC',...
         strcat(osPathSwitch(options.resultPath),expName(1:6)),...

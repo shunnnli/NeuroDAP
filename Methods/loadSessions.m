@@ -13,7 +13,7 @@ arguments
    options.followOriginal logical = true
    
    % Reload options (unfinished)
-   options.reloadAll logical = false       % If false, skip the whole function if sync_.mat is found
+   options.reloadAll logical = false    % If false, skip the whole function if sync_.mat is found
    options.reloadNI logical = false     % If false, skip loading NI and use previous loaded ones
    options.reloadLJ logical = false     % If false, skip loading LJ and use previous loaded ones
    options.reloadCam logical = false    % If false, skip loading Cam and use previous loaded ones

@@ -92,14 +92,18 @@ elseif isfield(params.session,'task') && isfield(options,'task')
         disp('Finished: options.task not provided or differed, use the original one');
     end
 elseif ~isfield(params.session,'task') && ~isfield(options,'task')
-    if contains(sessionTask,["R","RP","Reward"],IgnoreCase=false)
-        options.task = 'reward pairing';
+    if contains(sessionTask,["Random","H"],IgnoreCase=false)
+        options.task = 'random';
         params.session.task = options.task;
     elseif contains(sessionTask,["P","PP","Punish"],IgnoreCase=false)
         options.task = 'punish pairing';
         params.session.task = options.task;
-    elseif contains(sessionTask,["Random","H"],IgnoreCase=false)
-        options.task = 'random';
+        if contains(sessionTask,"RP",IgnoreCase=false)
+            options.task = 'reward pairing';
+            params.session.task = options.task;
+        end
+    elseif contains(sessionTask,["R","RP","Reward"],IgnoreCase=false)
+        options.task = 'reward pairing';
         params.session.task = options.task;
     else
         warning('Unrecognize session name pattern, set to random');

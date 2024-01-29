@@ -205,6 +205,20 @@ if isempty(dir(fullfile(resultspath,'animals*.mat'))) || groupSessions
     animals = getAnimalsStruct(summary);
 end
 
+%% Optional: modified animals struct
+
+for i = 1:length(animals)
+    if strcmpi('NAc-green',animals(i).name)
+        animals(i).name = 'NAc';
+    elseif strcmpi('PMT',animals(i).name)
+        if contains(animals(i).animal,{'SL111','SL112','SL113','SL114','SL115'})
+            animals(i).name = 'GCaMP8m';
+        else
+            animals(i).name = 'iGluSnFR2';
+        end
+    end
+end
+
 %% Save animals struct
 
 % Save animals.mat
@@ -231,25 +245,11 @@ plotTraces(combined.data{1},combined.timestamp,color=bluePurpleRed(1,:));
 plotEvent('Water',0,color=bluePurpleRed(1,:))
 xlabel('Time (s)'); ylabel('z-score');
 
-%% Optional (calculate LHb weird oscillation frequency)
-endPoint = min(1e6, length(combined.data{1}(2,:)));
-sData_fft = fft(normalize(trace(1:endPoint)));
-P2 = abs(sData_fft/endPoint);
-P1 = P2(1:endPoint/2+1);
-P1(2:end-1) = 2*P1(2:end-1);
-
-% make the frequency bins
-fftFreq = 50 * (0:(endPoint/2))/endPoint;
-
-figure; plot(fftFreq,P1);
-title('FFT'); 
-set(gca, 'YScale', 'log', 'XScale', 'log');
-
 %% Baseline DA: plot water, airpuff, stim, tone
 
 timeRange = [-0.5,3];
 eventRange = {'Water','Airpuff','Stim','Tone'};
-animalRange = {'SL155','SL156','SL157','SL158','SL159'};
+animalRange = 'All';%{'SL155','SL156','SL157','SL158','SL159'};
 taskRange = 'Random';
 trialRange = 'All'; % range of trials in each session
 totalTrialRange = 'All';
@@ -276,7 +276,7 @@ for s = 1:length(signalRange)
                 [eventRange{i},' (n=',num2str(size(combined.data{1},1)),')']},...
                 'Location','northeast');
     end
-    saveFigures(gcf,'Summary_random_dLight',...
+    saveFigures(gcf,'Summary_random_NAc',...
             strcat(resultspath),...
             saveFIG=true,savePDF=true);
 end
@@ -285,11 +285,11 @@ end
 
 timeRange = [-0.5,3];
 eventRange = {'Water','Airpuff','Stim','Tone'};
-animalRange = {'SL157','SL158','SL159'};
+animalRange = 'All';%{'SL157','SL158','SL159'};
 taskRange = 'Random';
 trialRange = 'All'; % range of trials in each session
 totalTrialRange = 'All';
-signalRange = {'LHb'};
+signalRange = {'GCaMP8m'};
 
 colorList = {bluePurpleRed(1,:),[.2,.2,.2],bluePurpleRed(500,:),bluePurpleRed(100,:)};
 eventDuration = [0,.1,.5,.5];
@@ -321,11 +321,11 @@ end
 
 timeRange = [-0.5,3];
 eventRange = {'Water','Airpuff','Stim','Tone'};
-animalRange = {'SL155','SL156'};
-taskRange = 'Punish1';
+animalRange = 'All';
+taskRange = 'Random';
 trialRange = 'All'; % range of trials in each session
 totalTrialRange = 'All';
-signalRange = {'LHb'};
+signalRange = {'iGluSnFR2'};
 
 colorList = {bluePurpleRed(1,:),[.2,.2,.2],bluePurpleRed(500,:),bluePurpleRed(100,:)};
 eventDuration = [0,.1,.5,.5];
@@ -348,9 +348,9 @@ for s = 1:length(signalRange)
                 [eventRange{i},' (n=',num2str(size(combined.data{1},1)),')']},...
                 'Location','northeast');
     end
-    % saveFigures(gcf,'Summary_random_iGluSnFR',...
-    %         strcat(resultspath),...
-    %         saveFIG=true,savePDF=true);
+    saveFigures(gcf,'Summary_random_iGluSnFR',...
+            strcat(resultspath),...
+            saveFIG=true,savePDF=true);
 end
 
 %% Plot overall to show animal learned
@@ -358,14 +358,14 @@ end
 timeRange = [-0.5,3];
 eventRange = {'Stim','Pair','Tone'};
 animalRange = 'All'; %{'SL155','SL156','SL157','SL158'};
-taskRange = {'Reward1','Punish1'};
+taskRange = {'Reward2','Punish2'};
 totalTrialRange = 'All';
 trialRange = 'All';
 signalRange = 'NAc';
 
 colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),bluePurpleRed(100,:)};
-groupSizeList = [20;20;20];
-nGroupsList = [15;15;15];
+groupSizeList = [50;50;50];
+nGroupsList = [4;4;4];
 ylimList = [-1.2,3.5; -1.2,1];
 
 for task = 1:length(taskRange)
@@ -387,11 +387,10 @@ for task = 1:length(taskRange)
         xlabel('Time (s)'); ylabel([signalRange,' z-score']);
         legend(legendList,'Location','northeast');
     end
-    saveFigures(gcf,['Summary_pairing_',taskRange{task}],...
-        strcat(resultspath),...
-        saveFIG=true,savePDF=true);
+    % saveFigures(gcf,['Summary_pairing_',taskRange{task}],...
+    %     strcat(resultspath),...
+    %     saveFIG=true,savePDF=true);
 end
-% autoArrangeFigures
 
 %% Plot lick trace
 

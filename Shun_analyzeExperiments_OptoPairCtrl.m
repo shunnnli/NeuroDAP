@@ -360,7 +360,7 @@ trialRange = 'All';
 signalRange = 'NAc';
 
 colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),bluePurpleRed(100,:)};
-groupSizeList = [20;20;20];
+groupSizeList = [50;50;50];
 nGroupsList = [15;15;15];
 ylimList = [-1.2,3.5; -1.2,1];
 
@@ -377,15 +377,15 @@ for task = 1:length(taskRange)
                                     signalRange=signalRange);
         legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,...
                         groupSize=groupSizeList(event),nGroups=nGroupsList(event),...
-                        groupby='sessions',startIdx=combined.options.startIdx,remaining='separate');
+                        groupby='sessions',startIdx=combined.options.startIdx,remaining='include');
         ylim(ylimList(task,:));
         plotEvent(eventRange{event},.5,color=colorList{event});
         xlabel('Time (s)'); ylabel([signalRange,' z-score']);
         legend(legendList,'Location','northeast');
     end
-    saveFigures(gcf,['Summary_pairing_',taskRange{task}],...
-        strcat(resultspath),...
-        saveFIG=true,savePDF=true);
+    % saveFigures(gcf,['Summary_pairing_',taskRange{task}],...
+    %     strcat(resultspath),...
+    %     saveFIG=true,savePDF=true);
 end
 % autoArrangeFigures
 
@@ -429,15 +429,18 @@ end
 
 %% Plot grouped CS DA response (grouped across animal and 10 trials)
 
-eventRange = {'Stim','Pair','Tone'};
 animalRange = 'All';
 taskRange = {'Reward1','Punish1'};
 conditionRange = [1,200];
 signalRange = 'NAc';
 
-colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),bluePurpleRed(100,:)};
+% eventRange = {'Stim','Pair','Tone','Baseline'};
+% colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),bluePurpleRed(100,:),[0.75,0.75,0.75]};
+
+eventRange = {'Baseline','Stim','Pair'};
+colorList = {[0.75,0.75,0.75],bluePurpleRed(500,:),bluePurpleRed(300,:)};
 stage = 2; % Plot CS only
-statsTypes = {'stageMax','stageMin','stageAvg'};
+statsTypes = {'stageMax','stageMin','stageAvg','stageAvg'};
 ylabelList = {'Max DA response during cue','Min DA response during cue'};
 
 groupSize = 10; % numbers of trials to calculate average
@@ -450,11 +453,63 @@ combinedStats = getGroupedTrialStats(animals,statsTypes,...
                             signalRange=signalRange);
 
 initializeFig(.7,.7); tiledlayout('flow');
-plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,color=colorList);
+results = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,color=colorList,xlimIdx=2);
 
-% saveFigures(gcf,['Summary_CSvsTrialsGrouped_',taskRange{task},'-',eventRange{event}],...
+% saveFigures(gcf,['Summary_CSvsTrialsGrouped'],...
 %         strcat(resultspath),...
 %         saveFIG=true,savePDF=true);
+
+%% Plot bar plot of DA slopes
+initializeFig(.7,.7); tiledlayout('flow');
+for task = 1:length(results.stats)
+    nexttile;
+    cur_stats = results.stats{task};
+    for event = 1:length(eventRange)
+        slopes = cur_stats{event}(:,1);
+
+        % plot bar plots
+        scatter(event,slopes,200,colorList{event},'filled'); hold on
+        bar(event,mean(slopes),EdgeColor=colorList{event},FaceColor=colorList{event},...
+            FaceAlpha=0.5,LineWidth=3);
+        errorbar(event,mean(slopes),getSEM(slopes),Color=colorList{event},LineWidth=2);
+
+        % Calculate significance
+        if event < length(eventRange)
+            for i = event+1:length(eventRange)
+                plotStats(slopes,cur_stats{i}(:,1),[event i],testType='kstest');
+            end
+        end
+    end
+
+    xticks(1:length(eventRange)); xticklabels(eventRange);
+    ylabel('Slope');
+end
+
+%% Plot bar plot of DA final values
+initializeFig(.7,.7); tiledlayout('flow');
+for task = 1:length(results.stats)
+    nexttile;
+    cur_traces = results.traces{task};
+    for event = 1:length(eventRange)
+        finalData = cur_traces{event}(:,end-3:end);
+        animalData = mean(finalData,2);
+
+        % plot bar plots
+        scatter(event,animalData,200,colorList{event},'filled'); hold on
+        bar(event,mean(animalData),EdgeColor=colorList{event},FaceColor=colorList{event},...
+            FaceAlpha=0.5,LineWidth=3);
+        errorbar(event,mean(animalData),getSEM(animalData),Color=colorList{event},LineWidth=2);
+
+        % Calculate significancesea
+        if event < length(eventRange)
+            for i = event+1:length(eventRange)
+                plotStats(animalData,mean(cur_traces{i}(:,end-3:end),2),[event i],testType='kstest');
+            end
+        end
+    end
+    xticks(1:length(eventRange)); xticklabels(eventRange);
+    ylabel('Learned CS response for DA');
+end
 
 %% Plot grouped anticipatory lick changes
 
@@ -463,6 +518,7 @@ animalRange = 'All';
 taskRange = {'Reward1','Punish1'};
 signalRange = 'NAc';
 colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),bluePurpleRed(100,:)};
+ylabelList = {'Anticipatory licks','Anticipatory licks'};
 
 combinedStats = getGroupedTrialStats(animals,'nAnticipatoryLicks',...
                             eventRange=eventRange,...

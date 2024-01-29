@@ -13,7 +13,7 @@ clear; close all;
 addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
 
 % Select sessions for analysis
-parentPath = osPathSwitch('/Volumes/MICROSCOPE/wengang/Exp_withAlly/');
+parentPath = osPathSwitch('/Volumes/MICROSCOPE/wengang/Exp_withShun/');
 expPaths = uipickfiles('FilterSpec',parentPath,'Prompt','Select experiment folders');
 
 % Set comman params

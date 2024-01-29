@@ -105,6 +105,7 @@ for s = 1:length(sessionList)
             plotBehavior=true,...
             pavlovian=false,...
             reactionTime=2);
+        % analyzeSessions_FFT(sessionList{s});
     catch ME
         errorSessionIdx = [errorSessionIdx;s];
         msg = getReport(ME); 

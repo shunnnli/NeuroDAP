@@ -1,14 +1,15 @@
-function plotSignificance(pvalue,xloc,yloc,options)
+function plotSignificance(pvalue,xloc,yPortion,options)
 
 arguments
     pvalue
     xloc double = [0 1] % must be size [1,2]
-    yloc double = 1 % porportion of the y axis
+    yPortion double = 1 % porportion of the y axis
     
     options.LineWidth double = 2
     options.LineLengthProportion double = 0.75
     options.FontSize double = 12
     options.ylim double = nan
+    options.yloc double
 end
 
 % determine x
@@ -18,7 +19,12 @@ xlineStart = xlineCenter - xlineLength/2;
 xlineEnd = xlineCenter + xlineLength/2;
 
 % determine y
-ylimit = ylim; height = yloc*(ylimit(2)-ylimit(1)) + ylimit(1);
+ylimit = ylim; 
+if isfield(options,'yloc')
+    height = options.yloc;
+else
+    height = yPortion*(ylimit(2)-ylimit(1)) + ylimit(1);
+end
 
 plot([xlineStart xlineEnd],ones(1,2)*height,'Color','k','LineWidth',options.LineWidth);
 text(xlineCenter,height,strcat("p = ",num2str(round(pvalue,4))),'FontSize',options.FontSize,...

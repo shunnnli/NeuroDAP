@@ -115,6 +115,7 @@ for i = 1:length(eventInSec)
     end
 
     firstBin = round((eventInSec(i)+timestamp(1))*signalFs);
+    if firstBin == 0; firstBin = 1; end
     lastBin = firstBin + length(timestamp) - 1;
     % eventBin = floor(eventInSec(i)*signalFs);
     if options.baseline ~= 0
