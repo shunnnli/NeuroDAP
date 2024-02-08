@@ -81,6 +81,11 @@ elseif ~isfield(options,'stimPattern') && ~isfield(params,'stim')
     params.stim.nPulsesPerStim = (params.stim.stimDuration/1000) * params.stim.pulseFreq;
     params.stim.pulseInterval = (1/params.stim.pulseFreq) - params.stim.pulseDuration;
 end
+disp(['Stim params: pulseFreq = ',num2str(params.stim.pulseFreq)]);
+disp(['Stim params: pulseDuration = ',num2str(params.stim.pulseDuration)]);
+disp(['Stim params: stimDuration = ',num2str(params.stim.stimDuration)]);
+disp(['Stim params: nPulsesPerStim = ',num2str(params.stim.nPulsesPerStim)]);
+disp(['Stim params: pulseInterval = ',num2str(params.stim.pulseInterval)]);
 
 % Load task
 if ~isfield(params.session,'task') && isfield(options,'task')
@@ -212,7 +217,7 @@ airpuffIdx = find(airpuff_rounded);
 if ~exist('trials','var') || options.redo
     if strcmp(options.task,'random')
         [allTrials,~] = getTrials(find(leftTone),optoCue,...
-                             waterIdx,airpuffIdx);
+                             waterIdx,airpuffIdx); % add rightLickON if only baseline licks
     elseif contains(options.task,'punish')
         [allTrials,~] = getTrials(find(leftTone),optoCue,waterIdx);
     else
@@ -288,7 +293,7 @@ if strcmp(options.task,'random')
     % else; baselineIdx = baselineLicks(:,1); end
     randomMinSample = 15*params.sync.behaviorFs;
     randomMaxSample = length(params.sync.timeNI) - (15*params.sync.behaviorFs);
-    baselineIdx = randi([randomMinSample,randomMaxSample],100,1);
+    baselineIdx = randi([randomMinSample,randomMaxSample],100,1); % changed to rightLickON if only baseline licks
     
     % Create task legend
     stageTime = [-2,0;0,2];

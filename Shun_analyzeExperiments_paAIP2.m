@@ -95,6 +95,21 @@ if isempty(dir(fullfile(resultspath,'animals*.mat'))) || regroupAnimals
 end
 
 
+%% Modified animals struct
+for i = 1:length(animals)
+    if strcmpi('Random',animals(i).task)
+        animals(i).task = '1-Random';
+    elseif strcmpi('Reward1',animals(i).task)
+        animals(i).task = '2-Reward';
+    elseif strcmpi('Punish1',animals(i).task)
+        animals(i).task = '3-Punish';
+    elseif strcmpi('Reward2',animals(i).task)
+        animals(i).task = '4-Reward';
+    elseif strcmpi('Punish2',animals(i).task)
+        animals(i).task = '5-Punish';
+    end
+end
+
 %% Save animals and summary struct (time consumming!!!)
 
 % Save animals.mat
@@ -353,13 +368,13 @@ end
 
 eventRange = {'Stim','Pair','Tone'};
 animalRange = 'All';
-taskRange =  {'Reward2','Punish2'}; %{'Reward1','Punish1'};
+taskRange = {'Reward1','Punish1'};
 signalRange = 'NAc';
 
 colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),bluePurpleRed(100,:)};
 stage = 2; % Plot CS only
-statsTypes = {'stageMax','stageMin','stageMax','stageMin'};
-ylabelList = {'Max DA response during cue','Min DA response during cue',...
+statsTypes = {'stageAvg','stageAvg','stageMax','stageMin'};
+ylabelList = {'Avg DA response during cue','Avg DA response during cue',...
                 'Max DA response during cue','Min DA response during cue'};
 
 groupSize = 10; % numbers of trials to calculate average
@@ -371,9 +386,9 @@ combinedStats = getGroupedTrialStats(animals,statsTypes,...
                             signalRange=signalRange);
 
 initializeFig(.7,.7); tiledlayout('flow');
-plotGroupedTrialStats(combinedStats,ylabelList,stage=stage,groupSize=10,color=colorList);
+plotGroupedTrialStats(combinedStats,ylabelList,stage=stage,groupSize=1,color=colorList);
 
-% saveFigures(gcf,['Summary_CSvsTrialsGrouped_Second'],...
+% saveFigures(gcf,['Summary_CSvsTrialsGrouped_FirstAvg'],...
 %         strcat(resultspath),...
 %         saveFIG=true,savePDF=true);
 

@@ -180,7 +180,7 @@ for row = 1:size(epochList,1)
 
 
         % Find peak and area during analysis window (for processed)
-        AUCs(k) = sum(processed_trace(analysisWindow));
+        AUCs(k) = sum(processed_trace(analysisWindow)) / options.outputFs;
         [~,peakIdx] = max(abs(processed_trace(analysisWindow)));
         peakWindowStart = max(1,peakIdx-peakWindowWidth) + analysisWindow(1);
         peakWindowEnd = min(analysisWindow(end),peakIdx+peakWindowWidth) + analysisWindow(1);

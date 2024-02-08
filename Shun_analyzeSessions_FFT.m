@@ -5,14 +5,16 @@
 %% Plot single session
 
 % Run this block after loading data_labjack.mat
+window = 10000:30000;%size(labjack.raw,2);
+
 initializeFig(0.6,0.5);
-nexttile; [fftFreq_NAc,P1_NAc] = plotFFT(labjack.raw(1,:)); 
+nexttile; [fftFreq_NAc,P1_NAc] = plotFFT(labjack.raw(1,window)); 
 title('NAc'); 
 sigma_power_NAc = P1_NAc(fftFreq_NAc >= 12 & fftFreq_NAc <= 15);
 peak_sigma_NAc = max(sigma_power_NAc);
 avg_sigma_NAc = mean(sigma_power_NAc);
 
-nexttile; [fftFreq_LHb,P1_LHb] = plotFFT(labjack.raw(2,:)); 
+nexttile; [fftFreq_LHb,P1_LHb] = plotFFT(labjack.raw(2,window)); 
 title('LHb'); 
 sigma_power_LHb = P1_LHb(fftFreq_LHb >= 12 & fftFreq_LHb <= 15);
 peak_sigma_LHb = max(sigma_power_LHb);

@@ -21,6 +21,7 @@ arguments
 
    % Stimulation digital line params
    options.invertStim logical = true % Invert signal from arduino for stimulation
+   options.getConsecutive logical = true
    
    % Photometry related params
    options.recordLJ double = [1,1,0]
@@ -195,32 +196,35 @@ if withNI
         photometry_raw = analogNI(8,:);
         
         % Digital channels
+        if options.invertStim
+            digitalNI(7,:) = ~digitalNI(7,:);
+            digitalNI(8,:) = ~digitalNI(8,:);
+        end
+
         temp = false(size(digitalNI));
         for i=1:size(digitalNI,1)
             temp2 = [false, diff(digitalNI(i,:))];
             temp(i,:) = (temp2==1);
         end
-        airpuffRaw = digitalNI(1,:);
-        leftSolenoidRaw = digitalNI(3,:);
-        rightSolenoidRaw = digitalNI(4,:);
-        leftToneRaw = digitalNI(5,:);
-        rightToneRaw = digitalNI(6,:);
-        if options.invertStim
-            redLaserRaw = ~digitalNI(7,:); % or ENL
-            blueLaserRaw = ~digitalNI(8,:);
-        else
-            redLaserRaw = digitalNI(7,:); % or ENL
-            blueLaserRaw = digitalNI(8,:);
-        end
         
         % Calculate length of each pulse
-        airpuff = temp(1,:) .* getConsecutive(airpuffRaw)./nidq.Fs;
-        leftSolenoid = temp(3,:) .* getConsecutive(leftSolenoidRaw)./nidq.Fs;
-        rightSolenoid = temp(4,:) .* getConsecutive(rightSolenoidRaw)./nidq.Fs;
-        leftTone = temp(5,:) .* getConsecutive(leftToneRaw)./nidq.Fs;
-        rightTone = temp(6,:) .* getConsecutive(rightToneRaw)./nidq.Fs;
-        redLaser = temp(7,:) .* getConsecutive(redLaserRaw)./nidq.Fs;
-        blueLaser = temp(8,:) .* getConsecutive(blueLaserRaw)./nidq.Fs;
+        if options.getConsecutive
+            airpuff = temp(1,:) .* getConsecutive(digitalNI(1,:))./nidq.Fs;
+            leftSolenoid = temp(3,:) .* getConsecutive(digitalNI(3,:))./nidq.Fs;
+            rightSolenoid = temp(4,:) .* getConsecutive(digitalNI(4,:))./nidq.Fs;
+            leftTone = temp(5,:) .* getConsecutive(digitalNI(5,:))./nidq.Fs;
+            rightTone = temp(6,:) .* getConsecutive(digitalNI(6,:))./nidq.Fs;
+            redLaser = temp(7,:) .* getConsecutive(digitalNI(7,:))./nidq.Fs;
+            blueLaser = temp(8,:) .* getConsecutive(digitalNI(8,:))./nidq.Fs;
+        else
+            airpuff = temp(1,:);
+            leftSolenoid = temp(3,:);
+            rightSolenoid = temp(4,:);
+            leftTone = temp(5,:);
+            rightTone = temp(6,:);
+            redLaser = temp(7,:);
+            blueLaser = temp(8,:);
+        end
         
         
         % Set up allTrials: not including omissionTrials

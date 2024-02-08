@@ -221,12 +221,10 @@ for signal = 1:length(options.signalRange)
             options.sessionList = [options.sessionList,row.options.sessionList(sessionIdx)];
             sessionTrials = [];
             for s = 1:length(sessionIdx)
-                if sessionIdx(s)
-                    startTrial = row.options.startIdx.session{signal}(s);
-                    if s == length(sessionIdx); endTrial = size(rowData,1);
-                    else; endTrial = row.options.startIdx.session{signal}(s+1)-1; end
-                    sessionTrials = [sessionTrials,startTrial:endTrial];
-                end
+                startTrial = row.options.startIdx.session{1};
+                if s == length(sessionIdx); endTrial = size(rowData,1);
+                else; endTrial = row.options.startIdx.session(s+1)-1; end
+                sessionTrials = [sessionTrials,startTrial:endTrial];
             end
             trialRange = intersect(trialRange,sessionTrials);
             if isempty(trialRange); warning('Did not find trials that fits the sessionRange!'); end

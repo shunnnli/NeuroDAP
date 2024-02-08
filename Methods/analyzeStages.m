@@ -8,6 +8,7 @@ arguments
     options.nboot double = 10000
     options.finalFs double = 50
     options.lick_binSize double
+    options.peakAvgWindow double = 1
 end
 
 % Provide lick_binSize if analyzing lick traces

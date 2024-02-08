@@ -37,7 +37,7 @@ stats = cell(length(options.taskRange),1);
 
 for task = 1:length(options.taskRange)
     stats_combined = cell(length(options.animalRange),length(options.eventRange));
-    animalList_task = unique({animals(strcmpi({animals.task},options.taskRange{task})).animal});
+    animalList_task = unique({animals(contains({animals.task},options.taskRange{task},IgnoreCase=true)).animal});
     animalList = intersect(animalList_task,options.animalRange);
 
     % Get statsType
