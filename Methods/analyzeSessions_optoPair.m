@@ -4,6 +4,7 @@ arguments
     sessionpath string
     
     options.task
+    options.outputName string %name of the output file in subfolder of the session
     options.stimPattern cell
 
     options.pavlovian logical = false
@@ -38,34 +39,41 @@ end
              
 % 1. Select session via uigetdir
 dirsplit = strsplit(sessionpath,filesep); 
-sessionName = dirsplit{end}; 
+if ~isfield(options,'outputName'); options.outputName = dirsplit{end}; end
 if ispc; projectPath = strcat('\\',fullfile(dirsplit{2:end-1}));
 elseif isunix; projectPath = strcat('/',fullfile(dirsplit{2:end-1}));
 end
+
 % Get animal name and session date
-dirsplit = strsplit(sessionName,'-');
+if ~contains(options.outputName,'-')
+    sessionName = dirsplit{end-1};
+    dirsplit = strsplit(sessionName,'-');
+else
+    sessionName = options.outputName;
+    dirsplit = strsplit(options.outputName,'-'); 
+end
 date = dirsplit{1}; animal = dirsplit{2}; sessionTask = dirsplit{3};
 clear dirsplit
 
-disp(strcat('**********',sessionName,'**********'));
-load(strcat(sessionpath,filesep,'timeseries_',sessionName,'.mat'));
-load(strcat(sessionpath,filesep,'data_',sessionName,'.mat'));
-load(strcat(sessionpath,filesep,'behavior_',sessionName,'.mat'));
-load(strcat(sessionpath,filesep,'sync_',sessionName,'.mat'));
+disp(strcat('**********',options.outputName,'**********'));
+load(strcat(sessionpath,filesep,'timeseries_',options.outputName,'.mat'));
+load(strcat(sessionpath,filesep,'data_',options.outputName,'.mat'));
+load(strcat(sessionpath,filesep,'behavior_',options.outputName,'.mat'));
+load(strcat(sessionpath,filesep,'sync_',options.outputName,'.mat'));
 
-if ~isfield(params.session,'name'); params.session.name = sessionName; end
+if ~isfield(params.session,'name'); params.session.name = options.outputName; end
 if ~isfield(params.session,'date'); params.session.date = date; end
 if ~isfield(params.session,'animal'); params.session.animal = animal; end
 if ~isfield(params.session,'projectPath'); params.session.projectPath = projectPath; end
 
 % Create analysis.mat
 if ~isempty(dir(fullfile(sessionpath,"analysis_*.mat")))
-    load(strcat(sessionpath,filesep,'analysis_',sessionName,'.mat'));
+    load(strcat(sessionpath,filesep,'analysis_',options.outputName,'.mat'));
 else
-    save(strcat(sessionpath,filesep,'analysis_',sessionName),'sessionName','-v7.3');
+    save(strcat(sessionpath,filesep,'analysis_',options.outputName),'sessionName','-v7.3');
     disp('Finished: analysis_.mat not found, created a new one');
 end
-disp(['Finished: Session ',sessionName,' loaded']);
+disp(['Finished: Session ',options.outputName,' loaded']);
 
 % Load behaivor params
 if isfield(options,'stimPattern') && (options.redo || ~isfield(params,'stim'))
@@ -131,7 +139,7 @@ if options.redo || ~isfield(params,'analyze')
     options.pavlovian = params.analyze.pavlovian;
     options.reactionTime = params.analyze.reactionTime;
     options.minLicks = params.analyze.minLicks;
-    save(strcat(sessionpath,filesep,'sync_',params.session.name),'params','-append');
+    save(strcat(sessionpath,filesep,'sync_',options.outputName),'params','-append');
 elseif isfield(params,'analyze')
     options.pavlovian = params.analyze.pavlovian;
     options.reactionTime = params.analyze.reactionTime;
@@ -149,7 +157,7 @@ if ~isempty(eyeAreaIdx); eyeArea_detrend = timeSeries(eyeAreaIdx).data; end
 pupilAreaIdx = find(cellfun(@(x) strcmpi(x,'pupilArea'), {timeSeries.name}));
 if ~isempty(pupilAreaIdx); pupilArea_detrend = timeSeries(pupilAreaIdx).data; end
 
-save(strcat(sessionpath,filesep,'sync_',params.session.name),'params','-append');
+save(strcat(sessionpath,filesep,'sync_',options.outputName),'params','-append');
 
 %% Preprocess outcome and opto data
 
@@ -168,7 +176,7 @@ if options.round
         airpuff_rounded = roundToTarget(airpuff,punishList); disp('Finished rounding: airpuff');
         
         % Save rounded data
-        save(strcat(sessionpath,filesep,'timeseries_',params.session.name),'rightSolenoid_rounded','airpuff_rounded','-append');
+        save(strcat(sessionpath,filesep,'timeseries_',options.outputName),'rightSolenoid_rounded','airpuff_rounded','-append');
         disp('Finished: rounding cue/outcome data');
     end
 else
@@ -188,16 +196,16 @@ if ~exist('optoCue','var') || options.redo
             optoCue = allPulses(temp_interval > intervalThreshold);
     
             % Save first pulse data
-            save(strcat(sessionpath,filesep,'timeseries_',params.session.name),"optoCue",'-append');
+            save(strcat(sessionpath,filesep,'timeseries_',options.outputName),"optoCue",'-append');
         else
             optoCue = find(redLaser);
-            save(strcat(sessionpath,filesep,'timeseries_',params.session.name),"optoCue",'-append');
+            save(strcat(sessionpath,filesep,'timeseries_',options.outputName),"optoCue",'-append');
         end
         disp('Finished: saved optoCue data');
     else 
         optoCue = [];
     end
-    save(strcat(sessionpath,filesep,'timeseries_',params.session.name),"optoCue",'-append');
+    save(strcat(sessionpath,filesep,'timeseries_',options.outputName),"optoCue",'-append');
 end
 
 
@@ -206,7 +214,7 @@ rightLickON = find(rightLick);
 if ~exist('lickBout','var') || options.redo
     % Get lick bout start time (ILI < 0.5s)
     lickBout = getLickBout(rightLickON);
-    save(strcat(sessionpath,filesep,'timeseries_',params.session.name),"lickBout",'-append');
+    save(strcat(sessionpath,filesep,'timeseries_',options.outputName),"lickBout",'-append');
 end
 
 
@@ -223,7 +231,7 @@ if ~exist('trials','var') || options.redo
     else
         [allTrials,~] = getTrials(find(leftTone),optoCue);
     end
-    save(strcat(sessionpath,filesep,'timeseries_',params.session.name),"allTrials",'-append');
+    save(strcat(sessionpath,filesep,'timeseries_',options.outputName),"allTrials",'-append');
 end
 
 % Find water lick (first lick in response to water)
@@ -274,7 +282,7 @@ if (~exist('trials','var') || options.redo)
     
 
     % Save to behavior_.mat
-    save(strcat(sessionpath,filesep,'behavior_',params.session.name),'trials',...
+    save(strcat(sessionpath,filesep,'behavior_',options.outputName),'trials',...
         'eventTable','trialTable','blockTable','-append');
     disp('Finished: trial table saved');
 end
@@ -414,7 +422,7 @@ else
     end
 
     % Save idx to behavior.mat
-    save(strcat(sessionpath,filesep,'behavior_',params.session.name),'allTrials',...
+    save(strcat(sessionpath,filesep,'behavior_',options.outputName),'allTrials',...
         'waterIdx','waterLickIdx','airpuffIdx','toneIdx','stimIdx','pairIdx',...
         'baselineIdx',...
         '-append');

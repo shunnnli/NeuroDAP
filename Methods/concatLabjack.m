@@ -9,10 +9,13 @@ arguments
     options.record double = [1,1,0] % Recorded channels
     options.rebuildInfo logical = false % rebuild info (old version of the system)
 
-    options.saveDuplicate logical = true % Save a duplicate into Photometry folder
-
     options.followOriginal logical = true % Follow original recorded information
+
+    options.saveDuplicate logical = true % Save a duplicate into Photometry folder
+    options.outputPath string
 end
+
+if ~isfield(options,'outputPath'); options.outputPath = sessionpath; end
 
 % Load info.mat
 pathPhotometry = strcat(sessionpath,filesep,'Photometry',filesep);
@@ -118,7 +121,7 @@ if options.plot
         nexttile; plot(labjack.raw(i,:)); title(strcat(labjack.name{i},'(raw)')); box off
         nexttile; plot(labjack.modulation(i,:)); title(strcat(labjack.name{i},'(mod)')); box off
     end
-    saveas(gcf,strcat(sessionpath,filesep,'Summary_labjack_raw.fig'));
+    saveas(gcf,strcat(options.outputPath,filesep,'Summary_labjack_raw.fig'));
 end
 
 %% Save concat files
@@ -129,9 +132,9 @@ labjack.totalLen = totalLen;
 labjack.options = options;
 
 if options.save
-    save(strcat(sessionpath,filesep,'data_labjack'),'labjack','sync_labjack','-v7.3');
+    save(strcat(options.outputPath,filesep,'data_labjack'),'labjack','sync_labjack','-v7.3');
     if options.saveDuplicate
-        save(strcat(sessionpath,filesep,'Photometry',filesep,'data_labjack'),'labjack','sync_labjack','-v7.3');
+        save(strcat(options.outputPath,filesep,'Photometry',filesep,'data_labjack'),'labjack','sync_labjack','-v7.3');
     end
 end
 

@@ -56,7 +56,7 @@ try
                         ' for neuron ',num2str(clusterList(i))]);
 
                     % Find first and last imec index
-                    imecFirstIdx = triggeredSpikeIdx(j) + floor(ap.Fs*timeRange(1));
+                    imecFirstIdx = triggeredSpikeIdx(j) + round(ap.Fs*timeRange(1));
                     imecLastIdx = imecFirstIdx + timesteps - 1;
 
                     % Read waveform within range

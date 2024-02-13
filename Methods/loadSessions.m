@@ -34,9 +34,14 @@ arguments
    options.movingAverageWindowSize double = 2 % moving average window size after downsample
    options.removeTwoEnds logical = false % see demodulateSignal.m
    options.plotPhotometry logical = true % Plot photometry signals or not
+   options.modFreq double
 
    % Sync related params
    options.syncPulseWindow double = 5000 % #of sync pulse to xcorr
+
+   % Output file name
+   options.outputName string % use the same name as the session folder if emtpy
+   options.outputPath string % should be a folder, outputs to the session folder if empty
    
 end
 
@@ -71,12 +76,23 @@ if ~isempty(dir(fullfile(session.path,"sync_*.mat"))) && ~any([options.reloadAll
     disp('Loading stop: sync file found.'); 
     return; 
 else
+    % Name all output files
+    if ~isfield(options,'outputName'); options.outputName = sessionName; end
+    if ~isfield(options,'outputPath'); options.outputPath = sessionpath; end
+    syncOutputName = strcat(options.outputPath,filesep,'sync_',options.outputName);
+    timeseriesOutputName = strcat(options.outputPath,filesep,'timeseries_',options.outputName);
+    dataOutputName = strcat(options.outputPath,filesep,'data_',options.outputName);
+    behaviorOutputName = strcat(options.outputPath,filesep,'behavior_',options.outputName);
+
+    % Create folder if neccessary
+    if ~exist(options.outputPath,'dir'); mkdir(options.outputPath); end
+
     % Initialize all .mat files
     options.reloadAll = true;
-    save(strcat(session.path,filesep,'sync_',sessionName),'sessionName','session','-v7.3');
-    save(strcat(session.path,filesep,'timeseries_',sessionName),'sessionName','session','-v7.3');
-    save(strcat(session.path,filesep,'data_',sessionName),'sessionName','session','-v7.3');
-    save(strcat(session.path,filesep,'behavior_',sessionName),'sessionName','session','-v7.3');
+    save(behaviorOutputName,'sessionName','session','-v7.3');
+    save(syncOutputName,'sessionName','session','-v7.3');
+    save(timeseriesOutputName,'sessionName','session','-v7.3');
+    save(dataOutputName,'sessionName','session','-v7.3');
 end
 
 withNI = ~isempty(dir(fullfile(session.path,'*.nidq.bin')));
@@ -235,12 +251,12 @@ if withNI
         
         %% Save behavioral data
         if options.withPhotometryNI
-            save(strcat(session.path,filesep,'data_',sessionName),...
+            save(dataOutputName,...
                 'airpuff','leftLick','rightLick','leftTone','rightTone',....
                 'leftSolenoid','rightSolenoid','allTones','blink','gyro',...
                 'photometry_raw','blueLaser','redLaser','-append');
         else
-            save(strcat(session.path,filesep,'data_',sessionName),...
+            save(dataOutputName,...
                 'airpuff','leftLick','rightLick','leftTone','rightTone',....
                 'leftSolenoid','rightSolenoid','allTones','blink','gyro',...
                 'blueLaser','redLaser','-append');
@@ -326,7 +342,7 @@ if withRecording && (options.reloadAll || options.reloadImec)
     toc
     
     %% Save ephys data
-    save(strcat(session.path,filesep,'data_',sessionName),'ap','lfp','-append');
+    save(dataOutputName,'ap','lfp','-append');
     disp('Finished: Neuropixel data saved in data_.mat');
 end
 
@@ -338,7 +354,8 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
         disp("Ongoing: concatenate and save raw photometry data");
         if isempty(dir(fullfile(session.path,filesep,'data_labjack.mat')))
             if strcmpi(options.labjackSetup,"Shun")
-                concatLabjack(session.path,save=true,plot=false,record=options.recordLJ,followOriginal=options.followOriginal);
+                concatLabjack(session.path,save=true,plot=false,record=options.recordLJ,followOriginal=options.followOriginal,...
+                              outputPath=options.outputPath);
             elseif strcmpi(options.labjackSetup,"Shijia")
                 concatLabjack_shijia(session.path,save=true,plot=false,record=options.recordLJ);
             end
@@ -346,6 +363,7 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
         load(strcat(session.path,filesep,'data_labjack.mat'));
         
         % Reload concatLabjack if labjack.record does not agree
+        updateLabjack = false;
         if ~isfield(labjack,'record')
             disp('     Did not find labjack.record, use options.reloadLJ instead');
             labjack.record = options.recordLJ; 
@@ -354,6 +372,7 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
             labjack.raw(find(~labjack.record),:) = [];
             labjack.modulation(find(~labjack.record),:) = [];
             labjack.name(find(~labjack.record)) = [];
+            updateLabjack = true;
         end
         if sum(labjack.record == options.recordLJ) ~= length(labjack.record)
             disp(['labjack.record: ',labjack.record]);
@@ -362,6 +381,9 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
         end
         disp('Finished: concatenate and saved raw photometry data in data_labjack.mat');
         disp(labjack);
+
+        % Update modFreq to user input if neccessary
+        if ~isfield(options,'modFreq'); options.modFreq = labjack.modFreq; end
     
         % Store relevant info
         params.photometry.params = labjack;
@@ -377,14 +399,15 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
                 labjack.nSignals = labjack.nSignals-1; 
                 labjack.raw(3,:) = [];
                 labjack.modulation(3,:) = [];
+                updateLabjack = true;
             end
         else
             params.sync.ni_photometryFs = [];
         end
 
         % Save updated labjack
-        save(strcat(sessionpath,filesep,'data_labjack'),'labjack','-append');
-        save(strcat(sessionpath,filesep,'data_',sessionName),'labjack','-append');
+        if updateLabjack; save(strcat(session.path,filesep,'data_labjack'),'labjack','-append'); end
+        save(dataOutputName,'labjack','-append');
     end
 
     %% Loop through all signals
@@ -395,7 +418,7 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
                 processed = demodulateSignal(labjack.raw(i,:),...
                                 targetFs=options.downsampleFs,...
                                 originalFs=params.sync.labjackFs,...
-                                modFreq=labjack.modFreq(i),...
+                                modFreq=options.modFreq(i),...
                                 removeTwoEnds=options.removeTwoEnds,...
                                 rollingWindowTime=options.rollingWindowTime);
     
@@ -463,7 +486,7 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
                     dsGreenLP = filtfilt(lpFilt,double(dsGreen));
                     rollingGreenLP = rollingZ(dsGreenLP,options.rollingWindowTime);
             
-                    save(strcat(session.path,filesep,'data_',sessionName),'dsGreenLP','rollingGreenLP','-append');
+                    save(dataOutputName,'dsGreenLP','rollingGreenLP','-append');
                 end
             end
         end
@@ -594,8 +617,8 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
         end
 
         % Save channels
-        saveas(gcf,strcat(session.path,filesep,'Summary_photometry_processing.png')); 
-        % saveas(gcf,strcat(session.path,filesep,'Summary_photometry_processing.fig'));
+        saveas(gcf,strcat(options.outputPath,filesep,'Summary_photometry_processing.png')); 
+        % saveas(gcf,strcat(options.outputPath,filesep,'Summary_photometry_processing.fig'));
     end
     disp("Finished: processed and saved photometry data in data_.mat");
 end
@@ -685,7 +708,7 @@ if withCamera && (options.reloadAll || options.reloadCam)
             disp("Finished: detrend eye, pupil area");
 
             % Save camera table
-            save(strcat(session.path,filesep,'data_',sessionName),'camera',...
+            save(dataOutputName,'camera',...
                 'pupilArea','eyeArea','-append');
             disp("Finished: saved camera csv file in data_.mat");
         else
@@ -769,7 +792,7 @@ if withCamera && (options.reloadAll || options.reloadCam)
             disp("Finished: detrend eye, pupil area");
 
             % Save camera table
-            save(strcat(session.path,filesep,'data_',sessionName),'camera',...
+            save(dataOutputName,'camera',...
                 'pupilArea','eyeArea','-append');
             disp("Finished: saved camera csv file in data_.mat");
         else
@@ -1145,7 +1168,7 @@ if withPhotometry
         disp("Finished: LJ timestamp plotted");
     end
 end
-saveas(gcf,strcat(session.path,filesep,'Summary_syncing_timestamp.png'));
+saveas(gcf,strcat(options.outputPath,filesep,'Summary_syncing_timestamp.png'));
 
 %% (Ver5) Save sync and other data
 
@@ -1220,9 +1243,8 @@ params.session = session;
 % toml.signal_indices.total_channels = labjack.nSignals;
 
 
-save(strcat(session.path,filesep,'sync_',sessionName),'params','-append');
-save(strcat(session.path,filesep,'sync_',sessionName),'params','-append');
-save(strcat(session.path,filesep,'timeseries_',sessionName),'timeSeries','-append');
+save(syncOutputName,'params','-append');
+save(timeseriesOutputName,'timeSeries','-append');
 disp('Finished: struct params, session saved in sync_.mat');
 
 return

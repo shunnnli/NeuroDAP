@@ -4,6 +4,7 @@ arguments
     sessionpath string
     
     options.task
+    options.outputName string %name of the output file in subfolder of the session
     options.stimPattern cell
 
     options.pavlovian logical = false
@@ -38,34 +39,36 @@ end
              
 % 1. Select session via uigetdir
 dirsplit = strsplit(sessionpath,filesep); 
-sessionName = dirsplit{end}; 
+if ~isfield(options,'outputName'); options.outputName = dirsplit{end}; end
 if ispc; projectPath = strcat('\\',fullfile(dirsplit{2:end-1}));
 elseif isunix; projectPath = strcat('/',fullfile(dirsplit{2:end-1}));
 end
+
 % Get animal name and session date
-dirsplit = strsplit(sessionName,'-');
+if ~contains(options.outputName,'-'); dirsplit = strsplit(dirsplit{end-1},'-');
+else; dirsplit = strsplit(options.outputName,'-'); end
 date = dirsplit{1}; animal = dirsplit{2}; sessionTask = dirsplit{3};
 clear dirsplit
 
-disp(strcat('**********',sessionName,'**********'));
-load(strcat(sessionpath,filesep,'timeseries_',sessionName,'.mat'));
-load(strcat(sessionpath,filesep,'data_',sessionName,'.mat'));
-load(strcat(sessionpath,filesep,'behavior_',sessionName,'.mat'));
-load(strcat(sessionpath,filesep,'sync_',sessionName,'.mat'));
+disp(strcat('**********',options.outputName,'**********'));
+load(strcat(sessionpath,filesep,'timeseries_',options.outputName,'.mat'));
+load(strcat(sessionpath,filesep,'data_',options.outputName,'.mat'));
+load(strcat(sessionpath,filesep,'behavior_',options.outputName,'.mat'));
+load(strcat(sessionpath,filesep,'sync_',options.outputName,'.mat'));
 
-if ~isfield(params.session,'name'); params.session.name = sessionName; end
+if ~isfield(params.session,'name'); params.session.name = options.outputName; end
 if ~isfield(params.session,'date'); params.session.date = date; end
 if ~isfield(params.session,'animal'); params.session.animal = animal; end
 if ~isfield(params.session,'projectPath'); params.session.projectPath = projectPath; end
 
 % Create analysis.mat
 if ~isempty(dir(fullfile(sessionpath,"analysis_*.mat")))
-    load(strcat(sessionpath,filesep,'analysis_',sessionName,'.mat'));
+    load(strcat(sessionpath,filesep,'analysis_',options.outputName,'.mat'));
 else
-    save(strcat(sessionpath,filesep,'analysis_',sessionName),'sessionName','-v7.3');
+    save(strcat(sessionpath,filesep,'analysis_',options.outputName),'sessionName','-v7.3');
     disp('Finished: analysis_.mat not found, created a new one');
 end
-disp(['Finished: Session ',sessionName,' loaded']);
+disp(['Finished: Session ',options.outputName,' loaded']);
 
 % Load behaivor params
 if isfield(options,'stimPattern') && (options.redo || ~isfield(params,'stim'))
@@ -81,6 +84,11 @@ elseif ~isfield(options,'stimPattern') && ~isfield(params,'stim')
     params.stim.nPulsesPerStim = (params.stim.stimDuration/1000) * params.stim.pulseFreq;
     params.stim.pulseInterval = (1/params.stim.pulseFreq) - params.stim.pulseDuration;
 end
+disp(['Stim params: pulseFreq = ',num2str(params.stim.pulseFreq)]);
+disp(['Stim params: pulseDuration = ',num2str(params.stim.pulseDuration)]);
+disp(['Stim params: stimDuration = ',num2str(params.stim.stimDuration)]);
+disp(['Stim params: nPulsesPerStim = ',num2str(params.stim.nPulsesPerStim)]);
+disp(['Stim params: pulseInterval = ',num2str(params.stim.pulseInterval)]);
 
 % Load task
 if ~isfield(params.session,'task') && isfield(options,'task')
@@ -92,14 +100,18 @@ elseif isfield(params.session,'task') && isfield(options,'task')
         disp('Finished: options.task not provided or differed, use the original one');
     end
 elseif ~isfield(params.session,'task') && ~isfield(options,'task')
-    if contains(sessionTask,["R","RP","Reward"],IgnoreCase=false)
-        options.task = 'reward pairing';
+    if contains(sessionTask,["Random","H"],IgnoreCase=false)
+        options.task = 'random';
         params.session.task = options.task;
     elseif contains(sessionTask,["P","PP","Punish"],IgnoreCase=false)
         options.task = 'punish pairing';
         params.session.task = options.task;
-    elseif contains(sessionTask,["Random","H"],IgnoreCase=false)
-        options.task = 'random';
+        if contains(sessionTask,"RP",IgnoreCase=false)
+            options.task = 'reward pairing';
+            params.session.task = options.task;
+        end
+    elseif contains(sessionTask,["R","RP","Reward"],IgnoreCase=false)
+        options.task = 'reward pairing';
         params.session.task = options.task;
     else
         warning('Unrecognize session name pattern, set to random');
@@ -208,7 +220,7 @@ airpuffIdx = find(airpuff_rounded);
 if ~exist('trials','var') || options.redo
     if strcmp(options.task,'random')
         [allTrials,~] = getTrials(find(leftTone),optoCue,...
-                             waterIdx,airpuffIdx);
+                             waterIdx,airpuffIdx); % add rightLickON if only baseline licks
     elseif contains(options.task,'punish')
         [allTrials,~] = getTrials(find(leftTone),optoCue,waterIdx);
     else
@@ -284,7 +296,7 @@ if strcmp(options.task,'random')
     % else; baselineIdx = baselineLicks(:,1); end
     randomMinSample = 15*params.sync.behaviorFs;
     randomMaxSample = length(params.sync.timeNI) - (15*params.sync.behaviorFs);
-    baselineIdx = randi([randomMinSample,randomMaxSample],100,1);
+    baselineIdx = randi([randomMinSample,randomMaxSample],100,1); % changed to rightLickON if only baseline licks
     
     % Create task legend
     stageTime = [-2,0;0,2];
@@ -313,7 +325,7 @@ else
     % else; baselineIdx = baselineLicks(:,1); end
     randomMinSample = floor(10*params.sync.behaviorFs);
     randomMaxSample = length(params.sync.timeNI) - randomMinSample;
-    1baselineIdx = randi([randomMinSample,randomMaxSample],100,1);
+    baselineIdx = randi([randomMinSample,randomMaxSample],100,1);
 
     if contains(options.task,'reward')
         if options.performing

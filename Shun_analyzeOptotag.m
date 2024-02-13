@@ -15,7 +15,7 @@ dirsplit = strsplit(sessionpath,filesep);
 sessionName = dirsplit{end}; session.projectPath = strcat('\\',fullfile(dirsplit{2:end-1})); clear dirsplit
 
 disp(strcat('********** ',sessionName,'**********'));
-load(strcat(sessionpath,'\','sync_',sessionName,'.mat'));
+load(strcat(sessionpath,filesep,'sync_',sessionName,'.mat'));
 disp(['Session ',sessionName,' loaded']);
 
 % Load waveforms
@@ -118,22 +118,22 @@ disp(['Finished: kilosort data for session ',sessionName,' loaded']);
 %% Load peri-stim spike times
 
 % % For ally
-optoStimIdx = find(blueLaser); % Find blue laser pulses
-% Define params
-timeRangeLong = [-1, 5];
-timeRangeShort = [-0.05, 0.2];
-binSizeLong = 0.05; % in sec
-binSizeShort = 0.0001;
+% optoStimIdx = find(blueLaser); % Find blue laser pulses
+% % Define params
+% timeRangeLong = [-1, 5];
+% timeRangeShort = [-0.05, 0.2];
+% binSizeLong = 0.05; % in sec
+% binSizeShort = 0.0001;
 
 % For shun
-% blueLaserON = find(blueLaser); % Find blue laser pulses
-% optoStimIdx = blueLaserON(1:end);
-% redLaserON = find(redLaser);
-% % Define params
-% timeRangeLong = [-0.5, 1];
-% timeRangeShort = [-0.05, 0.2];
-% binSizeLong = 0.01; % in sec
-% binSizeShort = 0.0001;
+blueLaserON = find(blueLaser); % Find blue laser pulses
+optoStimIdx = blueLaserON(1:end);
+redLaserON = find(redLaser);
+% Define params
+timeRangeLong = [-0.5, 1];
+timeRangeShort = [-0.05, 0.2];
+binSizeLong = 0.01; % in sec
+binSizeShort = 0.0001;
 
 % Find spikes around each laser pulse
 [~,optoSpikeRateLong,opto_long_params] = getSpikes(timeRangeLong,binSizeLong,optoStimIdx,params);
@@ -835,14 +835,16 @@ close;
 
 initializeFig(0.5,0.5);
 
+unitList = 1:ap.nGoodClusters;
+
 subplot(2,1,1)
-plotSpikes(optoSpikeRateShort(:,1:400,:),1:ap.nGoodClusters,timeRangeShort,bluePurpleRed,average=true,unit='ms',smooth=true);
-plotEvent('Stim',0.02,[7 136 225],unit='ms');
+plotSpikes(optoSpikeRateShort(:,1:400,:),unitList,timeRangeShort,bluePurpleRed,average=true,unit='ms',smooth=true);
+plotEvent('Stim',0.02,color=[7 136 225],unit='ms');
 xlabel('Time (s)'); ylabel('Spikes/s'); box off
 
 subplot(2,1,2)
-plotSpikes(optoSpikeRateLong(:,1:400,:),1:ap.nGoodClusters,timeRangeLong,bluePurpleRed,average=true,unit='ms');
-plotEvent('Stim',0.02,[7 136 225],unit='ms');
+plotSpikes(optoSpikeRateLong(:,1:400,:),unitList,timeRangeLong,bluePurpleRed,average=true,unit='ms');
+plotEvent('Stim',0.02,color=[7 136 225],unit='ms');
 xlabel('Time (s)'); ylabel('Spikes/s'); box off
 
 % save figure
@@ -910,39 +912,41 @@ save(strcat(session.path,'/','optotag_',sessionName),'optoStimIdx',...
 
 %% (With waveform) Plot every single neuron summary and save in a folder
 
-% optoStimDuration = 0.02; % Shun
-optoStimDuration = 0; % Ally
+optoStimDuration = 20; % Shun, in ms
+% optoStimDuration = 0; % Ally
+
+optoTrialRange = 1:600;
 
 wvf_r = nan(1,ap.nGoodClusters);
-for idx = 1:542%ap.nGoodClusters
+for idx = 64%1:542%ap.nGoodClusters
     i = idx;
     initializeFig(1,1); textOn = true;
     tiledlayout(4,3);
 
     % plot raster
     nexttile(1,[1 2]);
-    plotSpikeRaster(optoSpikeRateShort(:,401:650,:),i,[-0.005,salt_window],unit='ms',originalTimeRange=timeRangeShort,size=5);
-    plotEvent('Stim',optoStimDuration,[7 136 225],unit='ms');
-    yline([250],'--');
+    plotSpikeRaster(optoSpikeRateShort(:,optoTrialRange,:),i,[-0.005,salt_window],unit='ms',originalTimeRange=timeRangeShort,size=20);
+    plotEvent('Stim',optoStimDuration,color=[7 136 225],unit='s');
+    %yline([250],'--');
     %yline([600 1200 1800 2400],'-');
     
     nexttile(4,[1 2]);
-    plotSpikeRaster(optoSpikeRateShort(:,401:650,:),i,timeRangeShort,unit='ms',size=5);
-    plotEvent('Stim',optoStimDuration,[7 136 225],unit='ms');
-    yline([250],'--');
+    plotSpikeRaster(optoSpikeRateShort(:,optoTrialRange,:),i,timeRangeShort,unit='ms',size=20);
+    plotEvent('Stim',optoStimDuration,color=[7 136 225],unit='s');
+    %yline([250],'--');
     %yline([600 1200 1800 2400],'-');
     
     nexttile(7,[1 2]);
-    plotSpikes(optoSpikeRateShort(:,401:650,:),i,timeRangeShort,bluePurpleRed,textOn=true,text_source=ap,unit='ms',smooth=true);
-    plotEvent('Stim',optoStimDuration,[7 136 225],unit='ms');
+    plotSpikes(optoSpikeRateShort(:,optoTrialRange,:),i,timeRangeShort,bluePurpleRed,textOn=true,text_source=ap,unit='ms',smooth=true);
+    plotEvent('Stim',optoStimDuration,color=[7 136 225],unit='s');
     
     nexttile(10,[1 2]);
-    plotSpikes(optoSpikeRateLong(:,401:650,:),i,timeRangeLong,bluePurpleRed,textOn=true,text_source=ap,unit='ms');
-    plotEvent('Stim',optoStimDuration,[7 136 225],unit='ms');
+    plotSpikes(optoSpikeRateLong(:,optoTrialRange,:),i,timeRangeLong,bluePurpleRed,textOn=true,text_source=ap,unit='ms');
+    plotEvent('Stim',optoStimDuration,color=[7 136 225],unit='s');
 
 
     % Get waveform
-    timeRange = [-0.0025,0.0025];
+    timeRange = [-0.0020,0.0025];
     [neuron_optotag_wvf,neuron_control_wvf] = getSpikeWaveforms(mmf.Data.x,i,timeRange,params,...
                                                     event=optoStimIdx,maxLatency=salt_window,...
                                                     triggeredSpikeIdx=spt_test_params.triggeredSpikeIdx);
@@ -973,8 +977,8 @@ for idx = 1:542%ap.nGoodClusters
     title(['p-value: ',num2str(salt_p(i))]); box off
     
     % save figure
-    saveas(gcf,strcat(sessionpath,'\PSTH-allOpto_1mW_pulse\psth_stim_cluster',num2str(i),'.png'));
-    close;
+    % saveFigures(gcf,strcat('psth_stim_cluster',num2str(i)),strcat(sessionpath,'\PSTH-allOpto_1mW_pulse'),savePDF=true,saveFig=true);
+    % close;
 end
 
 %% SALT p-value vs waveform correlation

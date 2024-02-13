@@ -85,6 +85,7 @@ if isfield(database,'session')
     if  ~any((strcmpi(options.sessionRange,'All')))
         sessionIdx = cellfun(@(x) contains(x,options.sessionRange,IgnoreCase=true), {database(finalIdx).session});
         finalIdx = finalIdx(sessionIdx);
+        % will save options.sessionList later
     else
         options.sessionList = unique({database.session});
     end
@@ -217,6 +218,10 @@ for signal = 1:length(options.signalRange)
 
         % Check sessionRange if database do not have field sessions (ie animal struct)
         if ~isfield(database,'session') && ~any((strcmpi(options.sessionRange,'All')))
+            if ~isfield(row.options,'sessionList')
+                disp('No options.sessionList for this row found, set to empty!'); 
+                row.options.sessionList = {};
+            end
             sessionIdx = cellfun(@(x) contains(x,options.sessionRange,IgnoreCase=true), row.options.sessionList);
             options.sessionList = [options.sessionList,row.options.sessionList(sessionIdx)];
             sessionTrials = [];
