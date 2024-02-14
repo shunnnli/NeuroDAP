@@ -236,6 +236,9 @@ for signal = 1:length(options.signalRange)
             trialRange = intersect(trialRange,sessionTrials);
             if isempty(trialRange); warning('Did not find trials that fits the sessionRange!'); end
         else
+            if ~isfield(row.options,'sessionList')
+                row.options.sessionList = options.sessionList;
+            end
             options.sessionList = [options.sessionList,row.options.sessionList];
         end
 
