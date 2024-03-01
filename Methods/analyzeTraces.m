@@ -94,6 +94,7 @@ for i = 1:length(analysisEvents)
         analysis(row).stageAvg = stats.stageAvg;
         analysis(row).stageMax = stats.stageMax;
         analysis(row).stageMin = stats.stageMin;
+        analysis(row).stageArea = stats.stageArea;
         
         analysis(row).trialInfo.trialNumber = options.trialNumber{i};
         if ~isempty(options.trialTable)
@@ -128,6 +129,7 @@ for i = 1:length(analysisEvents)
     analysis(row).stageAvg = stats_lick.stageAvg;
     analysis(row).stageMax = stats_lick.stageMax;
     analysis(row).stageMin = stats_lick.stageMin;
+    analysis(row).stageArea = stats_lick.stageArea;
     
     analysis(row).trialInfo.trialNumber = options.trialNumber{i};
     if ~isempty(options.trialTable)

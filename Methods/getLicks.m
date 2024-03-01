@@ -28,7 +28,25 @@ lickRate = lickTraces;
 lickEvents = cell(length(eventIdx),2);
 
 % Return if there's no licks
-if isempty(find(leftLick,1)) && isempty(find(rightLick, 1)); return; end
+if isempty(find(leftLick,1)) && isempty(find(rightLick, 1))
+    if all(options.side == [1 1])
+        lickTraces{1} = lickTraces_left;
+        lickTraces{2} = lickTraces_right;
+        lickRate{1} = lickTraces{1} / binSize;
+        lickRate{2} = lickTraces{2} / binSize;
+    elseif all(options.side == [1 0])
+        lickTraces = lickTraces_left;
+        lickRate = lickTraces / binSize;
+        lickEvents = lickEvents(:,1);
+    elseif all(options.side == [0 1])
+        lickTraces = lickTraces_right;
+        lickRate = lickTraces / binSize;
+        lickEvents = lickEvents(:,2);
+    else 
+        warning('side format is wrong. Should be a 1x2 matrix (e.g. [0 1])');
+    end
+    return
+end
 
 % Find licks
 if isempty(rightLick)

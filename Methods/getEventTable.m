@@ -3,7 +3,7 @@ function eventTable = getEventTable(events,params,options)
 arguments
     events cell
     params struct
-    options.typeName cell = {"trialStart","airpuff","water","lick","tone","redStim"} 
+    options.typeName cell = {"trialStart","airpuff","water","lick","tone","redStim","blueStim"} 
 end
 
 % Load events as separte vectors

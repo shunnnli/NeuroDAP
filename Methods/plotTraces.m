@@ -14,7 +14,8 @@ end
 arguments    
     % Common options
     options.signalFs double = 50
-    options.baseline double = 0 % subtracted by x secs before event time
+    options.baseline double = [0,0] % subtracted by x secs before event time
+    options.dff logical = false
 
     % Extract options
     options.extract logical = true    
@@ -195,9 +196,32 @@ if ~options.extract && any(options.baseline ~= 0)
     % Convert to bin
     [~,eventBin] = min(abs(timestamp-0));
     firstBin_baseline = floor(eventBin + options.baseline(1)*options.signalFs);
-    lastBin_baseline = floor(eventBin + options.baseline(2)*options.signalFs);
+    lastBin_baseline = floor(eventBin + min(options.baseline(2),0)*options.signalFs);
     baseline = mean(traces(:,firstBin_baseline:lastBin_baseline),2);
+
+    % Subtract
     traces = traces - baseline;
+end
+
+%% Turn into df/f (if input signal is raw)
+if options.dff
+    % Check input
+    if options.baseline(1) < timestamp(1)
+        options.baseline(1) = timestamp(1);
+        warning('plotTraces: baseline is longer than input timeRange, changed to the first timestamp instead');
+        disp(['baseline: ',num2str(options.baseline)]);
+    elseif options.baseline(1) == 0
+        options.baseline(1) = timestamp(1);
+    end
+
+    % Convert to bin
+    [~,eventBin] = min(abs(timestamp-0));
+    firstBin_baseline = floor(eventBin + options.baseline(1)*options.signalFs);
+    lastBin_baseline = floor(eventBin + min(options.baseline(2),0)*options.signalFs);
+    baseline = mean(traces(:,firstBin_baseline:lastBin_baseline),2);
+
+    % Convert to dff
+    traces = (traces-baseline)./baseline;
 end
 
 %% Plot traces if needed

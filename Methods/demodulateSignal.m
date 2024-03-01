@@ -71,7 +71,6 @@ demodulated.demodTimes = dmTimes;                              % save time point
 
 % Demod with detrend
 signal_detrended = rollingZ(signal, options.detrendWindowSamples_rawFs);
-
 [spectVals, ~, ~] = spectrogram(signal_detrended, options.spectralWindow, options.spectralWindowOverlap, options.spectralFrequencies, options.originalFs);
 dmData = mean(abs(spectVals),1); % convert spectrogram to power    
 

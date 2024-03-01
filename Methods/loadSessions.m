@@ -412,7 +412,7 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
 
     %% Loop through all signals
     if withPhotometry
-        for i = 1:labjack.nSignals
+        for i = 1:size(labjack.raw,1)
             
             if labjack.mod(i)
                 processed = demodulateSignal(labjack.raw(i,:),...

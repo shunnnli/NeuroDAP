@@ -9,7 +9,7 @@ arguments
 
     options.optoTriggered logical = false
     options.optoInverted logical = true
-    options.optoPulseFreq double = 20
+    options.optoPulseFreq double = 50
     options.optoPulseDuration double = 5
     options.optoStimDuration double = 500
 end

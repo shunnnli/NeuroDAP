@@ -186,6 +186,7 @@ end
 
 
 % Find start of opto cue
+blueStimIdx = find(blueLaser);
 if ~exist('optoCue','var') || options.redo
     if ~isempty(find(redLaser, 1))
         % Find the first pulse of each stim pattern if nPulsePerPattern>1
@@ -225,7 +226,7 @@ airpuffIdx = find(airpuff_rounded);
 if ~exist('trials','var') || options.redo
     if strcmp(options.task,'random')
         [allTrials,~] = getTrials(find(leftTone),optoCue,...
-                             waterIdx,airpuffIdx); % add rightLickON if only baseline licks
+                             waterIdx,airpuffIdx, blueStimIdx); % add rightLickON if only baseline licks
     elseif contains(options.task,'punish')
         [allTrials,~] = getTrials(find(leftTone),optoCue,waterIdx);
     else
@@ -251,7 +252,8 @@ if (~exist('trials','var') || options.redo)
     disp('Ongoing: making trial table');
     events{1} = allTrials;      events{2} = airpuffIdx;
     events{3} = waterIdx;       events{4} = rightLickON;
-    events{5} = find(leftTone); events{6} = optoCue;
+    events{5} = find(leftTone); events{6} = optoCue; 
+    events{7} = blueStimIdx;
 
     trials = getTrialTable(options.task,events,rightSolenoid_rounded,airpuff_rounded,...
                 pavlovian=options.pavlovian,reactionTime=options.reactionTime);
@@ -292,7 +294,7 @@ end
 
 if strcmp(options.task,'random')
     
-    % Select event idx
+    % Select event idxs
     toneIdx = find(leftTone); stimIdx = optoCue;
 
     % Select baseline idx (align to each baseline lick)
@@ -305,11 +307,11 @@ if strcmp(options.task,'random')
     
     % Create task legend
     stageTime = [-2,0;0,2];
-    analysisEvents = {waterIdx,waterLickIdx,airpuffIdx,toneIdx,stimIdx,baselineIdx};
+    analysisEvents = {waterIdx,waterLickIdx,airpuffIdx,toneIdx,stimIdx,baselineIdx,blueStimIdx};
     eventTrialNum = {findTrials(waterIdx,trials),findTrials(waterLickIdx,trials),...
                     findTrials(airpuffIdx,trials),findTrials(toneIdx,trials),...
-                    findTrials(stimIdx,trials),findTrials(baselineIdx,trials)};
-    analysisLabels = {'Water','Rewarded licks','Airpuff','Tone','Stim','Baseline'};
+                    findTrials(stimIdx,trials),findTrials(baselineIdx,trials),findTrials(blueStimIdx,trials)};
+    analysisLabels = {'Water','Rewarded licks','Airpuff','Tone','Stim','Baseline','Blue stim'};
     taskLegend = getLegend(analysisEvents,analysisLabels);
 
     stageColors = {[.75 .75 .75],bluePurpleRed(1,:)};
@@ -403,11 +405,11 @@ else
     end
 
     stageTime = [-2,0;0,0.5;0.5,5];
-    analysisEvents = {waterIdx,waterLickIdx,toneIdx,stimIdx,pairIdx,airpuffIdx,baselineIdx};
+    analysisEvents = {waterIdx,waterLickIdx,toneIdx,stimIdx,pairIdx,airpuffIdx,baselineIdx,blueStimIdx};
     eventTrialNum = {findTrials(waterIdx,trials),findTrials(waterLickIdx,trials),...
                     toneTrials(:,1),stimTrials(:,1),pairTrials(:,1),...
-                    findTrials(airpuffIdx,trials),findTrials(baselineIdx,trials)};
-    analysisLabels = {'Water','Rewarded licks','Tone only','Stim only','Pair','Airpuff','Baseline'};
+                    findTrials(airpuffIdx,trials),findTrials(baselineIdx,trials),findTrials(blueStimIdx,trials)};
+    analysisLabels = {'Water','Rewarded licks','Tone only','Stim only','Pair','Airpuff','Baseline','Blue stim'};
     taskLegend = getLegend(analysisEvents,analysisLabels);
 
     stageColors = {[.75 .75 .75],bluePurpleRed(end,:),bluePurpleRed(1,:)};
@@ -499,6 +501,8 @@ if options.plotPhotometry
                         signalFs=finalFs,signalSystem=system);
             [~,~] = plotTraces(baselineIdx,timeRange,signal,[.75 .75 .75],params,...
                         signalFs=finalFs,signalSystem=system);
+            [~,~] = plotTraces(blueStimIdx,timeRange,signal,bluePurpleRed(100,:),params,...
+                        signalFs=finalFs,signalSystem=system);
             plotEvent('',0);
             xlabel('Time (s)'); ylabel([name,' z-score']);
             legend(taskLegend(2:end),'Location','northeast');
@@ -510,6 +514,7 @@ if options.plotPhotometry
             plotLicks(toneIdx,timeRange,options.lick_binSize,bluePurpleRed(350,:),[],rightLick,params);
             plotLicks(stimIdx,timeRange,options.lick_binSize,bluePurpleRed(end,:),[],rightLick,params);
             plotLicks(baselineIdx,timeRange,options.lick_binSize,[.75 .75 .75],[],rightLick,params);
+            plotLicks(blueStimIdx,timeRange,options.lick_binSize,bluePurpleRed(100,:),[],rightLick,params);
             plotEvent('',0);
             xlabel('Time (s)'); ylabel('Licks/s'); 
             legend(taskLegend(2:end),'Location','best');
@@ -522,6 +527,7 @@ if options.plotPhotometry
                 [~,~] = plotTraces(toneIdx,timeRange,eyeArea_detrend,bluePurpleRed(350,:),params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(stimIdx,timeRange,eyeArea_detrend,bluePurpleRed(end,:),params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(baselineIdx,timeRange,eyeArea_detrend,[.75 .75 .75],params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(blueStimIdx,timeRange,eyeArea_detrend,bluePurpleRed(100,:),params,signalSystem='camera',smooth=15);
                 plotEvent('',0);
                 xlabel('Time (s)'); ylabel('Eye area (z-score)');
                 legend(taskLegend(2:end),'Location','northeast');
@@ -533,6 +539,7 @@ if options.plotPhotometry
                 [~,~] = plotTraces(toneIdx,timeRange,pupilArea_detrend,bluePurpleRed(350,:),params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(stimIdx,timeRange,pupilArea_detrend,bluePurpleRed(end,:),params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(baselineIdx,timeRange,pupilArea_detrend,[.75 .75 .75],params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(blueStimIdx,timeRange,pupilArea_detrend,bluePurpleRed(100,:),params,signalSystem='camera',smooth=15);
                 plotEvent('',0);
                 xlabel('Time (s)'); ylabel('Pupil area (z-score)');
                 legend(taskLegend(2:end),'Location','northeast');
@@ -553,6 +560,8 @@ if options.plotPhotometry
                         signalFs=finalFs,signalSystem=system);
             [~,~] = plotTraces(baselineIdx,timeRange,signal,[.75 .75 .75],params,...
                         signalFs=finalFs,signalSystem=system);
+            [~,~] = plotTraces(blueStimIdx,timeRange,signal,bluePurpleRed(100,:),params,...
+                        signalFs=finalFs,signalSystem=system);
             plotEvent('',0);
             xlabel('Time (s)'); ylabel([name,' z-score']);
             legend(taskLegend(2:end),'Location','northeast');
@@ -565,6 +574,7 @@ if options.plotPhotometry
             plotLicks(pairIdx,timeRange,options.lick_binSize,bluePurpleRed(150,:),[],rightLick,params);
             plotLicks(airpuffIdx,timeRange,options.lick_binSize,[0.2, 0.2, 0.2],[],rightLick,params);
             plotLicks(baselineIdx,timeRange,options.lick_binSize,[.75 .75 .75],[],rightLick,params);
+            plotLicks(blueStimIdx,timeRange,options.lick_binSize,bluePurpleRed(100,:),[],rightLick,params);
             plotEvent('',0);
             xlabel('Time (s)'); ylabel('Licks/s'); 
             legend(taskLegend(2:end),'Location','best');
@@ -578,6 +588,7 @@ if options.plotPhotometry
                 [~,~] = plotTraces(pairIdx,timeRange,eyeArea_detrend,bluePurpleRed(150,:),params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(airpuffIdx,timeRange,eyeArea_detrend,[0.2, 0.2, 0.2],params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(baselineIdx,timeRange,eyeArea_detrend,[.75 .75 .75],params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(blueStimIdx,timeRange,eyeArea_detrend,bluePurpleRed(100,:),params,signalSystem='camera',smooth=15);
                 plotEvent('',0);
                 xlabel('Time (s)'); ylabel('Eye area (z-score)');
                 legend(taskLegend(2:end),'Location','northeast');
@@ -590,6 +601,7 @@ if options.plotPhotometry
                 [~,~] = plotTraces(pairIdx,timeRange,pupilArea_detrend,bluePurpleRed(150,:),params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(airpuffIdx,timeRange,pupilArea_detrend,[0.2, 0.2, 0.2],params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(baselineIdx,timeRange,pupilArea_detrend,[.75 .75 .75],params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(blueStimIdx,timeRange,pupilArea_detrend,bluePurpleRed(100,:),params,signalSystem='camera',smooth=15);
                 plotEvent('',0);
                 xlabel('Time (s)'); ylabel('Pupil area (z-score)');
                 legend(taskLegend(2:end),'Location','northeast');
@@ -599,10 +611,10 @@ if options.plotPhotometry
 
         %% Plot single stimulus PSTH
         if strcmp(options.task,'random')
-            eventIdxes = {stimIdx,waterLickIdx,toneIdx,airpuffIdx};
-            labels = {'Stim','Water','Tone','Airpuff'};
-            eventDurations = [0.5,0,0.5,0.02];
-            groupSizes = [20,30,10,30];
+            eventIdxes = {stimIdx,waterLickIdx,toneIdx,airpuffIdx,blueStimIdx};
+            labels = {'Stim','Water','Tone','Airpuff','Blue stim'};
+            eventDurations = [0.5,0,0.5,0.02,0.01];
+            groupSizes = [20,30,10,30,10];
             longTimeRange = [-5,10];
             shortTimeRange = [-1,5]; 
             
@@ -621,8 +633,7 @@ if options.plotPhotometry
                                 plotIndividual=true);
                 plotEvent(label,eventDuration); 
                 xlabel('Time (s)'); ylabel([name,' z-score']);
-                legend({['Shuffled (n=',num2str(length(eventIdx)),')'],...
-                        [label,' (n=',num2str(length(eventIdx)),')']},...
+                legend({[label,' (n=',num2str(length(eventIdx)),')']},...
                         'Location','northeast');
                 
                 nexttile(7,[1 2]);
@@ -645,8 +656,7 @@ if options.plotPhotometry
                                 plotIndividual=true);
                 plotEvent(label,eventDuration);
                 xlabel('Time (s)'); ylabel([name,' z-score']);
-                legend({['Shuffled (n=',num2str(length(eventIdx)),')'],...
-                        [label,' (n=',num2str(length(eventIdx)),')']},...
+                legend({[label,' (n=',num2str(length(eventIdx)),')']},...
                         'Location','northeast');
                 
                 nexttile(15,[1 2]);
@@ -658,11 +668,11 @@ if options.plotPhotometry
                 saveas(gcf,strcat(sessionpath,filesep,'Events_',timeSeries(path).name,'_',label,'.png'));
             end
         else
-            eventIdxes = {stimIdx,pairIdx,toneIdx,waterLickIdx,airpuffIdx};
-            omissionIdxes = {stimOmissionIdx, pairOmissionIdx,toneOmissionIdx,[],[]};
-            labels = {'Stim','Pair','Tone','Water','Airpuff'};
-            eventDurations = [0.5,0.5,0.5,0,0.02];
-            groupSizes = [10,10,10,30,30];
+            eventIdxes = {stimIdx,pairIdx,toneIdx,waterLickIdx,airpuffIdx,blueStimIdx};
+            omissionIdxes = {stimOmissionIdx, pairOmissionIdx,toneOmissionIdx,[],[],[]};
+            labels = {'Stim','Pair','Tone','Water','Airpuff','Blue stim'};
+            eventDurations = [0.5,0.5,0.5,0,0.02,0.01];
+            groupSizes = [10,10,10,30,30,10];
             longTimeRange = [-5,10];
             shortTimeRange = [-1,5]; 
             
@@ -685,8 +695,7 @@ if options.plotPhotometry
                                 signalFs=finalFs,signalSystem=system);
                 plotEvent(label,eventDuration);
                 xlabel('Time (s)'); ylabel([name,' z-score']);
-                legend({['Shuffled (n=',num2str(length(eventIdx)),')'],...
-                        [label,' (n=',num2str(length(eventIdx)),')'],...
+                legend({[label,' (n=',num2str(length(eventIdx)),')'],...
                         [label,' omission (n=',num2str(length(omissionIdxes)),')']},...
                         'Location','northeast');
                 
@@ -711,8 +720,7 @@ if options.plotPhotometry
                                 signalFs=finalFs,signalSystem=system);
                 plotEvent(label,eventDuration);
                 xlabel('Time (s)'); ylabel([name,' z-score']);
-                legend({['Shuffled (n=',num2str(length(eventIdx)),')'],...
-                        [label,' (n=',num2str(length(eventIdx)),')'],...
+                legend({[label,' (n=',num2str(length(eventIdx)),')'],...
                         [label,' omission (n=',num2str(length(omissionIdxes)),')']},...
                         'Location','northeast');
                 
@@ -847,6 +855,46 @@ if options.plotPhotometry
             end
             % Save
             saveas(gcf,strcat(sessionpath,filesep,'Analysis_',cur_signal,'_subtrial_trough.png'));
+        end
+
+        %% Plot subtrial area trend for baseline, CS, US
+        for signal = 1:nSignals
+            % Load current signal name and row in analysis
+            cur_signal = photometryName{signal};
+            signalIdx = find(cellfun(@(x) strcmpi(x,cur_signal), {analysis.name}));
+            eventPlotted = 0;
+            % Plot analysis result for this signal
+            initializeFig(0.8,0.8); tiledlayout(2,length(analysisEvents));
+            for i = 1:length(signalIdx)
+                row = signalIdx(i); eventPlotted = eventPlotted + 1;
+                nexttile;
+                for stage = 1:size(stageTime,1)
+                    data = analysis(row).stageArea.data(:,stage);
+                    p = analysis(row).stageArea.fit(stage,:);
+                    x = 1:length(data);
+                    scatter(x,data',100,stageColors{stage},'filled',MarkerFaceAlpha=0.5,HandleVisibility='off'); hold on
+                    plot(x,polyval(p,x),Color=stageColors{stage},lineWidth=5);
+                end
+                title(analysis(row).event);
+                xlabel('Trials'); ylabel([analysis(row).name,' signal area (z-score)']);
+                legend(stageLegend); box off
+    
+                nexttile(eventPlotted+length(analysisEvents));
+                for stage = 1:size(stageTime,1)
+                    h = histogram(analysis(row).stageArea.stats.bs(stage,:,1),nBins); hold on
+                    h.FaceColor = stageColors{stage}; h.EdgeColor = stageColors{stage};
+                    h.FaceAlpha = 0.25; h.EdgeAlpha = 0.25;
+                    pval = min(analysis(row).stageArea.stats.pval_slope(stage,:));
+                    xline(analysis(row).stageArea.fit(stage,1),'-',...
+                        {['Slope (',stageLegend{stage},')'],['p=',num2str(pval)]},...
+                        'Color',stageColors{stage},...
+                        'LineWidth',3,...
+                        'LabelOrientation','horizontal');
+                end
+                xlabel('Slope distribution (bootstrapped)'); ylabel('Count'); box off
+            end
+            % Save
+            saveas(gcf,strcat(sessionpath,filesep,'Analysis_',cur_signal,'_subtrial_area.png'));
         end
     end
 end

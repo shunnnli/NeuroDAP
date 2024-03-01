@@ -99,6 +99,34 @@ for stage = 1:size(stageTime,1)
     pMin_slope(stage,2) = sum(stageMinFit_bs(stage,:,end-1)>=stageMinFit(stage,end-1))/options.nboot;
 end
 
+% Calculate subtrial area
+stageArea = nan(size(trace,1),size(stageTime,1));
+stageAreaFit = nan(size(stageTime,1),2);
+stageAreaFit_bs = nan(size(stageTime,1),options.nboot,2);
+pArea_intercept = nan(size(stageTime,1),2);
+pArea_slope = nan(size(stageTime,1),2);
+for stage = 1:size(stageTime,1)
+    stageWindow = stageBin(stage,1):stageBin(stage,2);
+    stageArea(:,stage) = sum(trace(:,stageWindow),2);
+
+    % Fit stageMin across session
+    x = 1:size(trace,1); y = stageArea(:,stage)';
+    if length(y) <= 1; continue; end
+    stageAreaFit(stage,:) = polyfit(x,y,1);
+
+    % Test for significance (shuffled individual points, 
+    % calculate slope to build distribution, and test significance)
+    for sample = 1:options.nboot
+        bs_data = y(randperm(length(y)));
+        stageAreaFit_bs(stage,sample,:) = polyfit(x,bs_data,1);
+    end
+    % Calculate one-side p value
+    pArea_intercept(stage,1) = sum(stageAreaFit_bs(stage,:,end)<=stageAreaFit(stage,end))/options.nboot;
+    pArea_intercept(stage,2) = sum(stageAreaFit_bs(stage,:,end)>=stageAreaFit(stage,end))/options.nboot;
+    pArea_slope(stage,1) = sum(stageAreaFit_bs(stage,:,end-1)<=stageAreaFit(stage,end-1))/options.nboot;
+    pArea_slope(stage,2) = sum(stageAreaFit_bs(stage,:,end-1)>=stageAreaFit(stage,end-1))/options.nboot;
+end
+
 % Store in stats
 stats.stageAvg.data = stageAvg;
 stats.stageAvg.fit = stageAvgFit;
@@ -118,9 +146,16 @@ stats.stageMin.stats.bs = stageMinFit_bs;
 stats.stageMin.stats.pval_intercept = pMin_intercept;
 stats.stageMin.stats.pval_slope = pMin_slope;
 
+stats.stageArea.data = stageArea;
+stats.stageArea.fit = stageAreaFit;
+stats.stageArea.stats.bs = stageAreaFit_bs;
+stats.stageArea.stats.pval_intercept = pArea_intercept;
+stats.stageArea.stats.pval_slope = pArea_slope;
+
 stats.stageAvg.stageTime = stageTime;
 stats.stageMax.stageTime = stageTime;
 stats.stageMin.stageTime = stageTime;
+stats.stageArea.stageTime = stageTime;
 
 stats.options = options;
 
