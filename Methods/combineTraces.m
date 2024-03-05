@@ -97,6 +97,7 @@ end
 % Select rows based on events
 if ~strcmpi(options.eventRange,'All')
     eventIdx = cellfun(@(x) contains(x,options.eventRange,IgnoreCase=true), {database(finalIdx).event});
+    % eventIdx = cellfun(@(x) strcmpi(x,options.eventRange), {database(finalIdx).event});
     finalIdx = finalIdx(eventIdx);
 else
     options.eventRange = unique({database.event});
@@ -116,7 +117,7 @@ else
 end
 
 % Update options.statsType
-if strcmpi(options.statsType,'All'); options.statsType = {'stageAvg','stageMax','stageMin'}; end
+if strcmpi(options.statsType,'All'); options.statsType = {'stageAvg','stageMax','stageMin','stageArea'}; end
 if ~iscell(options.statsType); options.statsType = {options.statsType}; end
 
 %% Initialize data/stats/trialNum arrays

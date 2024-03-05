@@ -44,7 +44,7 @@ for task = 1:length(options.taskRange)
     statsType = convertStringsToChars(statsTypes{task});
     if contains(statsType,"stage")
         options.inTrialTable = false;
-        if ~strcmpi(statsType,{'stageAvg','stageMax','stageMin'})
+        if ~strcmpi(statsType,{'stageAvg','stageMax','stageMin','stageArea'})
             warning('Not a valid statsType input, check for typos! Changed to stageAvg by default!');
             statsType = 'stageAvg';
         end

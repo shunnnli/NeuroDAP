@@ -42,6 +42,7 @@ for a = 1:length(animalList)
                 animals(row).stageAvg.data = combined.stats.stageAvg{1};
                 animals(row).stageMax.data = combined.stats.stageMax{1};
                 animals(row).stageMin.data = combined.stats.stageMin{1};
+                animals(row).stageArea.data = combined.stats.stageArea{1};
                 animals(row).timestamp = combined.timestamp;
                 animals(row).timeRange = combined.options.timeRange;
                 animals(row).finalFs = combined.options.finalFs;

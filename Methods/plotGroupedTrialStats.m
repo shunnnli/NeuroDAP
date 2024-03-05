@@ -80,11 +80,13 @@ for task = 1:length(stats)
         groupedStats{event} = animalStats;
 
         % Plot average data
+        if iscell(options.individualColor); individualColor = options.individualColor{event};
+        else; individualColor = options.individualColor; end
         scatter(x,mean(grouped,1),options.dotSize,options.color{event},'filled',HandleVisibility='off'); hold on
         plotTraces(grouped,x,color=options.color{event},extract=false,...
             meanOnly=options.meanOnly,...
             plotIndividual=options.plotIndividual,...
-            individualColor=options.individualColor);
+            individualColor=individualColor);
     end
 
     % Adjust xlim

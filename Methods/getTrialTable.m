@@ -147,6 +147,11 @@ for i=1:length(allTrials)
             if choice == 1; hit = [hit; cur_cue]; outcome = 'H';
             elseif choice == 0; miss = [miss; cur_cue]; outcome = 'M'; end
         end
+    elseif contains(task,'punish')
+        if ~options.pavlovian
+            if choice == 0; hit = [hit; cur_cue]; outcome = 'H';
+            elseif choice == 1; miss = [miss; cur_cue]; outcome = 'M'; end
+        end
     else
         if ~options.pavlovian; outcome = 'H'; end
     end
