@@ -117,7 +117,10 @@ else
 end
 
 % Update options.statsType
-if strcmpi(options.statsType,'All'); options.statsType = {'stageAvg','stageMax','stageMin','stageArea'}; end
+if strcmpi(options.statsType,'All')
+    options.statsType = {'stageAvg','stageMax','stageMin'}; 
+    % options.statsType = {'stageAvg','stageMax','stageMin','stageArea'}; 
+end
 if ~iscell(options.statsType); options.statsType = {options.statsType}; end
 
 %% Initialize data/stats/trialNum arrays

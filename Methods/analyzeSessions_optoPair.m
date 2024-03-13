@@ -10,6 +10,7 @@ arguments
     options.pavlovian logical = false
     options.reactionTime double = 1
     options.minLicks double = 2 % min licks to get reward
+    options.combineOmission logical = true % combine omission trials
 
     options.analyzeTraces logical = true
 
@@ -334,73 +335,93 @@ else
     randomMaxSample = length(params.sync.timeNI) - randomMinSample;
     baselineIdx = randi([randomMinSample,randomMaxSample],100,1);
 
-    if contains(options.task,'reward')
+    if options.combineOmission
         if options.performing
-            stimTrials = trials{trials.isTone == 0 & trials.isStim == 1 ...
-                & trials.isReward == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            stimOmissionTrials = trials{trials.isTone == 0 & trials.isStim == 1 ...
-                & trials.isReward == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            pairTrials = trials{trials.isTone == 1 & trials.isStim == 1 ...
-                & trials.isReward == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            pairOmissionTrials = trials{trials.isTone == 1 & trials.isStim == 1 ...
-                & trials.isReward == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            toneTrials = trials{trials.isTone == 1 & trials.isStim == 0 ...
-                & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+            stimTrials = trials{trials.isTone == 0 & trials.isStim == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+            pairTrials = trials{trials.isTone == 1 & trials.isStim == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+            toneTrials = trials{trials.isTone == 1 & trials.isStim == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
             stimIdx = stimTrials(:,2);
-            stimOmissionIdx = stimOmissionTrials(:,2);
             pairIdx = pairTrials(:,2);
-            pairOmissionIdx = pairOmissionTrials(:,2);
             toneIdx = toneTrials(:,2);
+            stimOmissionIdx = []; pairOmissionIdx = []; toneOmissionIdx = [];
         else
-            stimTrials = trials{trials.isTone == 0 & trials.isStim == 1 & trials.isReward == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            stimOmissionTrials = trials{trials.isTone == 0 & trials.isStim == 1 & trials.isReward == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            pairTrials = trials{trials.isTone == 1 & trials.isStim == 1 & trials.isReward == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            pairOmissionTrials = trials{trials.isTone == 1 & trials.isStim == 1 & trials.isReward == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            toneTrials = trials{trials.isTone == 1 & trials.isStim == 0 & trials.isReward == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            toneOmissionTrials = trials{trials.isTone == 1 & trials.isStim == 0 & trials.isReward == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            if isempty(toneTrials) && ~isempty(toneOmissionTrials)
-                toneTrials = toneOmissionTrials;
-            end
+            stimTrials = trials{trials.isTone == 0 & trials.isStim == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+            pairTrials = trials{trials.isTone == 1 & trials.isStim == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+            toneTrials = trials{trials.isTone == 1 & trials.isStim == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
             stimIdx = stimTrials(:,2);
-            stimOmissionIdx = stimOmissionTrials(:,2);
             pairIdx = pairTrials(:,2);
-            pairOmissionIdx = pairOmissionTrials(:,2);
             toneIdx = toneTrials(:,2);
-            toneOmissionIdx = toneOmissionTrials(:,2);
+            stimOmissionIdx = []; pairOmissionIdx = []; toneOmissionIdx = [];
         end
-    elseif contains(options.task,'punish')
-        if options.performing
-            stimTrials = trials{trials.isTone == 0 & trials.isStim == 1 ...
-                & trials.isPunishment == 1 & trials.performing == 1, ["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            stimOmissionTrials = trials{trials.isTone == 0 & trials.isStim == 1 ...
-                & trials.isPunishment == 0 & trials.performing == 1, ["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            pairTrials = trials{trials.isTone == 1 & trials.isStim == 1 ...
-                & trials.isPunishment == 1 & trials.performing == 1, ["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            pairOmissionTrials = trials{trials.isTone == 1 & trials.isStim == 1 ...
-                & trials.isPunishment == 0 & trials.performing == 1, ["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            toneTrials = trials{trials.isTone == 1 & trials.isStim == 0 ...
-                & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            stimIdx = stimTrials(:,2);
-            stimOmissionIdx = stimOmissionTrials(:,2);
-            pairIdx = pairTrials(:,2);
-            pairOmissionIdx = pairOmissionTrials(:,2);
-            toneIdx = toneTrials(:,2);
-        else
-            stimTrials = trials{trials.isTone == 0 & trials.isStim == 1 & trials.isPunishment == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            stimOmissionTrials = trials{trials.isTone == 0 & trials.isStim == 1 & trials.isPunishment == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            pairTrials = trials{trials.isTone == 1 & trials.isStim == 1 & trials.isPunishment == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            pairOmissionTrials = trials{trials.isTone == 1 & trials.isStim == 1 & trials.isPunishment == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            toneTrials = trials{trials.isTone == 1 & trials.isStim == 0 & trials.isPunishment == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            toneOmissionTrials = trials{trials.isTone == 1 & trials.isStim == 0 & trials.isPunishment == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            if isempty(toneTrials) && ~isempty(toneOmissionTrials)
-                toneTrials = toneOmissionTrials;
+    else
+        if contains(options.task,'reward')
+            if options.performing
+                stimTrials = trials{trials.isTone == 0 & trials.isStim == 1 ...
+                    & trials.isReward == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                stimOmissionTrials = trials{trials.isTone == 0 & trials.isStim == 1 ...
+                    & trials.isReward == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                pairTrials = trials{trials.isTone == 1 & trials.isStim == 1 ...
+                    & trials.isReward == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                pairOmissionTrials = trials{trials.isTone == 1 & trials.isStim == 1 ...
+                    & trials.isReward == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                toneTrials = trials{trials.isTone == 1 & trials.isStim == 0 ...
+                    & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                stimIdx = stimTrials(:,2);
+                stimOmissionIdx = stimOmissionTrials(:,2);
+                pairIdx = pairTrials(:,2);
+                pairOmissionIdx = pairOmissionTrials(:,2);
+                toneIdx = toneTrials(:,2);
+            else
+                stimTrials = trials{trials.isTone == 0 & trials.isStim == 1 & trials.isReward == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                stimOmissionTrials = trials{trials.isTone == 0 & trials.isStim == 1 & trials.isReward == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                pairTrials = trials{trials.isTone == 1 & trials.isStim == 1 & trials.isReward == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                pairOmissionTrials = trials{trials.isTone == 1 & trials.isStim == 1 & trials.isReward == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                toneTrials = trials{trials.isTone == 1 & trials.isStim == 0 & trials.isReward == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                toneOmissionTrials = trials{trials.isTone == 1 & trials.isStim == 0 & trials.isReward == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                if isempty(toneTrials) && ~isempty(toneOmissionTrials)
+                    toneTrials = toneOmissionTrials;
+                end
+                stimIdx = stimTrials(:,2);
+                stimOmissionIdx = stimOmissionTrials(:,2);
+                pairIdx = pairTrials(:,2);
+                pairOmissionIdx = pairOmissionTrials(:,2);
+                toneIdx = toneTrials(:,2);
+                toneOmissionIdx = toneOmissionTrials(:,2);
             end
-            stimIdx = stimTrials(:,2);
-            stimOmissionIdx = stimOmissionTrials(:,2);
-            pairIdx = pairTrials(:,2);
-            pairOmissionIdx = pairOmissionTrials(:,2);
-            toneIdx = toneTrials(:,2);
-            toneOmissionIdx = toneOmissionTrials(:,2);
+        elseif contains(options.task,'punish')
+            if options.performing
+                stimTrials = trials{trials.isTone == 0 & trials.isStim == 1 ...
+                    & trials.isPunishment == 1 & trials.performing == 1, ["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                stimOmissionTrials = trials{trials.isTone == 0 & trials.isStim == 1 ...
+                    & trials.isPunishment == 0 & trials.performing == 1, ["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                pairTrials = trials{trials.isTone == 1 & trials.isStim == 1 ...
+                    & trials.isPunishment == 1 & trials.performing == 1, ["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                pairOmissionTrials = trials{trials.isTone == 1 & trials.isStim == 1 ...
+                    & trials.isPunishment == 0 & trials.performing == 1, ["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                toneTrials = trials{trials.isTone == 1 & trials.isStim == 0 ...
+                    & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                stimIdx = stimTrials(:,2);
+                stimOmissionIdx = stimOmissionTrials(:,2);
+                pairIdx = pairTrials(:,2);
+                pairOmissionIdx = pairOmissionTrials(:,2);
+                toneIdx = toneTrials(:,2);
+            else
+                stimTrials = trials{trials.isTone == 0 & trials.isStim == 1 & trials.isPunishment == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                stimOmissionTrials = trials{trials.isTone == 0 & trials.isStim == 1 & trials.isPunishment == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                pairTrials = trials{trials.isTone == 1 & trials.isStim == 1 & trials.isPunishment == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                pairOmissionTrials = trials{trials.isTone == 1 & trials.isStim == 1 & trials.isPunishment == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                toneTrials = trials{trials.isTone == 1 & trials.isStim == 0 & trials.isPunishment == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                toneOmissionTrials = trials{trials.isTone == 1 & trials.isStim == 0 & trials.isPunishment == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                if isempty(toneTrials) && ~isempty(toneOmissionTrials)
+                    toneTrials = toneOmissionTrials;
+                end
+                stimIdx = stimTrials(:,2);
+                stimOmissionIdx = stimOmissionTrials(:,2);
+                pairIdx = pairTrials(:,2);
+                pairOmissionIdx = pairOmissionTrials(:,2);
+                toneIdx = toneTrials(:,2);
+                toneOmissionIdx = toneOmissionTrials(:,2);
+            end
         end
     end
 

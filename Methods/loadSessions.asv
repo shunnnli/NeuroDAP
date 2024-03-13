@@ -258,7 +258,6 @@ if withNI
         channels = assignNIDAQChannel(analogNI, digitalNI,user=options.NISetup,...
             inverStim=options.invertStim,getConsecutive=options.getConsecutive);
         
-        % Save assigned channels separately for later analysis
         if strcmpi(options.NISetup,'Shun')
             leftLick = channels{1}; rightLick = channels{2};
             blink = channels{3}; gyro = channels{4}; photometry_raw = channels{5};
@@ -294,7 +293,7 @@ if withNI
             end
         elseif strcmpi(options.NISetup,'Kevin')
             save(dataOutputName,...
-                    'leftLick','rightLick','leftNose','rightNose',....
+                    'syncNI','leftLick','rightLick','leftNose','rightNose',....
                     'leftSolenoid','rightSolenoid','leftLED','rightLED','centerLED',...
                     'centerNose','rightLick_analog','-append');
         end

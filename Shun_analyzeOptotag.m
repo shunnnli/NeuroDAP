@@ -10,13 +10,19 @@ setenv('NEUROPIXEL_MAP_FILE', which('neuropixPhase3B2_kilosortChanMap.mat'));
 [~,~,~,blueGreenYellow,blueWhiteRed,~,bluePurpleRed] = loadColors;
 
 % Select session via uigetdir
-sessionpath = uigetdir('\\research.files.med.harvard.edu\neurobio\MICROSCOPE\Shun');
+sessionpath = uigetdir(osPathSwitch('\\research.files.med.harvard.edu\neurobio\MICROSCOPE\Shun'));
 dirsplit = strsplit(sessionpath,filesep); 
 sessionName = dirsplit{end}; session.projectPath = strcat('\\',fullfile(dirsplit{2:end-1})); clear dirsplit
 
 disp(strcat('********** ',sessionName,'**********'));
+load(strcat(sessionpath,filesep,'data_',sessionName,'.mat'));
 load(strcat(sessionpath,filesep,'sync_',sessionName,'.mat'));
 disp(['Session ',sessionName,' loaded']);
+
+% For Kevin
+session.apBin = 'NP1_012124_g0_t0.imec0.ap.bin';
+session.pathImec = '/Volumes/MICROSCOPE/Kevin/3-Experiments/5-InVivo/0-RawData/2024/012124/NP1_012124_g0/NP1_012124_g0_imec0/';
+session.sorterOutput = '/Volumes/MICROSCOPE/Kevin/3-Experiments/5-InVivo/0-RawData/2024/012124/NP1_012124_g0/kilosort2.5_output/sorter_output/';
 
 % Load waveforms
 gwfparams.fileName = session.apBin; gwfparams.nCh = 385;
@@ -31,12 +37,16 @@ filenamestruct = dir(fileName);
 dataTypeNBytes = numel(typecast(cast(0, gwfparams.dataType), 'uint8')); % Determine number of bytes per sample
 nSamp = filenamestruct.bytes/(gwfparams.nCh*dataTypeNBytes);  % Number of samples per channel
 mmf = memmapfile(fileName, 'Format', {gwfparams.dataType, [gwfparams.nCh nSamp], 'x'},'Writable',true);
-chMap = readNPY(fullfile(session.pathImec, 'channel_map.npy'))+1; % Order in which data was streamed to disk; must be 1-indexed for Matlab
+
+% chMap = readNPY(fullfile(session.pathImec, 'channel_map.npy'))+1; % Order in which data was streamed to disk; must be 1-indexed for Matlab
+%For kevin
+chMap = readNPY(fullfile(session.sorterOutput, 'channel_map.npy'))+1;
+
 nChInMap = numel(chMap);
 disp(['Finished: ', gwfparams.fileName,' for session ',sessionName,' loaded']);
 
 %% Load kilosort
-[clusterLabel,spike_times,spike_clusters,cluster_info] = readNPYData(session.pathImec);
+[clusterLabel,spike_times,spike_clusters,cluster_info] = readNPYData(session.sorterOutput); % originally pathImec
 
 % Decide which label is used for good unit
 answer = questdlg("Which label criteria will be used for good unit?",...
@@ -97,6 +107,19 @@ processed.ephys.signals = spikes;
 % ks.load()
 
 disp(['Finished: kilosort data for session ',sessionName,' loaded']);
+
+%% For Kevin: plot spikes of units aligned to some events
+
+leftReward = find(leftSolenoid);
+timeRange = [-1, 4];
+binSize = 0.01; % in sec
+[~,leftRewardSpikeRate,leftReward_params] = getSpikes(timeRange,binSize,leftReward,params);
+
+initializeFig(0.5,0.5);
+clusterList = [21, 23];
+plotSpikes(leftRewardSpikeRate,clusterList,timeRange,bluePurpleRed,average=false,unit='ms',smooth=true);
+plotEvent('Left reward',0,bluePurpleRed(1,:),unit='ms');
+xlabel('Time (s)'); ylabel('Spikes/s'); box off
 
 %% Generate laser-triggered firing rate for each good cluster
 
