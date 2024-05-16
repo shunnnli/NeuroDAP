@@ -25,6 +25,7 @@ arguments
     % if options.trialRange = [0/-1,3]; get trials [13,15,29,32] (ie get [1,3-0/3-(-1)])
 
     options.statsType string = 'All'
+    options.withStageArea logical = true
     options.empty logical = false
 
     options.trialConditions string
@@ -118,8 +119,8 @@ end
 
 % Update options.statsType
 if strcmpi(options.statsType,'All')
-    options.statsType = {'stageAvg','stageMax','stageMin'}; 
-    % options.statsType = {'stageAvg','stageMax','stageMin','stageArea'}; 
+    if ~options.withStageArea; options.statsType = {'stageAvg','stageMax','stageMin'}; 
+    else; options.statsType = {'stageAvg','stageMax','stageMin','stageArea'}; end
 end
 if ~iscell(options.statsType); options.statsType = {options.statsType}; end
 

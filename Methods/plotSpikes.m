@@ -33,7 +33,6 @@ end
 cmap = colormap(flipud(jet(length(clusterList))));
 ncolor = round(linspace(1,size(color,1),length(clusterList)));
 
-
 % Set axis
 if strcmp(options.unit,'ms')
     timeRange = timeRange .* 1000;

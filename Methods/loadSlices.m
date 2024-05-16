@@ -17,12 +17,12 @@ arguments
     options.baselineWindow double = 1:10000;
     options.peakWindow double = 2; % in ms
 
-    options.rawDataPath string
+    options.rawDataPath string = 'default'
 end
 
 %% Setup
 
-if ~isfield(options,'rawDataPath')
+if strcmp(options.rawDataPath,'default')
     options.rawDataPath = expPath;
 end
 

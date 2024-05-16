@@ -1,11 +1,11 @@
-function summary = concatAnalysis(sessionList)
+ function summary = concatAnalysis(sessionList)
 
 arguments
     sessionList cell
 end
 
 summary = struct([]);
-disp('Finished: summary.mat not found, created a new one');
+disp('Ongoing: summary.mat not found, creating a new one');
 
 % Group sessions to summary
 for s = 1:length(sessionList)

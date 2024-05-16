@@ -4,8 +4,9 @@ arguments
     analogNI double
     digitalNI double
     options.user string = 'Shun'
-    options.inverStim logical = true
+    options.invertStim logical = true
     options.getConsecutive logical = true
+    options.nidqFs double = 10000
 end
 
 if strcmpi('Shun',options.user)
@@ -42,13 +43,13 @@ if strcmpi('Shun',options.user)
     
     % Calculate length of each pulse
     if options.getConsecutive
-        airpuff = temp(1,:) .* getConsecutive(digitalNI(1,:))./nidq.Fs;
-        leftSolenoid = temp(3,:) .* getConsecutive(digitalNI(3,:))./nidq.Fs;
-        rightSolenoid = temp(4,:) .* getConsecutive(digitalNI(4,:))./nidq.Fs;
-        leftTone = temp(5,:) .* getConsecutive(digitalNI(5,:))./nidq.Fs;
-        rightTone = temp(6,:) .* getConsecutive(digitalNI(6,:))./nidq.Fs;
-        redLaser = temp(7,:) .* getConsecutive(digitalNI(7,:))./nidq.Fs;
-        blueLaser = temp(8,:) .* getConsecutive(digitalNI(8,:))./nidq.Fs;
+        airpuff = temp(1,:) .* getConsecutive(digitalNI(1,:))./options.nidqFs;
+        leftSolenoid = temp(3,:) .* getConsecutive(digitalNI(3,:))./options.nidqFs;
+        rightSolenoid = temp(4,:) .* getConsecutive(digitalNI(4,:))./options.nidqFs;
+        leftTone = temp(5,:) .* getConsecutive(digitalNI(5,:))./options.nidqFs;
+        rightTone = temp(6,:) .* getConsecutive(digitalNI(6,:))./options.nidqFs;
+        redLaser = temp(7,:) .* getConsecutive(digitalNI(7,:))./options.nidqFs;
+        blueLaser = temp(8,:) .* getConsecutive(digitalNI(8,:))./options.nidqFs;
     else
         airpuff = temp(1,:);
         leftSolenoid = temp(3,:);

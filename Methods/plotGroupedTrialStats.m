@@ -11,6 +11,7 @@ arguments
     options.eventRange   
     options.inTrialTable logical
     options.xlimIdx double = 0
+    options.ylim double
     options.dotSize double = 200
 
     % plotTraces options
@@ -88,6 +89,9 @@ for task = 1:length(stats)
             plotIndividual=options.plotIndividual,...
             individualColor=individualColor);
     end
+
+    % Adjust ylim
+    if isfield(options,'ylim'); ylim(options.ylim); end
 
     % Adjust xlim
     if options.xlimIdx ~= 0

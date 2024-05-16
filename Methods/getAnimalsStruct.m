@@ -8,6 +8,10 @@ animals = struct([]);
 animalList = unique({summary.animal});
 disp('Finished: animal.mat not found, created a new one');
 
+% Whether summary have stageArea
+if isfield(summary,'stageArea'); withStageArea = true;
+else; withStageArea = false; end
+
 for a = 1:length(animalList)
     animalIdx = find(cellfun(@(x) contains(x,animalList{a}), {summary.animal}));
     taskList = unique({summary(animalIdx).task});
@@ -30,7 +34,7 @@ for a = 1:length(animalList)
                                 eventRange=eventList{event},...
                                 taskRange=taskList{task},...
                                 signalRange=signalList{signal},...
-                                statsType='All');
+                                statsType='All',withStageArea=withStageArea);
 
                 row = size(animals,2) + 1;
                 animals(row).animal = animalList{a};
@@ -42,7 +46,7 @@ for a = 1:length(animalList)
                 animals(row).stageAvg.data = combined.stats.stageAvg{1};
                 animals(row).stageMax.data = combined.stats.stageMax{1};
                 animals(row).stageMin.data = combined.stats.stageMin{1};
-                animals(row).stageArea.data = combined.stats.stageArea{1};
+                if withStageArea; animals(row).stageArea.data = combined.stats.stageArea{1}; end
                 animals(row).timestamp = combined.timestamp;
                 animals(row).timeRange = combined.options.timeRange;
                 animals(row).finalFs = combined.options.finalFs;
