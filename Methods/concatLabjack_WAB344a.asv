@@ -64,7 +64,7 @@ if ~isfield(labjack,'record')
     labjack.nSignals = sum(labjack.record);
 end
 % If input is different from labjack.record
-if sum(labjack.record == options.record) ~= 3
+if sum(labjack.record == options.record) ~= 2
     disp(['labjack.record: ',num2str(labjack.record)]);
     disp(['options.recordLJ: ',num2str(options.record)]);
     if options.followOriginal
@@ -113,28 +113,27 @@ end
 % Log behavior signals
 rightSolenoid = output(mod(1:totalLen,numChannels)==6);
 rightLick = output(mod(1:totalLen,numChannels)==7);
-leftSpeaker = output(mod(1:totalLen,numChannels)==8);
-rightSpeaker = output(mod(1:totalLen,numChannels)==9);
+rightSpeaker = output(mod(1:totalLen,numChannels)==8);
+leftSpeaker = output(mod(1:totalLen,numChannels)==9);
 leftSolenoid = output(mod(1:totalLen,numChannels)==10);
 leftLick = output(mod(1:totalLen,numChannels)==11);
-
-initializeFig(0.5,1); tiledlayout(numChannels,1);
-for i = 1:numChannels
-    nexttile; plot(output(mod(1:totalLen,numChannels)==i)); 
-    title(num2str(i)); ylim([0,5]);
-end
 
 
 %% Plot photometry summary plot (skipped by default)
 if options.plot
     initializeFig(0.67,0.67);
-    nexttile; plot(sync_labjack); title('sync'); box off
+    nexttile; plot(sync_labjack); title('sync'); box off; %ylim([-5,5]);
     for i = 1:size(labjack.raw,1)
-        nexttile; plot(labjack.raw(i,:)); title(strcat(labjack.name{i},'(raw)')); box off
-        nexttile; plot(labjack.modulation(i,:)); title(strcat(labjack.name{i},'(mod)')); box off
+        nexttile; plot(labjack.raw(i,:)); title(strcat(labjack.name{i},'(raw)')); ylim([-5,5]); box off
+        nexttile; plot(labjack.modulation(i,:)); title(strcat(labjack.name{i},'(mod)')); ylim([-5,5]); box off
     end
 
-    nexttile; plot(rightSolenoid); title('Right solenoid'); ybox off 
+    nexttile; plot(rightSolenoid); title('Right solenoid'); ylim([-5,5]); box off 
+    nexttile; plot(rightLick); title('Right lick'); ylim([-5,5]); box off 
+    nexttile; plot(leftSpeaker); title('Left speaker - go cue'); ylim([-5,5]); box off 
+    nexttile; plot(rightSpeaker); title('Right speaker - nogo cue'); ylim([-5,5]); box off 
+    nexttile; plot(leftSolenoid); title('Left solenoid'); ylim([-5,5]); box off 
+    nexttile; plot(leftLick); title('Left lick'); ylim([-5,5]); box off
 
     saveas(gcf,strcat(options.outputPath,filesep,'Summary_labjack_raw.fig'));
 end
@@ -147,7 +146,10 @@ labjack.totalLen = totalLen;
 labjack.options = options;
 
 if options.save
-    save(strcat(options.outputPath,filesep,'data_labjack'),'labjack','sync_labjack','-v7.3');
+    save(strcat(options.outputPath,filesep,'data_labjack'),...
+        'labjack','sync_labjack',...
+        'rightSolenoid','rightLick','leftSpeaker','rightSpeaker',...
+        'leftSolenoid','leftLick','-v7.3');
     if options.saveDuplicate
         save(strcat(options.outputPath,filesep,'Photometry',filesep,'data_labjack'),'labjack','sync_labjack','-v7.3');
     end

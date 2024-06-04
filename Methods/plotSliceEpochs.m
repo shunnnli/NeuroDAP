@@ -14,7 +14,7 @@ arguments
     options.timeRange double = [-20,50] % in ms
     options.outputFs double = 10000
 
-    options.plotAll logical = false;
+    options.plotAll logical = true;
     options.nArtifactSamples double = 0 % in sample
     options.yScalePadding double = 0.1; % in percentage
     options.VholdList double = [-70, 0, 8, 10, 12, 15, 18, 20];
@@ -24,14 +24,14 @@ arguments
     options.fitScatter logical = true % fit scatter plot
 
     options.save logical = true; % save peaks and aucs
-    options.resultPath string = '/Volumes/MICROSCOPE/Shun/Project valence/Patch/';
+    options.resultPath string = 'PreQC';
 end
 
 %% Load epoch file
 
 % Determine the number of input sessions
 if isempty(expPaths); error("ERROR: empty expPaths variable!!");
-elseif isstring(expPaths) || ischar(expPaths) || (iscell(expPaths) && length(expPaths) == 1)
+elseif isstring(expPaths) || ischar(expPaths) || (iscell(expPaths) && isscalar(expPaths))
     expPath = expPaths; clearvars expPaths;
     combine = false;
 else
@@ -78,6 +78,9 @@ analysisWindow = (options.eventSample+options.nArtifactSamples)-timeRangeStartSa
 
 [~,~,~,~,~,~,bluePurpleRed] = loadColors; 
 
+% Update resultPath
+options.resultPath = fullfile(epochs{1,'Session'},options.resultPath);
+
 %% Plot summary raw trace for each cell/epoch
 
 if ~combine
@@ -118,13 +121,15 @@ if ~combine
             legend(legendList);
             title(strcat('Cell #',num2str(cellList(c))));
         end
-        saveFigures(gcf,'Trace_cell_raw',epochs{1,'Session'},saveFIG=true,savePDF=true);
+        saveFigures(gcf,'Trace_cell_raw',options.resultPath,saveFIG=true,savePDF=true);
     end
     
     initializeFig(1,1); tiledlayout('flow');
-    for e = 1:size(epochs,1)
+    for row = 1:size(epochs,1)
         nexttile;
-        traces = epochs{e,'Raw sweeps'}{1}(:,plotWindow);
+        if options.plotAll; included = 1:size(epochs{row,'Raw sweeps'}{1},1);
+        else; included = epochs{row,'Included'}{1}; end
+        traces = epochs{row,'Raw sweeps'}{1}(included==1,plotWindow);
         plotSEM(timeRangeInms,traces,bluePurpleRed(1,:),...
                 meanOnly=true,plotIndividual=true);
         xlabel('Time (ms)');
@@ -133,9 +138,9 @@ if ~combine
         yMax = max(traces(:,analysisWindow),[],"all");
         yPad = abs(yMax-yMin)*options.yScalePadding;
         ylim([yMin-yPad,yMax+yPad]);
-        title(strcat('Epochs #',num2str(e)));
+        title(strcat('Epochs #',num2str(epochs{row,'Epoch'})));
     end
-    saveFigures(gcf,'Trace_epoch_raw',epochs{1,'Session'},saveFIG=true,savePDF=true);
+    saveFigures(gcf,'Trace_epoch_raw',options.resultPath,saveFIG=true,savePDF=true);
 end
 
 
@@ -178,13 +183,15 @@ if ~combine
             legend(legendList);
             title(strcat('Cell #',num2str(cellList(c))));
         end
-        saveFigures(gcf,'Trace_cell_processed',epochs{1,'Session'},saveFIG=true,savePDF=true);
+        saveFigures(gcf,'Trace_cell_processed',options.resultPath,saveFIG=true,savePDF=true);
     end
     
     initializeFig(1,1); tiledlayout('flow');
-    for e = 1:size(epochs,1)
+    for row = 1:size(epochs,1)
         nexttile;
-        traces = epochs{e,'Processed sweeps'}{1}(:,plotWindow);
+        if options.plotAll; included = 1:size(epochs{row,'Processed sweeps'}{1},1);
+        else; included = epochs{row,'Included'}{1}; end
+        traces = epochs{row,'Processed sweeps'}{1}(included==1,plotWindow);
         plotSEM(timeRangeInms,traces,bluePurpleRed(end,:),...
                 meanOnly=true,plotIndividual=true);
         xlabel('Time (ms)');
@@ -193,9 +200,9 @@ if ~combine
         yMax = max(traces(:,analysisWindow),[],"all");
         yPad = abs(yMax-yMin)*options.yScalePadding;
         ylim([yMin-yPad,yMax+yPad]);
-        title(strcat('Epochs #',num2str(e)));
+        title(strcat('Epochs #',num2str(epochs{row,'Epoch'})));
     end
-    saveFigures(gcf,'Trace_epoch_processed',epochs{1,'Session'},saveFIG=true,savePDF=true);
+    saveFigures(gcf,'Trace_epoch_processed',options.resultPath,saveFIG=true,savePDF=true);
 end
 
 %% Extract EPSC/IPSC statistics
@@ -381,7 +388,7 @@ xticks(groupsList); xticklabels(options.conditions(groupsList+1));
 ylabel('EPSC/IPSC AUC'); ylim([0,10]);
 
 % Save
-if ~combine; saveFigures(gcf,'Summary_EPSCvsIPSC',epochs{1,'Session'},saveFIG=true,savePDF=true);
+if ~combine; saveFigures(gcf,'Summary_EPSCvsIPSC',options.resultPath,saveFIG=true,savePDF=true);
 else
     saveFigures(gcf,'Summary_EPSCvsIPSC',...
         strcat(osPathSwitch(options.resultPath),expName(1:6)),...

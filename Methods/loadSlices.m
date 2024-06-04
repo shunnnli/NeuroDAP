@@ -52,7 +52,7 @@ withVhold = ~isempty(dir(fullfile(options.rawDataPath,"AD2*.mat")));
 withVholdAvg = length(epochList)==length(vholdList);
 
 if withVhold
-    varTypes = {'string','string','double','cell','cell','cell','cell',...
+    varTypes = {'string','double','double','cell','cell','cell','cell',...
                 'double','cell','cell','cell',...
                 'cell','cell',...
                 'cell','cell','cell'};
@@ -64,7 +64,7 @@ if withVhold
     epochs = table('Size',[length(epochList),length(varNames)],...
         'VariableTypes',varTypes,'VariableNames',varNames);
 else
-    varTypes = {'string','string','double','cell','cell','cell','cell',...
+    varTypes = {'string','double','double','cell','cell','cell','cell',...
                 'double',...
                 'cell','cell',...
                 'cell','cell','cell'};
@@ -214,7 +214,7 @@ for row = 1:size(epochList,1)
 
     %% Store everything in epochs
     epochs{epoch,'Session'} = string(options.rawDataPath);
-    epochs{epoch,'Epoch'} = string(epochList{row,1});
+    epochs{epoch,'Epoch'} = epoch; %string(epochList{row,1});
     epochs{epoch,'Included'} = num2cell(included,[1 2]);
     epochs{epoch,'Sweep names'} = num2cell(sweepAcq,[1 2]);
     epochs{epoch,'Raw sweeps'} = num2cell(sweeps,[1 2]);
@@ -240,7 +240,7 @@ end
 epochs = rmmissing(epochs);
 
 % If vhold never have -70, plot by each epoch
-if length(unique(epochs{:,'Cell'})) == 1
+if isscalar(unique(epochs{:,'Cell'}))
     epochs{:,3} = (1:size(epochs,1))';
 end
 

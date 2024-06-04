@@ -26,6 +26,9 @@ load(strcat(pathPhotometry,'info.mat'));
 D = dir(strcat(pathPhotometry,'Raw_*.mat')); 
 filename = {D.name}; load(strcat(pathPhotometry,filename{1}));
 
+% Remove the first file to get rid of artifact
+filename = filename(2:end); D = D(2:end);
+
 %% Store mod related signal
 if ~exist('labjack','var')
     disp("concatLabjack: 'params' not found, build from current info.");
@@ -113,8 +116,8 @@ end
 % Log behavior signals
 rightSolenoid = output(mod(1:totalLen,numChannels)==6);
 rightLick = output(mod(1:totalLen,numChannels)==7);
-leftSpeaker = output(mod(1:totalLen,numChannels)==8);
-rightSpeaker = output(mod(1:totalLen,numChannels)==9);
+rightSpeaker = output(mod(1:totalLen,numChannels)==8);
+leftSpeaker = output(mod(1:totalLen,numChannels)==9);
 leftSolenoid = output(mod(1:totalLen,numChannels)==10);
 leftLick = output(mod(1:totalLen,numChannels)==11);
 
@@ -130,8 +133,8 @@ if options.plot
 
     nexttile; plot(rightSolenoid); title('Right solenoid'); ylim([-5,5]); box off 
     nexttile; plot(rightLick); title('Right lick'); ylim([-5,5]); box off 
-    nexttile; plot(leftSpeaker); title('Left speaker'); ylim([-5,5]); box off 
-    nexttile; plot(rightSpeaker); title('Right speaker'); ylim([-5,5]); box off 
+    nexttile; plot(leftSpeaker); title('Left speaker - go cue'); ylim([-5,5]); box off 
+    nexttile; plot(rightSpeaker); title('Right speaker - nogo cue'); ylim([-5,5]); box off 
     nexttile; plot(leftSolenoid); title('Left solenoid'); ylim([-5,5]); box off 
     nexttile; plot(leftLick); title('Left lick'); ylim([-5,5]); box off
 
