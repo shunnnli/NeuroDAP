@@ -2,9 +2,12 @@ function Rin = getRin(data, options)
 
 % Shun Li, 12/21/2023
 % Modified from phUtil_rcCheck_Rin by Bernardo Sabatini
+% Series resistance ~= input resistance
 
 arguments
     data double
+
+    options.calculate logical = true % if false, just extract relevant value from headerString
 
     options.headerString
     options.onset double
@@ -23,7 +26,9 @@ if ~isfield(options,'headerString')
     if ~isfield(options,["onset","pulseWidth"])
         error('Have to provide onset and pulseWith if headerString not provided!');
     end
-    
+    if ~options.calculate
+        error("Have to provide headerString if not calculate from raw trace!");
+    end
 else
     rc_pulse = phUtil_HeaderValue(options.headerString, 'state.phys.internal.pulseString_RCCheck');
     options.currentClamp = phUtil_HeaderValue(options.headerString,'state.phys.settings.currentClamp0');
@@ -32,6 +37,13 @@ else
     options.amplitude = phUtil_parsePulsePatternString(rc_pulse, 'amplitude');
     options.onset = phUtil_parsePulsePatternString(rc_pulse, 'delay');
     options.pulseWidth = phUtil_parsePulsePatternString(rc_pulse, 'pulseWidth');
+end
+
+%%
+if ~options.calculate
+    Rin = phUtil_HeaderValue(options.headerString,'state.phys.cellParams.rs0');
+
+    return
 end
 
 %% Calculate basic params

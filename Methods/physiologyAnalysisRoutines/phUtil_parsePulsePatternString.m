@@ -11,7 +11,9 @@ function val=phUtil_parsePulsePatternString(pString, param)
        if isempty(ffEqual) || isempty(ffSemi)
             disp([param ' malformed in ' pString]);
        else
-           vString=pString(ffEqual+ff+1:ffSemi+ff-1);
+           startIndex = ffEqual + ff + 1; startIndex = startIndex(1);
+           endIndex = ffSemi + ff - 1; endIndex = endIndex(1);
+           vString = pString(startIndex:endIndex);
        end
         val=str2double(vString);
     end

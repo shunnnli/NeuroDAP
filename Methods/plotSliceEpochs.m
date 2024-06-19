@@ -98,7 +98,7 @@ if ~combine
             nexttile; yMax = nan; yMin = nan; legendList = [];
             nColors = round(linspace(1,size(bluePurpleRed,1),size(cellEpochs,1)));
             for e = 1:size(cellEpochs,1)
-                if options.plotAll; included = 1:size(cellEpochs{1},1);
+                if options.plotAll; included = ones(size(cellEpochs{e,2},1),1);
                 else; included = cellEpochs{e,2}; end
                 traces = cellEpochs{e,1}(included==1,plotWindow);
                 if isempty(traces); continue; end
@@ -127,9 +127,10 @@ if ~combine
     initializeFig(1,1); tiledlayout('flow');
     for row = 1:size(epochs,1)
         nexttile;
-        if options.plotAll; included = 1:size(epochs{row,'Raw sweeps'}{1},1);
+        if options.plotAll; included = ones(size(epochs{row,'Raw sweeps'}{1},1),1);
         else; included = epochs{row,'Included'}{1}; end
         traces = epochs{row,'Raw sweeps'}{1}(included==1,plotWindow);
+        if isempty(traces); continue; end
         plotSEM(timeRangeInms,traces,bluePurpleRed(1,:),...
                 meanOnly=true,plotIndividual=true);
         xlabel('Time (ms)');
@@ -160,7 +161,7 @@ if ~combine
             nexttile; yMax = nan; yMin = nan; legendList = [];
             nColors = round(linspace(1,size(bluePurpleRed,1),size(cellEpochs,1)));
             for e = 1:size(cellEpochs,1)
-                if options.plotAll; included = 1:size(cellEpochs{1},1);
+                if options.plotAll; included = ones(size(cellEpochs{e,2},1),1);
                 else; included = cellEpochs{e,2}; end
                 traces = cellEpochs{e,1}(included==1,plotWindow);
                 if isempty(traces); continue; end
@@ -189,9 +190,10 @@ if ~combine
     initializeFig(1,1); tiledlayout('flow');
     for row = 1:size(epochs,1)
         nexttile;
-        if options.plotAll; included = 1:size(epochs{row,'Processed sweeps'}{1},1);
+        if options.plotAll; included = ones(size(epochs{row,'Processed sweeps'}{1},1),1);
         else; included = epochs{row,'Included'}{1}; end
         traces = epochs{row,'Processed sweeps'}{1}(included==1,plotWindow);
+        if isempty(traces); continue; end
         plotSEM(timeRangeInms,traces,bluePurpleRed(end,:),...
                 meanOnly=true,plotIndividual=true);
         xlabel('Time (ms)');

@@ -1,77 +1,116 @@
-function epochs = loadSlices(expPath,options)
+function epochs = loadSlices(exp,options)
 
 
 arguments
-    expPath string %full path of the session
+    exp  %full path of the session or epochs.mat
 
-    options.filterSignal logical = false;
-    options.filterSweeps logical = true; % remove sweeps that have different vhold
+    options.filterSignal logical = false
+    options.filterSweeps logical = true % If true, do not analyze sweeps with different Vhold (included == false)
 
-    options.save logical = true;
-    options.reload logical = false;
+    options.save logical = true
+    options.reload logical = false
+    options.calculateQC logical = false
+    
+    options.animal string
+    options.task string = 'random'
 
     options.outputFs double = 10000
-    options.timeRange double = [-20,50] % in ms
+    options.timeRange double = [-20,100] % in ms
     options.eventSample double = 10000 % in sample
     options.nArtifactSamples double = 0 % in sample
     options.baselineWindow double = 1:10000;
     options.peakWindow double = 2; % in ms
 
     options.rawDataPath string = 'default'
+    options.saveDataPath string
 end
 
-%% Setup
-
-if strcmp(options.rawDataPath,'default')
-    options.rawDataPath = expPath;
-end
-
-% Decide reload if session has already been loaded
-dirsplit = split(expPath,filesep); expName = dirsplit{end};
-if ~isempty(dir(fullfile(expPath,"epochs_*.mat")))
-    if ~options.reload
-        disp('Loading stop: epochs file found.');
-        load(strcat(expPath,filesep,'epochs_',expName,'.mat'));
-        return; 
-    end
-else
-    options.reload = true;
-end
+%% General setup
 
 timeRangeStartSample = options.eventSample + options.outputFs*options.timeRange(1)/1000;
 timeRangeEndSample = options.eventSample + options.outputFs*options.timeRange(2)/1000;
 analysisWindow = (options.eventSample+options.nArtifactSamples) : timeRangeEndSample;
 peakWindowWidth = (options.peakWindow/(2*1000)) * options.outputFs;
 
+% Determine processing type
+% If exp is epochs.mat, then only analyze rows/neurons in epochs.mat 
+% (reprocess signal for postQC data)
+if ischar(exp); createNewEpoch = true;
+elseif istable(exp); createNewEpoch = false; end
+
+if strcmp(options.rawDataPath,'default')
+    if createNewEpoch; options.rawDataPath = exp;
+    else; options.rawDataPath = exp{1,"Session"}; end
+    options.saveDataPath = options.rawDataPath;
+else
+    if createNewEpoch; options.saveDataPath = exp;
+    else; options.saveDataPath = exp{1,"Session"}; end
+end
+
+if createNewEpoch
+    % Decide reload if session has already been loaded
+    dirsplit = split(exp,filesep); expName = dirsplit{end};
+    if ~isempty(dir(fullfile(exp,"epochs_*.mat")))
+        if ~options.reload
+            disp('Loading stop: epochs file found.');
+            load(strcat(exp,filesep,'epochs_',expName,'.mat'));
+            return; 
+        end
+    else
+        options.reload = true;
+    end
+else
+    dirsplit = split(exp{1,"Session"},filesep); expName = dirsplit{end};
+end
+
 %% Grab corresponding recordings through epoch average files
-epochList = sortrows(struct2cell(dir(fullfile(expPath,['AD0_e*','p1avg.mat'])))',3);
-vholdList = sortrows(struct2cell(dir(fullfile(options.rawDataPath,['AD2_e*','p1avg.mat'])))',3);
+
+if createNewEpoch
+    epochList = sortrows(struct2cell(dir(fullfile(exp,['AD0_e*','p1avg.mat'])))',3);
+    vholdList = sortrows(struct2cell(dir(fullfile(options.rawDataPath,['AD2_e*','p1avg.mat'])))',3);
+else
+    epochList = {};
+    for i = 1:size(exp,1)
+        epochPath = strcat(filesep,'AD0_e',num2str(exp{i,"Epoch"}),'p1avg.mat');
+        epochList = [epochList; struct2cell(dir(fullfile(strcat(exp{:,"Session"}{i}, epochPath))))'];
+    end
+    vholdList = {};
+    for i = 1:size(exp,1)
+        vholdPath = strcat(filesep,'AD2_e',num2str(exp{i,"Epoch"}),'p1avg.mat');
+        vholdList = [vholdList; struct2cell(dir(fullfile(strcat(exp{:,"Session"}{i}, vholdPath))))'];
+    end
+end
 
 % Check whether there's AD2 to record Vhold
 withVhold = ~isempty(dir(fullfile(options.rawDataPath,"AD2*.mat")));
 withVholdAvg = length(epochList)==length(vholdList);
 
+% Initialize epochs.mat
 if withVhold
-    varTypes = {'string','double','double','cell','cell','cell','cell',...
+    varTypes = {'string','string','string','double','double',...
+                'cell','cell','cell','cell',...
                 'double','cell','cell','cell',...
                 'cell','cell',...
                 'cell','cell','cell'};
-    varNames = {'Session','Epoch','Cell','Included','Sweep names','Raw sweeps','Processed sweeps',...
-        'Vhold epoch mean','Vhold sweep mean',...
-        'Vhold epoch trace','Vhold sweep trace',...
-        'Peaks','AUCs',...
-        'Rin','Rs','Cm'};
+    varNames = {'Session','Animal','Task','Epoch','Cell',...
+                'Included','Sweep names','Raw sweeps','Processed sweeps',...
+                'Vhold epoch mean','Vhold sweep mean',...
+                'Vhold epoch trace','Vhold sweep trace',...
+                'Peaks','AUCs',...
+                'Rs','Rm','Cm'};
     epochs = table('Size',[length(epochList),length(varNames)],...
         'VariableTypes',varTypes,'VariableNames',varNames);
 else
-    varTypes = {'string','double','double','cell','cell','cell','cell',...
+    varTypes = {'string','string','string','double','double',...
+                'cell','cell','cell','cell',...
                 'double',...
                 'cell','cell',...
                 'cell','cell','cell'};
-    varNames = {'Session','Epoch','Cell','Included','Sweep names','Raw sweeps','Processed sweeps',...
+    varNames = {'Session','Animal','Task','Epoch','Cell',...
+                'Included','Sweep names','Raw sweeps','Processed sweeps',...
                 'Vhold epoch mean',...
                 'Peaks','AUCs',...
-                'Rin','Rs','Cm'};
+                'Rs','Rm','Cm'};
     epochs = table('Size',[length(epochList),length(varNames)],...
         'VariableTypes',varTypes,'VariableNames',varNames);
 end
@@ -91,8 +130,8 @@ for row = 1:size(epochList,1)
     processed = zeros(size(sweeps));
     AUCs = zeros(length(sweepAcq),1);
     peaks = zeros(length(sweepAcq),1);
-    Rins = zeros(length(sweepAcq),1);
     Rss = zeros(length(sweepAcq),1);
+    Rms = zeros(length(sweepAcq),1);
     Cms = zeros(length(sweepAcq),1);
 
     % Load Vhold for epoch avg file
@@ -129,13 +168,13 @@ for row = 1:size(epochList,1)
         sweeps(k,:) = raw_trace;
 
 
-        % Calculate quality metrics
-        % Rin
-        Rins(k) = getRin(raw_trace,headerString=eval([sweepAcq{k},'.UserData.headerString']));
-        % Rs
-        % Rss(k) = getRs();
-        % Cm
-        % Cms(k) = getCm();
+        % Extract quality metrics from header string
+        qc = getCellQC(raw_trace,calculate=options.calculateQC,...
+                    headerString=eval([sweepAcq{k},'.UserData.headerString']));
+        Rss(k) = qc.Rs;
+        Rms(k) = qc.Rm;
+        Cms(k) = qc.Cm;
+        
 
         % Process trace: mean-subtracted, optional LP
         % Mean subtraction
@@ -204,16 +243,23 @@ for row = 1:size(epochList,1)
 
 
     % Remove empty/erraneous sweeps (optional)
-    if options.filterSweeps && withVhold
-        rounded_epoch_vhold = roundToTarget(vholdEpochMean,[-70,0,8]);
-        rounded_sweeps_vhold = roundToTarget(vholdSweepsMean,[-70,0,8]);
-        included = (rounded_sweeps_vhold == rounded_epoch_vhold);
+    if createNewEpoch
+        if options.filterSweeps && withVhold
+            % rounded_epoch_vhold = roundToTarget(vholdEpochMean,[-70,0,8]);
+            % rounded_sweeps_vhold = roundToTarget(vholdSweepsMean,[-70,0,8]);
+            % included = (rounded_sweeps_vhold == rounded_epoch_vhold);
+            included = ~isoutlier(vholdSweepsMean,'mean');
+        else
+            included = ones(length(sweepAcq),1);
+        end
     else
-        included = ones(length(sweepAcq),1);
+        included = exp{epoch,"Included"};
     end
 
     %% Store everything in epochs
-    epochs{epoch,'Session'} = string(options.rawDataPath);
+    epochs{epoch,'Session'} = options.rawDataPath;
+    epochs{epoch,'Animal'} = options.animal;
+    epochs{epoch,'Task'} = options.task;
     epochs{epoch,'Epoch'} = epoch; %string(epochList{row,1});
     epochs{epoch,'Included'} = num2cell(included,[1 2]);
     epochs{epoch,'Sweep names'} = num2cell(sweepAcq,[1 2]);
@@ -221,8 +267,8 @@ for row = 1:size(epochList,1)
     epochs{epoch,'Processed sweeps'} = num2cell(processed,[1 2]);
     epochs{epoch,'Peaks'} = num2cell(peaks,[1 2]);
     epochs{epoch,'AUCs'} = num2cell(AUCs,[1 2]);
-    epochs{epoch,'Rin'} = num2cell(Rins,[1 2]);
     epochs{epoch,'Rs'} = num2cell(Rss,[1 2]);
+    epochs{epoch,'Rm'} = num2cell(Rms,[1 2]);
     epochs{epoch,'Cm'} = num2cell(Cms,[1 2]);
 
     if withVhold
@@ -245,8 +291,16 @@ if isscalar(unique(epochs{:,'Cell'}))
 end
 
 if options.save
-    save(strcat(expPath,filesep,'epochs_',expName),'epochs','-v7.3');
-    disp(strcat("Saved: ",expName));
+    if createNewEpoch
+        save(strcat(options.saveDataPath,filesep,'epochs_',expName),'epochs','-v7.3');
+        disp(strcat("New epochs.mat created & saved: ",expName));
+    else
+        % Save old epochs
+        today = char(datetime('today','Format','yyyyMMdd'));
+        save(strcat(options.saveDataPath,filesep,'epochs_',today),'exp','-v7.3');
+        save(strcat(options.saveDataPath,filesep,'epochs_',expName),'epochs','-v7.3');
+        disp(strcat("Existing epochs.mat reprocessed: ",expName));
+    end
 end
 
 end

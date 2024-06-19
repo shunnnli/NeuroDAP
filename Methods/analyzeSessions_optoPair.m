@@ -24,6 +24,8 @@ arguments
     options.plotBehavior logical = true % Plot lick raster summary plot
 
     options.lick_binSize double = 0.1
+    options.shortTimeRange double = [-1,5]
+    options.longTimeRange double = [-5,10]
 end
 
 %% Notes
@@ -525,7 +527,7 @@ if options.plotPhotometry
         name = timeSeries(path).name;
         
         %% Plot combined PSTH
-        timeRange = [-1,5];
+        timeRange = options.shortTimeRange;
         % 2. Plot traces
         % Determine figure layout 
         if params.session.withCamera && params.session.withEyeTracking
@@ -694,17 +696,17 @@ if options.plotPhotometry
             if strcmp(params.stim.color,'red')
                 eventIdxes = {stimIdx,waterLickIdx,toneIdx,airpuffIdx,blueStimIdx};
                 labels = {'Stim','Water','Tone','Airpuff','Blue stim'};
-                eventDurations = [0.5,0,0.5,0.02,0.01];
-                groupSizes = [20,30,10,30,10];
-                longTimeRange = [-5,10];
-                shortTimeRange = [-1,5]; 
+                eventDurations = [params.stim.stimDuration/1000,0,0.5,0.02,0.01];
+                groupSizes = [30,30,10,30,10];
+                longTimeRange = options.longTimeRange;
+                shortTimeRange = options.shortTimeRange; 
             else
                 eventIdxes = {stimIdx,waterLickIdx,toneIdx,airpuffIdx,redStimIdx};
                 labels = {'Stim','Water','Tone','Airpuff','Red stim'};
-                eventDurations = [0.5,0,0.5,0.02,0.01];
-                groupSizes = [20,30,10,30,10];
-                longTimeRange = [-5,10];
-                shortTimeRange = [-1,5]; 
+                eventDurations = [params.stim.stimDuration/1000,0,0.5,0.02,0.01];
+                groupSizes = [30,30,10,30,10];
+                longTimeRange = options.longTimeRange;
+                shortTimeRange = options.shortTimeRange; 
             end
             
             for event = 1:length(eventIdxes)
@@ -761,18 +763,18 @@ if options.plotPhotometry
                 eventIdxes = {stimIdx,pairIdx,toneIdx,waterLickIdx,airpuffIdx,blueStimIdx};
                 omissionIdxes = {stimOmissionIdx, pairOmissionIdx,toneOmissionIdx,[],[],[]};
                 labels = {'Stim','Pair','Tone','Water','Airpuff','Blue stim'};
-                eventDurations = [0.5,0.5,0.5,0,0.02,0.01];
+                eventDurations = [params.stim.stimDuration/1000,0.5,0.5,0,0.02,0.01];
                 groupSizes = [10,10,10,30,30,10];
-                longTimeRange = [-5,10];
-                shortTimeRange = [-1,5]; 
+                longTimeRange = options.longTimeRange;
+                shortTimeRange = options.shortTimeRange; 
             else
                 eventIdxes = {stimIdx,pairIdx,toneIdx,waterLickIdx,airpuffIdx,redStimIdx};
                 omissionIdxes = {stimOmissionIdx, pairOmissionIdx,toneOmissionIdx,[],[],[]};
                 labels = {'Stim','Pair','Tone','Water','Airpuff','Red stim'};
-                eventDurations = [0.5,0.5,0.5,0,0.02,0.01];
+                eventDurations = [params.stim.stimDuration/1000,0.5,0.5,0,0.02,0.01];
                 groupSizes = [10,10,10,30,30,10];
-                longTimeRange = [-5,10];
-                shortTimeRange = [-1,5];
+                longTimeRange = options.longTimeRange;
+                shortTimeRange = options.shortTimeRange;
             end
             
             for event = 1:length(eventIdxes)
@@ -1040,7 +1042,7 @@ end
 
 if options.plotBehavior && contains(options.task,'pairing')     
     %% Plot session overview for licking
-    timeRange = [-5,10]; cameraTimeRange = [-1,5];
+    timeRange = options.longTimeRange; cameraTimeRange = options.shortTimeRange;
     markerSize = 20;
 
     % Get event time and number by trial type

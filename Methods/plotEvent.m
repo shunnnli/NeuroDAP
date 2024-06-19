@@ -13,6 +13,7 @@ arguments
     options.FaceAlpha double = 0.1
     options.LineWidth double = 1.5
     options.LineStyle string = '-'
+    options.shadeOnly logical = false
 end
 
 % Check color is valid
@@ -31,7 +32,9 @@ ylimit = ylim; bottom = ylimit(1); top = ylimit(2);
 % Plot events
 patch([options.x duration duration options.x],[bottom bottom top top],options.color,...
         'FaceAlpha',options.FaceAlpha,'EdgeColor','none','HandleVisibility','off'); hold on
-xline(options.x,options.LineStyle,label,'Color',options.color,'LineWidth',options.LineWidth,'HandleVisibility','off'); hold on
+if ~options.shadeOnly
+    xline(options.x,options.LineStyle,label,'Color',options.color,'LineWidth',options.LineWidth,'HandleVisibility','off'); hold on
+end
 
 xlim([left right]);
 ylim([bottom top]);
