@@ -33,13 +33,7 @@ expPath = expPath{1};
 
 %% (Optional) Just load epochs.mat
 
-epochs = loadSlices(expPath,reload=sessionParams.reload,...
-                animal=sessionParams.Animal,task=task,...
-                timeRange=timeRange,...
-                filterSignal=false,filterSweeps=true,...
-                calculateQC=sessionParams.calculateQC,...
-                nArtifactSamples=nArtifactSamples,...
-                rawDataPath=rawDataPath);
+epochs = loadSlices(expPath,reload=sessionParams.reload);
 
 % Reprocess post QC epochs.mat
 epochs = loadSlices(epochs,reload=sessionParams.reload,...
@@ -48,7 +42,8 @@ epochs = loadSlices(epochs,reload=sessionParams.reload,...
                 filterSignal=false,filterSweeps=true,...
                 calculateQC=sessionParams.calculateQC,...
                 nArtifactSamples=nArtifactSamples,...
-                rawDataPath=rawDataPath);
+                rawDataPath=rawDataPath,...
+                save=true);
 
 %% Load epoch for single session
 
@@ -103,7 +98,7 @@ return
 
 close all
 initializeFig(0.67, 0.5); tiledlayout(1,3);
-row = 5;
+row = 13;
 
 % Find event window
 timeRange = [-20,100];
@@ -248,10 +243,6 @@ disp('Moving finished');
 % epochs{newRow,"Cm"}{1}(end-length(sweepIdx)) = [];
 % 
 % disp('Undo moving finished');
-
-%% Test for quality control code
-
-Rin = getRin(raw_trace,headerString=eval([sweepAcq{k},'.UserData.headerString']));
 
 %% Run Quality Control
 disp('Running Quality Control Check');

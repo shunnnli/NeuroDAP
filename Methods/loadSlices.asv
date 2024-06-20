@@ -128,13 +128,6 @@ for row = 1:size(epochList,1)
     namesplit = strsplit(epochList{row,1},{'e','p1avg'}); 
     epoch = str2double(namesplit{2});
     sweepAcq = eval(['AD0_e',num2str(epoch),'p1avg.UserData.Components']);
-
-    % Import processed numbers if post QC
-    if ~createNewEpoch
-        included = exp{row,"Included"}{1};
-        cellid = exp{row,"Cell"};
-        sweepAcq = exp{row,"Sweep names"}{1};
-    end
     
     % Initialize some temporary matrix
     sweeps = zeros(length(sweepAcq), size(eval(['AD0_e',num2str(epoch),'p1avg.data']),2));
@@ -158,6 +151,13 @@ for row = 1:size(epochList,1)
     elseif withVhold && ~withVholdAvg
         vholdAcq = sweepAcq;
         vholdSweeps = zeros(size(sweeps));
+    end
+
+    % Import processed numbers if post QC
+    if ~createNewEpoch
+        included = exp{row,"Included"}{1};
+        cellid = exp{row,"Cell"};
+        sweepAcq = exp{row,"Sweep names"}{1};
     end
 
     %% Load individual sweeps
@@ -286,8 +286,7 @@ for row = 1:size(epochList,1)
         epochs{row,'Vhold epoch trace'} = num2cell(vholdEpoch,[1 2]);
         epochs{row,'Vhold sweep trace'} = num2cell(vholdSweeps,[1 2]);
     else
-        if createNewEpoch; epochs{row,'Cell'} = epoch;
-        else; epochs{row,'Cell'} = cellid; end
+        epochs{row,'Cell'} = epoch;
         epochs{row,'Vhold epoch mean'} = 100;
     end
 end
