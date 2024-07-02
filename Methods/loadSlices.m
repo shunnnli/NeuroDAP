@@ -1,4 +1,4 @@
-function epochs = loadSlices(exp,options)
+function varargout = loadSlices(exp,options)
 
 
 arguments
@@ -35,19 +35,19 @@ peakWindowWidth = (options.peakWindow/(2*1000)) * options.outputFs;
 % Determine processing type
 % If exp is epochs.mat, then only analyze rows/neurons in epochs.mat 
 % (reprocess signal for postQC data)
-if ischar(exp); createNewEpoch = true;
-elseif istable(exp); createNewEpoch = false; end
+if ischar(exp); createNew = true;
+elseif istable(exp); createNew = false; end
 
 if strcmp(options.rawDataPath,'default')
-    if createNewEpoch; options.rawDataPath = exp;
+    if createNew; options.rawDataPath = exp;
     else; options.rawDataPath = exp{1,"Session"}; end
     options.saveDataPath = options.rawDataPath;
 else
-    if createNewEpoch; options.saveDataPath = exp;
+    if createNew; options.saveDataPath = exp;
     else; options.saveDataPath = exp{1,"Session"}; end
 end
 
-if createNewEpoch
+if createNew
     % Decide reload if session has already been loaded
     dirsplit = split(exp,filesep); expName = dirsplit{end};
     if ~isempty(dir(fullfile(exp,"epochs_*.mat")))
@@ -58,7 +58,7 @@ if createNewEpoch
                 if istable(exp); epochs = exp;
                 elseif exist('epochs_old','var') && istable(epochs_old); epochs = epochs_old; end
             end
-            return; 
+            return
         end
     else
         options.reload = true;
@@ -69,7 +69,7 @@ end
 
 %% Grab corresponding recordings through epoch average files
 
-if createNewEpoch
+if createNew
     epochList = sortrows(struct2cell(dir(fullfile(exp,['AD0_e*','p1avg.mat'])))',3);
     vholdList = sortrows(struct2cell(dir(fullfile(options.rawDataPath,['AD2_e*','p1avg.mat'])))',3);
 else
@@ -85,39 +85,24 @@ else
     end
 end
 
+% Initialize epochs.mat
+varTypes = {'string','string','string','double','double',...
+            'cell','cell','cell','cell',...
+            'cell','cell',...
+            'cell','cell','cell',...
+            'double','cell','cell','cell'};
+varNames = {'Session','Animal','Task','Epoch','Cell',...
+            'Included','Sweep names','Raw sweeps','Processed sweeps',...
+            'Peaks','AUCs',...
+            'Rs','Rm','Cm',...
+            'Vhold epoch mean','Vhold sweep mean','Vhold epoch trace','Vhold sweep trace'};
+epochs = table('Size',[length(epochList),length(varNames)],...
+    'VariableTypes',varTypes,'VariableNames',varNames);
+
+
 % Check whether there's AD2 to record Vhold
 withVhold = ~isempty(dir(fullfile(options.rawDataPath,"AD2*.mat")));
 withVholdAvg = length(epochList)==length(vholdList);
-
-% Initialize epochs.mat
-if withVhold
-    varTypes = {'string','string','string','double','double',...
-                'cell','cell','cell','cell',...
-                'double','cell','cell','cell',...
-                'cell','cell',...
-                'cell','cell','cell'};
-    varNames = {'Session','Animal','Task','Epoch','Cell',...
-                'Included','Sweep names','Raw sweeps','Processed sweeps',...
-                'Vhold epoch mean','Vhold sweep mean',...
-                'Vhold epoch trace','Vhold sweep trace',...
-                'Peaks','AUCs',...
-                'Rs','Rm','Cm'};
-    epochs = table('Size',[length(epochList),length(varNames)],...
-        'VariableTypes',varTypes,'VariableNames',varNames);
-else
-    varTypes = {'string','string','string','double','double',...
-                'cell','cell','cell','cell',...
-                'double',...
-                'cell','cell',...
-                'cell','cell','cell'};
-    varNames = {'Session','Animal','Task','Epoch','Cell',...
-                'Included','Sweep names','Raw sweeps','Processed sweeps',...
-                'Vhold epoch mean',...
-                'Peaks','AUCs',...
-                'Rs','Rm','Cm'};
-    epochs = table('Size',[length(epochList),length(varNames)],...
-        'VariableTypes',varTypes,'VariableNames',varNames);
-end
 
 %% Load individual epoch
 cellid = 0;
@@ -130,7 +115,7 @@ for row = 1:size(epochList,1)
     sweepAcq = eval(['AD0_e',num2str(epoch),'p1avg.UserData.Components']);
 
     % Import processed numbers if post QC
-    if ~createNewEpoch
+    if ~createNew
         included = exp{row,"Included"}{1};
         cellid = exp{row,"Cell"};
         sweepAcq = exp{row,"Sweep names"}{1};
@@ -246,14 +231,14 @@ for row = 1:size(epochList,1)
             vholdEpoch = mean(vholdSweeps(:,options.baselineWindow),1);
         end
 
-        if vholdEpochMean < -50 && createNewEpoch; cellid = cellid + 1; end
+        if vholdEpochMean < -50 && createNew; cellid = cellid + 1; end
 
         vholdSweepsMean = mean(vholdSweeps(:,1:20000),2);
     end
 
 
     % Remove empty/erraneous sweeps (optional)
-    if createNewEpoch
+    if createNew
         if options.filterSweeps && withVhold
             % rounded_epoch_vhold = roundToTarget(vholdEpochMean,[-70,0,8]);
             % rounded_sweeps_vhold = roundToTarget(vholdSweepsMean,[-70,0,8]);
@@ -286,9 +271,12 @@ for row = 1:size(epochList,1)
         epochs{row,'Vhold epoch trace'} = num2cell(vholdEpoch,[1 2]);
         epochs{row,'Vhold sweep trace'} = num2cell(vholdSweeps,[1 2]);
     else
-        if createNewEpoch; epochs{row,'Cell'} = epoch;
+        if createNew; epochs{row,'Cell'} = epoch;
         else; epochs{row,'Cell'} = cellid; end
         epochs{row,'Vhold epoch mean'} = 100;
+        epochs{row,'Vhold sweep mean'} = num2cell(100,[1 2]);
+        epochs{row,'Vhold epoch trace'} = num2cell(100,[1 2]);
+        epochs{row,'Vhold sweep trace'} = num2cell(100,[1 2]);
     end
 end
 
@@ -299,17 +287,27 @@ if isscalar(unique(epochs{:,'Cell'}))
     epochs{:,3} = (1:size(epochs,1))';
 end
 
+%% Save epochs.mat
 if options.save
-    if createNewEpoch
+    if createNew
         save(strcat(options.saveDataPath,filesep,'epochs_',expName),'epochs','-v7.3');
         disp(strcat("New epochs.mat created & saved: ",expName));
     else
         % Save old epochs
         today = char(datetime('today','Format','yyyyMMdd')); epochs_old = exp;
         save(strcat(options.saveDataPath,filesep,'epochs_',today),'epochs_old','-v7.3');
-        save(strcat(options.saveDataPath,filesep,'epochs_',expName),'epochs','-v7.3');
+        save(strcat(options.saveDataPath,filesep,'epochs_',expName),'epochs','-append');
         disp(strcat("Existing epochs.mat reprocessed: ",expName));
     end
 end
+
+%% Create cells.mat
+
+cells = getCellTable(epochs,save=options.save);
+
+%% Define output
+
+varargout(1) = epochs;
+varargout(2) = cells;
 
 end

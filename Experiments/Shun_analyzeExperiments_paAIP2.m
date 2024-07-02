@@ -179,7 +179,7 @@ end
 
 timeRange = [-0.5,3];
 eventRange = {'Stim','Pair','Tone'};
-animalRange = {'SL133','SL135','SL136'};%'All';
+animalRange = {'SL136'};%{'SL133','SL135','SL136'};%'All';
 taskRange = {'Reward1','Punish1','Reward2','Punish2'};
 totalTrialRange = 'All';
 trialRange = 'All';
@@ -250,9 +250,9 @@ for task = 1:length(taskRange)
             legend(legendList,'Location','northeast');
         end
     end
-    saveFigures(gcf,['Summary_paAIP2_',taskRange{task},'-',eventRange{event},'_',signalRange],...
-        strcat(resultspath),...
-        saveFIG=true,savePDF=true);
+    % saveFigures(gcf,['Summary_paAIP2_',taskRange{task},'-',eventRange{event},'_',signalRange],...
+    %     strcat(resultspath),...
+    %     saveFIG=true,savePDF=true);
 end
 % autoArrangeFigures
 
