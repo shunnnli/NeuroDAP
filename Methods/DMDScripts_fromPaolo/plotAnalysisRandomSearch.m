@@ -23,14 +23,14 @@ expPath = expPath{1};
 
 %% Luca's code
 
-cellList = dir(fullfile(expPath,'cell*'));
+cellList = dir(fullfile(expPathLuca,'cell*'));
 nCells = length(cellList);
 startDir = 1;
 
 loadCells = struct;
-selectedCells = ["cell4"];
+selectedCells = ["cell1"];
 
-queryFeature = 'heightPulsePeak';
+queryFeature = 'areaPulse';
 savePlots = 1;
 responseTimeWindow = num2str(500);
 
@@ -45,7 +45,7 @@ warning('off','MATLAB:unknownObjectNowStruct')
         if isequal(currentCell.name, selectedCells(iSelectedCell))
             
             disp(['****** Loaded ' currentCell.name ' ******'])
-            cellPath = [expPath filesep cellList(iCell).name];
+            cellPath = [expPathLuca filesep cellList(iCell).name];
             processedDataPath = [cellPath filesep 'ProcessedData' filesep 'Data'];
             analyzedDataFolderName = 'Analysis';
             analyzedDataFolderPath = [cellPath filesep analyzedDataFolderName];

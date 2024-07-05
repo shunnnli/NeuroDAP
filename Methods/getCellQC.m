@@ -30,20 +30,19 @@ if ~isfield(options,'headerString')
         error("Have to provide headerString if not calculate from raw trace!");
     end
 else
-    rc_pulse = phUtil_HeaderValue(options.headerString, 'state.phys.internal.pulseString_RCCheck');
-    options.currentClamp = phUtil_HeaderValue(options.headerString,'state.phys.settings.currentClamp0');
-    options.Fs = phUtil_HeaderValue(options.headerString,'state.phys.settings.inputRate', 1); % ms
+    options.currentClamp = getHeaderValue(options.headerString,'state.phys.settings.currentClamp0');
+    options.Fs = getHeaderValue(options.headerString,'state.phys.settings.inputRate', convert=true); % ms
 
-    options.amplitude = phUtil_parsePulsePatternString(rc_pulse, 'amplitude');
-    options.onset = phUtil_parsePulsePatternString(rc_pulse, 'delay');
-    options.pulseWidth = phUtil_parsePulsePatternString(rc_pulse, 'pulseWidth');
+    options.amplitude = getHeaderValue(options.headerString,'state.phys.internal.pulseString_RCCheck', pulseVar='amplitude');
+    options.onset = getHeaderValue(options.headerString,'state.phys.internal.pulseString_RCCheck', pulseVar='delay');
+    options.pulseWidth = getHeaderValue(options.headerString,'state.phys.internal.pulseString_RCCheck', pulseVar='pulseWidth');
 end
 
 %% Extract from headerString
 if ~options.calculate
-    qc.Rs = str2double(phUtil_HeaderValue(options.headerString,'state.phys.cellParams.rs0'));
-    qc.Rm = str2double(phUtil_HeaderValue(options.headerString,'state.phys.cellParams.rm0'));
-    qc.Cm = str2double(phUtil_HeaderValue(options.headerString,'state.phys.cellParams.cm0'));
+    qc.Rs = getHeaderValue(options.headerString,'state.phys.cellParams.rs0',convert=true);
+    qc.Rm = getHeaderValue(options.headerString,'state.phys.cellParams.rm0',convert=true);
+    qc.Cm = getHeaderValue(options.headerString,'state.phys.cellParams.cm0',convert=true);
     return
 end
 

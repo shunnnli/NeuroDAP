@@ -324,8 +324,10 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
             labjack.name(find(~labjack.record)) = [];
             updateLabjack = true;
         end
-        if sum(labjack.record == options.recordLJ) ~= length(labjack.record)
-            disp(['labjack.record: ',labjack.record]);
+        %if sum(labjack.record == options.recordLJ)~=length(labjack.record) 
+        %edited by Emily 6/28/24 to work with new rig
+        if size(labjack.record) ~= size(options.recordLJ)
+        disp(['labjack.record: ',labjack.record]);
             disp(['options.recordLJ: ',options.recordLJ]);
             warning(['labjack.record does not agree with recordLJ, use labjack.record = ',num2str(labjack.record)]); 
         end
