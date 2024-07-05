@@ -64,8 +64,8 @@ if options.plotSearch
 
             % Save figure
             filename = curCell.Epochs{1}{search};
-            filepath = fullfile(options.saveDataPath,['cell',num2str(curCell.Cell)],'Search summary');
-            saveFigures(gcf,[filename,'_',curCell.Options{1}.feature],filepath);
+            filepath = fullfile(options.saveDataPath,['cell',curCell.Cell],)
+            saveFigures(gcf,[filename,'_',curCell.Options{1}.feature],expPath);
         end
     end
 end
@@ -123,7 +123,7 @@ if options.plotPairs
     
             % Save figure
             pairEpochs = curCell.('Difference map'){1}.pair{sameVholdIdx(p)};
-            filepath = fullfile(options.saveDataPath,['cell',num2str(curCell.Cell)],'Same Vhold pairs');
+            filepath = fullfile(expPath,'cell',num2str(curCell.Cell),'Same Vhold pairs');
             filename = ['spots_cell',num2str(curCell.Cell),'_DiffResponse_epoch',...
                         num2str(pairEpochs(1)),'vs',num2str(pairEpochs(2))];
             saveFigures(gcf,[filename,'_',curCell.Options{1}.feature],filepath);
@@ -173,7 +173,7 @@ if options.plotPairs
     
             % Save figure
             pairEpochs = curCell.('Difference map'){1}.pair{diffVholdIdx(p)};
-            filepath = fullfile(options.saveDataPath,['cell',num2str(curCell.Cell)],'Different Vhold pairs');
+            filepath = fullfile(expPath,'cell',num2str(curCell.Cell),'Different Vhold pairs');
             filename = ['spots_cell',num2str(curCell.Cell),'_NetResponse_epoch',...
                         num2str(pairEpochs(1)),'vs',num2str(pairEpochs(2))];
             saveFigures(gcf,[filename,'_',curCell.Options{1}.feature],filepath);

@@ -48,7 +48,7 @@ loadSlicesDMD(epochs,reload=true);%sessionParams.reload);
 
 %% Plot search results
 
-cells = analyzeSlice_DMD(expPath,reload=false,plotDepthResponseMap=true);
+cells = analyzeSlice_DMD(expPath,plotSearch=false,plotPairs=true);
 return
 
 %% Luca's code
