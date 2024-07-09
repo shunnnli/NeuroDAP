@@ -10,16 +10,16 @@ arguments
 
     options.save logical = true
     options.reload logical = false
-    options.reloadSpots logical = true
+    options.reloadCells logical = false
     options.calculateQC logical = false
 
     options.outputFs double = 10000
     options.timeRange double = [-20,100] % in ms
-    options.controlWindowLength double = 50 % in ms before the stim onset
+    options.controlWindow double = 50 % in ms before the stim onset
     options.eventSample % in sample
     options.nArtifactSamples double = 0 % in sample
     options.rcCheckRecoveryWindow double = 100 % in ms
-    options.peakWindow double = 2; % in ms around the peak to average
+    options.peakWindow double = 2 % in ms around the peak to average
 
     options.feature = 'auc'
 
@@ -29,38 +29,32 @@ end
 
 %% General setup
 
+today = char(datetime('today','Format','yyyyMMdd'));
+dirsplit = split(epochs{1,"Session"},filesep); expName = dirsplit{end};
+
+% Decide reload if session has already been loaded
+if options.reload
+    options.reloadCells = true;
+    resultsFolderName = ['Results_',today];
+else
+    resultsList = sortrows(struct2cell(dir(fullfile(epochs{1,"Session"},'Results_*')))',3);
+    resultsPath = fullfile(resultsList{end,2},resultsList{end,1},'cell1','spots_*.mat');
+    if ~isempty(resultsPath)
+        disp('Loading stop: spots file found.');
+        resultsFolderName = resultsList{end,1};
+        if ~options.reloadCells; return; end
+    end
+end
+
 % Determine data path
 % 1. If saveDataPath == 'default', save files in saveDataPath = rawDataPath
 % 2. If saveDataPath ~= 'default', saveDataPath should be specified by the user
 % 3. "Sessions" in epochs and cells table should be the same as rawDataPath
 if strcmp(options.saveDataPath,'default')
     options.rawDataPath = epochs{1,"Session"};
-    options.saveDataPath = options.rawDataPath;
+    options.saveDataPath = strcat(options.rawDataPath,filesep,resultsFolderName);
 else
     options.rawDataPath = epochs{1,"Session"};
-end
-
-% Decide reload if session has already been loaded
-dirsplit = split(epochs{1,"Session"},filesep); expName = dirsplit{end};
-if ~isempty(dir(fullfile(epochs{1,"Session"},"spots_*.mat")))
-    if ~options.reload
-        disp('Loading stop: epochs file found.');
-        load(strcat(epochs{1,"Session"},filesep,'spots_',expName,'.mat'));
-        if ~exist('spots','var')
-            if istable(epochs); spots = spots;
-            elseif exist('epochs_old','var') && istable(epochs_old); spots = spots_old; end
-        end
-        return
-    else
-        if options.reloadSpots
-            % Collect all spots.mat and move them to a separate folder (name is the date)
-            storageFolder = ['spots_',char(datetime('today','Format','yyyyMMdd'))];
-            movefile(fullfile(epochs{1,"Session"},'spots_*'), fullfile(epochs{1,"Session"},storageFolder));
-        end
-    end
-else
-    options.reload = true;
-    options.reloadSpots = true;
 end
 
 % Turn off some warnings
@@ -85,21 +79,22 @@ cells = table('Size',[max(exp{:,'Cell'}),length(varNames)],...
     'VariableTypes',varTypes,'VariableNames',varNames);
 
 % Initialize other params
-cellResponseMap = {}; isResponseMap_cell = {}; 
+cellResponseMap = {}; isResponseMap_cell = {}; cellCurrentMap = {};
 cellVhold = []; cellEpochs = {};
 
 %% Iterate & analyze individual epoch
 
 for row = 1:size(exp,1)
     clearvars AD*
+    cellResultsPath = strcat(options.saveDataPath,filesep,['cell',num2str(exp{row,'Cell'})]);
 
-    if options.reloadSpots
+    if options.reload
         %% Load basic info
     
         % Initialize fullSearchTable pointer
         % Since I'm iterating sweep in order, the spots are correspond to the
         % order recorded in fullSearchTable
-        curSpot = 0;
+        curSpot = 0; prevDepth = 1;
     
         % Load fullSearchTable
         epoch = exp{row,'Epoch'};
@@ -118,7 +113,7 @@ for row = 1:size(exp,1)
         info = readtable(fullfile(epochPath,'InfoPatching.xlsx'),csvOpts);
         info = rmmissing(info,DataVariables="acq_");
     
-        %% Initialize epochs table
+        %% Initialize spots table
         
         varTypes = {'string','string','string','double','double','double',...
                     'double','double','string','cell','cell',...
@@ -185,14 +180,23 @@ for row = 1:size(exp,1)
             timeRangeStartSample = options.eventSample + options.outputFs*options.timeRange(1)/1000;
             timeRangeEndSample = options.eventSample + options.outputFs*options.timeRange(2)/1000;
             plotWindowLength = timeRangeEndSample(1) - timeRangeStartSample(1) + 1;
-            % plotWindowTime = linspace(options.timeRange(1),options.timeRange(2),plotWindowLength);
+            plotWindowTime = linspace(options.timeRange(1),options.timeRange(2),plotWindowLength);
     
             % Define control window: 50ms before each spot stim
-            controlWindowLength = options.controlWindowLength * options.outputFs/1000;
+            controlWindowLength = options.controlWindow * options.outputFs/1000;
     
             % Define time window for analysis
             peakWindowWidth = (options.peakWindow/(2*1000)) * options.outputFs;
             analysisWindow = abs(options.outputFs*options.timeRange(1)/1000):plotWindowLength;
+
+            % Save time windows to options
+            options.baselineWindow = baselineWindow;
+            options.baselineWindow_preStim = preStimWindow;
+            options.baselineWindow_postStim = postStimWindow;
+            options.analysisWindow = analysisWindow;
+            options.plotWindowLength = plotWindowLength;
+            options.peakWindowWidth = peakWindowWidth;
+            options.plotWindowTime = plotWindowTime;
     
     
             % Process trace: mean-subtracted, optional LP
@@ -221,7 +225,6 @@ for row = 1:size(exp,1)
             % Find baseline stats
             stats.baseline.avg = mean(processed_trace(baselineWindow));
             stats.baseline.std = std(processed_trace(baselineWindow));
-    
     
             % Determine Vhold
             % Find in .xlsx file first, if can't find, use the heuristic that
@@ -279,7 +282,7 @@ for row = 1:size(exp,1)
     
                 % Store data for the current spot
                 curSpot = curSpot + 1;
-                spots{curSpot,'Session'} = exp{row,'Session'};
+                spots{curSpot,'Session'} = cellResultsPath;
                 spots{curSpot,'Animal'} = exp{row,'Animal'};
                 spots{curSpot,'Task'} = exp{row,'Task'};
                 spots{curSpot,'Epoch'} = exp{row,'Epoch'};
@@ -297,37 +300,82 @@ for row = 1:size(exp,1)
                 spots{curSpot,'Cm'} = Cm;
                 spots{curSpot,'Options'} = {options};
             end
+
+            % Save spots.mat for a specific depth
+            % If not, spots are too big and matlab can't load later
+            if k == length(sweepAcq) || prevDepth ~= protocol.depth
+                if options.save
+                    % Generate spotsAtDepth
+                    if k == length(sweepAcq)
+                        spotsAtDepth = spots(spots.Depth == protocol.depth,:);
+                    else
+                        spotsAtDepth = spots(spots.Depth == prevDepth,:); 
+                        spots(spots.Depth == prevDepth,:) = [];
+                        spots = rmmissing(spots,DataVariables='Session');
+                    end
+                    spotsAtDepth = rmmissing(spotsAtDepth,DataVariables='Session');
+
+                    % Save spotsAtDepth
+                    filename = strcat('spots_cell',num2str(exp{row,'Cell'}),...
+                                      '_epoch',num2str(exp{row,'Epoch'}),...
+                                      '_depth',num2str(prevDepth));
+                    mkdir(cellResultsPath);
+                    save(fullfile(cellResultsPath,filename),'spotsAtDepth','-v7.3');
+                    disp(strcat("New spots.mat created & saved: ",filename));
+                    
+                    prevDepth = protocol.depth; clearvars AD*
+                end
+            end
         end
     
-        %% Save spots.mat
-        if options.save
-            filename = strcat('spots_cell',num2str(exp{row,'Cell'}),'_epoch',num2str(exp{row,'Epoch'}));
-            save(strcat(options.saveDataPath,filesep,filename),'spots','-v7.3');
-            disp(strcat("New spots.mat created & saved: cell ",num2str(exp{row,'Cell'}),', epoch ',num2str(exp{row,'Epoch'})));
-        end
+        % %% Save spots.mat
+        % if options.save
+        %     filename = strcat('spots_cell',num2str(exp{row,'Cell'}),'_epoch',num2str(exp{row,'Epoch'}));
+        %     save(strcat(options.saveDataPath,filesep,filename),'spots','-v7.3');
+        %     disp(strcat("New spots.mat created & saved: cell ",num2str(exp{row,'Cell'}),', epoch ',num2str(exp{row,'Epoch'})));
+        % end
         clearvars AD*
         disp('Ongoing: adding current search to cells_DMD.mat');
-    else
-        % Load corresponding spots.mat
-        filename = strcat('spots_cell',num2str(exp{row,'Cell'}),'_epoch',num2str(exp{row,'Epoch'}));
-        load(fullfile(filename,'.mat'));
+        
     end
     
     %% Loop through all searches and create cells.mat
 
     % Initialize params
-    depthList = unique(spots.Depth);
-    searchResponseMap = zeros(608,684,length(depthList));
-    isResponseMap_search = zeros(608,684,length(depthList));
-    cellVhold = [cellVhold; spots{1,'Vhold'}];
-    cellEpochs{end+1} = filename;
+    % depthList = unique(spots.Depth);
+    % searchResponseMap = zeros(608,684,length(depthList));
+    % isResponseMap_search = zeros(608,684,length(depthList));
+    % searchCurrentMap = cell(length(depthList),1);
+    % cellVhold = [cellVhold; spots{1,'Vhold'}];
+    % cellEpochs{end+1} = filename;
+
+    % Get a list of spots.mat file of a given cell and epoch
+    filename = strcat('spots_cell',num2str(exp{row,'Cell'}),'_epoch',num2str(exp{row,'Epoch'}));
+    depthfilename = strcat(filename,'_depth*.mat');
+    spotsList = dir(fullfile(cellResultsPath,depthfilename));
+    disp(['Ongoing: adding search epoch ', filename,' to cells_DMD.mat']);
+
+    % Initialize params
+    nDepth = length(spotsList);
+    searchResponseMap = zeros(608,684,nDepth);
+    isResponseMap_search = zeros(608,684,nDepth);
+    searchCurrentMap = cell(nDepth,1);
 
     % Loop through depth
-    for d = 1:length(depthList)
+    for depthIdx = 1:nDepth
         % Initialization
+        % d = depthList(depthIdx);
+        % spotsAtDepth = spots(spots.Depth == d,:);
+        depthFilePath = fullfile(spotsList(depthIdx).folder,spotsList(depthIdx).name);
+        load(depthFilePath,'spotsAtDepth');
+        % Get search depth
+        % dirsplit = split(spotsList(depthIdx).name,'_'); 
+        % d = str2double(dirsplit{end}(end-4));
+        d = spotsAtDepth{1,'Depth'};
+        
         depthResponseMap = zeros(608,684);
         isResponseMap_depth = zeros(608,684);
-        spotsAtDepth = spots(spots.Depth == d,:);
+        depthCurrentMap = zeros(4^d,size(spotsAtDepth{1,'Response'}{1}.processed,2));
     
         % Build response map
         for s = 1:size(spotsAtDepth,1)
@@ -351,35 +399,54 @@ for row = 1:size(exp,1)
             if originalValue_isResponse==0; isResponseMap_depth(xRange,yRange) = newValue_isResponse;
             else; isResponseMap_depth(xRange,yRange) = originalValue_isResponse || newValue_isResponse;
             end
+
+            % Get response trace
+            square_width = 608/2^d; square_height = 684/2^d;
+            x_index = floor(location(1) / square_width);
+            y_index = floor(location(3) / square_height);
+            spotIdx = y_index + x_index * 2^d + 1;
+            trace = spotsAtDepth{s,'Response'}{1}.processed;
+
+            % Add to current map
+            originalTrace = depthCurrentMap(spotIdx,:);
+            if mean(originalTrace)==0; depthCurrentMap(spotIdx,:) = trace;
+            else; depthCurrentMap(spotIdx,:) = (originalTrace + trace)/2;
+            end
         end        
 
         % Save depthResponseMap
         searchResponseMap(:,:,d) = depthResponseMap;
         isResponseMap_search(:,:,d) = isResponseMap_depth;
+        searchCurrentMap{d} = depthCurrentMap;
     end
 
     % Save response map
     cellResponseMap{end+1} = searchResponseMap;
     isResponseMap_cell{end+1} = isResponseMap_search;
+    cellCurrentMap{end+1} = searchCurrentMap;
 
     % Save to cell
-    if row == size(exp,1) || spots{1,'Cell'} ~= exp{row+1,'Cell'}
+    curCell = spotsAtDepth{1,'Cell'};
+    cellVhold = [cellVhold; spotsAtDepth{1,'Vhold'}];
+    cellEpochs{end+1} = filename;
+
+    if row == size(exp,1) || curCell ~= exp{row+1,'Cell'}
         responseMap.responseMap = cellResponseMap';
         responseMap.isResponseMap = isResponseMap_cell';
+        responseMap.currentMap = cellCurrentMap';
 
-        cells{spots{1,'Cell'},'Session'} = spots{1,'Session'};
-        cells{spots{1,'Cell'},'Animal'} = spots{1,'Animal'};
-        cells{spots{1,'Cell'},'Task'} = spots{1,'Task'};
-        cells{spots{1,'Cell'},'Cell'} = spots{1,'Cell'};
-        cells{spots{1,'Cell'},'Epochs'} = {cellEpochs'};
-        cells{spots{1,'Cell'},'Vhold'} = {cellVhold};
-        cells{spots{1,'Cell'},'Response map'} = {responseMap};
-        cells{spots{1,'Cell'},'Options'} = {options};
-        disp(['Finished: saving data for cell ',num2str(spots{1,'Cell'})]);
+        cells{curCell,'Session'} = options.saveDataPath;
+        cells{curCell,'Animal'} = spotsAtDepth{1,'Animal'};
+        cells{curCell,'Task'} = spotsAtDepth{1,'Task'};
+        cells{curCell,'Cell'} = curCell;
+        cells{curCell,'Epochs'} = {cellEpochs'};
+        cells{curCell,'Vhold'} = {cellVhold};
+        cells{curCell,'Response map'} = {responseMap};
+        cells{curCell,'Options'} = {options};
 
         % Update prevCell and reset cellResponseMap
         cellVhold = []; cellEpochs = {};
-        cellResponseMap = {}; isResponseMap_cell = {};
+        cellResponseMap = {}; isResponseMap_cell = {}; cellCurrentMap = {};
     end
 end
 
@@ -389,8 +456,8 @@ end
 % in AUC or other feature
 
 for c = 1:size(cells,1)
-    cell = cells(cells.Cell == c,:);
-    searchPerCell = length(cell.Vhold{1});
+    cellData = cells(cells.Cell == c,:);
+    searchPerCell = length(cellData.Vhold{1});
     diff_rmap_cell = {}; common_isResponse_cell = {}; 
     diff_pairs = {}; diff_vholds = [];
     
@@ -401,10 +468,10 @@ for c = 1:size(cells,1)
         % Analyze all pairs of searches
         for search2 = search1+1:searchPerCell
             % Get response map
-            search1_rmap = cell.("Response map"){1}.responseMap{search1};
-            search2_rmap = cell.("Response map"){1}.responseMap{search2};
-            search1_isResponse = cell.("Response map"){1}.isResponseMap{search1};
-            search2_isResponse = cell.("Response map"){1}.isResponseMap{search2};
+            search1_rmap = cellData.("Response map"){1}.responseMap{search1};
+            search2_rmap = cellData.("Response map"){1}.responseMap{search2};
+            search1_isResponse = cellData.("Response map"){1}.isResponseMap{search1};
+            search2_isResponse = cellData.("Response map"){1}.isResponseMap{search2};
 
             % Check max common depth
             maxCommonDepth = min([size(search1_rmap,3),size(search2_rmap,3)]);
@@ -414,7 +481,7 @@ for c = 1:size(cells,1)
             search2_isResponse = search2_isResponse(:,:,1:maxCommonDepth);
 
             % Check whether Vhold are the same
-            diffVhold = cell.Vhold{1}(search1) ~= cell.Vhold{1}(search2);
+            diffVhold = cellData.Vhold{1}(search1) ~= cellData.Vhold{1}(search2);
 
             % Initialize difference map
             diff_rmap = zeros(size(search1_rmap));

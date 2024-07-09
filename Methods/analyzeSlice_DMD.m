@@ -5,9 +5,15 @@ arguments
 
     options.save logical = true
     options.saveDataPath string = 'default'
+    options.savePNG logical = true
+    options.savePDF logical = true
+    options.saveFIG logical = true
 
     options.plotSearch logical = true
     options.plotPairs
+
+    options.timeRange double = [-20,100]
+    options.outputFs double = 10000
 end
 
 %% Setup
@@ -15,34 +21,88 @@ end
 [~,~,~,~,blueWhiteRed,~,~] = loadColors;
 
 if strcmp(options.saveDataPath,'default')
-    options.saveDataPath = fullfile(expPath,'Results');
+    today = char(datetime('today','Format','yyyyMMdd'));
+    options.saveDataPath = strcat(expPath,filesep,['Results_',today]);
 end
 
 % Decide reload if session has already been loaded
 dirsplit = split(expPath,filesep); expName = dirsplit{end};
-try load(strcat(expPath,filesep,'cells_DMD_',expName,'.mat'));
+try load(strcat(options.saveDataPath,filesep,'cells_DMD_',expName,'.mat'));
 catch
     error('Error: did not find cells_DMD.mat!');
+end
+
+% Define time window
+cellsOptions = cells{1,'Options'}{1};
+if options.outputFs ~= cellsOptions.outputFs
+    warning('analyzeSlice_DMD: Default options.outputFs differs from outputFs extracted from cells_DMD. Using cells_DMD value instead!');
+    options.outputFs = cellsOptions.outputFs;
+end
+if options.timeRange ~= cellsOptions.timeRange
+    eventSample = abs(cellsOptions.timeRange(1))*(cellsOptions.outputFs/1000) + 1;
+    plotFirstSample = eventSample + options.timeRange(1)*(cellsOptions.outputFs/1000);
+    plotLastSample = eventSample + options.timeRange(2)*(cellsOptions.outputFs/1000);
+    plotWindowLength = plotLastSample - plotFirstSample + 1;
+    plotWindowTime = linspace(options.timeRange(1),options.timeRange(2),plotWindowLength);
+else
+    if isfield(cellsOptions,'plotWindowTime')
+        plotWindowTime = cellsOptions.plotWindowTime;
+        plotWindowLength = length(plotWindowTime);
+    else
+        if isfield(cellsOptions,'plotWindowLength'); plotWindowLength = cellsOptions.plotWindowLength;
+        else; plotWindowLength = (options.timeRange(2)-options.timeRange(1))* options.outputFs/1000 + 1;
+        end
+        plotWindowTime = linspace(options.timeRange(1),options.timeRange(2),plotWindowLength);
+    end
+    plotFirstSample = 1; plotLastSample = plotWindowLength;
 end
 
 %% Plot response map for each search
 
 if options.plotSearch
     for c = 1:size(cells,1)
+        disp(['Ongoing: plotting searches for cell',num2str(c)]);
         curCell = cells(cells.Cell == c,:);
         searchPerCell = length(curCell.Vhold{1});
 
         for search = 1:searchPerCell
             search_rmap = curCell.("Response map"){1}.responseMap{search};
             search_isResponse = curCell.("Response map"){1}.isResponseMap{search};
+            search_cmap = curCell.("Response map"){1}.currentMap{search};
+            search_vhold = curCell.Vhold{1}(search);
 
-            initializeFig(0.8,1); tiledlayout(2,size(search_rmap,3));
+            % Initialize figure
+            initializeFig(0.8,1); 
+            masterLayout = tiledlayout(3,size(search_rmap,3));
+
             for d = 1:size(search_rmap,3)
                 depthResponseMap = search_rmap(:,:,d);
                 isResponseMap_depth = search_isResponse(:,:,d);
+                depthCurrentMap = search_cmap{d};
+
+                % Plot current trace map
+                nexttile(masterLayout,d); axis off;
+                title(['Depth ', num2str(d),': current responses']); 
+                depthLayout = tiledlayout(masterLayout,2^d,2^d);
+                depthLayout.Layout.Tile = d;
+                depthLayout.TileSpacing = 'none'; depthLayout.Padding = 'tight';
+                maxCurrent = max(abs(depthCurrentMap),[],'all');
+                for t = 1:4^d
+                    nexttile(depthLayout,t);
+                    if search_vhold < -50; color = blueWhiteRed(end,:);
+                    else; color = blueWhiteRed(1,:); end
+                    plotSEM(plotWindowTime,depthCurrentMap(t,plotFirstSample:plotLastSample),color);
+                    xlim([options.timeRange(1), options.timeRange(2)]); ylim([-maxCurrent, maxCurrent]);
+                    % Plot axis at the bottom-left tile
+                    if t ~= 4^d-2^d+1; axis off
+                    else
+                        xlabel('ms'); ylabel('pA'); box off; 
+                        xticks([0,100]); yticks([ceil(-maxCurrent/5)*5,floor(maxCurrent/5)*5]);
+                    end
+                end
 
                 % Plot response map
-                ax_response = nexttile(d); 
+                ax_response = nexttile(masterLayout,d + size(search_rmap,3)); 
                 imagesc(depthResponseMap); axis off;  
                 cb = colorbar; cb.Label.String = 'Total charge (pC)';
                 climit = max(abs(depthResponseMap),[],'all'); 
@@ -51,7 +111,7 @@ if options.plotSearch
                 title(['Depth ', num2str(d),': ',curCell.Options{1}.feature]);
         
                 % Plot isResponse map
-                ax_isResponse = nexttile(d + size(search_rmap,3)); 
+                ax_isResponse = nexttile(masterLayout, d + 2*size(search_rmap,3)); 
                 imagesc(isResponseMap_depth); axis off;  clim([0, 1]);
                 colorbar(Ticks=[0,1],TickLabels={'No response','Responded'});
                 title(['Depth ', num2str(d),': responded spots']);
@@ -65,8 +125,10 @@ if options.plotSearch
             % Save figure
             filename = curCell.Epochs{1}{search};
             filepath = fullfile(options.saveDataPath,['cell',num2str(curCell.Cell)],'Search summary');
-            saveFigures(gcf,[filename,'_',curCell.Options{1}.feature],filepath);
+            saveFigures(gcf,[filename,'_',curCell.Options{1}.feature],filepath,...
+                        savePNG=options.savePNG,savePDF=options.savePDF,saveFIG=options.saveFIG);
         end
+        close all
     end
 end
 
@@ -75,25 +137,61 @@ end
 % Plot search pairs with same Vhold and different Vhold separately
 if options.plotPairs
     for c = 1:size(cells,1)
+        disp(['Ongoing: plotting search pairs for cell',num2str(c)]);
         curCell = cells(cells.Cell == c,:);
-        allPairs = curCell.('Difference map'){1}.Vhold;
+        allPairs = curCell.('Difference map'){1}.diffVhold;
         diffVholdIdx = find(allPairs);
         sameVholdIdx = find(~allPairs);
     
-        % (Unifinished) Plot search pairs with the same Vhold
+        % Plot search pairs with the same Vhold
         for p = 1:length(sameVholdIdx)
             diffMap = curCell.('Difference map'){1}.response{sameVholdIdx(p)};
             commonSpots = curCell.('Difference map'){1}.commonSpots{sameVholdIdx(p)};
+
+            % Find corresponding current map
+            pairEpochs = curCell.('Difference map'){1}.pair{sameVholdIdx(p)};
+            search1_cmap = curCell.("Response map"){1}.currentMap{pairEpochs(1)};
+            search2_cmap = curCell.("Response map"){1}.currentMap{pairEpochs(2)};
+            search1_vhold = curCell.Vhold{1}(pairEpochs(1));
+            search2_vhold = curCell.Vhold{1}(pairEpochs(2));
     
             % Plot diff map and common map
-            initializeFig(0.8,1); tiledlayout(3,size(diffMap,3));
+            initializeFig(0.8,1);
+            masterLayout = tiledlayout(4,size(diffMap,3));
+
             for d = 1:size(diffMap,3)
                 depthResponseMap = diffMap(:,:,d);
                 depthCommonSpots = commonSpots(:,:,d);
                 colormap(flip(blueWhiteRed));
+                depthCurrentMap_search1 = search1_cmap{d};
+                depthCurrentMap_search2 = search2_cmap{d};
+
+                % Plot current response map
+                nexttile(masterLayout, d);
+                title(['Depth ', num2str(d),': current responses']); 
+                depthLayout = tiledlayout(masterLayout,2^d,2^d);
+                depthLayout.Layout.Tile = d;
+                depthLayout.TileSpacing = 'none'; depthLayout.Padding = 'tight';
+                maxCurrent = max(abs([depthCurrentMap_search1 depthCurrentMap_search2]),[],'all');
+                for t = 1:4^d
+                    nexttile(depthLayout,t);
+                    if search1_vhold < -50; color1 = blueWhiteRed(end-150,:);
+                    else; color1 = blueWhiteRed(150,:); end
+                    if search2_vhold < -50; color2 = blueWhiteRed(end,:);
+                    else; color2 = blueWhiteRed(1,:); end
+                    plotSEM(plotWindowTime,depthCurrentMap_search1(t,plotFirstSample:plotLastSample),color1);
+                    plotSEM(plotWindowTime,depthCurrentMap_search2(t,plotFirstSample:plotLastSample),color2);
+                    xlim([options.timeRange(1), options.timeRange(2)]); ylim([-maxCurrent, maxCurrent]);
+                    % Plot axis at the bottom-left tile
+                    if t ~= 4^d-2^d+1; axis off
+                    else
+                        xlabel('ms'); ylabel('pA'); box off; 
+                        xticks([0,100]); yticks([ceil(-maxCurrent/5)*5,floor(maxCurrent/5)*5]);
+                    end
+                end
                 
                 % Plot difference response map
-                nexttile(d); 
+                nexttile(masterLayout, d + size(diffMap,3)); 
                 imagesc(depthResponseMap); axis off;  
                 cb = colorbar; cb.Label.String = '\Delta charge (pC)';
                 climit = max(abs(depthResponseMap),[],'all'); 
@@ -101,8 +199,8 @@ if options.plotPairs
                 clim([-climit, climit]);
                 title(['Depth ', num2str(d),': \Delta',curCell.Options{1}.feature]);
                 
-                % % Plot difference response map (common spot only)
-                nexttile(d + size(diffMap,3));
+                % Plot difference response map (common spot only)
+                nexttile(masterLayout, d + 2*size(diffMap,3));
                 depthCommonResponse = depthResponseMap;
                 depthCommonResponse(depthCommonResponse & ~depthCommonSpots) = 0;
                 imagesc(depthCommonResponse); axis off;  
@@ -113,7 +211,7 @@ if options.plotPairs
                 title(['Depth ', num2str(d),': \Delta',curCell.Options{1}.feature, ' (common spot only)']);
                 
                 % Plot common spot map
-                nexttile(d + 2*size(diffMap,3));
+                nexttile(masterLayout, d + 3*size(diffMap,3));
                 depthCommonResponse(depthCommonResponse > 0) = 1;
                 depthCommonResponse(depthCommonResponse < 0) = -1;
                 imagesc(depthCommonResponse); axis off;  clim([-1, 1]);
@@ -122,11 +220,11 @@ if options.plotPairs
             end
     
             % Save figure
-            pairEpochs = curCell.('Difference map'){1}.pair{sameVholdIdx(p)};
             filepath = fullfile(options.saveDataPath,['cell',num2str(curCell.Cell)],'Same Vhold pairs');
             filename = ['spots_cell',num2str(curCell.Cell),'_DiffResponse_epoch',...
                         num2str(pairEpochs(1)),'vs',num2str(pairEpochs(2))];
-            saveFigures(gcf,[filename,'_',curCell.Options{1}.feature],filepath);
+            saveFigures(gcf,[filename,'_',curCell.Options{1}.feature],filepath,...
+                        savePNG=options.savePNG,savePDF=options.savePDF,saveFIG=options.saveFIG);
         end
     
     
@@ -134,16 +232,51 @@ if options.plotPairs
         for p = 1:length(diffVholdIdx)
             diffMap = curCell.('Difference map'){1}.response{diffVholdIdx(p)};
             commonSpots = curCell.('Difference map'){1}.commonSpots{diffVholdIdx(p)};
+
+            % Find corresponding current map
+            pairEpochs = curCell.('Difference map'){1}.pair{diffVholdIdx(p)};
+            search1_cmap = curCell.("Response map"){1}.currentMap{pairEpochs(1)};
+            search2_cmap = curCell.("Response map"){1}.currentMap{pairEpochs(2)};
+            search1_vhold = curCell.Vhold{1}(pairEpochs(1));
+            search2_vhold = curCell.Vhold{1}(pairEpochs(2));
     
             % Plot diff map and common map
-            initializeFig(0.8,1); tiledlayout(3,size(diffMap,3));
+            initializeFig(0.8,1);
+            masterLayout = tiledlayout(4,size(diffMap,3));
+
             for d = 1:size(diffMap,3)
                 depthResponseMap = diffMap(:,:,d);
                 depthCommonSpots = commonSpots(:,:,d);
                 colormap(flip(blueWhiteRed));
+                depthCurrentMap_search1 = search1_cmap{d};
+                depthCurrentMap_search2 = search2_cmap{d};
+
+                % Plot current response map
+                nexttile(masterLayout, d);
+                title(['Depth ', num2str(d),': current responses']); 
+                depthLayout = tiledlayout(masterLayout,2^d,2^d);
+                depthLayout.Layout.Tile = d;
+                depthLayout.TileSpacing = 'none'; depthLayout.Padding = 'tight';
+                maxCurrent = max(abs([depthCurrentMap_search1 depthCurrentMap_search2]),[],'all');
+                for t = 1:4^d
+                    nexttile(depthLayout,t);
+                    if search1_vhold < -50; color1 = blueWhiteRed(end,:);
+                    else; color1 = blueWhiteRed(1,:); end
+                    if search2_vhold < -50; color2 = blueWhiteRed(end,:);
+                    else; color2 = blueWhiteRed(1,:); end
+                    plotSEM(plotWindowTime,depthCurrentMap_search1(t,plotFirstSample:plotLastSample),color1);
+                    plotSEM(plotWindowTime,depthCurrentMap_search2(t,plotFirstSample:plotLastSample),color2);
+                    xlim([options.timeRange(1), options.timeRange(2)]); ylim([-maxCurrent, maxCurrent]);
+                    % Plot axis at the bottom-left tile
+                    if t ~= 4^d-2^d+1; axis off
+                    else
+                        xlabel('ms'); ylabel('pA'); box off; 
+                        xticks([0,100]); yticks([ceil(-maxCurrent/5)*5,floor(maxCurrent/5)*5]);
+                    end
+                end
                 
                 % Plot difference response map
-                nexttile(d); 
+                nexttile(masterLayout, d + size(diffMap,3)); 
                 imagesc(depthResponseMap); axis off;  
                 cb = colorbar; cb.Label.String = 'Net total charge (pC)';
                 climit = max(abs(depthResponseMap),[],'all'); 
@@ -151,8 +284,8 @@ if options.plotPairs
                 clim([-climit, climit]);
                 title(['Depth ', num2str(d),': \Delta',curCell.Options{1}.feature]);
                 
-                % % Plot difference response map (common spot only)
-                nexttile(d + size(diffMap,3));
+                % Plot difference response map (common spot only)
+                nexttile(masterLayout, d + 2*size(diffMap,3));
                 depthCommonResponse = depthResponseMap;
                 depthCommonResponse(depthCommonResponse & ~depthCommonSpots) = 0;
                 imagesc(depthCommonResponse); axis off;  
@@ -163,7 +296,7 @@ if options.plotPairs
                 title(['Depth ', num2str(d),': \Delta',curCell.Options{1}.feature, ' (common spot only)']);
                 
                 % Plot common spot map
-                nexttile(d + 2*size(diffMap,3));
+                nexttile(masterLayout, d + 3*size(diffMap,3));
                 depthCommonResponse(depthCommonResponse > 0) = 1;
                 depthCommonResponse(depthCommonResponse < 0) = -1;
                 imagesc(depthCommonResponse); axis off;  clim([-1, 1]);
@@ -172,12 +305,13 @@ if options.plotPairs
             end
     
             % Save figure
-            pairEpochs = curCell.('Difference map'){1}.pair{diffVholdIdx(p)};
             filepath = fullfile(options.saveDataPath,['cell',num2str(curCell.Cell)],'Different Vhold pairs');
             filename = ['spots_cell',num2str(curCell.Cell),'_NetResponse_epoch',...
                         num2str(pairEpochs(1)),'vs',num2str(pairEpochs(2))];
-            saveFigures(gcf,[filename,'_',curCell.Options{1}.feature],filepath);
+            saveFigures(gcf,[filename,'_',curCell.Options{1}.feature],filepath,...
+                        savePNG=options.savePNG,savePDF=options.savePDF,saveFIG=options.saveFIG);
         end
+        close all
     end
 end
 

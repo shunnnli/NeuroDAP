@@ -44,27 +44,11 @@ epochs = loadSlices(expPath,reload=sessionParams.reload,...
 
 %% Process data for random search epoch
 
-loadSlicesDMD(epochs,reload=true);%sessionParams.reload);
+% loadSlicesDMD(epochs,reload=sessionParams.reload,reloadCells=true);
+loadSlicesDMD(epochs,reload=true);
 
 %% Plot search results
 
-cells = analyzeSlice_DMD(expPath,plotSearch=false,plotPairs=true);
+cells = analyzeSlice_DMD(expPath,plotSearch=true,plotPairs=true,...
+                        savePNG=false,savePDF=true,saveFIG=false);
 return
-
-%% Luca's code
-
-% cellList = dir(fullfile(expPath,'cell*'));
-% nCells = length(cellList);
-% startDir = 1;
-% 
-% loadCells = struct;
-% selectedCells = ["cell1","cell2","cell3","cell4"];
-% 
-% warning('off','MATLAB:unknownObjectNowStruct')
-% 
-% % Call scripts
-% scriptOrganizeAcquisitionsVCwithRandomSearch; % find corresponding sweeps for each stim
-% scriptCollectFeaturesVC; % calculate features of full field VC recordings
-% scriptCollectFeaturesRandomSearch; % same as above for random search
-% 
-% % separately run plotAnalysisRandomSearch

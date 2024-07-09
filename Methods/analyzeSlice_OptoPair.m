@@ -1,3 +1,4 @@
+
 function analyzeSlice_OptoPair(expPaths,options)
 
 arguments
@@ -6,7 +7,7 @@ arguments
     % If there're multiple sessions: combine peaks/aucs and only plot EPSCvsIPSC
 
     options.plotTraces logical = true % just plot traces for epoch/cell
-    options.calculateStats logical = false % calculate EPSC/IPSC
+    options.plotStats logical = false % calculate EPSC/IPSC
 
     options.groups double = 1; % indicate grouping of sessions if multiple sessions are provided
     options.conditions string = ["Control","Reward pairing","Punishment pairing"];
@@ -82,91 +83,33 @@ if singleSession && options.plotTraces
             yScalePadding=options.yScalePadding);
 end
 
-%% Calculate EPSC and IPSC stats
+%% ************ UNFINISHED ************** Plot stats
 
-if ~options.calculateStats; return; end
+if options.plotStats
+    animalList = unique(allCells{:,"Animal"});
 
-%%%%%%%%%%%%%%%%%%%% UNFINISHED %%%%%%%%%%%%%%%%%%%%%%%
+    % Initialize stats result matrix
+    all_peaks = []; all_aucs = []; groups = [];
 
-animalList = unique(allCells{:,"Animal"});
-
-for i = 1:length(animalList)
-    % Find epochs for an animal
-    animalCells = allCells(allCells.Animal == animalList(i),:);
-    cellList = unique(animalCells{:,"Cell"});
-
-    % Calculate EPSC and IPSC stats for each cell
-    for c = 1:size(cellList,1)
-        cellstats = animalCells{animalCells.Cell==cellList(c),["Vhold","Included","Peaks","AUCs"]};
-        EPSCrows = cellstats{1} < -10;
-        IPSCrows = cellstats{1} >= 0;
-        % Calculate peaks
-        EPSCpeaks = cellstats{3}(EPSCrows)
-    end
-
-end
-
-%% Old code
-if singleSession
-    peaks = nan(size(cellList,1),2);
-    aucs = nan(size(cellList,1),2);
-    groups = ones(size(cellList,1),2);
-    
-    for c = 1:size(cellList,1)
-        % Find EPSC and IPSC stats
-        % Intuition: if there's multiple epochs for similar range of Vhold, it
-        % is because the previous one is slightly wrong (99% is because 0mV is 
-        % not the true reversal potential)
-        EPSCstats = allEpochs{allEpochs.Cell==cellList(c) & allEpochs.("Vhold epoch mean")<-50, ["Included","Peaks","AUCs"]};
-        IPSCstats = allEpochs{allEpochs.Cell==cellList(c) & allEpochs.("Vhold epoch mean")>-10, ["Included","Peaks","AUCs"]};
-    
-        % Collect EPSC and IPSC stats
-        if ~isempty(EPSCstats)
-            EPSCstats = EPSCstats(end,:);
-            peaks(c,1) = mean(EPSCstats{2}(EPSCstats{1}==1)); 
-            aucs(c,1) = mean(EPSCstats{3}(EPSCstats{1}==1)); 
-        end
-        if ~isempty(IPSCstats)
-            IPSCstats = IPSCstats(end,:);
-            peaks(c,2) = mean(IPSCstats{2}(IPSCstats{1}==1)); 
-            aucs(c,2) = mean(IPSCstats{3}(IPSCstats{1}==1));
-        end
-    end
-    % Save peaks and aucs
-    all_peaks = peaks; all_aucs = aucs;
-    save(strcat(expPath,filesep,'epochs_',expName),'all_peaks','all_aucs','-append');
-
-else
-    animalList = unique(allEpochs{:,"Animal"});
-
-    for exp = 1:length(expPaths)
+    % Loop through animals to get results
+    for animal = 1:length(animalList)
         % Find corresponding physiology session
-        animalRows = allEpochs.Animal == animalList(exp);
-        cellList = unique(allEpochs{:,"Cell"});
+        animalCells = allCells(strcmp(allCells.Animal,animalList(animal)),:);
+        cellList = unique(animalCells.Cell);
         peaks = nan(size(cellList,1),2);
         aucs = nan(size(cellList,1),2);
-        group = ones(size(cellList,1),1) * options.groups(exp);
+        group = ones(size(cellList,1),1) * options.groups(animal);
         
         for c = 1:size(cellList,1)
             % Find EPSC and IPSC stats
-            % Intuition: if there's multiple epochs for similar range of Vhold, it
-            % is because the previous one is slightly wrong (99% is because 0mV is 
-            % not the true reversal potential)
-            EPSCstats = allEpochs{allEpochs.Cell==cellList(c) & allEpochs.("Vhold epoch mean")<-50, ["Included","Peaks","AUCs"]};
-            IPSCstats = allEpochs{allEpochs.Cell==cellList(c) & allEpochs.("Vhold epoch mean")>-10, ["Included","Peaks","AUCs"]};
-        
-            % Collect EPSC and IPSC stats
-            if ~isempty(EPSCstats)
-                EPSCstats = EPSCstats(end,:);
-                peaks(c,1) = mean(EPSCstats{2}(EPSCstats{1}==1)); 
-                aucs(c,1) = mean(EPSCstats{3}(EPSCstats{1}==1)); 
-            end
-            if ~isempty(IPSCstats)
-                IPSCstats = IPSCstats(end,:);
-                peaks(c,2) = mean(IPSCstats{2}(IPSCstats{1}==1)); 
-                aucs(c,2) = mean(IPSCstats{3}(IPSCstats{1}==1));
-            end
+            stats = animalCells{animalCells.Cell==cellList(c),'Stats'}{1};
+            peaks(c,1) = stats.EPSC.peakAvg;
+            peaks(c,2) = stats.IPSC.peakAvg;
+            aucs(c,1) = stats.EPSC.aucAvg;
+            aucs(c,2) = stats.IPSC.aucAvg;
         end
+
+        % Save results
         all_peaks = [all_peaks;peaks];
         all_aucs = [all_aucs;aucs];
         groups = [groups;group];
