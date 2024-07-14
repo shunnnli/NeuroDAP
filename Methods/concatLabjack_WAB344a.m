@@ -116,8 +116,8 @@ end
 % Log behavior signals
 rightSolenoid = output(mod(1:totalLen,numChannels)==6);
 rightLick = output(mod(1:totalLen,numChannels)==7);
-rightSpeaker = output(mod(1:totalLen,numChannels)==8);
-leftSpeaker = output(mod(1:totalLen,numChannels)==9);
+rightTone = output(mod(1:totalLen,numChannels)==8);
+leftTone = output(mod(1:totalLen,numChannels)==9);
 leftSolenoid = output(mod(1:totalLen,numChannels)==10);
 leftLick = output(mod(1:totalLen,numChannels)==11);
 
@@ -133,8 +133,8 @@ if options.plot
 
     nexttile; plot(rightSolenoid); title('Right solenoid'); ylim([-5,5]); box off 
     nexttile; plot(rightLick); title('Right lick'); ylim([-5,5]); box off 
-    nexttile; plot(leftSpeaker); title('Left speaker - go cue'); ylim([-5,5]); box off 
-    nexttile; plot(rightSpeaker); title('Right speaker - nogo cue'); ylim([-5,5]); box off 
+    nexttile; plot(leftTone); title('Left speaker - go cue'); ylim([-5,5]); box off 
+    nexttile; plot(rightTone); title('Right speaker - nogo cue'); ylim([-5,5]); box off 
     nexttile; plot(leftSolenoid); title('Left solenoid'); ylim([-5,5]); box off 
     nexttile; plot(leftLick); title('Left lick'); ylim([-5,5]); box off
 
@@ -151,7 +151,7 @@ labjack.options = options;
 if options.save
     save(strcat(options.outputPath,filesep,'data_labjack'),...
         'labjack','sync_labjack',...
-        'rightSolenoid','rightLick','leftSpeaker','rightSpeaker',...
+        'rightSolenoid','rightLick','leftTone','rightTone',...
         'leftSolenoid','leftLick','-v7.3');
     if options.saveDuplicate
         save(strcat(options.outputPath,filesep,'Photometry',filesep,'data_labjack'),'labjack','sync_labjack','-v7.3');

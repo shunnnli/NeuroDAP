@@ -5,7 +5,7 @@ function loadSlicesDMD(epochs,options)
 arguments
     epochs table %full path of the session or epochs.mat
 
-    options.filterSignal logical = false
+    options.filterSignal logical = true
     options.filterSweeps logical = true % If true, do not analyze sweeps with different Vhold (included == false)
 
     options.save logical = true
@@ -15,13 +15,15 @@ arguments
 
     options.outputFs double = 10000
     options.timeRange double = [-20,100] % in ms
-    options.controlWindow double = 50 % in ms before the stim onset
+    options.analysisWindowLength double = 50 % in ms after stim onset
+    options.controlWindowLength double = 50 % in ms before stim onset
     options.eventSample % in sample
     options.nArtifactSamples double = 0 % in sample
     options.rcCheckRecoveryWindow double = 100 % in ms
-    options.peakWindow double = 2 % in ms around the peak to average
+    options.peakWindow double = 1 % in ms around the peak to average
 
     options.feature = 'auc'
+    options.thresholdFactor double = 3 % 3*std
 
     options.rawDataPath string
     options.saveDataPath string = 'default'
@@ -78,9 +80,10 @@ varNames = {'Session','Animal','Task','Cell','Epochs','Vhold',...
 cells = table('Size',[max(exp{:,'Cell'}),length(varNames)],...
     'VariableTypes',varTypes,'VariableNames',varNames);
 
-% Initialize other params
+% Initialize cell-level params
 cellResponseMap = {}; isResponseMap_cell = {}; cellCurrentMap = {};
-cellVhold = []; cellEpochs = {};
+cellVhold = []; cellEpochs = {}; searchTotalSpots = {};
+nullSpotData = []; preStimData = []; baselineData = [];
 
 %% Iterate & analyze individual epoch
 
@@ -94,7 +97,7 @@ for row = 1:size(exp,1)
         % Initialize fullSearchTable pointer
         % Since I'm iterating sweep in order, the spots are correspond to the
         % order recorded in fullSearchTable
-        curSpot = 0; prevDepth = 1;
+        curSpot = 0; prevDepth = 1; totalSpots = 0;
     
         % Load fullSearchTable
         epoch = exp{row,'Epoch'};
@@ -182,12 +185,16 @@ for row = 1:size(exp,1)
             plotWindowLength = timeRangeEndSample(1) - timeRangeStartSample(1) + 1;
             plotWindowTime = linspace(options.timeRange(1),options.timeRange(2),plotWindowLength);
     
-            % Define control window: 50ms before each spot stim
-            controlWindowLength = options.controlWindow * options.outputFs/1000;
+            % Define control window: 50ms before each spot stim onset
+            controlWindowSamples = options.controlWindowLength * options.outputFs/1000;
+
+            % Define analysis window: 50ms after each spot stim onset
+            analysisWindowSamples = options.analysisWindowLength * options.outputFs/1000;
+            eventSample = abs(options.outputFs*options.timeRange(1)/1000);
+            analysisWindow = eventSample:eventSample+analysisWindowSamples;
     
-            % Define time window for analysis
+            % Define time window for peak window analysis
             peakWindowWidth = (options.peakWindow/(2*1000)) * options.outputFs;
-            analysisWindow = abs(options.outputFs*options.timeRange(1)/1000):plotWindowLength;
 
             % Save time windows to options
             options.baselineWindow = baselineWindow;
@@ -197,7 +204,9 @@ for row = 1:size(exp,1)
             options.plotWindowLength = plotWindowLength;
             options.peakWindowWidth = peakWindowWidth;
             options.plotWindowTime = plotWindowTime;
-    
+            options.analysisWindowSamples = analysisWindowSamples;
+            options.controlWindowSamples = controlWindowSamples;
+
     
             % Process trace: mean-subtracted, optional LP
             % Mean subtraction
@@ -236,52 +245,107 @@ for row = 1:size(exp,1)
                 else; vhold = 10; end
             end
     
+            % Initialize matrix for noise analysis later
+            baselineData = [baselineData, processed_trace(baselineWindow)];
     
             %% Loop through all spots
             for s = 1:protocol.numPulses
+                %% Define timeWindow and extract response
+                % Define control window
+                plotWindow = timeRangeStartSample(s):timeRangeEndSample(s);
+                controlWindow = protocol.stimOnset(s)-controlWindowSamples-1 : protocol.stimOnset(s)-1;
+                options.plotWindow = plotWindow;
+                options.controlWindow = controlWindow;
+
                 % Save spot coordinates
                 location = [sweepSpots{s,"xStart"}+1, sweepSpots{s,"xStart"}+sweepSpots{s,"xWidth"},...
                             sweepSpots{s,"yStart"}+1, sweepSpots{s,"yStart"}+sweepSpots{s,"yHeight"}];
     
                 % Save spot responses
-                responses.raw = raw_trace(timeRangeStartSample(s):timeRangeEndSample(s));
-                responses.processed = processed_trace(timeRangeStartSample(s):timeRangeEndSample(s));
+                responses.raw = raw_trace(plotWindow);
+                responses.processed = processed_trace(plotWindow);
+                responses.control = processed_trace(controlWindow);
+                responses.rawTrace = raw_trace;
+                responses.processedTrace = processed_trace;
     
-                % Define control window
-                controlWindow = protocol.stimOnset(s)-controlWindowLength : protocol.stimOnset(s)-1;
-        
+                %% Identify putative hotspots
+
+                % Seulah's method: 
+                % spots that exceed thresholdFactor scaled MAD from the median for at least 5ms
+                % trace_mad = mad(responses.processed,1);
+                % isResponse = find(sum(isoutlier(trace_mad,median=1,ThresholdFactor=options.thresholdFactor),2)>50); 
+
+                % Alternative method: more than thresholdFactor more than
+                % baseline std for at least 5ms
+                response_threshold =  options.thresholdFactor * stats.baseline.std;
+                responses.isResponse = sweepSpots{s,'response'};
+                if find(sum(abs(responses.processed(analysisWindow)) >= response_threshold)>50)
+                    responses.hotspot = true;
+                else; responses.hotspot = false; 
+                end
+                
+                %% Determine analysis time window per hotspot based on changepoint analysis
+                % if responses.hotspot
+                %     % Changepoint analysis
+                %     cpaWindow= 0; % option to widen the analysis window (unit in 0.1 ms), default is 0
+                %     changeIdx = findchangepts(responses.processed,Statistic='rms',MaxNumChanges=2); % rms works better than std or mean
+                %     % Final analysis time window
+                %     changeIdx(1) = changeIdx(1)-cpaWindow;   
+                %     changeIdx(2) = changeIdx(2)+cpaWindow;
+                % end
+
+                %% Extract baseline and prestim trace for noise analysis
+                % Concat baseline period + prestim period of all spots +
+                % response period for null spots
+
+                preStimData = [preStimData, processed_trace(controlWindow)];
+                if ~responses.hotspot; nullSpotData = [nullSpotData, responses.processed]; end
+
+                %% Calculate statistics
+
                 % Find auc
                 stats.response.auc = sum(responses.processed(analysisWindow)) / options.outputFs;
                 stats.baseline.auc = sum(processed_trace(controlWindow)) / options.outputFs;
     
-                % Find peak for stim response
+                % Find min and max value for stim response
                 trace = responses.processed(analysisWindow);
-                if vhold < -30; [~,peakIdx] = max(-trace);
-                else; [~,peakIdx] = max(trace); end
-                peakWindowStart = max(1,peakIdx-peakWindowWidth);
-                peakWindowEnd = min(peakIdx+peakWindowWidth,length(trace));
-                if vhold < -30; stats.response.peak = -mean(trace(peakWindowStart:peakWindowEnd));
-                else; stats.response.peak = mean(trace(peakWindowStart:peakWindowEnd)); end
-                stats.response.peakTime = peakIdx * 1000/options.outputFs;
+                [~,maxIdx] = max(trace); [~,minIdx] = min(trace);
+                % Average around max/min idx to get final value
+                maxWindowStart = max(1,maxIdx-peakWindowWidth);
+                maxWindowEnd = min(maxIdx+peakWindowWidth,length(trace));
+                minWindowStart = max(1,minIdx-peakWindowWidth);
+                minWindowEnd = min(minIdx+peakWindowWidth,length(trace));
+                stats.response.max = mean(trace(maxWindowStart:maxWindowEnd));
+                stats.response.min = mean(trace(minWindowStart:minWindowEnd));
+                stats.response.maxTime = maxIdx * 1000/options.outputFs;
+                stats.response.minTime = minIdx * 1000/options.outputFs;
+                if vhold < -50; stats.response.peak = stats.response.min;
+                elseif vhold > 10; stats.response.peak = stats.response.max; 
+                end
     
-                % Find peak for control baseline
+                % Find min and max for control baseline
                 trace = processed_trace(controlWindow);
-                if vhold < -30; [~,peakIdx] = max(-trace);
-                else; [~,peakIdx] = max(trace); end
-                peakWindowStart = max(1,peakIdx-peakWindowWidth);
-                peakWindowEnd = min(peakIdx+peakWindowWidth,length(trace));
-                if vhold < -30; stats.response.peak = -mean(trace(peakWindowStart:peakWindowEnd));
-                else; stats.response.peak = mean(trace(peakWindowStart:peakWindowEnd)); end
-                stats.baseline.peakTime = peakIdx * 1000/options.outputFs;
+                [~,maxIdx] = max(trace); [~,minIdx] = min(trace);
+                % Average around max/min idx to get final value
+                maxWindowStart = max(1,maxIdx-peakWindowWidth);
+                maxWindowEnd = min(maxIdx+peakWindowWidth,length(trace));
+                minWindowStart = max(1,minIdx-peakWindowWidth);
+                minWindowEnd = min(minIdx+peakWindowWidth,length(trace));
+                stats.baseline.max = mean(trace(maxWindowStart:maxWindowEnd));
+                stats.baseline.min = mean(trace(minWindowStart:minWindowEnd));
+                stats.baseline.maxTime = maxIdx * 1000/options.outputFs;
+                stats.baseline.minTime = minIdx * 1000/options.outputFs;
+                if vhold < -50; stats.baseline.peak = stats.baseline.min;
+                elseif vhold > 10; stats.baseline.peak = stats.baseline.max; 
+                end
+
+                % Find E/I index
+                stats.response.EIindex = abs(stats.response.max)-abs(stats.response.min) / abs(stats.response.max)+abs(stats.response.min);
+                stats.baseline.EIindex = abs(stats.baseline.max)-abs(stats.baseline.min) / abs(stats.baseline.max)+abs(stats.baseline.min);
     
-                % Determine whether there is a response across threshold
-                response_threshold =  5 * stats.baseline.std;
-                responses.isResponse = sweepSpots{s,'response'};
-                if abs(stats.response.peak) >= response_threshold; responses.isResponse_posthoc = true;
-                else; responses.isResponse_posthoc = false; end
-    
-                % Store data for the current spot
+                %% Store data for the current spot
                 curSpot = curSpot + 1;
+                totalSpots = totalSpots + 1;
                 spots{curSpot,'Session'} = cellResultsPath;
                 spots{curSpot,'Animal'} = exp{row,'Animal'};
                 spots{curSpot,'Task'} = exp{row,'Task'};
@@ -327,27 +391,11 @@ for row = 1:size(exp,1)
                 end
             end
         end
-    
-        % %% Save spots.mat
-        % if options.save
-        %     filename = strcat('spots_cell',num2str(exp{row,'Cell'}),'_epoch',num2str(exp{row,'Epoch'}));
-        %     save(strcat(options.saveDataPath,filesep,filename),'spots','-v7.3');
-        %     disp(strcat("New spots.mat created & saved: cell ",num2str(exp{row,'Cell'}),', epoch ',num2str(exp{row,'Epoch'})));
-        % end
-        clearvars AD*
-        disp('Ongoing: adding current search to cells_DMD.mat');
-        
     end
     
-    %% Loop through all searches and create cells.mat
+    %% Loop through all depth and add search results to cells.mat
 
-    % Initialize params
-    % depthList = unique(spots.Depth);
-    % searchResponseMap = zeros(608,684,length(depthList));
-    % isResponseMap_search = zeros(608,684,length(depthList));
-    % searchCurrentMap = cell(length(depthList),1);
-    % cellVhold = [cellVhold; spots{1,'Vhold'}];
-    % cellEpochs{end+1} = filename;
+    disp('Ongoing: adding current search to cells_DMD.mat'); clearvars AD*
 
     % Get a list of spots.mat file of a given cell and epoch
     filename = strcat('spots_cell',num2str(exp{row,'Cell'}),'_epoch',num2str(exp{row,'Epoch'}));
@@ -364,13 +412,9 @@ for row = 1:size(exp,1)
     % Loop through depth
     for depthIdx = 1:nDepth
         % Initialization
-        % d = depthList(depthIdx);
-        % spotsAtDepth = spots(spots.Depth == d,:);
         depthFilePath = fullfile(spotsList(depthIdx).folder,spotsList(depthIdx).name);
         load(depthFilePath,'spotsAtDepth');
         % Get search depth
-        % dirsplit = split(spotsList(depthIdx).name,'_'); 
-        % d = str2double(dirsplit{end}(end-4));
         d = spotsAtDepth{1,'Depth'};
         
         depthResponseMap = zeros(608,684);
@@ -429,11 +473,13 @@ for row = 1:size(exp,1)
     curCell = spotsAtDepth{1,'Cell'};
     cellVhold = [cellVhold; spotsAtDepth{1,'Vhold'}];
     cellEpochs{end+1} = filename;
+    searchTotalSpots{end+1} = totalSpots;
 
     if row == size(exp,1) || curCell ~= exp{row+1,'Cell'}
         responseMap.responseMap = cellResponseMap';
         responseMap.isResponseMap = isResponseMap_cell';
         responseMap.currentMap = cellCurrentMap';
+        options.searchTotalSpots = searchTotalSpots;
 
         cells{curCell,'Session'} = options.saveDataPath;
         cells{curCell,'Animal'} = spotsAtDepth{1,'Animal'};
@@ -444,9 +490,15 @@ for row = 1:size(exp,1)
         cells{curCell,'Response map'} = {responseMap};
         cells{curCell,'Options'} = {options};
 
+        % Save noise data for this cell
+        filename = strcat('noise_cell',num2str(curCell));
+        save(fullfile(cellResultsPath,filename),'nullSpotData','preStimData','baselineData','-v7.3');
+        disp(strcat("Saved noise data for cell: ",num2str(curCell)));
+
         % Update prevCell and reset cellResponseMap
-        cellVhold = []; cellEpochs = {};
+        cellVhold = []; cellEpochs = {}; searchTotalSpots = {};
         cellResponseMap = {}; isResponseMap_cell = {}; cellCurrentMap = {};
+        nullSpotData = []; preStimData = []; baselineData = [];
     end
 end
 
@@ -460,12 +512,72 @@ for c = 1:size(cells,1)
     searchPerCell = length(cellData.Vhold{1});
     diff_rmap_cell = {}; common_isResponse_cell = {}; 
     diff_pairs = {}; diff_vholds = [];
+
+    %% Build a noise model for a given cell
+    % pd1 is a gaussian model fit to null spots
+    % pd2 is a gaussian model fit to -30ms to -5ms period prior to
+    % photostimulation onset
+    % pd3 is a gaussian model fit to pooled datapoints of null spots,
+    % prestim period, and baseline period.
+
+    disp(['Ongoing: building noise model for cell ',num2str(num2str(c))]);
+
+    % Load noise data
+    cellResultsPath = strcat(options.saveDataPath,filesep,['cell',num2str(c)]);
+    filename = strcat('noise_cell',num2str(c),'.mat');
+    load(fullfile(cellResultsPath,filename));
+
+    % Initialize noise summary plot
+    initializeFig(0.75,1); tiledlayout(1,3);
     
+    % pd1
+    nexttile; 
+    outlier1 = isoutlier(nullSpotData);
+    noise_nullSpot = fitdist(nullSpotData(~outlier1)','Normal');
+    histogram(nullSpotData,'Normalization','pdf'); hold on
+    histogram(nullSpotData(~outlier1),'Normalization','pdf');  hold on
+    xrange = [min(nullSpotData),max(nullSpotData)];
+    plot(linspace(xrange(1),xrange(2)),pdf(noise_nullSpot,linspace(xrange(1),xrange(2))),'LineWidth',2);
+    title('Null spot response');
+    
+    % pd2
+    nexttile; 
+    outlier2 = isoutlier(preStimData);
+    noise_preStim = fitdist(preStimData(~outlier2)','Normal');
+    xrange=[min(preStimData),max(preStimData)];
+    histogram(preStimData,'Normalization','pdf'); hold on
+    histogram(preStimData(~outlier2),'Normalization','pdf'); hold on
+    plot(linspace(xrange(1),xrange(2)),pdf(noise_preStim,linspace(xrange(1),xrange(2))),'LineWidth',2);
+    title('Pre-stim period');
+    
+    % pd3
+    nexttile;
+    outlier3 = isoutlier(baselineData);
+    allNullData = [nullSpotData(~outlier1),preStimData(~outlier2),baselineData(~outlier3)];
+    noise_all = fitdist(allNullData','Normal');
+    xrange=[min(allNullData),max(allNullData)];
+    histogram(allNullData,'Normalization','pdf'); hold on
+    plot(linspace(xrange(1),xrange(2)),pdf(noise_all,linspace(xrange(1),xrange(2))),'LineWidth',2);
+    title('Baseline + Pre-stim + Null spot response');
+
+    % Set threshold based on the noise model (2*standard devation of the
+    % symmetric noise)
+    options.Ethres = -2 * noise_all.sigma;
+    options.Ithres = 2 * noise_all.sigma;
+    
+    % Save noise model
+    if options.save
+        saveFigures(gcf,['cell',num2str(c),'_noise'],cellResultsPath);
+        save(fullfile(cellResultsPath,filename),'noise_nullSpot','noise_preStim','noise_all','allNullData','-append');
+        disp(strcat("Saved noise model for cell: ",num2str(c)));
+    end
+    
+    %% Analyze all pairs of searches
     for search1 = 1:searchPerCell
 
         % Unfinished: build Vhold average map
 
-        % Analyze all pairs of searches
+        % Loop through all search pairs
         for search2 = search1+1:searchPerCell
             % Get response map
             search1_rmap = cellData.("Response map"){1}.responseMap{search1};
@@ -514,6 +626,7 @@ for c = 1:size(cells,1)
     diff.pair = diff_pairs';
     diff.diffVhold = diff_vholds;
     cells{c,'Difference map'} = {diff};
+    cells{c,'Options'} = {options};
 end
 
 %% Save cells.mat
@@ -522,5 +635,6 @@ if options.save
     save(strcat(options.saveDataPath,filesep,'cells_DMD_',expName),'cells','-v7.3');
     disp(strcat("Saved cells_DMD.mat: ",expName));
 end
+close all
 
 end

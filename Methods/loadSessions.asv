@@ -362,7 +362,8 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
             % structvars(labjack.behavior);
             save(dataOutputName,...
                 'leftLick','rightLick','leftTone','rightTone',....
-                'leftSolenoid','rightSolenoid','-append');
+                'leftSolenoid','rightSolenoid',...
+                ,'redLaser','-append');
         end
 
         % Save updated labjack

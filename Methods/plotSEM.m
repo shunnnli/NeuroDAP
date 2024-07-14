@@ -11,19 +11,34 @@ arguments
 
     options.meanOnly logical = false
     options.plotIndividual logical = false % plot individual trace in the background
-    options.individualColor double = [0.8, 0.8, 0.8] % Color of individual trace
+    options.individualColor = 'gray' % Color of individual trace
     options.LineStyle (1,1) string = "-"
     options.LineWidth (1,1) {mustBeNumeric} = 2
     options.plotStyle string = 'line'
     options.delta double = []
+    options.individualAlpha double = 0
 end
 
+%% Set up
 if isempty(y); return; end
 
 % Check color is valid
 if ~isstring(color)
     if any(sum(color)>3) && size(color,1) == 1
         color = color ./ 255;
+    end
+end
+
+% Check individual color
+if ~isstring(options.individualColor) && ~ischar(options.individualColor)
+    if any(sum(options.individualColor)>3) && size(options.individualColor,1) == 1
+        options.individualColor = options.individualColor ./ 255;
+    end
+else
+    if strcmp(options.individualColor,'same')
+        options.individualColor = color;
+    elseif strcmp(options.individualColor,'gray')
+        options.individualColor = [0.8, 0.8, 0.8];
     end
 end
 
@@ -44,7 +59,12 @@ else
     ySEM = options.delta;
 end
 
-% Plot
+% Update individual color
+if options.individualAlpha ~= 0 
+    options.individualColor = [options.individualColor,options.individualAlpha];
+end
+
+%% Plot
 if strcmp(options.plotStyle,'line')
     if options.plotIndividual
         for i = 1:size(y,1)
