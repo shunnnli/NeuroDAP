@@ -9,6 +9,7 @@ arguments
 
     options.outputFs double = 10000
     options.timeRange double = [-20,100] % in ms
+    options.analysisWindowLength double = 50 % in ms after the stim onset
     options.controlWindowLength double = 50 % in ms before the stim onset
     options.eventSample % in sample
     options.nArtifactSamples double = 0 % in sample
@@ -59,7 +60,8 @@ for i = 1:length(animalList)
     for c = 1:size(cellList,1)
         cellEpochs = animalEpochs(animalEpochs.Cell == cellList(c),:);
         wholeFieldIdx = ~cellfun(@(x) contains(x.cycle,'randomSearch'),cellEpochs.Protocol);
-        cellEpochs = cellEpochs(wholeFieldIdx);
+        cellEpochs = cellEpochs(wholeFieldIdx,:);
+        options.rawDataPath = cellEpochs{1,'Options'}{1}.rawDataPath;
 
         % Initialize structure to save cell data
         respnoses.raw = {}; respnoses.processed = {}; respnoses.isResponse = {};
@@ -79,22 +81,25 @@ for i = 1:length(animalList)
             timeRangeStartSample = options.eventSample + options.outputFs*options.timeRange(1)/1000;
             timeRangeEndSample = options.eventSample + options.outputFs*options.timeRange(2)/1000;
             plotWindowLength = timeRangeEndSample(1) - timeRangeStartSample(1) + 1;
+            baselineWindow = cellEpochs{e,'Options'}{1}.baselineWindow;
 
-            % Define control window: 50ms before each spot stim
-            controlWindowLength = options.controlWindowLength * options.outputFs/1000;
+            % Define control window: 50ms before each spot stim onset
+            controlWindowSamples = options.controlWindowLength * options.outputFs/1000;
+
+            % Define analysis window: 50ms after each spot stim onset
+            analysisWindowSamples = options.analysisWindowLength * options.outputFs/1000;
+            eventSample = abs(options.outputFs*options.timeRange(1)/1000);
+            analysisWindow = eventSample:eventSample+analysisWindowSamples;
     
-            % Define time window for analysis
+            % Define time window for peak window analysis
             peakWindowWidth = (options.peakWindow/(2*1000)) * options.outputFs;
-            analysisWindow = abs(options.outputFs*options.timeRange(1)/1000):plotWindowLength;
 
-            % Save time windows to options
+            % Store in options
+            options.controlWindowSamples = controlWindowSamples;
+            options.analysisWindowSamples = analysisWindowSamples;
             options.baselineWindow = baselineWindow;
-            options.baselineWindow_preStim = preStimWindow;
-            options.baselineWindow_postStim = postStimWindow;
             options.analysisWindow = analysisWindow;
-            options.controlWindowLength = controlWindowLength;
-            options.plotWindowLength = plotWindowLength;
-            options.peakWindowLength = peakWindowLength;
+            options.peakWindowWidth = peakWindowWidth;
 
             % Initialize response matrix
             responses_raw = zeros(protocol.numPulses, plotWindowLength);
@@ -117,7 +122,7 @@ for i = 1:length(animalList)
                 responses_processed(s,:) = processed_trace(timeRangeStartSample(s):timeRangeEndSample(s));
     
                 % Define control window
-                controlWindow = protocol.stimOnset(s)-controlWindowLength : protocol.stimOnset(s)-1;
+                controlWindow = protocol.stimOnset(s)-controlWindowSamples-1 : protocol.stimOnset(s)-1;
         
                 % Find auc
                 stats_response_auc(s) = sum(responses_processed(analysisWindow)) / options.outputFs;
@@ -144,7 +149,7 @@ for i = 1:length(animalList)
                 stats_baseline_peakTime(s) = peakIdx * 1000/options.outputFs;
     
                 % Determine whether there is a response across threshold
-                response_threshold =  5 * stats.baseline.std;
+                response_threshold =  5 * stats_baseline_std;
                 if abs(stats_response_peak) >= response_threshold; responses_isResponse = true;
                 else; responses_isResponse = false; end
             end
@@ -192,7 +197,7 @@ for i = 1:length(animalList)
 
     if options.save
         save(strcat(animalEpochs{1,'Session'},filesep,'cells_',expName),'cells');
-        disp(strcat("Created cells.mat: ",expName));
+        disp(strcat("Created cells.mat: cell_",expName));
     end
     allCells = [allCells; cells];
 end

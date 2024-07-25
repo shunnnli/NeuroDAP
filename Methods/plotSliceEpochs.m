@@ -14,7 +14,6 @@ arguments
 
     options.plotAll logical = true % plot all sweeps if true
     options.nArtifactSamples double = 0 % in sample
-    options.yScalePadding double = 0.1 % in percentage
 
     options.save logical = true; % save peaks and aucs
     options.resultPath;
@@ -28,18 +27,21 @@ timeRangeInms = (plotWindow-1*options.outputFs) ./ (options.outputFs/1000);
 analysisWindow = (options.eventSample+options.nArtifactSamples)-timeRangeStartSample : length(plotWindow);
 
 % Fill in resultPath if neccessary
-if isempty(options.resultsPath)
+if isempty(options.resultPath)
     options.resultPath = fullfile(epochs{1,'Session'},options.resultPath);
-    disp(strcat('Updated resultPath: ', options.resultPath);
+    disp(strcat('Updated resultPath: ', options.resultPath));
 end
 
 %% Plot summary raw trace for each cell/epoch
 
 if options.plotCell
+
+    cellList = unique(epochs.Cell);
+
     initializeFig(1,1); tiledlayout('flow');
     for c = 1:size(cellList,1)
         cellEpochs = epochs{epochs.Cell==cellList(c),["Raw sweeps","Included"]};
-        vholdEpochs = epochs{epochs.Cell==cellList(c),"Vhold epoch mean"};
+        vholdEpochs = epochs{epochs.Cell==cellList(c),"Vhold"};
         haveIncluded = 0;
         for include = 1:size(cellEpochs,1)
             haveIncluded = haveIncluded + sum(cellEpochs{include,2});
@@ -54,7 +56,7 @@ if options.plotCell
             traces = cellEpochs{e,1}(included==1,plotWindow);
             if isempty(traces); continue; end
             plotSEM(timeRangeInms,traces,options.colormap(nColors(e),:),...
-                    meanOnly=true,plotIndividual=true);
+                    plotPatch=false,plotIndividual=true);
             xlabel('Time (ms)');
             ylabel('Current (pA)');
             yMinTrace = min(traces(:,analysisWindow),[],"all");
@@ -66,9 +68,7 @@ if options.plotCell
             vhold_cur = round(vholdEpochs(e));
             legendList = [legendList; strcat(num2str(vhold_cur),"mV (n=",num2str(size(cellEpochs{e,1},1)),")")];
         end
-    
-        yPad = abs(yMax-yMin)*options.yScalePadding;
-        ylim([yMin-yPad,yMax+yPad]);
+        ylim([yMin-eps,yMax+eps]);
         legend(legendList);
         title(strcat('Cell #',num2str(cellList(c))));
     end
@@ -84,13 +84,12 @@ if options.plotEpoch
         traces = epochs{row,'Raw sweeps'}{1}(included==1,plotWindow);
         if isempty(traces); continue; end
         plotSEM(timeRangeInms,traces,options.colormap(1,:),...
-                meanOnly=true,plotIndividual=true);
+                plotPatch=false,plotIndividual=true);
         xlabel('Time (ms)');
         ylabel('Current (pA)');
         yMin = min(traces(:,analysisWindow),[],"all");
         yMax = max(traces(:,analysisWindow),[],"all");
-        yPad = abs(yMax-yMin)*options.yScalePadding;
-        ylim([yMin-yPad,yMax+yPad]);
+        ylim([yMin-eps,yMax+eps]);
         title(strcat('Epochs #',num2str(epochs{row,'Epoch'})));
     end
     saveFigures(gcf,'Trace_epoch_raw',options.resultPath,saveFIG=true,savePDF=true);
@@ -103,7 +102,7 @@ if options.plotCell
     initializeFig(1,1); tiledlayout('flow');
     for c = 1:size(cellList,1)
         cellEpochs = epochs{epochs.Cell==cellList(c),["Processed sweeps","Included"]};
-        vholdEpochs = epochs{epochs.Cell==cellList(c),"Vhold epoch mean"};
+        vholdEpochs = epochs{epochs.Cell==cellList(c),"Vhold"};
         haveIncluded = 0;
         for include = 1:size(cellEpochs,1)
             haveIncluded = haveIncluded + sum(cellEpochs{include,2});
@@ -118,7 +117,7 @@ if options.plotCell
             traces = cellEpochs{e,1}(included==1,plotWindow);
             if isempty(traces); continue; end
             plotSEM(timeRangeInms,traces,options.colormap(nColors(e),:),...
-                    meanOnly=true,plotIndividual=true);
+                    plotPatch=false,plotIndividual=true);
             xlabel('Time (ms)');
             ylabel('Current (pA)');
             yMinTrace = min(traces(:,analysisWindow),[],"all");
@@ -130,9 +129,7 @@ if options.plotCell
             vhold_cur = round(vholdEpochs(e));
             legendList = [legendList; strcat(num2str(vhold_cur),"mV (n=",num2str(size(cellEpochs{e,1},1)),")")];
         end
-    
-        yPad = abs(yMax-yMin)*options.yScalePadding;
-        ylim([yMin-yPad,yMax+yPad]);
+        ylim([yMin-eps,yMax+eps]);
         legend(legendList);
         title(strcat('Cell #',num2str(cellList(c))));
     end
@@ -148,13 +145,12 @@ if options.plotEpoch
         traces = epochs{row,'Processed sweeps'}{1}(included==1,plotWindow);
         if isempty(traces); continue; end
         plotSEM(timeRangeInms,traces,options.colormap(end,:),...
-                meanOnly=true,plotIndividual=true);
+                plotPatch=false,plotIndividual=true);
         xlabel('Time (ms)');
         ylabel('Current (pA)');
         yMin = min(traces(:,analysisWindow),[],"all");
         yMax = max(traces(:,analysisWindow),[],"all");
-        yPad = abs(yMax-yMin)*options.yScalePadding;
-        ylim([yMin-yPad,yMax+yPad]);
+        ylim([yMin-eps,yMax+eps]);
         title(strcat('Epochs #',num2str(epochs{row,'Epoch'})));
     end
     saveFigures(gcf,'Trace_epoch_processed',options.resultPath,saveFIG=true,savePDF=true);

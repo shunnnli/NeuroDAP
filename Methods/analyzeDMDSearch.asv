@@ -1,4 +1,4 @@
-function analyzeSpots(curCell, searchIdx, options)
+function analyzeDMDSearch(curCell, searchIdx, options)
 
 % Create spots summary file and plot summary figure
 
@@ -157,6 +157,11 @@ for d = 1:nDepth
     optoTime = linspace(0,options.analysisWindowLength,size(optoData,2));
     ctrlTime = linspace(-options.controlWindowLength,0,size(ctrlData,2));
 
+    % Calculate max/min current for plotting
+    optoMax = optoMax(~isoutlier(optoMax,));
+    optoMax = max(optoData,[],'all'); 
+    optoMin = min(optoData,[],'all');
+
     % Get hotspot vs null spot
     hotspot_spotIdx = cell2mat(cellfun(@(x) sum(x)>=1, search_hotspot{d}, UniformOutput=false));
     hotspot_sweepIdx = cell2mat(cellfun(@(x) repmat(sum(x)>=1,size(x)), search_hotspot{d}, UniformOutput=false));
@@ -171,8 +176,6 @@ for d = 1:nDepth
     spotAUC_avg = cell2mat(cellfun(@(x) mean(x,"all"), curCell.Stats{1}.auc{searchIdx}{d},UniformOutput=false));
     % ctrlMax_avg = cell2mat(cellfun(@(x) max(x,[],'all'), depthBaselineMap,UniformOutput=false));
     % ctrlMin_avg = cell2mat(cellfun(@(x) min(x,[],'all'), depthBaselineMap,UniformOutput=false));
-    optoMax = max(optoData,[],'all'); optoMin = min(optoData,[],'all');
-    % absMaxCurrent = max([optoMax -optoMin],[],'all');
 
     % Calculate response rate
     % Prestim success rate
@@ -257,11 +260,13 @@ for d = 1:nDepth
 
     % Plot opto vs prestim trace 
     nexttile(masterLayout,11);
-    plotSEM(ctrlTime(end-200:end),ctrlData(:,end-200:end),[.8 .8 .8],plotIndividual=true,individualColor='same',individualAlpha=0.3);
-    plotSEM(optoTime,nullspotData,[.6 .6 .6],plotIndividual=true,individualColor='same',individualAlpha=0.3);
-    plotSEM(optoTime,hotspotData,color,plotIndividual=true,individualColor='same',individualAlpha=0.3);
+    plotSEM(ctrlTime(end-200:end),ctrlData(:,end-200:end),[.8 .8 .8],...
+            plotIndividual=true,individualColor='same',individualAlpha=0.3,...
+            label='Baseline');
+    plotSEM(optoTime,nullspotData,[.6 .6 .6],plotIndividual=true,individualColor='same',individualAlpha=0.3,label='Nullspot');
+    plotSEM(optoTime,hotspotData,color,plotIndividual=true,individualColor='same',individualAlpha=0.3,label='Hotspot');
     xlabel('Time from stim (ms)'); ylabel('pA'), ylim([optoMin, optoMax]);
-    legend({'Baseline','Null spot','Hotspot'},Location='southwest');
+    legend(Location='best');
     title(['Depth ', num2str(curDepth),': opto vs baseline trace']);
 
     % Plot noise vs response distribution

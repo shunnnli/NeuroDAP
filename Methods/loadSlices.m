@@ -20,7 +20,8 @@ arguments
     options.timeRange double = [-20,100] % in ms
     options.eventSample % in sample
     options.nArtifactSamples double = 0 % in sample
-    options.controlWindowLength double = 100 % in ms
+    options.analysisWindowLength double = 50 % in ms after stim onset
+    options.controlWindowLength double = 50 % in ms
     options.rcCheckRecoveryWindow double = 100 % in ms
     options.peakWindow double = 2 % in ms around the peak to average
 
@@ -44,9 +45,11 @@ if strcmp(options.saveDataPath,'default')
     if createNew; options.rawDataPath = exp;
     else; options.rawDataPath = exp{1,"Session"}; end
     options.saveDataPath = options.rawDataPath;
+    options.sessionPath = options.rawDataPath;
 else
     if createNew; options.rawDataPath = exp;
     else; options.rawDataPath = exp{1,"Session"}; end
+    options.sessionPath = options.rawDataPath;
 end
 
 if createNew
@@ -77,6 +80,10 @@ if createNew
 else
     dirsplit = split(exp{1,"Session"},filesep); expName = dirsplit{end};
 end
+
+% Turn off some warnings
+warning('off','MATLAB:unknownObjectNowStruct');
+warning('off','MATLAB:table:RowsAddedExistingVars');
 
 %% Determine recording rig (ie file structure)
 
@@ -115,12 +122,13 @@ if options.reload
         if createNew
             epochList = {}; vholdList = {};
             for c = 1:length(cellFolders)
+                if contains(cellFolders(c).name,'.mat'); continue; end
                 cellPath = strcat(cellFolders(c).folder,filesep,cellFolders(c).name);
                 cellEpochList = sortrows(struct2cell(dir(fullfile(cellPath,['AD0_e*','p*avg.mat'])))',3);
-                cellEpochList(:,end+1) = num2cell(str2double(cellFolders(c).name(5)),[1 2]); % store cell number as the last column
+                cellEpochList(:,end+1) = num2cell(sscanf(cellFolders(c).name,'cell%d'),[1 2]); % store cell number as the last column
                 epochList = [epochList; cellEpochList];
                 cellVholdList = sortrows(struct2cell(dir(fullfile(cellPath,['AD2_e*','p*avg.mat'])))',3);
-                cellVholdList(:,end+1) = num2cell(str2double(cellFolders(c).name(5)),[1 2]); % store cell number as the last column
+                cellVholdList(:,end+1) = num2cell(sscanf(cellFolders(c).name,'cell%d'),[1 2]); % store cell number as the last column
                 vholdList = [vholdList; cellVholdList];
             end
         else
@@ -173,6 +181,7 @@ if options.reload
         load(fullfile(epochList{row,2},epochList{row,1}));
         namesplit = strsplit(epochList{row,1},{'e','p','avg.mat'}); 
         epoch = str2double(namesplit{2});
+        options.rawDataPath = epochList{row,2};
         sweepAcq = eval(['AD0_e',num2str(epoch),'p',namesplit{3},'avg.UserData.Components']);
     
         % Import processed numbers if post QC
@@ -212,6 +221,21 @@ if options.reload
             vholdAcq = sweepAcq;
             vholdSweeps = zeros(size(sweeps));
         end
+
+        % Load csv file for vhold
+        if ~strcmp(rig,'Wengang')
+            csvOpts = detectImportOptions(fullfile(epochList{row,2},'InfoPatching.xlsx'));
+            csvOpts.SelectedVariableNames = 1:9;
+            csvOpts.VariableNamesRange = 25;
+            info = readtable(fullfile(epochList{row,2},'InfoPatching.xlsx'),csvOpts);
+            info = rmmissing(info,DataVariables="acq_");
+            info = rmmissing(info,DataVariables="epoch");
+
+            if iscell(info.acq_); info.acq_ = str2double(info.acq_); end
+            if iscell(info.epoch); info.epoch = str2double(info.epoch); end
+            if iscell(info.cyclePos); info.epoch = str2double(info.cyclePos); end
+            if iscell(info.holding); info.acq_ = str2double(info.holding); end
+        end
     
         %% Load individual sweeps
         for k = 1:length(sweepAcq)
@@ -233,8 +257,12 @@ if options.reload
                                        rcCheckRecoveryWindow=options.rcCheckRecoveryWindow);
             protocols{k} = {protocol};
             cycles{k} = protocol.cycle;
-            vholds(k) = mean(raw_trace(baselineWindow));
-    
+
+            % Extract quality metrics from header string
+            qc = getCellQC(raw_trace,calculate=options.calculateQC,headerString=headerString);
+            Rss(k) = qc.Rs; Rms(k) = qc.Rm; Cms(k) = qc.Cm;
+            
+            
             % Skip analysis for some sweeps
             % 1. For whole field cycles, warn user if total length of raw_trace
             % is differnt from avg trace
@@ -248,11 +276,7 @@ if options.reload
                 warning("Sweep duration is different from epoch avg duration!!");
                 continue
             end
-            sweeps(k,:) = raw_trace;
-    
-            % Extract quality metrics from header string
-            qc = getCellQC(raw_trace,calculate=options.calculateQC,headerString=headerString);
-            Rss(k) = qc.Rs; Rms(k) = qc.Rm; Cms(k) = qc.Cm;
+            sweeps(k,:) = raw_trace;            
     
     
             % Define time window for baseline & analysis
@@ -270,27 +294,58 @@ if options.reload
                 postStimWindow = (protocol.stimOnset(1) + stimDuration):rcCheckOnset;
                 baselineWindow = [preStimWindow,postStimWindow];
             end
+
+            % Define time window for plotting
+            options.eventSample = protocol.stimOnset;
+            timeRangeStartSample = options.eventSample + options.outputFs*options.timeRange(1)/1000;
+            timeRangeEndSample = options.eventSample + options.outputFs*options.timeRange(2)/1000;
+            plotWindowLength = timeRangeEndSample(1) - timeRangeStartSample(1) + 1;
+            plotWindowTime = linspace(options.timeRange(1),options.timeRange(2),plotWindowLength);
     
-            % Calculate analysis window
-            if ~strcmp(rig,'Wengang')
-                options.eventSample = protocol.stimOnset;
-                timeRangeEndSample = options.eventSample + options.outputFs*options.timeRange(2)/1000;
-                analysisWindow = (options.eventSample+options.nArtifactSamples) : timeRangeEndSample;
-                peakWindowWidth = (options.peakWindow/(2*1000)) * options.outputFs;
-            end
+            % Define control window: 50ms before each spot stim onset
+            controlWindowSamples = options.controlWindowLength * options.outputFs/1000;
+
+            % Define analysis window: 50ms after each spot stim onset
+            analysisWindowSamples = options.analysisWindowLength * options.outputFs/1000;
+            eventSample = abs(options.outputFs*options.timeRange(1)/1000);
+            analysisWindow = eventSample:eventSample+analysisWindowSamples;
     
-            % Save time windows to options
+            % Define time window for peak window analysis
+            peakWindowWidth = (options.peakWindow/(2*1000)) * options.outputFs;
+
+            % Save time windows to options and protocols
             options.baselineWindow = baselineWindow;
             options.baselineWindow_preStim = preStimWindow;
             options.baselineWindow_postStim = postStimWindow;
             options.analysisWindow = analysisWindow;
-            options.controlWindowLength = controlWindowLength;
             options.plotWindowLength = plotWindowLength;
-            options.peakWindowLength = peakWindowLength;
+            options.peakWindowWidth = peakWindowWidth;
+            options.plotWindowTime = plotWindowTime;
+            options.analysisWindowSamples = analysisWindowSamples;
+            options.controlWindowSamples = controlWindowSamples;
+    
+
+            % % Calculate analysis window
+            % if ~strcmp(rig,'Wengang')
+            %     options.eventSample = protocol.stimOnset;
+            %     timeRangeEndSample = options.eventSample + options.outputFs*options.timeRange(2)/1000;
+            %     analysisWindow = (options.eventSample+options.nArtifactSamples) : timeRangeEndSample;
+            %     peakWindowWidth = (options.peakWindow/(2*1000)) * options.outputFs;
+            % end
+            % 
+            % % Save time windows to options
+            % options.baselineWindow = baselineWindow;
+            % options.baselineWindow_preStim = preStimWindow;
+            % options.baselineWindow_postStim = postStimWindow;
+            % options.analysisWindow = analysisWindow;
+            % options.controlWindowLength = controlWindowLength;
+            % options.plotWindowLength = plotWindowLength;
+            % options.peakWindowLength = peakWindowLength;
     
     
             % Process trace: mean-subtracted, optional LP
             % Mean subtraction
+            baselineAvg = mean(raw_trace(baselineWindow));
             mean_subtracted = raw_trace - mean(raw_trace(baselineWindow));
             if options.filterSignal
                 Fs = options.outputFs; % Sampling frequency  
@@ -359,11 +414,17 @@ if options.reload
             end
         else
             cellid = epochList{row,end};
+            
+            % Determine Vhold
+            % Find in .xlsx file first, if can't find, use the heuristic that
+            % cells with negative leak current Vhold=-70, otherwise Vhold = 10;
+            acqsplit = split(sweepAcq{k},'_'); acqNum = str2double(acqsplit{end});
+            vhold = info{info.acq_ == acqNum,'holding'};
+            if isempty(vhold)
+                if baselineAvg < 0; vhold = -70;
+                else; vhold = 10; end
+            end
         end
-        % Total cell vhold
-        if mode(vholds) < 0; vhold = -70;
-        else; vhold = 10; end
-    
     
         % Remove empty/erraneous sweeps
         if createNew
@@ -388,7 +449,7 @@ if options.reload
         end
     
         %% Store everything in epochs
-        epochs{row,'Session'} = string(options.rawDataPath);
+        epochs{row,'Session'} = string(options.sessionPath);
         epochs{row,'Animal'} = options.animal;
         epochs{row,'Task'} = options.task;
         epochs{row,'Epoch'} = epoch; %string(epochList{row,1});

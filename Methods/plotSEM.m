@@ -1,4 +1,4 @@
-function plotSEM(x,y,color,options)
+function varargout = plotSEM(x,y,color,options)
 
 % parse inputs
 arguments
@@ -9,7 +9,8 @@ arguments
     options.smooth double = 0;
     options.smoothMethod string = 'movmean';
 
-    options.meanOnly logical = false
+    options.plotMean logical = true
+    options.plotPatch logical = true % requires plotMean is true
     options.plotIndividual logical = false % plot individual trace in the background
     options.individualColor = 'gray' % Color of individual trace
     options.LineStyle (1,1) string = "-"
@@ -17,10 +18,15 @@ arguments
     options.plotStyle string = 'line'
     options.delta double = []
     options.individualAlpha double = 0
+
+    options.label string = ''
 end
 
 %% Set up
-if isempty(y); return; end
+if isempty(y)
+    l = nan; varargout{1} = l;
+    return; 
+end
 
 % Check color is valid
 if ~isstring(color)
@@ -68,19 +74,25 @@ end
 if strcmp(options.plotStyle,'line')
     if options.plotIndividual
         for i = 1:size(y,1)
-            plot(x,y(i,:),'Color',options.individualColor,'LineWidth',options.LineWidth-1,'LineStyle',options.LineStyle,'HandleVisibility','off'); hold on
+            plot(x,y(i,:),'Color',options.individualColor,'LineWidth',max(0.01,options.LineWidth-1),'LineStyle',options.LineStyle,'HandleVisibility','off'); hold on
         end
     end
-    plot(x,yMean,'Color',color,'LineWidth',options.LineWidth,'LineStyle',options.LineStyle); hold on
+    if options.plotMean
+        l = plot(x,yMean,'Color',color,'LineWidth',options.LineWidth,'LineStyle',options.LineStyle,'DisplayName',options.label); hold on
+    end
 elseif strcmp(options.plotStyle,'stairs')
-    stairs(x,yMean,'Color',color,'LineWidth',options.LineWidth,'LineStyle',options.LineStyle); hold on
+    if options.plotMean
+        l = stairs(x,yMean,'Color',color,'LineWidth',options.LineWidth,'LineStyle',options.LineStyle,'DisplayName',options.label); hold on
+    end
 end
 
-if ~options.meanOnly
+if options.plotMean && options.plotPatch
     patch('XData',[x, fliplr(x)], 'YData',[yMean-ySEM, fliplr(yMean+ySEM)], ...
         'FaceColor',color,'EdgeColor','none','FaceAlpha',0.25,'HandleVisibility','off');
     hold on
 end
 box off
+
+varargout{1} = l;
 
 end % plotSEM

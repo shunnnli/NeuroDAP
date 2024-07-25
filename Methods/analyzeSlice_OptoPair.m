@@ -9,6 +9,9 @@ arguments
     options.plotTraces logical = true % just plot traces for epoch/cell
     options.plotStats logical = false % calculate EPSC/IPSC
 
+    options.plotEpoch logical = true
+    options.plotCell logical = true
+
     options.groups double = 1; % indicate grouping of sessions if multiple sessions are provided
     options.conditions string = ["Control","Reward pairing","Punishment pairing"];
     options.conditionValues double = [0,1,2];
@@ -20,7 +23,6 @@ arguments
 
     options.plotAll logical = true
     options.nArtifactSamples double = 0 % in sample
-    options.yScalePadding double = 0.1 % in percentage
     options.VholdList double = [-70, 0, 8, 10, 12, 15, 18, 20];
 
     options.dotSizeScatter double = 100; % dot size for scatter plot
@@ -65,9 +67,14 @@ end
 [~,~,~,~,~,~,bluePurpleRed] = loadColors; 
 % Set up resultPath
 if ~isfield(options,'resultPath')
-    if singleSession; options.resultPath = fullfile(allEpochs{1,'Session'},options.resultPath);
+    if singleSession; options.resultPath = fullfile(allEpochs{1,'Session'});
     else
         error('Multiple sessions: please specify resultPath!'); 
+    end
+else
+    if singleSession; options.resultPath = fullfile(allEpochs{1,'Session'},options.resultPath);
+    elseif ~contains(options.resultPath,filesep)
+        error('Multiple sessions: please specify resultPath!');
     end
 end
 
@@ -79,8 +86,7 @@ if singleSession && options.plotTraces
             resultPath=options.resultPath,save=options.save,...
             timeRange=options.timeRange,...
             eventSample=options.eventSample,nArtifactSamples=options.nArtifactSamples,...
-            outputFs=options.outputFs,...
-            yScalePadding=options.yScalePadding);
+            outputFs=options.outputFs);
 end
 
 %% ************ UNFINISHED ************** Plot stats

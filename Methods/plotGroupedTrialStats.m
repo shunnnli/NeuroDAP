@@ -15,9 +15,10 @@ arguments
     options.dotSize double = 200
 
     % plotTraces options
-    options.meanOnly logical = false
+    options.plotPatch logical = true
     options.plotIndividual logical = false
-    options.individualColor = [0.8, 0.8, 0.8]
+    options.individualColor = 'gray'
+    options.individualAlpha double = 0
 end
 
 %% Parse inputs
@@ -85,7 +86,7 @@ for task = 1:length(stats)
         else; individualColor = options.individualColor; end
         scatter(x,mean(grouped,1),options.dotSize,options.color{event},'filled',HandleVisibility='off'); hold on
         plotTraces(grouped,x,color=options.color{event},extract=false,...
-            meanOnly=options.meanOnly,...
+            plotPatch=options.plotPatch,...
             plotIndividual=options.plotIndividual,...
             individualColor=individualColor);
     end

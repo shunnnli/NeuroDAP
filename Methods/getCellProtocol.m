@@ -14,18 +14,23 @@ end
 % Get cycle
 protocol.cycle = getHeaderValue(headerString,'state.cycle.cycleName');
 
+% Decide color
+protocol.lastLinesUsed = eval(getHeaderValue(headerString,'state.phys.internal.lastLinesUsed'));
+protocol.lastPulsesUsed = eval(getHeaderValue(headerString,'state.phys.internal.lastPulsesUsed'));
+protocol.stimChannel = protocol.lastLinesUsed{end};
+
 % Get experiment protocol
-% UNFINISHED: ADD BLUE AND RED SEPARATION
-protocol.amplitude = getHeaderValue(headerString,'state.phys.internal.pulseString_ao1',pulseVar='amplitude');
-protocol.duration = getHeaderValue(headerString,'state.phys.internal.pulseString_ao1',pulseVar='duration');
-protocol.offset = getHeaderValue(headerString,'state.phys.internal.pulseString_ao1',pulseVar='offset');
-protocol.numPulses = getHeaderValue(headerString,'state.phys.internal.pulseString_ao1',pulseVar='numPulses');
-protocol.isi = getHeaderValue(headerString,'state.phys.internal.pulseString_ao1',pulseVar='isi');
-protocol.pulseWidth = getHeaderValue(headerString,'state.phys.internal.pulseString_ao1',pulseVar='pulseWidth');
-protocol.delay = getHeaderValue(headerString,'state.phys.internal.pulseString_ao1',pulseVar='delay');
-protocol.ramp = getHeaderValue(headerString,'state.phys.internal.pulseString_ao1',pulseVar='ramp');
-protocol.patternRepeats = getHeaderValue(headerString,'state.phys.internal.pulseString_ao1',pulseVar='patternRepeats');
-protocol.patternISI = getHeaderValue(headerString,'state.phys.internal.pulseString_ao1',pulseVar='patternISI');
+pulseString = ['state.phys.internal.pulseString_',protocol.stimChannel];
+protocol.amplitude = getHeaderValue(headerString,pulseString,pulseVar='amplitude');
+protocol.duration = getHeaderValue(headerString,pulseString,pulseVar='duration');
+protocol.offset = getHeaderValue(headerString,pulseString,pulseVar='offset');
+protocol.numPulses = getHeaderValue(headerString,pulseString,pulseVar='numPulses');
+protocol.isi = getHeaderValue(headerString,pulseString,pulseVar='isi');
+protocol.pulseWidth = getHeaderValue(headerString,pulseString,pulseVar='pulseWidth');
+protocol.delay = getHeaderValue(headerString,pulseString,pulseVar='delay');
+protocol.ramp = getHeaderValue(headerString,pulseString,pulseVar='ramp');
+protocol.patternRepeats = getHeaderValue(headerString,pulseString,pulseVar='patternRepeats');
+protocol.patternISI = getHeaderValue(headerString,pulseString,pulseVar='patternISI');
 
 % Calculate stim onset time
 protocol.stimOnset = protocol.delay + ((1:protocol.numPulses)-1)*protocol.isi;
@@ -35,6 +40,17 @@ protocol.stimOnset = protocol.stimOnset * (options.outputFs/1000); % in samples
 if contains(protocol.cycle,'randomSearch')
     protocol.depth = getHeaderValue(headerString,'state.zDMD.searchDepth',convert=true);
     protocol.repetition = getHeaderValue(headerString,'state.zDMD.searchRepetition',convert=true);
+
+    % Extract cell location
+    if strcmp(protocol.stimChannel,'ao1')
+        tVector = eval(getHeaderValue(headerString,'state.zDMD.tVectorBlue'));
+        protocol.cellX = 342 + round(tVector(1));
+        protocol.cellY = 304 + round(tVector(2));
+    elseif strcmp(protocol.stimChannel,'ao2')
+        tVector = eval(getHeaderValue(headerString,'state.zDMD.tVectorRed'));
+        protocol.cellX = 342 - round(tVector(2));
+        protocol.cellY = 304 + round(tVector(1));
+    end
 end
 
 end
