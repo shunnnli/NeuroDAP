@@ -115,7 +115,7 @@ included = ones(size(epochs{row,'Raw sweeps'}{1},1),1);
 traces = epochs{row,'Raw sweeps'}{1}(included==1,plotWindow);
 if ~isempty(traces)
     plotSEM(timeRangeInms,traces,[0.343, 0.75, 0.232],...
-            meanOnly=true,plotIndividual=true);
+            plotPatch=false,plotIndividual=true);
     xlabel('Time (ms)');
     ylabel('Current (pA)');
     yMin = min(traces(:,analysisWindow),[],"all");
@@ -131,7 +131,7 @@ included = epochs{row,'Included'}{1};
 traces = epochs{row,'Raw sweeps'}{1}(included==1,plotWindow);
 if ~isempty(traces)
     plotSEM(timeRangeInms,traces,[0.343, 0.75, 0.232],...
-            meanOnly=true,plotIndividual=true);
+            plotPatch=false,plotIndividual=true);
     xlabel('Time (ms)');
     ylabel('Current (pA)');
     yMin = min(traces(:,analysisWindow),[],"all");
@@ -147,7 +147,7 @@ included = epochs{row,'Included'}{1};
 traces = epochs{row,'Raw sweeps'}{1}(included~=1,plotWindow);
 if ~isempty(traces)
     plotSEM(timeRangeInms,traces,[0.343, 0.75, 0.232],...
-            meanOnly=true,plotIndividual=true);
+            plotPatch=false,plotIndividual=true);
     xlabel('Time (ms)');
     ylabel('Current (pA)');
     yMin = min(traces(:,analysisWindow),[],"all");

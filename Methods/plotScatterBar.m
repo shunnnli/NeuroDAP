@@ -10,11 +10,13 @@ arguments
     options.MarkerFaceAlpha double = 0.8
     options.XJitter = 'density'
     options.XJitterWidth double = 0.5
-
+    options.LineWidth double = 2
 end
 
 xgroupdata = x * ones(size(data,1),1);
-boxchart(xgroupdata,data,'BoxFaceColor',options.color); hold on
+boxchart(xgroupdata,data,'BoxFaceColor',options.color,'WhiskerLineColor',options.color,...
+         LineWidth=options.LineWidth); 
+hold on
 swarmchart(xgroupdata,data,...
     options.dotSize,options.color,'filled',...
     'MarkerFaceAlpha',options.MarkerFaceAlpha,...

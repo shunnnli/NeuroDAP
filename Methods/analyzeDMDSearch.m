@@ -15,7 +15,7 @@ arguments
     options.saveFIG logical = true
 
     options.outputFs double = 10000
-    options.timeRange double = [-20,100] % in ms
+    options.timeRange double = [-1,50] % in ms
     options.analysisWindowLength double = 50 % in ms after stim onset
     options.controlWindowLength double = 50 % in ms before stim onset
     options.eventSample % in sample
@@ -35,7 +35,6 @@ end
 [~,~,~,~,blueWhiteRed,~,~] = loadColors;
 
 % Define path
-cellResultsPath = fullfile(curCell.Session,['cell',num2str(curCell.Cell)]);
 strsplit = split(curCell.Session,'Results');
 expPath = strsplit{1};
 
@@ -62,7 +61,7 @@ purple = [232, 130, 250]./255;
 
 % Define time windows
 if options.outputFs ~= curCell.Options{1}.outputFs
-    warning('analyzeSlice_DMD: Default options.outputFs differs from outputFs extracted from cells_DMD. Using cells_DMD value instead!');
+    warning('analyzeDMDSearch: Default options.outputFs differs from outputFs extracted from cells_DMD. Using cells_DMD value instead!');
     options.outputFs = curCell.Options{1}.outputFs;
 end
 if options.timeRange ~= curCell.Options{1}.timeRange
@@ -93,7 +92,8 @@ end
 curSearch = curCell.Epochs{1}{searchIdx};
 search_depths = curCell.("Response map"){1}.depths{searchIdx};
 search_rmap = curCell.("Response map"){1}.responseMap{searchIdx};
-search_isResponse = curCell.("Response map"){1}.isResponseMap{searchIdx};
+% search_isResponse = curCell.("Response map"){1}.isResponseMap{searchIdx};
+% search_hotspotMap = curCell.("Response map"){1}.hotspotMap{searchIdx};
 search_cmap = curCell.("Response map"){1}.currentMap{searchIdx};
 search_bmap = curCell.("Response map"){1}.baselineMap{searchIdx};
 search_vhold = curCell.Vhold{1}(searchIdx);
@@ -114,9 +114,12 @@ else
 end
 
 % Define color
-if search_vhold < -50; color = blueWhiteRed(end,:);
-elseif search_vhold > -10; color = blueWhiteRed(1,:); 
-else; color = purple; 
+if search_vhold < -50
+    color = blueWhiteRed(end,:); 
+elseif search_vhold > -10
+    color = blueWhiteRed(1,:); 
+else
+    color = purple; 
 end
 
 % Load noise model of this neuron
@@ -125,12 +128,13 @@ Ethres = curCell.Stats{1}.Ethres; %-2 * noise_all.sigma;
 Ithres = curCell.Stats{1}.Ithres; %2 * noise_all.sigma;
 
 % Load spots.mat for this neuron
-depthfilename = strcat(curSearch,'_depth*.mat');
-spotsList = dir(fullfile(cellResultsPath,depthfilename));
+% cellResultsPath = fullfile(curCell.Session,['cell',num2str(curCell.Cell)]);
+% depthfilename = strcat(curSearch,'_depth*.mat');
+% spotsList = dir(fullfile(cellResultsPath,depthfilename));
 
 %% Generate a summary figure for each search
 
-for d = 3%1:nDepth
+for d = 1:nDepth
     %% Initialization
     curDepth = search_depths(d);
     disp(['Ongoing: calculating statistics for search: ', curSearch,' at depth ',num2str(curDepth)]);
@@ -141,10 +145,12 @@ for d = 3%1:nDepth
 
     % Load depth specific data
     depthResponseMap = search_rmap(:,:,d);
-    isResponseMap_depth = search_isResponse(:,:,d);
+    % depthHotspotMap = search_isResponse(:,:,d);
+    % depthHotspotMap = search_hotspotMap(:,:,d);
     depthCurrentMap = search_cmap{d};
     depthBaselineMap = search_bmap{d};
     spotSequence = repelem(1:height(search_hotspot{d}), cellfun(@numel, search_hotspot{d}))';
+    depthHotspot = search_hotspot{d};
 
     % Determine current plot line width
     if curDepth <= length(options.depthLineWidth); LineWidth = options.depthLineWidth(curDepth);
@@ -154,12 +160,13 @@ for d = 3%1:nDepth
     optoData = cell2mat(depthCurrentMap); 
     optoData = optoData(:,analysisWindow);
     ctrlData = cell2mat(depthBaselineMap);
+    ctrlData = ctrlData(:,size(ctrlData,2)-length(analysisWindow)+1:size(ctrlData,2));
     optoTime = linspace(0,options.analysisWindowLength,size(optoData,2));
     ctrlTime = linspace(-options.controlWindowLength,0,size(ctrlData,2));
 
     % Calculate max/min current for plotting
-    optoMax = optoData(~isoutlier(optoData)); 
-    optoMin = optoData(~isoutlier(optoData)); 
+    % optoMax = optoData(~isoutlier(optoData)); 
+    % optoMin = optoData(~isoutlier(optoData)); 
     optoMax = max(optoData,[],'all'); optoMin = min(optoData,[],'all');
 
     % Get hotspot vs null spot
@@ -168,14 +175,26 @@ for d = 3%1:nDepth
     hotspotData = optoData(hotspot_sweepIdx,:);
     nullspotData = optoData(~hotspot_sweepIdx,:);
 
-    % Get max/min responses for each spot
+    % Get response statistics for each spot
     spotMax_avg = cell2mat(cellfun(@(x) mean(x,"all"), curCell.Stats{1}.max{searchIdx}{d},UniformOutput=false));
     spotMin_avg = cell2mat(cellfun(@(x) mean(x,"all"), curCell.Stats{1}.min{searchIdx}{d},UniformOutput=false));
     spotMaxTime_avg = cell2mat(cellfun(@(x) mean(x,"all"), curCell.Stats{1}.maxTime{searchIdx}{d},UniformOutput=false));
     spotMinTime_avg = cell2mat(cellfun(@(x) mean(x,"all"), curCell.Stats{1}.minTime{searchIdx}{d},UniformOutput=false));
     spotAUC_avg = cell2mat(cellfun(@(x) mean(x,"all"), curCell.Stats{1}.auc{searchIdx}{d},UniformOutput=false));
-    % ctrlMax_avg = cell2mat(cellfun(@(x) max(x,[],'all'), depthBaselineMap,UniformOutput=false));
-    % ctrlMin_avg = cell2mat(cellfun(@(x) min(x,[],'all'), depthBaselineMap,UniformOutput=false));
+    ctrlAUC_avg = cell2mat(cellfun(@(x) mean(x,"all"), curCell.Stats{1}.baseline.auc{searchIdx}{d},UniformOutput=false));
+    % ctrlSTD_avg = cell2mat(cellfun(@(x) mean(x,"all"), curCell.Stats{1}.baseline.std{searchIdx}{d},UniformOutput=false));
+    ctrlMax_avg = cell2mat(cellfun(@(x) max(x,[],'all'), depthBaselineMap,UniformOutput=false));
+    ctrlMin_avg = cell2mat(cellfun(@(x) min(x,[],'all'), depthBaselineMap,UniformOutput=false));
+    [~,ctrlMaxTimeIdx_avg] = cellfun(@(x) max(x,[],'all'), depthBaselineMap,UniformOutput=false);
+    ctrlMaxTime_avg = cell2mat(ctrlMaxTimeIdx_avg)/options.outputFs*1000;
+    [~,ctrlMinTimeIdx_avg] = cellfun(@(x) max(x,[],'all'), depthBaselineMap,UniformOutput=false);
+    ctrlMinTime_avg = cell2mat(ctrlMinTimeIdx_avg)/options.outputFs*1000;
+    spotAbsAUC = sum(abs(optoData),2)/options.outputFs; 
+    ctrlAbsAUC = sum(abs(ctrlData),2)/options.outputFs;
+    spotAbsAUC_avg = accumarray(spotSequence(:), spotAbsAUC(:), [], @(x) {x});
+    ctrlAbsAUC_avg = accumarray(spotSequence(:), ctrlAbsAUC(:), [], @(x) {x});
+    spotAbsAUC_avg = cell2mat(cellfun(@(x) mean(x,"all"), spotAbsAUC_avg,UniformOutput=false));
+    ctrlAbsAUC_avg = cell2mat(cellfun(@(x) mean(x,"all"), ctrlAbsAUC_avg,UniformOutput=false));
 
     % Calculate response rate
     % Prestim success rate
@@ -216,12 +235,19 @@ for d = 3%1:nDepth
         nexttile(depthLayout,t);
         if isempty(depthCurrentMap{t})
             trace = nan(1,plotWindowLength);
+            spotHotspot = false;
         else
             trace = depthCurrentMap{t}(:,plotFirstSample:plotLastSample);
+            spotHotspot = sum(depthHotspot{t})>=1;
         end
-        plotSEM(plotWindowTime,trace,color,...
-                plotIndividual=true,individualColor='same',individualAlpha=0.3,...
-                LineWidth=LineWidth);
+
+        if spotHotspot
+            plotSEM(plotWindowTime,trace,color,opacity=1,...
+                    plotIndividual=true,LineWidth=LineWidth);
+        else
+            plotSEM(plotWindowTime,trace,color,opacity=0.3,...
+                    plotIndividual=true,LineWidth=LineWidth);
+        end
         xlim([options.timeRange(1), options.timeRange(2)]); 
         ylim([optoMin, optoMax]);
         plotEvent('',stimDuration,shadeOnly=true,color=stimColor,FaceAlpha=0.3,percentY=30,zeroValue=0);
@@ -235,7 +261,7 @@ for d = 3%1:nDepth
         else
             xlabel('ms'); ylabel('pA'); box off; 
             xticks([0,50]); 
-            yticks(sort([ceil(optoMin)-eps,round(Ethres),round(Ithres),floor(optoMax)+eps]));
+            yticks(sort(unique([round(optoMin)-eps,round(Ethres),round(Ithres),round(optoMax)+eps])));
         end
     end
 
@@ -250,27 +276,27 @@ for d = 3%1:nDepth
     scatter(cellLoc(1),cellLoc(2),50,'o','filled','MarkerFaceColor','k','MarkerEdgeColor','none');
     title(['Depth ', num2str(curDepth),': ',curCell.Options{1}.feature]);
 
-    % Plot isResponse map
-    ax_isResponse = nexttile(masterLayout,4,[2 1]); 
-    imagesc(isResponseMap_depth); axis off; hold on;
-    clim([0, 1]); colormap(ax_isResponse,[.98,.98,.98; color]);
-    colorbar(Ticks=[0,1],TickLabels={'No response','Responded'});
-    scatter(cellLoc(1),cellLoc(2),50,'o','filled','MarkerFaceColor','k','MarkerEdgeColor','none');
-    title(['Depth ', num2str(curDepth),': responded spots']);
+    % Plot hotspot map
+    % ax_hotspot = nexttile(masterLayout,4,[2 1]); 
+    % imagesc(depthHotspotMap); axis off; hold on;
+    % clim([0, 1]); colormap(ax_hotspot,[.98,.98,.98; color]);
+    % colorbar(Ticks=[0,1],TickLabels={'No response','Responded'});
+    % scatter(cellLoc(1),cellLoc(2),50,'o','filled','MarkerFaceColor','k','MarkerEdgeColor','none');
+    % title(['Depth ', num2str(curDepth),': responded spots']);
 
     % Plot opto vs prestim trace 
-    nexttile(masterLayout,11);
-    plotSEM(ctrlTime(end-200:end),ctrlData(:,end-200:end),[.8 .8 .8],...
-            plotIndividual=true,individualColor='same',individualAlpha=0.3,...
+    nexttile(masterLayout,4);
+    plotSEM(ctrlTime(end-200:end),ctrlData(:,end-200:end),...
+            [.8 .8 .8],plotIndividual=true,...
             label='Baseline');
-    plotSEM(optoTime,nullspotData,[.6 .6 .6],plotIndividual=true,individualColor='same',individualAlpha=0.3,label='Nullspot');
-    plotSEM(optoTime,hotspotData,color,plotIndividual=true,individualColor='same',individualAlpha=0.3,label='Hotspot');
+    plotSEM(optoTime,nullspotData,[.6 .6 .6],plotIndividual=true,label='Nullspot');
+    plotSEM(optoTime,hotspotData,color,plotIndividual=true,label='Hotspot');
     xlabel('Time from stim (ms)'); ylabel('pA'), ylim([optoMin, optoMax]);
     legend(Location='best');
     title(['Depth ', num2str(curDepth),': opto vs baseline trace']);
 
     % Plot noise vs response distribution
-    nexttile(masterLayout,12); 
+    nexttile(masterLayout,8); 
     h_baseline = histogram(allNullData,'Normalization','pdf'); hold on
     h_baseline.FaceColor = [.8,.8,.8]; h_baseline.EdgeColor = [.8,.8,.8];
     if find(~hotspot_spotIdx)
@@ -287,38 +313,80 @@ for d = 3%1:nDepth
     title(['Depth ', num2str(curDepth),': noise vs response']);
 
     % Plot statistics
-    nexttile(masterLayout,15);
-    statLayout = tiledlayout(masterLayout,1,5);
-    statLayout.Layout.Tile = 15;
-    statLayout.Layout.TileSpan = [1 2];
-    statLayout.TileSpacing = 'compact'; statLayout.Padding = 'tight'; axis off;
+    nexttile(masterLayout,11);
+    statLayout1 = tiledlayout(masterLayout,1,5);
+    statLayout1.Layout.Tile = 11;
+    statLayout1.Layout.TileSpan = [1 2];
+    statLayout1.TileSpacing = 'compact'; statLayout1.Padding = 'tight'; axis off;
 
-    % Plot hotspot vs nullspot minTime
-    nexttile(statLayout,1);
-    if find(hotspot_spotIdx); plotScatterBar(spotMinTime_avg(hotspot_spotIdx),1,color=red); end
-    if find(~hotspot_spotIdx); plotScatterBar(spotMinTime_avg(~hotspot_spotIdx),2,color=[.6 .6 .6]); end
-    xticks([1 2]); xticklabels({'Hotspot','Nullspot'});
-    ylabel('Time to min (ms)');
-    title('Time to minimum');
+    % Plot hotspot vs nullspot min response
+    nexttile(statLayout1,1,[1 2]);
+    if find(hotspot_spotIdx); plotScatterBar(spotMin_avg(hotspot_spotIdx),1,color=red); end
+    if find(~hotspot_spotIdx); plotScatterBar(spotMin_avg(~hotspot_spotIdx),2,color=[.6 .6 .6]); end
+    % Plot hotspot vs nullspot max response
+    if find(hotspot_spotIdx); plotScatterBar(spotMax_avg(hotspot_spotIdx),3,color=blue); end
+    if find(~hotspot_spotIdx); plotScatterBar(spotMax_avg(~hotspot_spotIdx),4,color=[.6 .6 .6]); end  
+    xticks([1 2 3 4]); 
+    xticklabels({'Exci. hotspot','Exci. nullspot','Inhi. hotspot','Inhi. nullspot'});
+    ylabel('Current (pA)');
+    title('Max response current');
 
-    % Plot hotspot vs nullspot maxTime
-    nexttile(statLayout,2);
-    if find(hotspot_spotIdx); plotScatterBar(spotMaxTime_avg(hotspot_spotIdx),1,color=blue); end
-    if find(~hotspot_spotIdx); plotScatterBar(spotMaxTime_avg(~hotspot_spotIdx),2,color=[.6 .6 .6]); end
-    xticks([1 2]); xticklabels({'Hotspot','Nullspot'});
-    ylabel('Time to max (ms)');
-    title('Time to maximum');
+    % Plot ctrl min/max response
+    nexttile(statLayout1,3);
+    plotScatterBar(ctrlMin_avg,1,color=[.8 .8 .8]);
+    plotScatterBar(ctrlMax_avg,2,color=[.8 .8 .8]);
+    xticks([1 2]); xticklabels({'Excitatory','Inhibitory'});
+    ylabel('Current (pA)');
+    title('Max ctrl current');
 
     % Plot hotspot vs nullspot AUC
-    nexttile(statLayout,3);
+    nexttile(statLayout1,4);
     if find(hotspot_spotIdx); plotScatterBar(spotAUC_avg(hotspot_spotIdx),1,color=red); end
     if find(~hotspot_spotIdx); plotScatterBar(spotAUC_avg(~hotspot_spotIdx),2,color=[.6 .6 .6]); end
-    xticks([1 2]); xticklabels({'Hotspot','Nullspot'});
-    ylabel('AUC (pC)');
-    title('AUC');
+    plotScatterBar(ctrlAUC_avg,3,color=[.8 .8 .8]);
+    xticks([1 2 3]); xticklabels({'Hotspot','Nullspot','Ctrl'});
+    ylabel('Net total charge (pC)');
+    title('Net total charge');
+
+    % Plot hotspot vs nullspot absolute AUC
+    nexttile(statLayout1,5);
+    if find(hotspot_spotIdx); plotScatterBar(spotAbsAUC_avg(hotspot_spotIdx),1,color=red); end
+    if find(~hotspot_spotIdx); plotScatterBar(spotAbsAUC_avg(~hotspot_spotIdx),2,color=[.6 .6 .6]); end
+    plotScatterBar(ctrlAbsAUC_avg,3,color=[.8 .8 .8]);
+    xticks([1 2 3]); xticklabels({'Hotspot','Nullspot','Ctrl'});
+    ylabel('Absolute total charge (pC)');
+    title('Absolute total charge');
+
+    % Other statistics
+    nexttile(masterLayout,15);
+    statLayout2 = tiledlayout(masterLayout,1,5);
+    statLayout2.Layout.Tile = 15;
+    statLayout2.Layout.TileSpan = [1 2];
+    statLayout2.TileSpacing = 'compact'; statLayout2.Padding = 'tight'; axis off;
+
+    % Plot hotspot vs nullspot minTime
+    nexttile(statLayout2,1,[1 2]);
+    if find(hotspot_spotIdx); plotScatterBar(spotMinTime_avg(hotspot_spotIdx),1,color=red); end
+    if find(~hotspot_spotIdx); plotScatterBar(spotMinTime_avg(~hotspot_spotIdx),2,color=[.6 .6 .6]); end
+    % Plot hotspot vs nullspot maxTime
+    if find(hotspot_spotIdx); plotScatterBar(spotMaxTime_avg(hotspot_spotIdx),3,color=blue); end
+    if find(~hotspot_spotIdx); plotScatterBar(spotMaxTime_avg(~hotspot_spotIdx),4,color=[.6 .6 .6]); end
+    xticks([1 2 3 4]); 
+    xticklabels({'Exci. hotspot','Exci. nullspot','Inhi. hotspot','Inhi. nullspot'});
+    ylabel('Time (ms)');
+    title('Time to max response current');
+
+    % Plot control minTime/maxTime
+    nexttile(statLayout2,3);
+    plotScatterBar(ctrlMinTime_avg,1,color=[.8 .8 .8]);
+    plotScatterBar(ctrlMaxTime_avg,2,color=[.8 .8 .8]);
+    xticks([1 2 3 4 5 6]); 
+    xticklabels({'Excitatory','Inhibitory'});
+    ylabel('Time (ms)');
+    title('Time to max ctrl current');
 
     % Plot spot response rate vs noise response rate (excitatory)
-    nexttile(statLayout,4); 
+    nexttile(statLayout2,4); 
     if find(hotspot_spotIdx); plotScatterBar(Erate_opto(hotspot_spotIdx),1,color=red); end
     if find(~hotspot_spotIdx); plotScatterBar(Erate_opto(~hotspot_spotIdx),2,color=[.6 .6 .6]); end
     plotScatterBar(Erate_ctrl,3,color=[.8 .8 .8]);
@@ -327,7 +395,7 @@ for d = 3%1:nDepth
     title('Excitatory response rate');
     
     % Plot spot response rate vs noise response rate (inhibitory)
-    nexttile(statLayout,5); 
+    nexttile(statLayout2,5); 
     if find(hotspot_spotIdx); plotScatterBar(Irate_opto(hotspot_spotIdx),1,color=blue); end
     if find(~hotspot_spotIdx); plotScatterBar(Irate_opto(~hotspot_spotIdx),2,color=[.6 .6 .6]); end
     plotScatterBar(Irate_ctrl,3,color=[.8 .8 .8]);
@@ -343,6 +411,6 @@ for d = 3%1:nDepth
     disp(['Finished: saving summary figure for search: ', curSearch,' at depth ',num2str(curDepth)]);
 end
 
-disp(['Finished: analyzeSpot finished for search: ', curSearch]);
+disp(['Finished: analysis finished for search: ', curSearch]);
 close all;
 end

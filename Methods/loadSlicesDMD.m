@@ -102,15 +102,17 @@ if options.reloadCells
         'VariableTypes',varTypes,'VariableNames',varNames);
     
     % Initialize cell-level params
-    cellResponseMap = {}; isResponseMap_cell = {}; 
+    cellResponseMap = {}; isResponseMap_cell = {}; cellHotspotMap = {};
     cellCurrentMap = {}; cellBaselineMap = {};
     cellVhold = []; cellEpochs = {}; searchTotalSpots = {}; 
-    cellDepthList = {}; cellProtocols = {}; cellSpotSequence = {};
+    cellDepthList = {}; cellProtocols = {}; 
     nullSpotData = []; preStimData = []; baselineData = [];
-    cellSpotResponse = {}; 
+    cellSpotResponse = {}; cellSpotSequence = {};
     cellMaxResponse = {}; cellMinResponse = {};
     cellMaxTime = {};cellMinTime = {};
     cellAUC = {}; cellEIindex = {};
+    cellBaselineAUC = {}; cellBaselineSTD = {};
+    cellSpotLocation = {};
 
     %% Iterate & analyze individual epoch
     for row = 1:size(exp,1)
@@ -314,7 +316,7 @@ if options.reloadCells
                     % baseline std for at least 5ms
                     response_threshold =  options.thresholdFactor * stats.baseline.std;
                     responses.isResponse = sweepSpots{s,'response'};
-                    if find(sum(abs(responses.processed(analysisWindow)) >= response_threshold)>50)
+                    if find(sum(abs(responses.processed(analysisWindow)) >= response_threshold)>=50)
                         responses.hotspot = true;
                     else; responses.hotspot = false; 
                     end
@@ -449,11 +451,13 @@ if options.reloadCells
         nDepth = length(spotsList);
         searchResponseMap = zeros(684,608,nDepth);
         isResponseMap_search = zeros(684,608,nDepth);
+        searchHotspotMap = zeros(684,608,nDepth);
         searchCurrentMap = cell(nDepth,1);
         searchBaselineMap = cell(nDepth,1);
         searchDepthList = zeros(1,nDepth);
         searchProtocols = cell(nDepth,1);
         searchSpotSequence = cell(nDepth,1);
+        searchSpotLocation = cell(nDepth,1);
 
         searchSpotResponse = cell(nDepth,1);
         searchMaxResponse = cell(nDepth,1);
@@ -462,6 +466,8 @@ if options.reloadCells
         searchMinTime = cell(nDepth,1);
         searchAUC = cell(nDepth,1);
         searchEIindex = cell(nDepth,1);
+        searchBaselineAUC = cell(nDepth,1);
+        searchBaselineSTD = cell(nDepth,1);
     
         % Loop through depth
         for depthIdx = 1:nDepth
@@ -477,43 +483,30 @@ if options.reloadCells
             
             depthResponseMap = zeros(684,608);
             isResponseMap_depth = zeros(684,608);
+            depthHotspotMap = zeros(684,608);
             depthCurrentMap = cell(4^d,1);
             depthBaselineMap = cell(4^d,1);
             depthSpotSequence = zeros(size(spotsAtDepth,1),1);
+            depthSpotLocation = zeros(4^d,4);
         
             % Build response map
             for s = 1:size(spotsAtDepth,1)
-                % Get response value
-                location = spotsAtDepth{s,'Location'}{1};
-                yRange = location(1):location(2);
-                xRange = location(3):location(4);
-                originalValue = mean(depthResponseMap(xRange,yRange),'all');
-                newValue = spotsAtDepth{s,'Stats'}{1}.response.(options.feature);
-        
-                % Add to depthResponseMap
-                if originalValue==0; depthResponseMap(xRange,yRange) = newValue;
-                else; depthResponseMap(xRange,yRange) = mean([originalValue,newValue]);
-                end
-    
-                % Get isResponse value
-                originalValue_isResponse = mode(isResponseMap_depth(xRange,yRange),'all');
-                newValue_isResponse = spotsAtDepth{s,'Response'}{1}.isResponse;
-        
-                % Add to isResponseMap
-                if originalValue_isResponse==0; isResponseMap_depth(xRange,yRange) = newValue_isResponse;
-                else; isResponseMap_depth(xRange,yRange) = originalValue_isResponse || newValue_isResponse;
-                end
-    
                 % Build depthCurrentMap
                 % depthCurrentMap = cell{nSpotAtDepth,1}
                 % depthCurrentMap{spot1} = zeros(nRep,nSamples)
     
-                % Get response trace
+                % Get spot index
+                location = spotsAtDepth{s,'Location'}{1};
+                yRange = location(1):location(2);
+                xRange = location(3):location(4);
                 square_width = location(2)-location(1)+1; 
                 square_height = location(4)-location(3)+1;
                 x_index = floor(location(1) / square_width);
                 y_index = floor(location(3) / square_height);
                 spotIdx = x_index + y_index * 2^d + 1;
+                depthSpotLocation(spotIdx,:) = location;
+
+                % Get response trace
                 trace = spotsAtDepth{s,'Response'}{1}.processed;
                 baseline = spotsAtDepth{s,'Response'}{1}.control;
     
@@ -521,6 +514,31 @@ if options.reloadCells
                 depthCurrentMap{spotIdx} = [depthCurrentMap{spotIdx}; trace];
                 depthBaselineMap{spotIdx} = [depthBaselineMap{spotIdx}; baseline];
                 depthSpotSequence(s) = spotIdx;
+
+                % Get response value
+                originalValue = mean(depthResponseMap(xRange,yRange),'all');
+                newValue = spotsAtDepth{s,'Stats'}{1}.response.(options.feature);
+                % Add to depthResponseMap
+                if originalValue==0; depthResponseMap(xRange,yRange) = newValue;
+                else; depthResponseMap(xRange,yRange) = mean([originalValue,newValue]);
+                end
+    
+                % Get isResponse value 
+                % value during online search
+                originalValue_isResponse = mode(isResponseMap_depth(xRange,yRange),'all');
+                newValue_isResponse = spotsAtDepth{s,'Response'}{1}.isResponse;
+                % Add to isResponseMap
+                if originalValue_isResponse==0; isResponseMap_depth(xRange,yRange) = newValue_isResponse;
+                else; isResponseMap_depth(xRange,yRange) = originalValue_isResponse || newValue_isResponse;
+                end
+
+                % Get hotspot value
+                originalValue_hotspot = mode(depthHotspotMap(xRange,yRange),'all');
+                newValue_hotspot = spotsAtDepth{s,'Response'}{1}.hotspot;
+                % Add to hotspot map
+                if originalValue_hotspot==0; depthHotspotMap(xRange,yRange) = newValue_hotspot;
+                else; depthHotspotMap(xRange,yRange) = originalValue_hotspot || newValue_hotspot;
+                end
             end        
 
             % Extract statistics
@@ -538,14 +556,20 @@ if options.reloadCells
             EIindex = cell2mat(arrayfun(@(x) spotsAtDepth{x,'Stats'}{1}.response.EIindex,1:height(spotsAtDepth), UniformOutput=false)');
             depthAUC = accumarray(depthSpotSequence(:), auc(:), [], @(x) {x});
             depthEIindex = accumarray(depthSpotSequence(:), EIindex(:), [], @(x) {x});
+            baselineAUC = cell2mat(arrayfun(@(x) spotsAtDepth{x,'Stats'}{1}.baseline.auc,1:height(spotsAtDepth), UniformOutput=false)');
+            baselineSTD = cell2mat(arrayfun(@(x) spotsAtDepth{x,'Stats'}{1}.baseline.std,1:height(spotsAtDepth), UniformOutput=false)');
+            depthBaselineAUC = accumarray(depthSpotSequence(:), baselineAUC(:), [], @(x) {x});
+            depthBaselineSTD = accumarray(depthSpotSequence(:), baselineSTD(:), [], @(x) {x}); 
 
             % Save statistics
             searchResponseMap(:,:,depthIdx) = depthResponseMap;
             isResponseMap_search(:,:,depthIdx) = isResponseMap_depth;
+            searchHotspotMap(:,:,depthIdx) = depthHotspotMap;
             searchCurrentMap{depthIdx} = depthCurrentMap;
             searchBaselineMap{depthIdx} = depthBaselineMap;
             searchDepthList(depthIdx) = d;
             searchSpotSequence{depthIdx} = depthSpotSequence;
+            searchSpotLocation{depthIdx} = depthSpotLocation;
 
             searchSpotResponse{depthIdx} = depthSpotResponse;
             searchMaxResponse{depthIdx} = depthMaxResponse;
@@ -554,15 +578,19 @@ if options.reloadCells
             searchMinTime{depthIdx} = depthMinTime;
             searchAUC{depthIdx} = depthAUC;
             searchEIindex{depthIdx} = depthEIindex;
+            searchBaselineAUC{depthIdx} = depthBaselineAUC;
+            searchBaselineSTD{depthIdx} = depthBaselineSTD;
         end
     
         % Save response map
         cellResponseMap{end+1} = searchResponseMap;
         isResponseMap_cell{end+1} = isResponseMap_search;
+        cellHotspotMap{end+1} = searchHotspotMap;
         cellCurrentMap{end+1} = searchCurrentMap;
         cellBaselineMap{end+1} = searchBaselineMap;
         cellDepthList{end+1} = searchDepthList;
         cellSpotSequence{end+1} = searchSpotSequence;
+        cellSpotLocation{end+1} = searchSpotLocation;
 
         cellSpotResponse{end+1} = searchSpotResponse;
         cellMaxResponse{end+1} = searchMaxResponse;
@@ -571,6 +599,8 @@ if options.reloadCells
         cellMinTime{end+1} = searchMinTime;
         cellAUC{end+1} = searchAUC;
         cellEIindex{end+1} = searchEIindex;
+        cellBaselineAUC{end+1} = searchBaselineAUC;
+        cellBaselineSTD{end+1} = searchBaselineSTD;
     
         % Save to cell
         curCell = spotsAtDepth{1,'Cell'};
@@ -582,11 +612,13 @@ if options.reloadCells
         if row == size(exp,1) || curCell ~= exp{row+1,'Cell'}
             responseMap.responseMap = cellResponseMap';
             responseMap.isResponseMap = isResponseMap_cell';
+            responseMap.hotspotMap = cellHotspotMap';
             responseMap.currentMap = cellCurrentMap';
             responseMap.baselineMap = cellBaselineMap';
             responseMap.depths = cellDepthList';
             responseMap.spotSequence = cellSpotSequence';
             responseMap.hotspot = cellSpotResponse';
+            responseMap.spotLocation = cellSpotLocation';
 
             cellStats.max = cellMaxResponse';
             cellStats.min = cellMinResponse';
@@ -594,6 +626,8 @@ if options.reloadCells
             cellStats.minTime = cellMinTime';
             cellStats.auc = cellAUC';
             cellStats.EIindex = cellEIindex';
+            cellStats.baseline.auc = cellBaselineAUC';
+            cellStats.baseline.std = cellBaselineSTD';
 
             options.searchTotalSpots = searchTotalSpots;
             options.cellLocation = [spotsAtDepth{1,'Protocol'}{1}.cellX, spotsAtDepth{1,'Protocol'}{1}.cellY];
@@ -620,13 +654,15 @@ if options.reloadCells
             % Update prevCell and reset cellResponseMap
             cellVhold = []; cellEpochs = {}; searchTotalSpots = {}; 
             cellDepthList = {}; cellSpotSequence = {}; cellProtocols = {};
-            cellResponseMap = {}; isResponseMap_cell = {}; 
+            cellResponseMap = {}; isResponseMap_cell = {}; cellHotspotMap = {};
             cellCurrentMap = {}; cellBaselineMap = {};
             nullSpotData = []; preStimData = []; baselineData = [];
             cellSpotResponse = {}; 
             cellMaxResponse = {}; cellMinResponse = {};
             cellMaxTime = {};cellMinTime = {};
             cellAUC = {}; cellEIindex = {};
+            cellBaselineAUC = {}; cellBaselineSTD = {};
+            cellSpotLocation = {};
         end
     end
 end
@@ -698,10 +734,10 @@ if options.reloadCellAnalysis
         plot(linspace(xrange(1),xrange(2)),pdf(noise_all,linspace(xrange(1),xrange(2))),'LineWidth',2);
         title('Baseline + Pre-stim + Null spot response');
     
-        % Set threshold based on the noise model (2*standard devation of the
+        % Set threshold based on the noise model (3*standard devation of the
         % symmetric noise)
-        cellStats.Ethres = -2 * noise_all.sigma;
-        cellStats.Ithres = 2 * noise_all.sigma;
+        cellStats.Ethres = -options.thresholdFactor * noise_all.sigma;
+        cellStats.Ithres = options.thresholdFactor * noise_all.sigma;
         cellStats.noiseSD = noise_all.sigma;
         
         % Save noise model

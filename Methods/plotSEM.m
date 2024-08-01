@@ -11,14 +11,17 @@ arguments
 
     options.plotMean logical = true
     options.plotPatch logical = true % requires plotMean is true
+    
+    options.opacity double = 1 % 1 is not transparent, 0 is fully transparent
+
     options.plotIndividual logical = false % plot individual trace in the background
-    options.individualColor = 'gray' % Color of individual trace
+    options.individualColor = 'same' % Color of individual trace
+    options.individualAlpha double = 0.3
+
     options.LineStyle (1,1) string = "-"
     options.LineWidth (1,1) {mustBeNumeric} = 2
     options.plotStyle string = 'line'
     options.delta double = []
-    options.individualAlpha double = 0
-
     options.label string = ''
 end
 
@@ -35,6 +38,9 @@ if ~isstring(color)
     end
 end
 
+% Change color opacity as indiacted
+color = 1 - options.opacity*(1-color);
+
 % Check individual color
 if ~isstring(options.individualColor) && ~ischar(options.individualColor)
     if any(sum(options.individualColor)>3) && size(options.individualColor,1) == 1
@@ -44,7 +50,7 @@ else
     if strcmp(options.individualColor,'same')
         options.individualColor = color;
     elseif strcmp(options.individualColor,'gray')
-        options.individualColor = [0.8, 0.8, 0.8];
+        options.individualColor = [0.6, 0.6, 0.6];
     end
 end
 
