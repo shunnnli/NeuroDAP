@@ -58,4 +58,5 @@ for a = 1:length(animalList)
     end
 end
 
+disp('Finished: building animals struct');
 end
