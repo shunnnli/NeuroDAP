@@ -697,7 +697,7 @@ if options.plotPhotometry
                 eventIdxes = {stimIdx,waterLickIdx,toneIdx,airpuffIdx,blueStimIdx};
                 labels = {'Stim','Water','Tone','Airpuff','Blue stim'};
                 eventDurations = [params.stim.stimDuration/1000,0,0.5,0.02,0.01];
-                groupSizes = [10,30,10,30,10];
+                groupSizes = [20,30,10,30,10];
                 longTimeRange = options.longTimeRange;
                 shortTimeRange = options.shortTimeRange; 
             else

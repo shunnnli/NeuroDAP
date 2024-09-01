@@ -92,7 +92,10 @@ for task = 1:length(stats)
     end
 
     % Adjust ylim
-    if isfield(options,'ylim'); ylim(options.ylim); end
+    if isfield(options,'ylim')
+        if size(options.ylim,1)==1; ylim(options.ylim); 
+        else; ylim(options.ylim(task,:)); end
+    end
 
     % Adjust xlim
     if options.xlimIdx ~= 0

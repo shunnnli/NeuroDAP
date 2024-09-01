@@ -47,19 +47,20 @@ for i = 1:length(animalList)
     varTypes = {'string','string','string','double','cell',...
                 'cell','cell','cell','cell',...
                 'cell','cell','cell',...
-                'cell','cell','cell',...
+                'cell',...
                 'cell','cell'};
     varNames = {'Session','Animal','Task','Cell','Vhold',...
                 'Included','Sweep names','Raw sweeps','Processed sweeps',...
                 'Protocol','Response','Stats',...
-                'Rs','Rm','Cm',...
+                'QC',...
                 'VholdInfo','Options'};
     cells = table('Size',[length(cellList),length(varNames)],...
         'VariableTypes',varTypes,'VariableNames',varNames);
 
     for c = 1:size(cellList,1)
         cellEpochs = animalEpochs(animalEpochs.Cell == cellList(c),:);
-        wholeFieldIdx = ~cellfun(@(x) contains(x.cycle,'randomSearch'),cellEpochs.Protocol);
+        cellProtocols = cellfun(@(v) v.cycle, cellEpochs.Protocol, UniformOutput=false);
+        wholeFieldIdx = ~cellfun(@(x) any(contains(x,'randomSearch')),cellProtocols);
         cellEpochs = cellEpochs(wholeFieldIdx,:);
         options.rawDataPath = cellEpochs{1,'Options'}{1}.rawDataPath;
 
@@ -75,6 +76,9 @@ for i = 1:length(animalList)
             raw_trace = cellEpochs{e,'Raw sweeps'}{1};
             processed_trace = cellEpochs{e,'Processed sweeps'}{1};
             vhold = cellEpochs{e,'Vhold'};
+            
+            protocol.stimOnset = protocol.stimOnset(1);
+            protocol.numPulses = protocol.numPulses(1);
             
             % Define time window for plotting
             options.eventSample = protocol.stimOnset;
@@ -188,16 +192,15 @@ for i = 1:length(animalList)
         cells{c,'Protocol'} = {cellEpochs.('Protocol')};
         cells{c,'Response'} = {respnoses};
         cells{c,'Stats'} = {stats};
-        cells{c,'Rs'} = {cellEpochs.('Rs')};
-        cells{c,'Rm'} = {cellEpochs.('Rm')};
-        cells{c,'Cm'} = {cellEpochs.('Cm')};
+        cells{c,'QC'} = {cellEpochs.('QC')};
         cells{c,'VholdInfo'} = {cellEpochs.('VholdInfo')};
         cells{c,'Options'} = {options};
     end
 
     if options.save
-        save(strcat(animalEpochs{1,'Session'},filesep,'cells_',expName),'cells');
-        disp(strcat("Created cells.mat: cell_",expName));
+        today = char(datetime('today','Format','yyyyMMdd')); 
+        save(strcat(animalEpochs{1,'Session'},filesep,'cells_',today),'cells');
+        disp(strcat("Created cells.mat: cell_",today," for ",expName));
     end
     allCells = [allCells; cells];
 end

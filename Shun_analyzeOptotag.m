@@ -112,14 +112,21 @@ disp(['Finished: kilosort data for session ',sessionName,' loaded']);
 
 leftReward = find(leftSolenoid);
 timeRange = [-1, 4];
-binSize = 0.01; % in sec
+binSize = 0.001; % in sec
 [~,leftRewardSpikeRate,leftReward_params] = getSpikes(timeRange,binSize,leftReward,params);
 
+%% For kevin: plot spikes
 initializeFig(0.5,0.5);
-clusterList = [21, 23];
-plotSpikes(leftRewardSpikeRate,clusterList,timeRange,bluePurpleRed,average=false,unit='ms',smooth=true);
-plotEvent('Left reward',0,bluePurpleRed(1,:),unit='ms');
-xlabel('Time (s)'); ylabel('Spikes/s'); box off
+clusterList = [23];
+
+tiledlayout(2,1);
+nexttile;
+plotSpikes(leftRewardSpikeRate,clusterList,timeRange,bluePurpleRed,average=false,unit='ms',smooth=false);
+plotEvent('Left reward',0,color=bluePurpleRed(1,:),unit='ms');
+
+nexttile;
+plotSpikeRaster(leftRewardSpikeRate,1,timeRange,unit='ms',size=5);
+plotEvent('Left reward',0,color=bluePurpleRed(1,:),unit='s');
 
 %% Generate laser-triggered firing rate for each good cluster
 
@@ -540,7 +547,7 @@ optoStimDuration = 0; % Ally
 
 clusterList = intersect_units;  
 
-for idx = 1:length(clusterList);
+for idx = 1:length(clusterList)
     i = clusterList(idx);
     initializeFig(1,1); textOn = true;
     t = tiledlayout(2,2,'TileSpacing','compact');

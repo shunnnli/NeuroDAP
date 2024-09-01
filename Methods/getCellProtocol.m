@@ -36,6 +36,16 @@ protocol.patternISI = getHeaderValue(headerString,pulseString,pulseVar='patternI
 protocol.stimOnset = protocol.delay + ((1:protocol.numPulses)-1)*protocol.isi;
 protocol.stimOnset = protocol.stimOnset * (options.outputFs/1000); % in samples
 
+% Get RC check params
+rcCheckOnset = getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck',pulseVar='delay') * (options.outputFs/1000);
+rcCheckPulseWidth = getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck',pulseVar='pulseWidth') * (options.outputFs/1000);
+rcCheckEnd = rcCheckOnset + rcCheckPulseWidth + (options.rcCheckRecoveryWindow*(options.outputFs/1000));
+rcCheckAmplitude = getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck',pulseVar='amplitude');
+protocol.rcCheckOnset = rcCheckOnset;
+protocol.rcCheckPulseWidth = rcCheckPulseWidth;
+protocol.rcCheckEnd = rcCheckEnd;
+protocol.rcCheckAmplitude = rcCheckAmplitude;
+
 % Extract DMD related params
 if contains(protocol.cycle,'randomSearch')
     protocol.depth = getHeaderValue(headerString,'state.zDMD.searchDepth',convert=true);
@@ -52,5 +62,9 @@ if contains(protocol.cycle,'randomSearch')
         protocol.cellY = 304 + round(tVector(1));
     end
 end
+
+% Save other values
+protocol.headerString = headerString;
+protocol.pulseString = pulseString;
 
 end

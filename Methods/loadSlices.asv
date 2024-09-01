@@ -609,7 +609,7 @@ if options.reload
         %% Plot epoch analysis summary
         if options.plot
             close all;
-            plotEpochSummary(epochs,row,save=true,saveDataPath=options.saveDataPath);
+            plotEpochSummary(epochs,row,save=false,plotAll=false);
             % initializeFig(1,1); tiledlayout(3,9); 
             % dotSize = 200;
             % if any(included)

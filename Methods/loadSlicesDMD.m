@@ -12,7 +12,7 @@ arguments
     options.reload logical = false
     options.reloadCells logical = false
     options.reloadCellAnalysis logical = false
-    options.calculateQC logical = false
+    options.calculateQC logical = true
 
     options.outputFs double = 10000
     options.timeRange double = [-20,100] % in ms
@@ -157,12 +157,12 @@ if options.reloadCells
             varTypes = {'string','string','string','double','double','double',...
                         'double','double','string','cell','cell',...
                         'cell','cell',...
-                        'double','double','double',...
+                        'cell',...
                         'cell'};
             varNames = {'Session','Animal','Task','Epoch','Cell','Vhold',...
                         'Depth','Repetition','Sweep','Location','Protocol',...
                         'Response','Stats',...
-                        'Rs','Rm','Cm',...
+                        'QC',...
                         'Options'};
             spots = table('Size',[size(exp,1),length(varNames)],...
                 'VariableTypes',varTypes,'VariableNames',varNames);
@@ -187,10 +187,6 @@ if options.reloadCells
                                            rcCheckRecoveryWindow=options.rcCheckRecoveryWindow);
                 if k == 1; prevDepth = protocol.depth; end
         
-                % Extract quality metrics from header string
-                qc = getCellQC(raw_trace,calculate=options.calculateQC,headerString=headerString);
-                Rs = qc.Rs; Rm = qc.Rm; Cm = qc.Cm;
-        
                 % Find corresponding spot from fullSearchTable
                 sweepSpots = fullSearchTable(curSpot+1 : curSpot+protocol.numPulses,:);
                 % curSpot = curSpot+protocol.numPulses;
@@ -198,12 +194,11 @@ if options.reloadCells
                 if any(sweepSpots.("depth") ~= protocol.depth)
                     error('Error: selected spot are of the wrong depth based on headerString!');
                 end
-
         
                 % Define baseline window: have two windows, one before pulse and one after pulse
                 rcCheckOnset = getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck',pulseVar='delay') * (options.outputFs/1000);
                 rcCheckPulseWidth = getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck',pulseVar='pulseWidth') * (options.outputFs/1000);
-                stimDuration = (protocol.numPulses * protocol.isi) * options.outputFs/1000;
+                stimDuration = ((protocol.numPulses * protocol.isi)+200) * options.outputFs/1000; % 200ms recovery window after last pulse
                 if rcCheckOnset < protocol.stimOnset(1)
                     rcCheckEnd = rcCheckOnset + rcCheckPulseWidth + (options.rcCheckRecoveryWindow*(options.outputFs/1000));
                     preStimWindow = rcCheckEnd : (protocol.stimOnset(1)-1);
@@ -245,6 +240,11 @@ if options.reloadCells
                 options.controlWindowSamples = controlWindowSamples;
     
         
+                % Extract quality metrics from header string
+                qc = getCellQC(headerString,calculate=options.calculateQC,data=raw_trace);
+                % Rs = qc.Rs; Rm = qc.Rm; Cm = qc.Cm;
+
+
                 % Process trace: mean-subtracted, optional LP
                 % Mean subtraction
                 mean_subtracted = raw_trace - mean(raw_trace(baselineWindow));
@@ -392,12 +392,10 @@ if options.reloadCells
                     spots{curSpot,'Repetition'} = protocol.repetition;
                     spots{curSpot,'Sweep'} = string(sweepAcq{k});
                     spots{curSpot,'Location'} = num2cell(location,[1 2]);
-                    spots{curSpot,'Protocol'} = {protocol};
+                    spots{curSpot,'Protocol'} = protocols;
                     spots{curSpot,'Response'} = {responses};
                     spots{curSpot,'Stats'} = {stats};
-                    spots{curSpot,'Rs'} = Rs;
-                    spots{curSpot,'Rm'} = Rm;
-                    spots{curSpot,'Cm'} = Cm;
+                    spots{curSpot,'QC'} = {qc};
                     spots{curSpot,'Options'} = {options};
                 end
     

@@ -176,18 +176,38 @@ disp('Finished: summary struct and trialtables loaded');
 
 %% Optional: Make changes to summary for further analysis
 
-% for i = 1:211; summary(i).task = 'Random'; end
-
+% Change some names if needed
 for i = 1:length(summary)
     cur_task = summary(i).task;
+    cur_event = summary(i).event;
+    cur_date = str2double(summary(i).date);
+
     if contains('random',cur_task,IgnoreCase=true)
         summary(i).task = 'Random';
-    elseif contains('reward pairing',cur_task,IgnoreCase=true)
-        summary(i).task = 'Reward2';
-    elseif contains('punish pairing',cur_task,IgnoreCase=true)
-        summary(i).task = 'Punish2';
+    elseif cur_date < 20240729
+        if contains('reward pairing',cur_task,IgnoreCase=true)
+            summary(i).task = 'Reward1 (paAIP2)';
+        elseif contains('punish pairing',cur_task,IgnoreCase=true)
+            summary(i).task = 'Punish1 (paAIP2)';
+        end
+    else
+        if contains('reward pairing',cur_task,IgnoreCase=true)
+            summary(i).task = 'Reward2 (ctrl)';
+        elseif contains('punish pairing',cur_task,IgnoreCase=true)
+            summary(i).task = 'Punish2 (paAIP2)';
+        end
+    end
+
+    if contains('Stim only',cur_event,IgnoreCase=true)
+        summary(i).event = 'Stim';
+    elseif contains('Tone only',cur_event,IgnoreCase=true)
+        summary(i).event = 'Tone';
     end
 end
+
+% Remove some rows if needed
+eventIdx = cellfun(@(x) contains(x,'Blue stim',IgnoreCase=true), {summary.event});
+summary(eventIdx) = [];
 
 %% Create animals struct
 
@@ -195,19 +215,10 @@ if isempty(dir(fullfile(resultspath,'animals*.mat'))) || groupSessions
     animals = getAnimalsStruct(summary);
 end
 
-%% (Optional) Make changes to animals struct
-
-for i = 1:length(animals)
-    cur = animals(i).event;
-    if contains('Blue stim',cur,IgnoreCase=true)
-        animals(i).event = 'CoChR';
-    end
-end
-
 %% Save animals struct
 
 prompt = 'Enter database notes (animals_20230326_notes.mat):';
-dlgtitle = 'Save animals struct'; fieldsize = [1 45]; definput = {'all'};
+dlgtitle = 'Save animals struct'; fieldsize = [1 45]; definput = {''};
 answer = inputdlg(prompt,dlgtitle,fieldsize,definput);
 today = char(datetime('today','Format','yyyyMMdd'));
 filename = strcat('animals_',today,'_',answer{1});
@@ -223,9 +234,9 @@ end
 
 initializeFig(0.5,0.5);
 combined = combineTraces(animals,timeRange=[-0.5,3],...
-                            eventRange='Water',...
+                            eventRange='Airpuff',...
                             animalRange="All",...
-                            taskRange='Punish1',...
+                            taskRange='Random',...
                             totalTrialRange='All',...
                             trialRange='All',...
                             signalRange='dLight',...
@@ -234,26 +245,10 @@ plotTraces(combined.data{1},combined.timestamp,color=bluePurpleRed(1,:));
 plotEvent('Water',0,color=bluePurpleRed(1,:))
 xlabel('Time (s)'); ylabel('z-score');
 
-%% Baseline licking
-
-initializeFig(0.5,0.5); tiledlayout(2,2); nexttile;
-combined = combineTraces(animals,timeRange=[-0.5,3],...
-                            eventRange='Baseline licks',...
-                            signalRange='NAc');
-plotTraces(combined.data{1},combined.timestamp,color=[0.75,0.75,0.75]);
-ylim([-1,4]);
-plotEvent('',0,color=[0.75,0.75,0.75])
-xlabel('Time (s)'); ylabel('NAc z-score');
-legend(['Baseline licks (n=',num2str(size(combined.data{1},1)),')'],'Location','northeast');
-
-saveFigures(gcf,'Summary_NAc_baselineLicking',...
-            strcat(resultspath),...
-            saveFIG=true,savePDF=true);
-
 %% Baseline dLight: plot water, airpuff, stim, tone
 
 timeRange = [-0.5,3];
-eventRange = {'Water','Airpuff','Stim','Tone'};
+eventRange = {'Rewarded Licks','Airpuff','Stim','Tone'};
 animalRange = 'All';
 taskRange = 'Random';
 trialRange = 'All'; % range of trials in each session
@@ -280,28 +275,28 @@ for s = 1:length(signalRange)
         legend({[eventRange{i},' (n=',num2str(size(combined.data{1},1)),')']},...
                 'Location','northeast');
     end
-    % saveFigures(gcf,'Summary_random_NAc',...
-    %         strcat(resultspath),...
-    %         saveFIG=true,savePDF=true);
+    saveFigures(gcf,'Summary_random_NAc',...
+            strcat(resultspath),...
+            saveFIG=true,savePDF=true);
 end
 
 %% Plot overall to show animal learned
 
 timeRange = [-0.5,3];
-eventRange = {'Tone'};
+eventRange = {'Stim','Pair','Tone'};
 animalRange = 'All';
-taskRange = {'Reward2','Punish2'};
+taskRange = {'Reward1 (paAIP2)','Punish1 (paAIP2)','Reward2 (Ctrl)','Punish2 (paAIP2)'};
 totalTrialRange = 'All';
 trialRange = 'All';
 signalRange = 'dLight';
 
 colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),bluePurpleRed(100,:)};
-groupSizeList = [50;50;50];
+groupSizeList = [50;50;10];
 nGroupsList = [15;15;15];
-ylimList = [-1.5,4; -1.5,2.5];
+ylimList = [-0.75,2.5; -0.75,1.5; -1,2.5; -1.25,1.75];
 
 for task = 1:length(taskRange)
-    initializeFig(0.5,0.5); tiledlayout('flow');
+    initializeFig(1,0.5); tiledlayout('flow');
     for event = 1:length(eventRange)
         nexttile;
         combined = combineTraces(animals,timeRange=timeRange,...
@@ -319,9 +314,9 @@ for task = 1:length(taskRange)
         xlabel('Time (s)'); ylabel([signalRange,' z-score']);
         legend(legendList,'Location','northeast');
     end
-    % saveFigures(gcf,['Summary_pairing_',taskRange{task}],...
-    %     strcat(resultspath),...
-    %     saveFIG=true,savePDF=true);
+    saveFigures(gcf,['Summary_pairing_',taskRange{task}],...
+        strcat(resultspath),...
+        saveFIG=true,savePDF=true);
 end
 
 %% Plot lick trace
@@ -329,7 +324,7 @@ end
 timeRange = [-0.5,3];
 eventRange = {'Stim','Pair','Tone'};
 animalRange = 'All';
-taskRange = {'Reward1','Punish1'};
+taskRange = {'Reward1 (paAIP2)','Punish1 (paAIP2)','Reward2 (Ctrl)','Punish2 (paAIP2)'};
 totalTrialRange = 'All';
 trialRange = 'All';
 signalRange = 'Lick';
@@ -337,7 +332,7 @@ signalRange = 'Lick';
 colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),bluePurpleRed(100,:)};
 groupSizeList = [30;30;30];
 nGroupsList = [5;5;5];
-ylimList = [0,4; 0,4];
+ylimList = [0,5; 0,5; 0,6.5; 0,6.5];
 
 for task = 1:length(taskRange)
     initializeFig(1,.5); tiledlayout('flow');
@@ -366,22 +361,21 @@ end
 %% Plot grouped CS DA response (grouped across animal and 10 trials)
 
 animalRange = 'All';
-taskRange = {'Reward1','Punish1'};
+taskRange = {'Reward1 (paAIP2)','Punish1 (paAIP2)'};
+% taskRange = {'Reward2 (Ctrl)','Punish2 (paAIP2)'};
 conditionRange = 'All';
 signalRange = 'dLight';
 
-eventRange = {'Stim','Pair','Tone'};
-colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),bluePurpleRed(100,:),[0.75,0.75,0.75]};
-
+eventRange = {'Baseline','Pair','Tone','Stim'};
+colorList = {[0.8,0.8,0.8],bluePurpleRed(300,:),bluePurpleRed(100,:),bluePurpleRed(500,:)};
 % eventRange = {'Baseline','Stim','Pair'};
 % colorList = {[0.75,0.75,0.75],bluePurpleRed(500,:),bluePurpleRed(300,:)};
+
 stage = 2; % Plot CS only
-statsTypes = {'stageMax','stageMin'};
-% statsTypes = {'stageArea','stageArea'};
-ylabelList = {'Max DA response during cue','Min DA response during cue'};
+statsTypes = {'stageMax','stageMax'}; ylabelList = {'Max DA response during cue','Max DA response during cue'};
+% statsTypes = {'stageAvg','stageAvg'}; ylabelList = {'Avg DA response during cue','Avg DA response during cue'};
 
 groupSize = 10; % numbers of trials to calculate average
-
 combinedStats = getGroupedTrialStats(animals,statsTypes,...
                             eventRange=eventRange,...
                             animalRange=animalRange,...
@@ -390,9 +384,9 @@ combinedStats = getGroupedTrialStats(animals,statsTypes,...
                             signalRange=signalRange);
 
 initializeFig(.7,.7); tiledlayout('flow');
-results = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,color=colorList,xlimIdx=1,ylim=[0,4;-1.4,0]);
+results = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,color=colorList,xlimIdx=4,ylim=[0 3]);
 
-saveFigures(gcf,'Summary_CSvsTrialsGrouped',...
+saveFigures(gcf,'Summary_CSvsTrialsGrouped_Pairing1_Max',...
         strcat(resultspath),...
         saveFIG=true,savePDF=true);
 
@@ -422,9 +416,9 @@ for task = 1:length(results.stats)
     ylabel('Slope');
 end
 
-saveFigures(gcf,'Summary_CSvsTrialsGrouped_slope',...
-        strcat(resultspath),...
-        saveFIG=true,savePDF=true);
+% saveFigures(gcf,'Summary_CSvsTrialsGrouped_slope',...
+%         strcat(resultspath),...
+%         saveFIG=true,savePDF=true);
 
 %% Plot bar plot of DA final values
 initializeFig(.7,.7); tiledlayout('flow');
@@ -452,9 +446,9 @@ for task = 1:length(results.stats)
     ylabel('Learned CS response for DA');
 end
 
-saveFigures(gcf,'Summary_CSvsTrialsGrouped_finalVal',...
-        strcat(resultspath),...
-        saveFIG=true,savePDF=true);
+% saveFigures(gcf,'Summary_CSvsTrialsGrouped_finalVal',...
+%         strcat(resultspath),...
+%         saveFIG=true,savePDF=true);
 
 %% Plot grouped anticipatory lick changes
 

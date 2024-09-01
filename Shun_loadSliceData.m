@@ -20,102 +20,96 @@ saveDataPath = 'default'; % strcat(parentPath,filesep,'20231221_ally');
 
 % Set comman params
 [sessionParams,canceled] = inputSessionParams_singleSlice(expPath,...
-                                paradigm=2,redStim=true,...
-                                reload=false,calculateQC=false,...
-                                timeRange='[-20,100]',nArtifactSamples='10');
+                                paradigm=1,redStim=true,...
+                                reload=false,calculateQC=true,...
+                                timeRange='[-10,50]',nArtifactSamples='10');
 taskOptions = {'random','reward pairing','punish pairing'};
-task = taskOptions{sessionParams.Paradigm};
-timeRange = eval(sessionParams.timeRange);
-nArtifactSamples = str2double(sessionParams.nArtifactSamples);
 
-if ~isscalar(expPath); error('Multiple sessions were selected, for multi-session analysis see analyzeSlice pipeline!'); end
-expPath = expPath{1};
+[~,~,~,~,~,~,bluePurpleRed] = loadColors;
+today = char(datetime('today','Format','yyyyMMdd')); 
 
 %% (Optional) Just load epochs.mat
 
-[epochs_old,cells] = loadSlices(expPath,reload=sessionParams.reload);
+combined_epochs = []; combined_cells = []; close all;
 
-% Reprocess post QC epochs.mat
-[epochs,cells] = loadSlices(epochs_old,reload=sessionParams.reload,...
-                animal=sessionParams.Animal,task=task,...
-                timeRange=timeRange,...
-                filterSignal=false,filterSweeps=true,...
-                calculateQC=sessionParams.calculateQC,...
-                nArtifactSamples=nArtifactSamples,...
-                saveDataPath=saveDataPath,...
-                save=true);
-return
+for i = 1:2%length(expPath)
+    timeRange = eval(sessionParams(i).timeRange);
+    nArtifactSamples = str2double(sessionParams(i).nArtifactSamples);
 
-%% Load epoch for single session
+    % (Optional) Define inclusion criteria if necessary
+    QCThreshold.include = {};
+    QCThreshold.Rs = 30;
+    QCThreshold.Verror = 10;
+    QCThreshold.Ibaseline = -300;
+    QCThreshold.Ibaseline_std = 20;
 
-dirsplit = split(expPath,filesep); expName = dirsplit{end};
-
-[epochs,cells] = loadSlices(expPath,reload=sessionParams.reload,...
-                animal=sessionParams.Animal,task=task,...
-                timeRange=timeRange,...
-                filterSignal=false,filterSweeps=true,...
-                calculateQC=sessionParams.calculateQC,...
-                nArtifactSamples=nArtifactSamples,...
-                saveDataPath=saveDataPath);
-
-analyzeSlice_OptoPair(expPath,...
-            timeRange=timeRange,...
-            nArtifactSamples=nArtifactSamples);
-
-save(strcat(expPath,filesep,'PreQC',filesep,'epochs_',expName),'epochs','-v7.3');
-disp(strcat("Saved: ",expName," in PreQC folder"));
-close all
-
-% Message for editing quality checks
-f = msgbox("Edit the epochs table and run following block after finished",...
-    "Quality check","help");
-return
-
-%% Quality checks: save modified epoch file
-
-% Message for editing quality checks
-answer = questdlg('Confirm and save quality check results?', ...
-    'Quality check confirmation','Yes','Not yet','Not yet');
-switch answer
-    case 'Yes'; qc = true;
-    case 'Not yet'; qc = false;
-end
-
-if qc
-    dirsplit = split(expPath,filesep); expName = dirsplit{end};
-    save(strcat(expPath,filesep,'epochs_',expName),'epochs','-v7.3');
-    save(strcat(expPath,filesep,'PostQC',filesep,'epochs_',expName),'epochs','-v7.3');
-    disp(strcat("Saved: ",expName," in PostQC folder"));
-
-    analyzeSlice_OptoPair(expPath,...
-                timeRange=timeRange,nArtifactSamples=nArtifactSamples,...
-                resultPath='PostQC',plotAll=false);
-    close all
+    % Reprocess post QC epochs.mat
+    % [epochs_old,~] = loadSlices(expPath{i},reload=sessionParams(i).reload);
+    [epochs,cells] = loadSlices(expPath{i},reload=true,...
+                                timeRange=timeRange,...
+                                filterSignal=false,filterSweeps=true,...
+                                calculateQC=sessionParams(i).calculateQC,...
+                                nArtifactSamples=nArtifactSamples,...
+                                saveDataPath=saveDataPath,...
+                                save=true,...
+                                QCThreshold=QCThreshold);
+    % combined_epochs = [combined_epochs; epochs];
+    % combined_cells = [combined_cells; cells];
 end
 
 return
+
+%% Save current epochs to session folder
+
+notes = 'QC';
+sessionPath = epochs{1,'Session'};
+dirsplit = split(sessionPath,filesep); expName = dirsplit{end};
+save(strcat(sessionPath,filesep,'epochs_',today,'_',notes),'epochs','-v7.3');
+disp(strcat("Saved: ",expName," in session folder"));
+
+% Save current epochs to the newest results folder
+resultsFolders = sortrows(struct2cell(dir(fullfile(sessionPath,"Epochs-*")))',3);
+resultFolder = resultsFolders{end,1};
+savePath = fullfile(sessionPath,resultFolder);
+
+save(strcat(sessionPath,filesep,'epochs_',today,'_',notes),'epochs','-v7.3');
+disp(strcat("Saved: ",expName," in results folder"));
+
+%% Plot epoch summary
+
+close all;
+rowIdx = 7;
+plotEpochSummary(epochs,rowIdx,plotAll=false,save=true);
 
 %% Useful code to plot raw sweeps
 
 close all
 initializeFig(0.67, 0.5); tiledlayout(1,3);
-row = 13;
+row = 22;
 
-% Find event window
-timeRange = [-20,100];
-timeRangeStartSample = 10000 + 10000*timeRange(1)/1000;
-timeRangeEndSample = 10000 + 10000*timeRange(2)/1000;
-plotWindow = timeRangeStartSample : timeRangeEndSample;
-timeRangeInms = (plotWindow-1*10000) ./ (10000/1000);
-analysisWindow = (10000+nArtifactSamples)-timeRangeStartSample : length(plotWindow);
+plotWholeTrace = true;
+
+if plotWholeTrace
+    plotWindow = 1:30000;
+    timeRangeInms = (plotWindow-1*10000) ./ (10000/1000); 
+    analysisWindow = 1:30000;
+else
+    % Find event window
+    timeRange = [-10,50];
+    timeRangeStartSample = 10000 + 10000*timeRange(1)/1000;
+    timeRangeEndSample = 10000 + 10000*timeRange(2)/1000;
+    plotWindow = timeRangeStartSample : timeRangeEndSample;
+    timeRangeInms = (plotWindow-1*10000) ./ (10000/1000);
+    analysisWindow = (10000+nArtifactSamples)-timeRangeStartSample : length(plotWindow);
+end
 
 % Plot all traces
 nexttile;
 included = ones(size(epochs{row,'Raw sweeps'}{1},1),1);
-traces = epochs{row,'Raw sweeps'}{1}(included==1,plotWindow);
+traces = epochs{row,'Raw sweeps'}{1}([11,12],plotWindow);
 if ~isempty(traces)
     plotSEM(timeRangeInms,traces,[0.343, 0.75, 0.232],...
-            plotPatch=false,plotIndividual=true);
+            plotPatch=false,plotIndividual=true,plotMean=false);
     xlabel('Time (ms)');
     ylabel('Current (pA)');
     yMin = min(traces(:,analysisWindow),[],"all");
@@ -245,146 +239,27 @@ disp('Moving finished');
 % 
 % disp('Undo moving finished');
 
-%% Run Quality Control
-disp('Running Quality Control Check');
-QCs = zeros(length(raw_concatenated_traces), length(raw_concatenated_traces(1).data));
-for QCCheck = 1:length(raw_concatenated_traces)
-    QCs(QCCheck,:) = raw_concatenated_traces(QCCheck).data;
-end
+%% Misc: plot histogram for Rs and voltage error
 
-tau = [];
-rs = [];
-rin = [];
-cm = [];
-baseline = [];
+close all;
+initializeFig(1,1); tiledlayout('flow');
 
-for l = 1:size(QCs,1)
-    dt = 0.1; % ms
-    T = 3000; % ms
-    tvec = dt:dt:T; % time vector
-    NS = length(tvec); % number samples
+nexttile;
+allRs = cell2mat(cellfun(@(x) x.Rs, epochs.QC,UniformOutput=false));
+histogram(allRs,100);
+title('Rs (MOhm)');
 
-    % You'd provide this I'm just showing you how to make it
-    data = QCs(l,:);
-    amplitudeRC = -5; % mV
-    
-    if isequal(recorder, 'KM') == 1
-        rcStart = 250;
-        rcEnd = 550;
-    elseif isequal(recorder, 'WW') == 1 
-        rcStart = 2800;
-        rcEnd = 2900;
-    end 
+nexttile;
+allVerror = cell2mat(cellfun(@(x) abs(x.Verror), epochs.QC,UniformOutput=false));
+histogram(allVerror,100);
+title('|Verror| (mV)');
 
-    rcDelay = .05; % ms to wait after start of rc check to do exponential fit and a few other things
+nexttile;
+allIbaseline = cell2mat(cellfun(@(x) x.Ibaseline, epochs.QC,UniformOutput=false));
+histogram(allIbaseline,100);
+title('Ibaseline (pA)');
 
-    startBaselineSample = find(tvec>=rcStart-(rcEnd-rcStart)*0.1,1,'first'); % calculate baseline with same amount of time
-    rcStartSample = find(tvec>=rcStart,1,'first'); 
-    startEndlineSample = find(tvec>=rcStart + (rcEnd-rcStart)*0.9,1,'first') - 1; % endline start sample
-    rcEndSample = find(tvec>=rcEnd,1,'first');
-    numDelaySamples = round(rcDelay / dt);
-
-    % Compute peak and get peak location
-    if amplitudeRC > 0
-        [pk, pkIdx] = max(data(rcStartSample:rcEndSample));
-    else
-        [pk, pkIdx] = min(data(rcStartSample:rcEndSample));
-    end
-    pkIdx = pkIdx + rcStartSample - 1; 
-
-    baseline(l) = mean(data(startBaselineSample:rcStartSample-1));
-    endline = mean(data(startEndlineSample:rcEndSample));
-
-
-    % Dan- play with this. Higher percentage biases fit to the fast component
-    % which is more accurate in dendritic cells
-    percentageDecayCutoff = 15; 
-    decayCutoffValue = (pk-endline)*percentageDecayCutoff/100 + endline;
-
-    if amplitudeRC > 0
-        decayEnd = find(data(pkIdx+numDelaySamples:rcEndSample)<decayCutoffValue,1,'first'); % Get's first below 20%
-    else
-        decayEnd = find(data(pkIdx+numDelaySamples:rcEndSample)>decayCutoffValue,1,'first'); % Get's first below 20%
-    end
-
-    decayTime = tvec(pkIdx+numDelaySamples:pkIdx+numDelaySamples+decayEnd-1);
-    
-    if length(decayTime)>1
-        decayTime = decayTime - decayTime(1); %start at 0
-        decayData = data(pkIdx+numDelaySamples:pkIdx+numDelaySamples+decayEnd-1) - endline; 
-        if amplitudeRC < 0, decayData = -decayData; end
-
-        % Fit Options
-        fitType = fittype('peak*exp(-x/tau)');
-        fitOptions = fitoptions(fitType);
-        fitOptions.StartPoint = [pk-endline decayEnd*dt/3];
-        fitOptions.Lower = [0 0];
-        fitOptions.Upper = [abs(pk)*10 T];
-
-        % Do Fit
-    
-        
-        decayFit = fit(decayTime(:),decayData(:),fitType,fitOptions);
-        tau(l) = decayFit.tau; % in whatever units you made tvec (should be ms)
-    else
-        tau(l) = NaN;
-    end
-    
-    relativeStart = (pkIdx+numDelaySamples - rcStartSample)*dt;
-
-    % Extrapolate back for exponential estimate of peak
-    pkEstimateExponential = decayFit.peak * exp(relativeStart/decayFit.tau) * (-1*(amplitudeRC<0)+1*(amplitudeRC>0)); 
-
-    choiceOfPeak = pk; % Or use "pkEstimateExponential"
-    % - using the true pk, rather than pkEstimateExponential, will probably be
-    % more accurate if you're patching dendritic cells
-    rs(l) = 1000 * amplitudeRC / (choiceOfPeak-endline);
-    rin(l) = (1000 * amplitudeRC/(endline-baseline(l))) - rs(l);
-    cm(l) = 1000 * tau(l) / rs(l);
-end
-
-
-%Plot everything
-figure
-for m = 1:size(QCs,1)
-    subplot(3,2,1);
-    plot(QCs(m, (rcStart*10)-100:(rcStart*10)+200));
-    ylabel('QC Pulse');
-    xlim([0 300]);
-    ylim([(min(QCs(m, (rcStart*10)-100:(rcStart*10)+200))-300) (max(QCs(m, (rcStart*10)-100:(rcStart*10)+200))+300)]);
-    hold on
-end
-subplot(3,2,2);
-plot(baseline, 'ko');
-ylabel('Baseline');
-xlim([0 size(QCs,1)])
-subplot(3,2,3);
-plot(rs,'ko');
-xlim([0 size(QCs,1)])
-ylabel('Rs (MOhm)')
-subplot(3,2,4);
-plot(rin,'bo');
-xlim([0 size(QCs,1)])
-ylabel('Rin (MOhm)')
-subplot(3,2,5);
-plot(tau,'ko');
-xlim([0 size(QCs,1)])
-ylabel('{\tau}_m (ms)')
-subplot(3,2,6);
-plot(cm,'ko');
-xlim([0 size(QCs,1)])
-ylabel('Cm (pF)')
-xlabel('Sweep #')
-
-%Make it look pretty
-sgtitle(strcat(mouseID, ' cell ', celll, ', epoch ', epochh));
-set(gcf, 'Color', 'w');
-
-%Adjust and save
-print(fullfile(savePath1, strcat(mouseID, '_cell', celll, '_epoch', epochh, '_QualityControl')), '-dpdf', '-fillpage', '-r1000');
-print(fullfile(savePath, strcat(mouseID, 'QualityControl')), '-dpsc', '-fillpage', '-append', '-r1000'); 
-
-%Close everything
-close all
-clear tau tauCap tauParams Cm Rm Raccess extrapolPkRC fittedVal f fittingTrace2 fittingTrace x x2 steadyRC baselineRC RCtrace locOnset
-clear AverageTraces AllTracesTable
+nexttile;
+allIbaseline_std = cell2mat(cellfun(@(x) x.Ibaseline_std, epochs.QC,UniformOutput=false));
+histogram(allIbaseline_std,100);
+title('Ibaseline STD');

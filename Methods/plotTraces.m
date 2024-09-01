@@ -41,7 +41,7 @@ arguments
     options.shuffledColor double = [.75, .75, .75]
     
     options.plotIndividual logical = false
-    options.individualColor = 'gray'
+    options.individualColor = 'same'
     options.individualAlpha double = 0
 
     options.plotStyle string = 'line'

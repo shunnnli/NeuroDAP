@@ -31,6 +31,7 @@ arguments
 
     options.save logical = true; % save peaks and aucs
     options.resultPath
+    options.folderName string = '' % will be "Results_20240822_folderName"
 end
 
 %% Load epoch file
@@ -65,17 +66,12 @@ end
 
 % Set up
 [~,~,~,~,~,~,bluePurpleRed] = loadColors; 
+today = char(datetime('today','Format','yyyyMMdd')); 
+folderName = strcat('Results_',today,'_',options.folderName);
 % Set up resultPath
-if ~isfield(options,'resultPath')
-    if singleSession; options.resultPath = fullfile(allEpochs{1,'Session'});
-    else
-        error('Multiple sessions: please specify resultPath!'); 
-    end
+if singleSession; options.resultPath = fullfile(allEpochs{1,'Session'},folderName);
 else
-    if singleSession; options.resultPath = fullfile(allEpochs{1,'Session'},options.resultPath);
-    elseif ~contains(options.resultPath,filesep)
-        error('Multiple sessions: please specify resultPath!');
-    end
+    error('Multiple sessions: please specify resultPath!'); 
 end
 
 %% Plot response traces for epoch/cell
@@ -88,6 +84,8 @@ if singleSession && options.plotTraces
             eventSample=options.eventSample,nArtifactSamples=options.nArtifactSamples,...
             outputFs=options.outputFs);
 end
+
+return
 
 %% ************ UNFINISHED ************** Plot stats
 

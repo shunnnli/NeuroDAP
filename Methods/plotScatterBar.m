@@ -13,10 +13,14 @@ arguments
     options.LineWidth double = 2
 end
 
+box off;
+
 xgroupdata = x * ones(size(data,1),1);
 boxchart(xgroupdata,data,'BoxFaceColor',options.color,'WhiskerLineColor',options.color,...
          LineWidth=options.LineWidth); 
-hold on
+
+hold on;
+
 swarmchart(xgroupdata,data,...
     options.dotSize,options.color,'filled',...
     'MarkerFaceAlpha',options.MarkerFaceAlpha,...

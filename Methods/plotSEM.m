@@ -16,7 +16,7 @@ arguments
 
     options.plotIndividual logical = false % plot individual trace in the background
     options.individualColor = 'same' % Color of individual trace
-    options.individualAlpha double = 0.3
+    options.individualAlpha double = 0.2
 
     options.LineStyle (1,1) string = "-"
     options.LineWidth (1,1) {mustBeNumeric} = 2
