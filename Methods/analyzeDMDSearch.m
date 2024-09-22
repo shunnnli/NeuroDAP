@@ -9,6 +9,9 @@ arguments
     options.redStim logical = true
     options.depthLineWidth double = [3,2.5,2,1.5,1.1,1,0.5];
 
+    options.color
+    options.colormap
+
     options.save logical = true
     options.savePNG logical = true
     options.savePDF logical = true
@@ -40,7 +43,7 @@ expPath = strsplit{1};
 
 % Define results path
 if strcmp(options.saveDataPath,'default')
-    resultsList = sortrows(struct2cell(dir(fullfile(expPath,'Results_*')))',3);
+    resultsList = sortrows(struct2cell(dir(fullfile(expPath,'Results-*')))',3);
     if strcmp(options.resultsPathDate,'newest')
         resultsPath = fullfile(resultsList{end,2},resultsList{end,1});
     else
@@ -53,6 +56,7 @@ if strcmp(options.saveDataPath,'default')
 end
 
 % Define colors
+if ~isfield(options,'colormap'); options.colormap = blueWhiteRed; end
 if options.redStim; stimColor = blueWhiteRed(end,:);
 else; stimColor = blueWhiteRed(1,:); end
 blue = blueWhiteRed(1,:);
@@ -114,12 +118,16 @@ else
 end
 
 % Define color
-if search_vhold < -50
-    color = blueWhiteRed(end,:); 
-elseif search_vhold > -10
-    color = blueWhiteRed(1,:); 
+if isfield(options,'color')
+    color = options.color;
 else
-    color = purple; 
+    if search_vhold < -50
+        color = blueWhiteRed(end,:); 
+    elseif search_vhold > -10
+        color = blueWhiteRed(1,:); 
+    else
+        color = purple; 
+    end
 end
 
 % Load noise model of this neuron
@@ -168,6 +176,9 @@ for d = 1:nDepth
     % optoMax = optoData(~isoutlier(optoData)); 
     % optoMin = optoData(~isoutlier(optoData)); 
     optoMax = max(optoData,[],'all'); optoMin = min(optoData,[],'all');
+
+    % (Optional) Change hotspot criteria
+    XXXXXXXXX
 
     % Get hotspot vs null spot
     hotspot_spotIdx = cell2mat(cellfun(@(x) sum(x)>=1, search_hotspot{d}, UniformOutput=false));
@@ -218,6 +229,7 @@ for d = 1:nDepth
 
     %% Plot figure
     disp(['Ongoing: plotting summary for search: ', curSearch,' at depth ',num2str(curDepth)]);
+    close all;
     initializeFig(1,1);
     masterLayout = tiledlayout(4,4);
     masterLayout.TileSpacing = 'compact';
@@ -271,8 +283,11 @@ for d = 1:nDepth
     cb = colorbar; cb.Label.String = 'Total charge (pC)';
     climit = max(abs(depthResponseMap),[],'all');
     if climit == 0; climit = eps; end 
-    clim([-climit, climit]); 
-    colormap(ax_response,flip(blueWhiteRed));
+    if search_vhold > 10; clim([0, climit]); 
+    elseif search_vhold < -50; clim([-climit, 0]); 
+    else; clim([-climit, climit]); 
+    end
+    colormap(ax_response,flip(options.colormap));
     scatter(cellLoc(1),cellLoc(2),50,'o','filled','MarkerFaceColor','k','MarkerEdgeColor','none');
     title(['Depth ', num2str(curDepth),': ',curCell.Options{1}.feature]);
 
@@ -327,7 +342,7 @@ for d = 1:nDepth
     if find(hotspot_spotIdx); plotScatterBar(spotMax_avg(hotspot_spotIdx),3,color=blue); end
     if find(~hotspot_spotIdx); plotScatterBar(spotMax_avg(~hotspot_spotIdx),4,color=[.6 .6 .6]); end  
     xticks([1 2 3 4]); 
-    xticklabels({'Exci. hotspot','Exci. nullspot','Inhi. hotspot','Inhi. nullspot'});
+    xticklabels({'Min hotspot','Min nullspot','Max hotspot','Max nullspot'});
     ylabel('Current (pA)');
     title('Max response current');
 
@@ -372,7 +387,7 @@ for d = 1:nDepth
     if find(hotspot_spotIdx); plotScatterBar(spotMaxTime_avg(hotspot_spotIdx),3,color=blue); end
     if find(~hotspot_spotIdx); plotScatterBar(spotMaxTime_avg(~hotspot_spotIdx),4,color=[.6 .6 .6]); end
     xticks([1 2 3 4]); 
-    xticklabels({'Exci. hotspot','Exci. nullspot','Inhi. hotspot','Inhi. nullspot'});
+    xticklabels({'Min hotspot','Min nullspot','Max hotspot','Max nullspot'});
     ylabel('Time (ms)');
     title('Time to max response current');
 

@@ -9,6 +9,8 @@ arguments
     options.redStim logical = true
     options.depthLineWidth double = [3,2.5,2,1.5,1.1,1,0.5];
 
+    options.color
+
     options.save logical = true
     options.savePNG logical = true
     options.savePDF logical = true
@@ -40,7 +42,7 @@ expPath = strsplit{1};
 
 % Define results path
 if strcmp(options.saveDataPath,'default')
-    resultsList = sortrows(struct2cell(dir(fullfile(expPath,'Results_*')))',3);
+    resultsList = sortrows(struct2cell(dir(fullfile(expPath,'Results-*')))',3);
     if strcmp(options.resultsPathDate,'newest')
         resultsPath = fullfile(resultsList{end,2},resultsList{end,1});
     else
@@ -125,20 +127,25 @@ else
 end
 
 % Define color
-if diffVhold
-    if search1_vhold < -50; color1 = blueWhiteRed(end,:); 
-    elseif search1_vhold > -10; color1 = blueWhiteRed(1,:); 
-    else; color1 = purple; 
-    end
-    if search2_vhold < -50; color2 = blueWhiteRed(end,:); 
-    elseif search2_vhold > -10; color2 = blueWhiteRed(1,:); 
-    else; color2 = purple; 
-    end
+if isfield(options,'color')
+    color1 = options.color;
+    color2 = 1 - 0.5*(1-options.color);
 else
-    if search1_vhold < -50; color1 = blueWhiteRed(end,:);
-    else; color1 = blueWhiteRed(1,:); end
-    if search2_vhold < -50; color2 = blueWhiteRed(end-150,:);
-    else; color2 = blueWhiteRed(150,:); end
+    if diffVhold
+        if search1_vhold < -50; color1 = blueWhiteRed(end,:); 
+        elseif search1_vhold > -10; color1 = blueWhiteRed(1,:); 
+        else; color1 = purple; 
+        end
+        if search2_vhold < -50; color2 = blueWhiteRed(end,:); 
+        elseif search2_vhold > -10; color2 = blueWhiteRed(1,:); 
+        else; color2 = purple; 
+        end
+    else
+        if search1_vhold < -50; color1 = blueWhiteRed(end,:);
+        else; color1 = blueWhiteRed(1,:); end
+        if search2_vhold < -50; color2 = blueWhiteRed(end-150,:);
+        else; color2 = blueWhiteRed(150,:); end
+    end
 end
 
 % Load noise model of this neuron
@@ -294,6 +301,7 @@ for d = 1:length(commonDepth)
 
     %% Plot figure
     disp(['Ongoing: plotting summary for searches: ', num2str(searchPair),' at depth ',num2str(curDepth)]);
+    close all;
     initializeFig(1,1);
     masterLayout = tiledlayout(4,4);
     masterLayout.TileSpacing = 'compact';
@@ -451,8 +459,8 @@ for d = 1:length(commonDepth)
     if find(~hotspot1_spotIdx); plotScatterBar(spotMax1_avg(~hotspot1_spotIdx),11,color=[.6 .6 .6]); end  
     if find(hotspot2_spotIdx); plotScatterBar(spotMax2_avg(hotspot2_spotIdx),13,color=blue); end
     if find(~hotspot2_spotIdx); plotScatterBar(spotMax2_avg(~hotspot2_spotIdx),15,color=[.6 .6 .6]); end  
-    ticks = {'Exci. hotspot','','Exci. nullspot','Exci. hotspot','','Exci. nullspot',...
-            'Inhi. hotspot','','Inhi. nullspot','Inhi. hotspot','','Inhi. nullspot';...
+    ticks = {'Min hotspot','','Min nullspot','Min hotspot','','Min nullspot',...
+            'Max hotspot','','Max nullspot','Max hotspot','','Max nullspot';...
             '','Search 1','','','Search 2','','','Search 1','','','Search 2',''};
     ticksAdjusted = strjust(pad(ticks),'center');
     tickLabels = strtrim(sprintf('%s\\newline%s\n', ticksAdjusted{:}));
@@ -523,8 +531,8 @@ for d = 1:length(commonDepth)
     if find(~hotspot1_spotIdx); plotScatterBar(spotMaxTime1_avg(~hotspot1_spotIdx),11,color=[.6 .6 .6]); end  
     if find(hotspot2_spotIdx); plotScatterBar(spotMaxTime2_avg(hotspot2_spotIdx),13,color=blue); end
     if find(~hotspot2_spotIdx); plotScatterBar(spotMaxTime2_avg(~hotspot2_spotIdx),15,color=[.6 .6 .6]); end  
-    ticks = {'Exci. hotspot','','Exci. nullspot','Exci. hotspot','','Exci. nullspot',...
-            'Inhi. hotspot','','Inhi. nullspot','Inhi. hotspot','','Inhi. nullspot';...
+    ticks = {'Min hotspot','','Min nullspot','Min hotspot','','Min nullspot',...
+            'Max hotspot','','Max nullspot','Max hotspot','','Max nullspot';...
             '','Search 1','','','Search 2','','','Search 1','','','Search 2',''};
     ticksAdjusted = strjust(pad(ticks),'center');
     tickLabels = strtrim(sprintf('%s\\newline%s\n', ticksAdjusted{:}));

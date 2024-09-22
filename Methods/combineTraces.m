@@ -119,8 +119,10 @@ end
 
 % Update options.statsType
 if strcmpi(options.statsType,'All')
-    if ~options.withStageArea; options.statsType = {'stageAvg','stageMax','stageMin'}; 
-    else; options.statsType = {'stageAvg','stageMax','stageMin','stageArea'}; end
+    % if ~options.withStageArea; options.statsType = {'stageAvg','stageMax','stageMin'}; 
+    % else; options.statsType = {'stageAvg','stageMax','stageMin','stageArea'}; end
+    database_fieldnames = fieldnames(database);
+    options.statsType = database_fieldnames(contains(database_fieldnames,'stage'));
 end
 if ~iscell(options.statsType); options.statsType = {options.statsType}; end
 
@@ -137,6 +139,10 @@ options.signalRows = [];
 % To record session/animal changes
 options.startIdx.animal = cell(length(options.signalRange),1); prev_animal = '';
 options.startIdx.session = cell(length(options.signalRange),1);
+options.startIdx.stage = cell(length(options.signalRange),1);
+
+% To record stageTime
+options.stageTime = {};
 
 %% Concat .data in each selected rows into a array for plotting
 for signal = 1:length(options.signalRange)
@@ -171,6 +177,12 @@ for signal = 1:length(options.signalRange)
         if ~strcmpi(prev_animal,row.animal)
             options.startIdx.animal{signal} = [options.startIdx.animal{signal}; size(data{signal},1)+1];
             prev_animal = row.animal;
+        end
+
+        % To record stage time
+        if any(cellfun(@(c) isequal(c, row.options.stageTime), options.stageTime))
+            options.stageTime{end+1} = row.options.stageTime;
+            options.startIdx.stage{signal} = [options.startIdx.stage{signal},size(data{signal},1)+1]; % Not tested
         end
 
         % Check timeRange is valid

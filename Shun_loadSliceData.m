@@ -10,11 +10,11 @@
 
 %% Define data path
 clear; close all;
-addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
+addpath(genpath(osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
 
 % Select sessions for analysis
 % parentPath = osPathSwitch('/Volumes/MICROSCOPE/wengang/Exp_withShun/');
-parentPath = osPathSwitch('/Volumes/MICROSCOPE/Shun/Project valence/Patch/');
+parentPath = osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Patch/');
 expPath = uipickfiles('FilterSpec',parentPath,'Prompt','Select experiment folders');
 saveDataPath = 'default'; % strcat(parentPath,filesep,'20231221_ally');
 
@@ -32,7 +32,7 @@ today = char(datetime('today','Format','yyyyMMdd'));
 
 combined_epochs = []; combined_cells = []; close all;
 
-for i = 1:2%length(expPath)
+for i = 1:length(expPath)
     timeRange = eval(sessionParams(i).timeRange);
     nArtifactSamples = str2double(sessionParams(i).nArtifactSamples);
 
@@ -77,15 +77,17 @@ disp(strcat("Saved: ",expName," in results folder"));
 
 %% Plot epoch summary
 
-close all;
-rowIdx = 7;
-plotEpochSummary(epochs,rowIdx,plotAll=false,save=true);
+
+for rowIdx = 1:size(epochs,1)
+    close all;
+    plotEpochSummary(epochs,rowIdx,save=true);
+end
 
 %% Useful code to plot raw sweeps
 
 close all
 initializeFig(0.67, 0.5); tiledlayout(1,3);
-row = 22;
+row = 1;
 
 plotWholeTrace = true;
 
@@ -106,7 +108,7 @@ end
 % Plot all traces
 nexttile;
 included = ones(size(epochs{row,'Raw sweeps'}{1},1),1);
-traces = epochs{row,'Raw sweeps'}{1}([11,12],plotWindow);
+traces = epochs{row,'Raw sweeps'}{1}(:,plotWindow);
 if ~isempty(traces)
     plotSEM(timeRangeInms,traces,[0.343, 0.75, 0.232],...
             plotPatch=false,plotIndividual=true,plotMean=false);

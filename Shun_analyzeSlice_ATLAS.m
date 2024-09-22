@@ -8,9 +8,11 @@
 % 09/14/23
 % Package loading part and anlaysis part into separate function
 
-%% Define data path
 clear; close all;
-addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
+addpath(genpath(osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
+[~,~,~,~,~,~,bluePurpleRed] = loadColors;
+
+%% Define data path
 
 % Select sessions for analysis
 parentPath = osPathSwitch('/Volumes/MICROSCOPE/wengang/Exp_withAlly/');
@@ -23,7 +25,7 @@ reload = true;
 
 if isscalar(expPaths); multipleSessions = false;
 else; multipleSessions = true; end
-[~,~,~,~,~,~,bluePurpleRed] = loadColors;
+
 
 %% Load epoch for single session
 
@@ -86,12 +88,12 @@ legend();
 %% Load combined.mat
 
 clear; close all;
-addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
+addpath(genpath(osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
 
 % Select sessions for analysis
-parentPath = osPathSwitch('/Volumes/MICROSCOPE/wengang/Exp_withAlly/Compiled_Data');
+parentPath = osPathSwitch('/Volumes/Neurobio/MICROSCOPE/wengang/Exp_withAlly/Compiled_Data');
 expPaths = uipickfiles('FilterSpec',parentPath,'Prompt','Select experiment folders');
-resultsPath = '/Volumes/MICROSCOPE/wengang/Exp_withAlly/Compiled_Data/ATLAS-Cre';
+resultsPath = '/Volumes/Neurobio/MICROSCOPE/wengang/Exp_withAlly/Compiled_Data/ATLAS-Cre';
 
 if isscalar(expPaths); expPaths = expPaths{1}; end
 load(expPaths);
@@ -184,7 +186,7 @@ plotTraces(nonRedTraces(:,plotWindow),timeRangeInms,color=[.2, .2, .2],...
         xlabel='Time (ms)', ylabel='Amplitude (pA)');
 ylim(ylimit);
 
-saveFigures(gcf,'Summary_redVsNonRed',resultsPath,savePDF=true,saveFIG=true);
+% saveFigures(gcf,'Summary_redVsNonRed',resultsPath,savePDF=true,saveFIG=true);
 
 %% Plot 2: mean of red vs non-red
 
@@ -206,7 +208,7 @@ plotTraces(nonRedTraces(:,plotWindow),timeRangeInms,plotPatch=false,color=[0.2,0
     xlabel='Time (ms)', ylabel='Amplitude (pA)');
 ylim(ylimit);
 
-saveFigures(gcf,'Summary_redVsNonRed_mean',resultsPath,savePDF=true,saveFIG=true);
+% saveFigures(gcf,'Summary_redVsNonRed_mean',resultsPath,savePDF=true,saveFIG=true);
 
 %% Plot 3: all pairs
 
@@ -242,12 +244,14 @@ saveFigures(gcf,'Summary_redVsNonRed_allCell',resultsPath,savePDF=true,saveFIG=t
 
 conditionLabels = {'Red','Non-red'};
 initializeFig(.5,.5); tiledlayout('flow');
+colors = [bluePurpleRed(end,:);[0.2,0.2,0.2]];
+
+% Change to absolute value
+pairPeaks = abs(pairPeaks); pairAUCs = abs(pairAUCs);
 
 % Plot peaks
 nexttile;
-plot([1,2],pairPeaks,color=[.75,.75,.75]); hold on;
-plotScatterBar(pairPeaks(:,1),1,color=bluePurpleRed(end,:),XJitterWidth=0.01,dotSize=100);
-plotScatterBar(pairPeaks(:,2),2,color=[0.2,0.2,0.2],XJitterWidth=0.01,dotSize=100);
+plotScatterBar(pairPeaks,[1 2],color=colors,XJitterWidth=0.01,dotSize=100,style='bar');
 
 % [~,p,~] = kstest2(pairPeaks(:,1),pairPeaks(:,2));
 p = signrank(pairPeaks(:,1),pairPeaks(:,2));
@@ -255,11 +259,10 @@ plotSignificance(p,[1 2],0.95);
 xticks([1 2]); xticklabels(conditionLabels);
 ylabel('Amplitude (pA)');
 
+
 % Plot AUCs
 nexttile;
-plot([1,2],pairAUCs,color=[.75,.75,.75]); hold on;
-plotScatterBar(pairAUCs(:,1),1,color=bluePurpleRed(end,:),XJitterWidth=0.01,dotSize=100);
-plotScatterBar(pairAUCs(:,2),2,color=[0.2,0.2,0.2],XJitterWidth=0.01,dotSize=100);
+plotScatterBar(pairAUCs,[1 2],color=colors,XJitterWidth=0.01,dotSize=100,style='bar');
 
 % [~,p,~] = kstest2(pairAUCs(:,1),pairAUCs(:,2));
 p = signrank(pairAUCs(:,1),pairAUCs(:,2));
@@ -267,4 +270,4 @@ plotSignificance(p,[1 2],0.95);
 xticks([1 2]); xticklabels(conditionLabels);
 ylabel('Total charge (pC)');
 
-saveFigures(gcf,'Summary_amplitude_signrank',resultsPath,savePDF=true,saveFIG=true);
+saveFigures(gcf,'Summary_amplitude_signrank_bar',resultsPath,savePDF=true,saveFIG=true);

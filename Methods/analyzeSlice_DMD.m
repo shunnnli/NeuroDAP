@@ -24,7 +24,7 @@ end
 %% Setup
 
 % Define results path
-resultsList = sortrows(struct2cell(dir(fullfile(expPath,'Results_*')))',3);
+resultsList = sortrows(struct2cell(dir(fullfile(expPath,'Results-*')))',3);
 if strcmp(options.resultsPathDate,'newest')
     resultsPath = fullfile(resultsList{end,2},resultsList{end,1});
 else

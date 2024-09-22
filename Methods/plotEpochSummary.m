@@ -7,6 +7,9 @@ arguments
     options.save logical = false
     options.saveDataPath
 
+    options.rig string = 'Wengang'
+    options.fs double = 10000
+
     options.dotSize double = 200
     options.passColor
     options.failColor
@@ -17,16 +20,18 @@ end
 %% Extract epoch values
 
 epoch = epochs{rowIdx,'Epoch'};
+cell = epochs{rowIdx,'Cell'};
 sweeps = epochs{rowIdx,'Raw sweeps'}{1};
 protocol = epochs{rowIdx,'Protocol'}{1};
 statistics = epochs{rowIdx,'Stats'}{1};
 epochOptions = epochs{rowIdx,'Options'}{1};
-nSweeps = size(sweeps,1);
+% nSweeps = size(sweeps,1);
+options.fs = epochOptions.outputFs;
 
 % QC params
 QC = epochs{rowIdx,'QC'}{1};
-QCIncluded = QC.included;
 QCThreshold = epochOptions.QCThreshold;
+% if ~isempty(fieldnames(QC)); QCIncluded = QC.included; end
 
 % Time windows
 if isfield(epochOptions,'stimDuration')
@@ -66,9 +71,11 @@ auc_control = statistics.baseline.auc;
 dotSize = options.dotSize;
 
 if any(included)
-    figname = ['Epoch',num2str(epoch),'-passed'];
+    if strcmp(options.rig,'Paolo'); figname = ['Cell',num2str(cell),'-Epoch',num2str(epoch),'-passed'];
+    else; figname = ['Epoch',num2str(epoch),'-passed']; end
 else
-    figname = ['Epoch',num2str(epoch),'-failed'];
+    if strcmp(options.rig,'Paolo'); figname = ['Cell',num2str(cell),'-Epoch',num2str(epoch),'-failed'];
+    else; figname = ['Epoch',num2str(epoch),'-failed']; end
 end
 
 if ~isfield(options,'passColor'); options.passColor = [12, 173, 74]./255; end
@@ -83,7 +90,7 @@ initializeFig(1,1); tiledlayout(3,9);
 % Plot good acquisitions (whole trace)
 nexttile(1,[1,3]);
 plotWindow = 1:size(sweeps,2);
-timeRangeInms = round((plotWindow-1*10000) ./ (10000/1000));
+timeRangeInms = (plotWindow-1*options.fs) ./ (options.fs/1000);
 plotSEM(timeRangeInms,sweeps(included==1,plotWindow),options.passColor,plotIndividual=true,IndividualColor=options.passCtrlColor);
 xlabel('Time (ms)'); xlim([timeRangeInms(1),timeRangeInms(end)]);
 ylabel('I (pA)');
@@ -94,7 +101,7 @@ nexttile(4,[1,3]);
 timeRangeStartSample = protocol.stimOnset(1) - 200;
 timeRangeEndSample = timeRangeStartSample + stimDuration;
 plotWindow = timeRangeStartSample : timeRangeEndSample;
-timeRangeInms = round((plotWindow-1*10000) ./ (10000/1000));
+timeRangeInms = (plotWindow-1*options.fs) ./ (options.fs/1000);
 plotSEM(timeRangeInms,sweeps(included==1,plotWindow),options.passColor,plotIndividual=true,IndividualColor=options.passCtrlColor);
 xlabel('Time (ms)'); xlim([timeRangeInms(1),timeRangeInms(end)]);
 ylabel('I (pA)');
@@ -105,7 +112,7 @@ nexttile(7,[1,3]);
 timeRangeStartSample = rcCheckOnset - 500;
 timeRangeEndSample = rcCheckEnd;
 plotWindow = timeRangeStartSample : timeRangeEndSample;
-timeRangeInms = round((plotWindow-1*10000) ./ (10000/1000));
+timeRangeInms = (plotWindow-1*options.fs) ./ (options.fs/1000);
 plotSEM(timeRangeInms,sweeps(included==1,plotWindow),options.passColor,plotIndividual=true,IndividualColor=options.passCtrlColor);
 xlabel('Time (ms)'); xlim([timeRangeInms(1),timeRangeInms(end)]);
 ylabel('I (pA)');
@@ -114,7 +121,7 @@ title(['Epoch ',num2str(epoch),': RC trace (included sweeps)']);
 % Plot bad acquisitions (whole trace)
 nexttile(10,[1,3]);
 plotWindow = 1:size(sweeps,2);
-timeRangeInms = round((plotWindow-1*10000) ./ (10000/1000));
+timeRangeInms = (plotWindow-1*options.fs) ./ (options.fs/1000);
 plotSEM(timeRangeInms,sweeps(included==0,plotWindow),options.failColor,plotIndividual=true,IndividualColor=options.failCtrlColor);
 xlabel('Time (ms)'); xlim([timeRangeInms(1),timeRangeInms(end)]);
 ylabel('I (pA)');
@@ -125,7 +132,7 @@ nexttile(13,[1,3]);
 timeRangeStartSample = protocol.stimOnset(1) - 200;
 timeRangeEndSample = timeRangeStartSample + stimDuration;
 plotWindow = timeRangeStartSample : timeRangeEndSample;
-timeRangeInms = round((plotWindow-1*10000) ./ (10000/1000));
+timeRangeInms = (plotWindow-1*options.fs) ./ (options.fs/1000);
 plotSEM(timeRangeInms,sweeps(included==0,plotWindow),options.failColor,plotIndividual=true,IndividualColor=options.failCtrlColor);
 xlabel('Time (ms)'); xlim([timeRangeInms(1),timeRangeInms(end)]);
 ylabel('I (pA)');
@@ -136,7 +143,7 @@ nexttile(16,[1,3]);
 timeRangeStartSample = rcCheckOnset - 500;
 timeRangeEndSample = rcCheckEnd;
 plotWindow = timeRangeStartSample : timeRangeEndSample;
-timeRangeInms = round((plotWindow-1*10000) ./ (10000/1000));
+timeRangeInms = (plotWindow-1*options.fs) ./ (options.fs/1000);
 plotSEM(timeRangeInms,sweeps(included==0,plotWindow),options.failColor,plotIndividual=true,IndividualColor=options.failCtrlColor);
 xlabel('Time (ms)'); xlim([timeRangeInms(1),timeRangeInms(end)]);
 ylabel('I (pA)');

@@ -39,14 +39,14 @@ dirsplit = split(epochs{1,"Session"},filesep); expName = dirsplit{end};
 if options.reload
     options.reloadCells = true;
     options.reloadCellAnalysis = true;
-    resultsFolderName = ['Results_',today];
+    resultsFolderName = ['Results-',today];
 else
-    resultsList = sortrows(struct2cell(dir(fullfile(epochs{1,"Session"},'Results_*')))',3);
+    resultsList = sortrows(struct2cell(dir(fullfile(epochs{1,"Session"},'Results-*')))',3);
     if isempty(resultsList)
         options.reload = true;
         options.reloadCells = true;
         options.reloadCellAnalysis = true;
-        resultsFolderName = ['Results_',today];
+        resultsFolderName = ['Results-',today];
     else
         resultsPath = dir(fullfile(resultsList{end,2},resultsList{end,1},'cell*','spots_*.mat'));
         if ~isempty(resultsPath)
@@ -83,9 +83,9 @@ warning('off','MATLAB:unknownObjectNowStruct');
 warning('off','MATLAB:table:RowsAddedExistingVars');
 
 %% Select randomSearch epochs
-randomSearchIdx = cellfun(@(x) contains(x.cycle, 'randomSearch'), epochs.("Protocol"));
+% randomSearchIdx = cellfun(@(x) contains(x.cycle, 'randomSearch'), epochs.("Protocol"));
+randomSearchIdx = cellfun(@(x) iscell(x),epochs.("Protocol"));
 exp = sortrows(epochs(randomSearchIdx,:),'Cell'); % randomSearchEpochs
-
 
 %% Build spots.mat and cells.mat
 if options.reloadCells
@@ -392,7 +392,7 @@ if options.reloadCells
                     spots{curSpot,'Repetition'} = protocol.repetition;
                     spots{curSpot,'Sweep'} = string(sweepAcq{k});
                     spots{curSpot,'Location'} = num2cell(location,[1 2]);
-                    spots{curSpot,'Protocol'} = protocols;
+                    spots{curSpot,'Protocol'} = {protocol};
                     spots{curSpot,'Response'} = {responses};
                     spots{curSpot,'Stats'} = {stats};
                     spots{curSpot,'QC'} = {qc};
@@ -439,6 +439,61 @@ if options.reloadCells
         % Skip if epoch file is not found
         if isempty(spotsList)
             disp(['Skipped: search epoch ', filename,' not found, skipped instead']);
+            if row == size(exp,1)
+                responseMap.responseMap = cellResponseMap';
+                responseMap.isResponseMap = isResponseMap_cell';
+                responseMap.hotspotMap = cellHotspotMap';
+                responseMap.currentMap = cellCurrentMap';
+                responseMap.baselineMap = cellBaselineMap';
+                responseMap.depths = cellDepthList';
+                responseMap.spotSequence = cellSpotSequence';
+                responseMap.hotspot = cellSpotResponse';
+                responseMap.spotLocation = cellSpotLocation';
+    
+                cellStats.max = cellMaxResponse';
+                cellStats.min = cellMinResponse';
+                cellStats.maxTime = cellMaxTime';
+                cellStats.minTime = cellMinTime';
+                cellStats.auc = cellAUC';
+                cellStats.EIindex = cellEIindex';
+                cellStats.baseline.auc = cellBaselineAUC';
+                cellStats.baseline.std = cellBaselineSTD';
+    
+                options.searchTotalSpots = searchTotalSpots;
+                options.cellLocation = [spotsAtDepth{1,'Protocol'}{1}.cellX, spotsAtDepth{1,'Protocol'}{1}.cellY];
+                options.spotOptions = spotsAtDepth{1,'Options'}{1};
+        
+                cells{curCell,'Session'} = options.saveDataPath;
+                cells{curCell,'Animal'} = spotsAtDepth{1,'Animal'};
+                cells{curCell,'Task'} = spotsAtDepth{1,'Task'};
+                cells{curCell,'Cell'} = curCell;
+                cells{curCell,'Epochs'} = {cellEpochs'};
+                cells{curCell,'Vhold'} = {cellVhold};
+                cells{curCell,'Protocol'} = {cellProtocols'};
+                cells{curCell,'Response map'} = {responseMap};
+                cells{curCell,'Stats'} = {cellStats};
+                cells{curCell,'Options'} = {options};
+        
+                % Save noise data for this cell
+                if options.reload
+                    filename = strcat('noise_cell',num2str(curCell));
+                    save(fullfile(epochs{1,"Session"},filename),'nullSpotData','preStimData','baselineData','-v7.3');
+                    disp(strcat("Saved noise data for cell: ",num2str(curCell)));
+                end
+        
+                % Update prevCell and reset cellResponseMap
+                cellVhold = []; cellEpochs = {}; searchTotalSpots = {}; 
+                cellDepthList = {}; cellSpotSequence = {}; cellProtocols = {};
+                cellResponseMap = {}; isResponseMap_cell = {}; cellHotspotMap = {};
+                cellCurrentMap = {}; cellBaselineMap = {};
+                nullSpotData = []; preStimData = []; baselineData = [];
+                cellSpotResponse = {}; 
+                cellMaxResponse = {}; cellMinResponse = {};
+                cellMaxTime = {};cellMinTime = {};
+                cellAUC = {}; cellEIindex = {};
+                cellBaselineAUC = {}; cellBaselineSTD = {};
+                cellSpotLocation = {};
+            end
             continue;
         else
             disp(['Ongoing: adding search epoch ', filename,' to cells_DMD.mat']);
@@ -742,7 +797,7 @@ if options.reloadCellAnalysis
         if options.save
             saveFigures(gcf,['cell',num2str(c),'_noise'],cellResultsPath);
             save(fullfile(epochs{1,"Session"},filename),'noise_nullSpot','noise_preStim','noise_all','allNullData','-append');
-            disp(strcat("Saved noise model for cell: ",num2str(c)));
+            disp(strcat("Saved noise model for cell: ",num2str(c))); close all;
         end
         
         %% Analyze all pairs of searches

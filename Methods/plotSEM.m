@@ -80,7 +80,7 @@ end
 if strcmp(options.plotStyle,'line')
     if options.plotIndividual
         for i = 1:size(y,1)
-            plot(x,y(i,:),'Color',options.individualColor,'LineWidth',max(0.01,options.LineWidth-1),'LineStyle',options.LineStyle,'HandleVisibility','off'); hold on
+            l = plot(x,y(i,:),'Color',options.individualColor,'LineWidth',max(0.01,options.LineWidth-1),'LineStyle',options.LineStyle,'HandleVisibility','off'); hold on
         end
     end
     if options.plotMean

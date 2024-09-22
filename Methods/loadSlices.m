@@ -311,7 +311,7 @@ if options.reload
                 warning("Sweep duration is different from epoch avg duration!!");
                 continue
             end
-            sweeps(k,:) = raw_trace;        
+            sweeps(k,:) = raw_trace;
 
 
             % For some recording of wengang, there's no stim, default to be
@@ -466,126 +466,133 @@ if options.reload
         end
 
         %% Merge protocol/qc/stats for each sweep into one for each epoch
-        protocols = mergeStructs(protocols);
-        statistics = mergeStructs(statistics);
-        QC = mergeStructs(QCs);
+        if ~contains(protocol.cycle,'randomSearch')
+            protocols = mergeStructs(protocols);
+            statistics = mergeStructs(statistics);
+            QC = mergeStructs(QCs);
 
-        %% Calculate peripeak data
-
-        % Find min and max value for stim response
-        trace = processed(:,analysisWindow);
-        avg_trace = mean(trace,1);
-        [~,maxIdx] = max(avg_trace); [~,minIdx] = min(avg_trace);
-        % Average around max/min idx to get final value
-        maxWindowStart = max(1,maxIdx-peakWindowWidth);
-        maxWindowEnd = min(maxIdx+peakWindowWidth,length(avg_trace));
-        minWindowStart = max(1,minIdx-peakWindowWidth);
-        minWindowEnd = min(minIdx+peakWindowWidth,length(avg_trace));
-        statistics.response.periMax = mean(trace(:,maxWindowStart:maxWindowEnd),2);
-        statistics.response.periMin = mean(trace(:,minWindowStart:minWindowEnd),2);
-        statistics.response.periMaxTime = maxIdx * 1000/options.outputFs;
-        statistics.response.periMinTime = minIdx * 1000/options.outputFs;
-
-        % Find min and max for control baseline
-        trace = processed(:,controlWindow);
-        avg_trace = mean(trace,1);
-        [~,maxIdx] = max(avg_trace); [~,minIdx] = min(avg_trace);
-        % Average around max/min idx to get final value
-        maxWindowStart = max(1,maxIdx-peakWindowWidth);
-        maxWindowEnd = min(maxIdx+peakWindowWidth,length(avg_trace));
-        minWindowStart = max(1,minIdx-peakWindowWidth);
-        minWindowEnd = min(minIdx+peakWindowWidth,length(avg_trace));
-        statistics.baseline.periMax = mean(trace(:,maxWindowStart:maxWindowEnd),2);
-        statistics.baseline.periMin = mean(trace(:,minWindowStart:minWindowEnd),2);
-        statistics.baseline.periMaxTime = maxIdx * 1000/options.outputFs;
-        statistics.baseline.periMinTime = minIdx * 1000/options.outputFs;
+            %% Calculate peripeak data
     
+            % Find min and max value for stim response
+            trace = processed(:,analysisWindow);
+            avg_trace = mean(trace,1);
+            [~,maxIdx] = max(avg_trace); [~,minIdx] = min(avg_trace);
+            % Average around max/min idx to get final value
+            maxWindowStart = max(1,maxIdx-peakWindowWidth);
+            maxWindowEnd = min(maxIdx+peakWindowWidth,length(avg_trace));
+            minWindowStart = max(1,minIdx-peakWindowWidth);
+            minWindowEnd = min(minIdx+peakWindowWidth,length(avg_trace));
+            statistics.response.periMax = mean(trace(:,maxWindowStart:maxWindowEnd),2);
+            statistics.response.periMin = mean(trace(:,minWindowStart:minWindowEnd),2);
+            statistics.response.periMaxTime = maxIdx * 1000/options.outputFs;
+            statistics.response.periMinTime = minIdx * 1000/options.outputFs;
     
-        %% Determine cellID and mean epoch vhold for that cell
-        if createNew
-            if strcmp(rig,'Wengang')
-                if withVhold
-                    if withVholdAvg
-                        vholdEpochMean = mean(vholdEpoch(:,baselineWindow),"all");
+            % Find min and max for control baseline
+            trace = processed(:,controlWindow);
+            avg_trace = mean(trace,1);
+            [~,maxIdx] = max(avg_trace); [~,minIdx] = min(avg_trace);
+            % Average around max/min idx to get final value
+            maxWindowStart = max(1,maxIdx-peakWindowWidth);
+            maxWindowEnd = min(maxIdx+peakWindowWidth,length(avg_trace));
+            minWindowStart = max(1,minIdx-peakWindowWidth);
+            minWindowEnd = min(minIdx+peakWindowWidth,length(avg_trace));
+            statistics.baseline.periMax = mean(trace(:,maxWindowStart:maxWindowEnd),2);
+            statistics.baseline.periMin = mean(trace(:,minWindowStart:minWindowEnd),2);
+            statistics.baseline.periMaxTime = maxIdx * 1000/options.outputFs;
+            statistics.baseline.periMinTime = minIdx * 1000/options.outputFs;
+        
+        
+            %% Determine cellID and mean epoch vhold for that cell
+            if createNew
+                if strcmp(rig,'Wengang')
+                    if withVhold
+                        if withVholdAvg
+                            vholdEpochMean = mean(vholdEpoch(:,baselineWindow),"all");
+                        else
+                            vholdEpochMean = mean(vholdSweeps(:,baselineWindow),"all"); 
+                            vholdEpoch = mean(vholdSweeps(:,baselineWindow),1);
+                        end
+                        if vholdEpochMean < -50; cellid = cellid + 1; end
+                        vholdSweepsMean = mean(vholdSweeps(:,1:20000),2);
+                        vholdInfo.vholdSweepsMean = vholdSweepsMean;
+                        vholdInfo.vholdEpochTrace = vholdEpoch;
+                        vholdInfo.vholdSweepsTrace = vholdSweeps;
                     else
-                        vholdEpochMean = mean(vholdSweeps(:,baselineWindow),"all"); 
-                        vholdEpoch = mean(vholdSweeps(:,baselineWindow),1);
+                        cellid = row;
+                        vholdEpochMean = 100;
                     end
-                    if vholdEpochMean < -50; cellid = cellid + 1; end
-                    vholdSweepsMean = mean(vholdSweeps(:,1:20000),2);
-                    vholdInfo.vholdSweepsMean = vholdSweepsMean;
-                    vholdInfo.vholdEpochTrace = vholdEpoch;
-                    vholdInfo.vholdSweepsTrace = vholdSweeps;
+                    vhold = vholdEpochMean;
+                    vholdInfo.vholdEpochMean = vholdEpochMean;
                 else
-                    cellid = row;
-                    vholdEpochMean = 100;
-                end
-                vhold = vholdEpochMean;
-                vholdInfo.vholdEpochMean = vholdEpochMean;
-            else
-                cellid = epochList{row,end};
-                
-                % Determine Vhold
-                % Find in .xlsx file first, if can't find, use the heuristic that
-                % cells with negative leak current Vhold=-70, otherwise Vhold = 10;
-                acqsplit = split(sweepAcq{k},'_'); acqNum = str2double(acqsplit{end});
-                vhold = info{info.acq_ == acqNum,'holding'};
-                if isempty(vhold)
-                    if baselineAvg < 0; vhold = -70;
-                    else; vhold = 10; end
-                end
-            end
-        end
-
-        %% Remove empty/erraneous sweeps
-        if createNew || isfield(options,'include')
-            included = ones(length(sweepAcq),1);
-
-            % Remove sweeps with different Vhold
-            if options.filterSweeps && withVhold
-                % rounded_epoch_vhold = roundToTarget(vholdEpochMean,[-70,0,8]);
-                % rounded_sweeps_vhold = roundToTarget(vholdSweepsMean,[-70,0,8]);
-                % included = (rounded_sweeps_vhold == rounded_epoch_vhold);
-                included = ~isoutlier(vholdInfo.vholdSweepsMean,'mean');
-            end 
-    
-            % Remove sweeps with different cycles
-            cycles = cycles(~cellfun(@isempty,cycles));
-            cyclesCount = tabulate(cycles);
-            [~, mostCommonIdx] = max([cyclesCount{:, 2}]);
-            if ~all(strcmp(cycles, cycles{mostCommonIdx}))
-                included = strcmp(cycles, cycles{mostCommonIdx});
-                % protocol = protocols{mostCommonIdx};
-            end
-
-            % Remove sweeps from QC based on baseline current
-            Ibaseline_avg_filter = QC.Ibaseline >= options.QCThreshold.Ibaseline;
-            Ibaseline_std_filter = QC.Ibaseline_std <= options.QCThreshold.Ibaseline_std;
-            QCIncluded = all([Ibaseline_avg_filter,Ibaseline_std_filter],2);
-            QC.included = QCIncluded;
-            included = all([included,QCIncluded],2);
-
-            % Remove epochs with high Rs or high Verror
-            Rs_final = mean(QC.Rs(included==1));
-            Verror_final = mean(abs(QC.Verror(included==1)));
-            if Rs_final > options.QCThreshold.Rs || Verror_final > options.QCThreshold.Verror
-                included = zeros(length(sweepAcq),1);
-            end
-            
-            % Remove sweeps based on other provided criteria
-            if ~isempty(options.QCThreshold.include)
-                for criterion = options.QCThreshold.include
-                    if length(eval(criterion{1})) > 1
-                        newIncluded = eval(criterion{1});
-                    else
-                        newIncluded = ones(length(sweepAcq),1) * eval(criterion{1});
+                    cellid = epochList{row,end};
+                    
+                    % Determine Vhold
+                    % Find in .xlsx file first, if can't find, use the heuristic that
+                    % cells with negative leak current Vhold=-70, otherwise Vhold = 10;
+                    acqsplit = split(sweepAcq{k},'_'); acqNum = str2double(acqsplit{end});
+                    vhold = info{info.acq_ == acqNum,'holding'};
+                    if isempty(vhold)
+                        if baselineAvg < 0; vhold = -70;
+                        else; vhold = 10; end
                     end
-                    included = all([included,newIncluded],2);
                 end
-                if length(included) ~= length(sweepAcq)
-                    warning('included have different size than #sweeps! Reset included to true for all!');
-                    included = ones(length(sweepAcq),1);
+            end
+    
+            %% Remove empty/erraneous sweeps
+            if createNew || isfield(options,'include')
+                included = ones(length(sweepAcq),1);
+    
+                % Remove sweeps with different Vhold
+                if options.filterSweeps && withVhold
+                    % rounded_epoch_vhold = roundToTarget(vholdEpochMean,[-70,0,8]);
+                    % rounded_sweeps_vhold = roundToTarget(vholdSweepsMean,[-70,0,8]);
+                    % included = (rounded_sweeps_vhold == rounded_epoch_vhold);
+                    included = ~isoutlier(vholdInfo.vholdSweepsMean,'mean');
+                end 
+        
+                % Remove sweeps with different cycles
+                cycles = cycles(~cellfun(@isempty,cycles));
+                if ~isempty(cycles)
+                    cyclesCount = tabulate(cycles);
+                    [~, mostCommonIdx] = max([cyclesCount{:, 2}]);
+                    if ~all(strcmp(cycles, cycles{mostCommonIdx}))
+                        included = strcmp(cycles, cycles{mostCommonIdx});
+                        % protocol = protocols{mostCommonIdx};
+                    end
                 end
+    
+                % Remove sweeps based on QC
+                if ~isempty(fieldnames(QC))
+                    % Remove sweeps from QC based on baseline current
+                    Ibaseline_avg_filter = QC.Ibaseline >= options.QCThreshold.Ibaseline;
+                    Ibaseline_std_filter = QC.Ibaseline_std <= options.QCThreshold.Ibaseline_std;
+                    QCIncluded = all([Ibaseline_avg_filter,Ibaseline_std_filter],2);
+                    QC.included = QCIncluded;
+                    included = all([included,QCIncluded],2);
+    
+                    % Remove epochs with high Rs or high Verror
+                    Rs_final = mean(QC.Rs(included==1));
+                    Verror_final = mean(abs(QC.Verror(included==1)));
+                    if Rs_final > options.QCThreshold.Rs || Verror_final > options.QCThreshold.Verror
+                        included = zeros(length(sweepAcq),1);
+                    end
+    
+                    % Remove sweeps based on other provided criteria
+                    if ~isempty(options.QCThreshold.include)
+                        for criterion = options.QCThreshold.include
+                            if length(eval(criterion{1})) > 1
+                                newIncluded = eval(criterion{1});
+                            else
+                                newIncluded = ones(length(sweepAcq),1) * eval(criterion{1});
+                            end
+                            included = all([included,newIncluded],2);
+                        end
+                        if length(included) ~= length(sweepAcq)
+                            warning('included have different size than #sweeps! Reset included to true for all!');
+                            included = ones(length(sweepAcq),1);
+                        end
+                    end
+                end 
             end
         end
     
@@ -607,156 +614,9 @@ if options.reload
         epochs{row,'Options'} = {options};
 
         %% Plot epoch analysis summary
-        if options.plot
+        if options.plot && ~isempty(fieldnames(QC))
             close all;
             plotEpochSummary(epochs,row,save=true,saveDataPath=options.saveDataPath);
-            % initializeFig(1,1); tiledlayout(3,9); 
-            % dotSize = 200;
-            % if any(included)
-            %     color = [12, 173, 74]./255;
-            %     individualColor = [.6 .6 .6];
-            %     figname = ['Epoch',num2str(epoch),'-passed'];
-            % else
-            %     color = 1 - 0.5*(1-[12, 173, 74]./255);
-            %     individualColor = [.7 .7 .7];
-            %     figname = ['Epoch',num2str(epoch),'-failed'];
-            % end
-            % 
-            % 
-            % % Plot good acquisitions (whole trace)
-            % nexttile(1,[1,3]);
-            % plotWindow = 1:size(sweeps,2);
-            % timeRangeInms = (plotWindow-1*10000) ./ (10000/1000);
-            % plotSEM(timeRangeInms,sweeps(QCIncluded==1,plotWindow),color,plotIndividual=true,IndividualColor=individualColor);
-            % xlabel('Time (ms)'); xlim([timeRangeInms(1),timeRangeInms(end)]);
-            % ylabel('I (pA)');
-            % title(['Epoch ',num2str(epoch),': whole trace (included sweeps)']);
-            % 
-            % % Plot good acquisitions (stim period)
-            % nexttile(4,[1,3]);
-            % timeRangeStartSample = protocol.stimOnset(1) - 200;
-            % timeRangeEndSample = timeRangeStartSample + stimDuration;
-            % plotWindow = timeRangeStartSample : timeRangeEndSample;
-            % timeRangeInms = (plotWindow-1*10000) ./ (10000/1000);
-            % plotSEM(timeRangeInms,sweeps(QCIncluded==1,plotWindow),color,plotIndividual=true,IndividualColor=individualColor);
-            % xlabel('Time (ms)'); xlim([timeRangeInms(1),timeRangeInms(end)]);
-            % ylabel('I (pA)');
-            % title(['Epoch ',num2str(epoch),': stim trace (included sweeps)']);
-            % 
-            % % Plot good acquisitions (RC period)
-            % nexttile(7,[1,3]);
-            % timeRangeStartSample = rcCheckOnset - 500;
-            % timeRangeEndSample = rcCheckEnd;
-            % plotWindow = timeRangeStartSample : timeRangeEndSample;
-            % timeRangeInms = (plotWindow-1*10000) ./ (10000/1000);
-            % plotSEM(timeRangeInms,sweeps(QCIncluded==1,plotWindow),color,plotIndividual=true,IndividualColor=individualColor);
-            % xlabel('Time (ms)'); xlim([timeRangeInms(1),timeRangeInms(end)]);
-            % ylabel('I (pA)');
-            % title(['Epoch ',num2str(epoch),': RC trace (included sweeps)']);
-            % 
-            % % Plot bad acquisitions (whole trace)
-            % nexttile(10,[1,3]);
-            % plotWindow = 1:size(sweeps,2);
-            % timeRangeInms = (plotWindow-1*10000) ./ (10000/1000);
-            % plotSEM(timeRangeInms,sweeps(QCIncluded==0,plotWindow),color,plotIndividual=true,IndividualColor=individualColor);
-            % xlabel('Time (ms)'); xlim([timeRangeInms(1),timeRangeInms(end)]);
-            % ylabel('I (pA)');
-            % title(['Epoch ',num2str(epoch),': whole trace (removed sweeps)']);
-            % 
-            % % Plot bad acquisitions (stim period)
-            % nexttile(13,[1,3]);
-            % timeRangeStartSample = protocol.stimOnset(1) - 200;
-            % timeRangeEndSample = timeRangeStartSample + stimDuration;
-            % plotWindow = timeRangeStartSample : timeRangeEndSample;
-            % timeRangeInms = (plotWindow-1*10000) ./ (10000/1000);
-            % plotSEM(timeRangeInms,sweeps(QCIncluded==0,plotWindow),color,plotIndividual=true,IndividualColor=individualColor);
-            % xlabel('Time (ms)'); xlim([timeRangeInms(1),timeRangeInms(end)]);
-            % ylabel('I (pA)');
-            % title(['Epoch ',num2str(epoch),': stim trace (removed sweeps)']);
-            % 
-            % % Plot bad acquisitions (RC period)
-            % nexttile(16,[1,3]);
-            % timeRangeStartSample = rcCheckOnset - 500;
-            % timeRangeEndSample = rcCheckEnd;
-            % plotWindow = timeRangeStartSample : timeRangeEndSample;
-            % timeRangeInms = (plotWindow-1*10000) ./ (10000/1000);
-            % plotSEM(timeRangeInms,sweeps(QCIncluded==0,plotWindow),color,plotIndividual=true,IndividualColor=individualColor);
-            % xlabel('Time (ms)'); xlim([timeRangeInms(1),timeRangeInms(end)]);
-            % ylabel('I (pA)');
-            % title(['Epoch ',num2str(epoch),': RC trace (removed sweeps)']);
-            % 
-            % % Plot Rs vs acq
-            % nexttile;
-            % yline(options.QCThreshold.Rs,'--','Threshold'); hold on;
-            % scatter(1:length(sweepAcq),QC.Rs,dotSize,color,'filled');
-            % xlabel('Acquisition');
-            % ylabel('Rs (M\Omega)');
-            % title('Rs');
-            % 
-            % % Plot Rm vs acq
-            % nexttile;
-            % scatter(1:length(sweepAcq),QC.Rm,dotSize,color,'filled');
-            % xlabel('Acquisition');
-            % ylabel('Rm (M\Omega)');
-            % title('Rm');
-            % 
-            % % Plot Cm vs acq
-            % nexttile;
-            % scatter(1:length(sweepAcq),QC.Cm,dotSize,color,'filled');
-            % xlabel('Acquisition');
-            % ylabel('Cm (uF)');
-            % title('Cm');
-            % 
-            % % Plot Ibaseline vs acq
-            % nexttile;
-            % yline(options.QCThreshold.Ibaseline,'--','Threshold'); hold on;
-            % scatter(1:length(sweepAcq),QC.Ibaseline,dotSize,color,'filled');
-            % xlabel('Acquisition');
-            % ylabel('I (pA)');
-            % title('Baseline current');
-            % 
-            % % Plot Ibaseline_std vs acq
-            % nexttile;
-            % yline(options.QCThreshold.Ibaseline_std,'--','Threshold'); hold on;
-            % scatter(1:length(sweepAcq),QC.Ibaseline_std,dotSize,color,'filled');
-            % xlabel('Acquisition');
-            % ylabel('Standard deviation');
-            % title('SD of baseline current');
-            % 
-            % % Plot Verror vs acq
-            % nexttile;
-            % yline(options.QCThreshold.Verror,'--','Threshold'); hold on;
-            % scatter(1:length(sweepAcq),abs(QC.Verror),dotSize,color,'filled');
-            % xlabel('Acquisition');
-            % ylabel('|Voltage error| (mV)');
-            % title('Voltage error');
-            % 
-            % % Plot max vs acq (stim & baseline)
-            % nexttile;
-            % scatter(1:length(sweepAcq),statistics.baseline.periMax,dotSize,[.8 .8 .8],'filled'); hold on;
-            % scatter(1:length(sweepAcq),statistics.response.periMax,dotSize,color,'filled');
-            % xlabel('Acquisition');
-            % ylabel('I_{max}  (pA)');
-            % title('Max response');
-            % 
-            % % Plot min vs acq (stim & baseline)
-            % nexttile;
-            % scatter(1:length(sweepAcq),statistics.baseline.periMin,dotSize,[.8 .8 .8],'filled'); hold on;
-            % scatter(1:length(sweepAcq),statistics.response.periMin,dotSize,color,'filled');
-            % xlabel('Acquisition');
-            % ylabel('I_{min}  (pA)');
-            % title('Min response');
-            % 
-            % % Plot charge vs acq (stim & baseline)
-            % nexttile;
-            % scatter(1:length(sweepAcq),statistics.baseline.auc,dotSize,[.8 .8 .8],'filled'); hold on;
-            % scatter(1:length(sweepAcq),statistics.response.auc,dotSize,color,'filled');
-            % xlabel('Acquisition');
-            % ylabel('Charge (pC)');
-            % title('Charge');
-            % 
-            % % Save figure
-            % saveFigures(gcf,figname,options.saveDataPath);
         end
     end
     

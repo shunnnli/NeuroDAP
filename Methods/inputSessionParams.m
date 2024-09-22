@@ -10,16 +10,23 @@ arguments
 
     options.optoTriggered logical = false
     options.optoInverted logical = true
-    options.optoPulseFreq double = 50
-    options.optoPulseDuration double = 5
-    options.optoStimDuration double = 500
+    options.redPulseFreq double = 50
+    options.redPulseDuration double = 5
+    options.redStimDuration double = 500
+    options.bluePulseFreq double = 30
+    options.bluePulseDuration double = 10
+    options.blueStimDuration double = 500
+
+    options.includeOtherStim logical = true
 end
 
 Prompt = {'Session',...
           'Paradigm','redStim','Pavlovian',...
           'ReactionTime','minLicks',...
           'OptoTriggered','OptoInverted',...
-          'OptoPulseFreq','OptoPulseDuration','OptoStimDuration'};
+          'RedPulseFreq','RedPulseDuration','RedStimDuration',...
+          'BluePulseFreq','BluePulseDuration','BlueStimDuration',...
+          'IncludeOtherStim'};
 
 Formats(1,1).enable = 'inactive'; % SessionName, acts as a label
 Formats(2,1).style = 'popupmenu'; % Behavior paradigm
@@ -31,9 +38,13 @@ Formats(5,1).type = 'edit';       % Reaction time
 Formats(6,1).type = 'edit';       % minLicks
 Formats(7,1).type = 'check';      % Opto pulse signaled triggered or full event
 Formats(8,1).type = 'check';      % Opto pulse inverted or not
-Formats(9,1).type = 'edit';       % Opto pulse frequency
-Formats(10,1).type = 'edit';       % Opto pulse duration
-Formats(11,1).type = 'edit';      % Opto stim duration
+Formats(9,1).type = 'edit';       % Red pulse frequency
+Formats(10,1).type = 'edit';       % Red pulse duration
+Formats(11,1).type = 'edit';      % Red stim duration
+Formats(12,1).type = 'edit';       % Blue pulse frequency
+Formats(13,1).type = 'edit';       % Blue pulse duration
+Formats(14,1).type = 'edit';      % Blue stim duration
+Formats(15,1).type = 'check';       % Include other stim
 
 % Create initial answer
 DefAns = cell(size(Prompt,1),length(sessionList));
@@ -53,9 +64,13 @@ for s = 1:length(sessionList)
     % Opto params
     DefAns{7,s} = options.optoTriggered;
     DefAns{8,s} = options.optoInverted;
-    DefAns{9,s} = num2str(options.optoPulseFreq);
-    DefAns{10,s} = num2str(options.optoPulseDuration);
-    DefAns{11,s} = num2str(options.optoStimDuration);
+    DefAns{9,s} = num2str(options.redPulseFreq);
+    DefAns{10,s} = num2str(options.redPulseDuration);
+    DefAns{11,s} = num2str(options.redStimDuration);
+    DefAns{12,s} = num2str(options.bluePulseFreq);
+    DefAns{13,s} = num2str(options.bluePulseDuration);
+    DefAns{14,s} = num2str(options.blueStimDuration);
+    DefAns{15,s} = options.includeOtherStim;
 end
 DefAns = cell2struct(DefAns,Prompt,1);
 Prompt = repmat(Prompt',1,2);

@@ -1,4 +1,4 @@
-function analyzeSessions_optoPair(sessionpath,options)
+function analyzeSessions_EPLHbPair(sessionpath,options)
 
 arguments
     sessionpath string
@@ -144,15 +144,11 @@ elseif ~isfield(params.session,'task') && ~isfield(options,'task')
     if contains(sessionTask,["Random","H"],IgnoreCase=false)
         options.task = 'random';
         params.session.task = options.task;
-    elseif contains(sessionTask,["P","PP","Punish"],IgnoreCase=false)
-        options.task = 'punish pairing';
+    elseif contains(sessionTask,"Simultaneous",IgnoreCase=false)
+        options.task = 'simultaneous';
         params.session.task = options.task;
-        if contains(sessionTask,"RP",IgnoreCase=false)
-            options.task = 'reward pairing';
-            params.session.task = options.task;
-        end
-    elseif contains(sessionTask,["R","RP","Reward"],IgnoreCase=false)
-        options.task = 'reward pairing';
+    elseif contains(sessionTask,"Sequential",IgnoreCase=false)
+        options.task = 'sequential';
         params.session.task = options.task;
     else
         warning('Unrecognize session name pattern, set to random');
@@ -294,15 +290,17 @@ if ~exist('trials','var') || options.redo
             [allTrials,~] = getTrials(find(leftTone),optoStim1,...
                                  waterIdx,airpuffIdx); % add rightLickON if only baseline licks
         end
-    elseif contains(options.task,'punish')
+    elseif contains(options.task,'simultaneous')
         if options.includeOtherStim
-            [allTrials,~] = getTrials(find(leftTone),optoStim1,optoStim2,waterIdx);
+            [allTrials,~] = getTrials(find(leftTone),optoStim1,optoStim2,...
+                                 waterIdx,airpuffIdx);
         else
             [allTrials,~] = getTrials(find(leftTone),optoStim1,waterIdx);
         end
     else
         if options.includeOtherStim
-            [allTrials,~] = getTrials(find(leftTone),optoStim1,optoStim2);
+            [allTrials,~] = getTrials(find(leftTone),optoStim1,optoStim2,...
+                                 waterIdx,airpuffIdx);
         else
             [allTrials,~] = getTrials(find(leftTone),optoStim1);
         end
@@ -414,48 +412,66 @@ else
     baselineIdx = randi([randomMinSample,randomMaxSample],100,1);
 
     if options.combineOmission
-        if options.performing
-            stimTrials = trials{trials.isTone == 0 & trials.isStim == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            pairTrials = trials{trials.isTone == 1 & trials.isStim == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            toneTrials = trials{trials.isTone == 1 & trials.isStim == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            stimIdx = stimTrials(:,2);
-            pairIdx = pairTrials(:,2);
-            toneIdx = toneTrials(:,2);
-            stimOmissionIdx = []; pairOmissionIdx = []; toneOmissionIdx = [];
-        else
-            stimTrials = trials{trials.isTone == 0 & trials.isStim == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            pairTrials = trials{trials.isTone == 1 & trials.isStim == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            toneTrials = trials{trials.isTone == 1 & trials.isStim == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            stimIdx = stimTrials(:,2);
-            pairIdx = pairTrials(:,2);
-            toneIdx = toneTrials(:,2);
-            stimOmissionIdx = []; pairOmissionIdx = []; toneOmissionIdx = [];
+        if contains(options.task,'simultaneous')
+            if options.performing
+                stimTrials = trials{trials.isTone == 0 & trials.isStim == 1 & trials.isStim2 == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                EPLHbTrials = trials{trials.isTone == 0 & trials.isStim == 1 & trials.isStim2 == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                pairTrials = trials{trials.isTone == 1 & trials.isStim == 1 & trials.isStim2 == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                toneTrials = trials{trials.isTone == 1 & trials.isStim == 0 & trials.isStim2 == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                stimIdx = stimTrials(:,2);
+                pairIdx = pairTrials(:,2);
+                EPLHbIdx = EPLHbTrials(:,2);
+                toneIdx = toneTrials(:,2);
+                stimOmissionIdx = []; pairOmissionIdx = []; stimToneOmissionIdx = [];
+            else
+                stimTrials = trials{trials.isTone == 0 & trials.isStim == 1 & trials.isStim2 == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                EPLHbTrials = trials{trials.isTone == 0 & trials.isStim == 1 & trials.isStim2 == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                pairTrials = trials{trials.isTone == 1 & trials.isStim == 1 & trials.isStim2 == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                toneTrials = trials{trials.isTone == 1 & trials.isStim == 0 & trials.isStim2 == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                stimIdx = stimTrials(:,2);
+                pairIdx = pairTrials(:,2);
+                EPLHbIdx = EPLHbTrials(:,2);
+                toneIdx = toneTrials(:,2);
+                stimOmissionIdx = []; pairOmissionIdx = []; stimToneOmissionIdx = [];
+            end
+        elseif contains(options.task,'sequential')
+            if options.performing
+                stimTrials = trials{trials.isTone == 0 & trials.isStim == 1 & trials.isStim2 == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                pairTrials = trials{trials.isTone == 1 & trials.isStim == 1 & trials.isStim2 == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                toneTrials = trials{trials.isTone == 1 & trials.isStim == 0 & trials.isStim2 == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                stimIdx = stimTrials(:,2);
+                pairIdx = pairTrials(:,2);
+                toneIdx = toneTrials(:,2);
+                stimOmissionIdx = []; pairOmissionIdx = []; toneOmissionIdx = [];
+            else
+                stimTrials = trials{trials.isTone == 0 & trials.isStim == 1 & trials.isStim2 == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                pairTrials = trials{trials.isTone == 1 & trials.isStim == 1 & trials.isStim2 == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                toneTrials = trials{trials.isTone == 1 & trials.isStim == 0 & trials.isStim2 == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                stimIdx = stimTrials(:,2);
+                pairIdx = pairTrials(:,2);
+                toneIdx = toneTrials(:,2);
+                stimOmissionIdx = []; pairOmissionIdx = []; toneOmissionIdx = [];
+            end
         end
     else
-        if contains(options.task,'reward')
+        if contains(options.task,'simultaneous')
             if options.performing
                 stimTrials = trials{trials.isTone == 0 & trials.isStim == 1 ...
-                    & trials.isReward == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                    & trials.isReward == 1 & trials.isStim2 == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
                 stimOmissionTrials = trials{trials.isTone == 0 & trials.isStim == 1 ...
-                    & trials.isReward == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                    & trials.isReward == 0 & trials.isStim2 == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
                 pairTrials = trials{trials.isTone == 1 & trials.isStim == 1 ...
-                    & trials.isReward == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                    & trials.isReward == 1 & trials.isStim2 == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
                 pairOmissionTrials = trials{trials.isTone == 1 & trials.isStim == 1 ...
-                    & trials.isReward == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                    & trials.isReward == 0 & trials.isStim2 == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                EPLHbTrials = trials{trials.isTone == 0 & trials.isStim == 0 ...
+                    & trials.isReward == 1 & trials.isStim2 == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                EPLHbOmissionTrials = trials{trials.isTone == 0 & trials.isStim == 0 ...
+                    & trials.isReward == 0 & trials.isStim2 == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
                 toneTrials = trials{trials.isTone == 1 & trials.isStim == 0 ...
-                    & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                stimIdx = stimTrials(:,2);
-                stimOmissionIdx = stimOmissionTrials(:,2);
-                pairIdx = pairTrials(:,2);
-                pairOmissionIdx = pairOmissionTrials(:,2);
-                toneIdx = toneTrials(:,2);
-            else
-                stimTrials = trials{trials.isTone == 0 & trials.isStim == 1 & trials.isReward == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                stimOmissionTrials = trials{trials.isTone == 0 & trials.isStim == 1 & trials.isReward == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                pairTrials = trials{trials.isTone == 1 & trials.isStim == 1 & trials.isReward == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                pairOmissionTrials = trials{trials.isTone == 1 & trials.isStim == 1 & trials.isReward == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                toneTrials = trials{trials.isTone == 1 & trials.isStim == 0 & trials.isReward == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                toneOmissionTrials = trials{trials.isTone == 1 & trials.isStim == 0 & trials.isReward == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                    & trials.isReward == 0 & trials.isStim2 == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                toneOmissionTrials = trials{trials.isTone == 1 & trials.isStim == 0 ...
+                    & trials.isReward == 0 & trials.isStim2 == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
                 if isempty(toneTrials) && ~isempty(toneOmissionTrials)
                     toneTrials = toneOmissionTrials;
                 end
@@ -463,10 +479,40 @@ else
                 stimOmissionIdx = stimOmissionTrials(:,2);
                 pairIdx = pairTrials(:,2);
                 pairOmissionIdx = pairOmissionTrials(:,2);
+                EPLHbIdx = EPLHbTrials(:,2);
+                EPLHbOmissionIdx = EPLHbOmissionTrials(:,2);
+                toneIdx = toneTrials(:,2);
+                toneOmissionIdx = toneOmissionTrials(:,2);
+            else
+                stimTrials = trials{trials.isTone == 0 & trials.isStim == 1 ...
+                    & trials.isReward == 1 & trials.isStim2 == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                stimOmissionTrials = trials{trials.isTone == 0 & trials.isStim == 1 ...
+                    & trials.isReward == 0 & trials.isStim2 == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                pairTrials = trials{trials.isTone == 1 & trials.isStim == 1 ...
+                    & trials.isReward == 1 & trials.isStim2 == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                pairOmissionTrials = trials{trials.isTone == 1 & trials.isStim == 1 ...
+                    & trials.isReward == 0 & trials.isStim2 == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                EPLHbTrials = trials{trials.isTone == 0 & trials.isStim == 0 ...
+                    & trials.isReward == 1 & trials.isStim2 == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                EPLHbOmissionTrials = trials{trials.isTone == 0 & trials.isStim == 0 ...
+                    & trials.isReward == 0 & trials.isStim2 == 1 ,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                toneTrials = trials{trials.isTone == 1 & trials.isStim == 0 ...
+                    & trials.isReward == 0 & trials.isStim2 == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                toneOmissionTrials = trials{trials.isTone == 1 & trials.isStim == 0 ...
+                    & trials.isReward == 0 & trials.isStim2 == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                if isempty(toneTrials) && ~isempty(toneOmissionTrials)
+                    toneTrials = toneOmissionTrials;
+                end
+                stimIdx = stimTrials(:,2);
+                stimOmissionIdx = stimOmissionTrials(:,2);
+                pairIdx = pairTrials(:,2);
+                pairOmissionIdx = pairOmissionTrials(:,2);
+                EPLHbIdx = EPLHbTrials(:,2);
+                EPLHbOmissionIdx = EPLHbOmissionTrials(:,2);
                 toneIdx = toneTrials(:,2);
                 toneOmissionIdx = toneOmissionTrials(:,2);
             end
-        elseif contains(options.task,'punish')
+        elseif contains(options.task,'sequential')
             if options.performing
                 stimTrials = trials{trials.isTone == 0 & trials.isStim == 1 ...
                     & trials.isPunishment == 1 & trials.performing == 1, ["TrialNumber","CueTime","OutcomeTime","ENL"]};
@@ -504,14 +550,27 @@ else
     end
 
     stageTime = [-2,0;0,0.5;0.5,5];
-    analysisEvents = {waterIdx,waterLickIdx,toneIdx,stimIdx,pairIdx,airpuffIdx,baselineIdx,optoStim2};
-    eventTrialNum = {findTrials(waterIdx,trials),findTrials(waterLickIdx,trials),...
-                    toneTrials(:,1),stimTrials(:,1),pairTrials(:,1),...
-                    findTrials(airpuffIdx,trials),findTrials(baselineIdx,trials),findTrials(optoStim2,trials)};
-    if strcmp(params.stim.color,'red')
-        analysisLabels = {'Water','Rewarded licks','Tone only','Stim only','Pair','Airpuff','Baseline','Blue stim'};
-    else
-        analysisLabels = {'Water','Rewarded licks','Tone only','Stim only','Pair','Airpuff','Baseline','Red stim'};
+    if contains(options.task,'simultaneous')
+        toneIdx = EPLHbIdx;
+        analysisEvents = {waterIdx,waterLickIdx,EPLHbIdx,stimIdx,pairIdx,airpuffIdx,baselineIdx,optoStim2};
+        eventTrialNum = {findTrials(waterIdx,trials),findTrials(waterLickIdx,trials),...
+                        EPLHbTrials(:,1),stimTrials(:,1),pairTrials(:,1),...
+                        findTrials(airpuffIdx,trials),findTrials(baselineIdx,trials),findTrials(optoStim2,trials)};
+        if strcmp(params.stim.color,'red')
+            analysisLabels = {'Water','Rewarded licks','EP & LHb stim','EP stim','Pair','Airpuff','Baseline','Blue stim'};
+        else
+            analysisLabels = {'Water','Rewarded licks','EP & LHb stim','EP stim','Pair','Airpuff','Baseline','Red stim'};
+        end
+    elseif contains(options.task,'sequential')
+        analysisEvents = {waterIdx,waterLickIdx,toneIdx,stimIdx,pairIdx,airpuffIdx,baselineIdx,optoStim2};
+        eventTrialNum = {findTrials(waterIdx,trials),findTrials(waterLickIdx,trials),...
+                        toneTrials(:,1),stimTrials(:,1),pairTrials(:,1),...
+                        findTrials(airpuffIdx,trials),findTrials(baselineIdx,trials),findTrials(optoStim2,trials)};
+        if strcmp(params.stim.color,'red')
+            analysisLabels = {'Water','Rewarded licks','Tone only','Stim only','Pair','Airpuff','Baseline','Blue stim'};
+        else
+            analysisLabels = {'Water','Rewarded licks','Tone only','Stim only','Pair','Airpuff','Baseline','Red stim'};
+        end
     end
     taskLegend = getLegend(analysisEvents,analysisLabels);
 
@@ -528,7 +587,7 @@ else
 
     % Save idx to behavior.mat
     save(strcat(sessionpath,filesep,'behavior_',options.outputName),'allTrials',...
-        'waterIdx','waterLickIdx','airpuffIdx','toneIdx','stimIdx','pairIdx',...
+        'waterIdx','waterLickIdx','airpuffIdx','EPLHbIdx','stimIdx','pairIdx','toneIdx',...
         'baselineIdx',...
         '-append');
 end
@@ -780,22 +839,42 @@ if options.plotPhotometry
                 saveas(gcf,strcat(sessionpath,filesep,'Events_',timeSeries(path).name,'_',label,'.png'));
             end
         else
-            if strcmp(params.stim.color,'red')
-                eventIdxes = {stimIdx,pairIdx,toneIdx,waterLickIdx,airpuffIdx,optoStim2};
-                omissionIdxes = {stimOmissionIdx, pairOmissionIdx,toneOmissionIdx,[],[],[]};
-                labels = {'Stim','Pair','Tone','Water','Airpuff','Blue stim'};
-                eventDurations = [stimDuration_cue/1000,0.5,0.5,0,0.02,stimDuration_other/1000];
-                groupSizes = [10,10,10,30,30,10];
-                longTimeRange = options.longTimeRange;
-                shortTimeRange = options.shortTimeRange; 
+            if contains(options.task,'simultaneous')
+                if strcmp(params.stim.color,'red')
+                    eventIdxes = {stimIdx,pairIdx,toneIdx,waterLickIdx,airpuffIdx,optoStim2};
+                    omissionIdxes = {stimOmissionIdx, pairOmissionIdx,stimToneOmissionIdx,[],[],[]};
+                    labels = {'Stim','Pair','EP & LHb stim','Water','Airpuff','Blue stim'};
+                    eventDurations = [stimDuration_cue/1000,0.5,0.5,0,0.02,stimDuration_other/1000];
+                    groupSizes = [10,10,10,30,30,10];
+                    longTimeRange = options.longTimeRange;
+                    shortTimeRange = options.shortTimeRange; 
+                else
+                    eventIdxes = {stimIdx,pairIdx,toneIdx,waterLickIdx,airpuffIdx,optoStim2};
+                    omissionIdxes = {stimOmissionIdx, pairOmissionIdx,stimToneOmissionIdx,[],[],[]};
+                    labels = {'Stim','Pair','EP & LHb stim','Water','Airpuff','Red stim'};
+                    eventDurations = [stimDuration_cue/1000,0.5,0.5,0,0.02,stimDuration_other/1000];
+                    groupSizes = [10,10,10,30,30,10];
+                    longTimeRange = options.longTimeRange;
+                    shortTimeRange = options.shortTimeRange;
+                end
             else
-                eventIdxes = {stimIdx,pairIdx,toneIdx,waterLickIdx,airpuffIdx,optoStim2};
-                omissionIdxes = {stimOmissionIdx, pairOmissionIdx,toneOmissionIdx,[],[],[]};
-                labels = {'Stim','Pair','Tone','Water','Airpuff','Red stim'};
-                eventDurations = [stimDuration_cue/1000,0.5,0.5,0,0.02,stimDuration_other/1000];
-                groupSizes = [10,10,10,30,30,10];
-                longTimeRange = options.longTimeRange;
-                shortTimeRange = options.shortTimeRange;
+                if strcmp(params.stim.color,'red')
+                    eventIdxes = {stimIdx,pairIdx,toneIdx,waterLickIdx,airpuffIdx,optoStim2};
+                    omissionIdxes = {stimOmissionIdx, pairOmissionIdx,stimToneOmissionIdx,[],[],[]};
+                    labels = {'Stim','Pair','Tone','Water','Airpuff','Blue stim'};
+                    eventDurations = [stimDuration_cue/1000,0.5,0.5,0,0.02,stimDuration_other/1000];
+                    groupSizes = [10,10,10,30,30,10];
+                    longTimeRange = options.longTimeRange;
+                    shortTimeRange = options.shortTimeRange; 
+                else
+                    eventIdxes = {stimIdx,pairIdx,toneIdx,waterLickIdx,airpuffIdx,optoStim2};
+                    omissionIdxes = {stimOmissionIdx, pairOmissionIdx,stimToneOmissionIdx,[],[],[]};
+                    labels = {'Stim','Pair','Tone','Water','Airpuff','Red stim'};
+                    eventDurations = [stimDuration_cue/1000,0.5,0.5,0,0.02,stimDuration_other/1000];
+                    groupSizes = [10,10,10,30,30,10];
+                    longTimeRange = options.longTimeRange;
+                    shortTimeRange = options.shortTimeRange;
+                end
             end
             
             for event = 1:length(eventIdxes)

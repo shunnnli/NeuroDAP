@@ -24,7 +24,7 @@ if strcmpi(options.animalRange,'All'); options.animalRange = unique({animals.ani
 if strcmpi(options.eventRange,'All'); options.eventRange = unique({animals.event}); end
 
 if strcmpi(options.taskRange,'All'); options.taskRange = unique({animals.task});
-elseif length(options.taskRange)==1; options.taskRange = {options.taskRange}; end
+elseif isscalar(options.taskRange); options.taskRange = {options.taskRange}; end
 
 if strcmpi(options.sessionRange,'All'); options.sessionRange = repelem("All",length(options.taskRange),1); end
 if strcmpi(options.totalTrialRange,'All'); options.totalTrialRange = repelem("All",length(options.taskRange),1); end
@@ -44,7 +44,7 @@ for task = 1:length(options.taskRange)
     statsType = convertStringsToChars(statsTypes{task});
     if contains(statsType,"stage")
         options.inTrialTable = false;
-        if ~strcmpi(statsType,{'stageAvg','stageMax','stageMin','stageArea'})
+        if ~strcmpi(statsType,{'stageAvg','stageMax','stageMin','stageArea','stageDelta'})
             warning('Not a valid statsType input, check for typos! Changed to stageAvg by default!');
             statsType = 'stageAvg';
         end
