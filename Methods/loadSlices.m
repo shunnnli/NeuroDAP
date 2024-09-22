@@ -250,10 +250,14 @@ if options.reload
             namesplit = strsplit(vholdList{row,1},{'e','p'}); 
             if epoch ~= str2double(namesplit{2})
                 error('Epoch number does not match between AD0 and AD2!!');
+                vholdAcq = sweepAcq;
+                vholdSweeps = zeros(size(sweeps));
+                withVholdAvg = false;
+            else
+                vholdAcq = eval(['AD2_e',num2str(epoch),'p1avg.UserData.Components']);
+                vholdEpoch = eval(['AD2_e',num2str(epoch),'p1avg.data']);
+                vholdSweeps = zeros(length(vholdAcq),length(vholdEpoch));
             end
-            vholdAcq = eval(['AD2_e',num2str(epoch),'p1avg.UserData.Components']);
-            vholdEpoch = eval(['AD2_e',num2str(epoch),'p1avg.data']);
-            vholdSweeps = zeros(length(vholdAcq),length(vholdEpoch));
         elseif withVhold && ~withVholdAvg
             vholdAcq = sweepAcq;
             vholdSweeps = zeros(size(sweeps));
