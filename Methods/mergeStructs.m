@@ -7,6 +7,8 @@ function masterStruct = mergeStructs(structList, options)
 arguments
     structList cell
     options.summary string = 'None'
+    options.reshape logical = false % normally not used
+    options.combine logical = true % combine data from multiple structs
 end
 
 % Initialize an empty master struct
@@ -15,7 +17,10 @@ masterStruct = struct();
 for i = 1:length(structList)
     currentStruct = structList{i}; % Extract the current struct
     masterStruct = mergeStructFields(masterStruct,currentStruct,...
-        length(structList),i,summary=options.summary);
+                    length(structList),i,...
+                    summary=options.summary,...
+                    combine=options.combine,...
+                    reshape=options.reshape);
 end
 
 end
@@ -29,6 +34,8 @@ function masterStruct = mergeStructFields(masterStruct,currentStruct,nStructs,st
         nStructs
         structIdx
         options.summary string
+        options.combine logical = true
+        options.reshape logical = false
     end
     
     fields = fieldnames(currentStruct); % Get the field names
@@ -40,7 +47,10 @@ function masterStruct = mergeStructFields(masterStruct,currentStruct,nStructs,st
                 masterStruct.(field) = struct(); % Initialize empty struct if it doesn't exist
             end
             masterStruct.(field) = mergeStructFields(masterStruct.(field), currentStruct.(field),...
-                                        nStructs,structIdx,summary=options.summary);
+                                        nStructs,structIdx,...
+                                        summary=options.summary,...
+                                        combine=options.combine,...
+                                        reshape=options.reshape);
         else
             % If the field is not a struct, append the values
             if ~isfield(masterStruct, field)
@@ -50,8 +60,14 @@ function masterStruct = mergeStructFields(masterStruct,currentStruct,nStructs,st
 
             % Convert cell arrays to vectors if possible
             if structIdx == nStructs
-                if all(cellfun(@isnumeric, masterStruct.(field)))
+                if options.combine && all(cellfun(@isnumeric, masterStruct.(field)))
                     values = cell2mat(masterStruct.(field));
+                    
+                    % Normally not needed
+                    if options.reshape
+                        values = reshape(values,nStructs,[]);
+                    end
+
                     if ~isfield(options,'summary')
                         masterStruct.(field) = values;
                     elseif contains(options.summary,{'average','mean','avg'},IgnoreCase=true)
@@ -68,6 +84,3 @@ function masterStruct = mergeStructFields(masterStruct,currentStruct,nStructs,st
         end
     end
 end
-
-
-%% Past code

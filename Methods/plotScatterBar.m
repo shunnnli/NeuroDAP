@@ -9,6 +9,7 @@ arguments
 
     options.style string = 'box' % can also be bar, which uses a bar
     options.BarFaceOpacity double = 0.2 % 1 is not transparent, 0 is fully transparent
+    options.orientation string = 'vertical';
     
     options.connectPairs logical = true
     options.connectColor = [0.75,0.75,0.75]
@@ -58,26 +59,39 @@ if isvector(data)
     xgroupdata = x * ones(size(data,1),1);
     if contains(options.style,'box',IgnoreCase=true)
         boxchart(xgroupdata,data,'BoxFaceColor',options.color,'WhiskerLineColor',options.color,...
-                 LineWidth=options.LineWidth); 
+                 LineWidth=options.LineWidth,...
+                 Orientation=options.orientation); 
         hold on;
     elseif contains(options.style,'bar',IgnoreCase=true)
         barFaceColor = 1 - options.BarFaceOpacity*(1-options.color);
-        bar(x,mean(data,'all'),FaceColor=barFaceColor,EdgeColor=options.color,LineWidth=options.LineWidth);
+        if strcmp(options.orientation,'vertical')
+            bar(x,mean(data,'all'),FaceColor=barFaceColor,EdgeColor=options.color,LineWidth=options.LineWidth);
+        else
+            barh(x,mean(data,'all'),FaceColor=barFaceColor,EdgeColor=options.color,LineWidth=options.LineWidth);
+        end
         hold on;
     
         SEM = getSEM(data);
-        eb = errorbar(x,mean(data,'all'),-SEM,SEM);
+        eb = errorbar(x,mean(data,'all'),-SEM,SEM,options.orientation);
         eb.Color = options.color;                            
         eb.LineWidth = options.LineWidth;  
         hold on;
     end
     
     if options.plotScatter
-        swarmchart(xgroupdata,data,...
-            options.dotSize,options.color,'filled',...
-            'MarkerFaceAlpha',options.MarkerFaceAlpha,...
-            'XJitter',options.XJitter,'XJitterWidth',options.XJitterWidth); 
-        hold on;
+        if strcmp(options.orientation,'vertical')
+            swarmchart(xgroupdata,data,...
+                options.dotSize,options.color,'filled',...
+                'MarkerFaceAlpha',options.MarkerFaceAlpha,...
+                'XJitter',options.XJitter,'XJitterWidth',options.XJitterWidth); 
+            hold on;
+        else
+            swarmchart(data,xgroupdata,...
+                    options.dotSize,options.color,'filled',...
+                    'MarkerFaceAlpha',options.MarkerFaceAlpha,...
+                    'YJitter',options.XJitter,'YJitterWidth',options.XJitterWidth);
+            hold on;
+        end
     end
 
 elseif size(data,2) == 2
@@ -88,15 +102,20 @@ elseif size(data,2) == 2
         xgroupdata = x(col) * ones(size(colData,1),1);
         if contains(options.style,'box',IgnoreCase=true)
             boxchart(xgroupdata,colData,'BoxFaceColor',options.color{col},'WhiskerLineColor',options.color{col},...
-                     LineWidth=options.LineWidth); 
+                     LineWidth=options.LineWidth,...
+                     Orientation=options.orientation); 
             hold on;
         elseif contains(options.style,'bar',IgnoreCase=true)
             barFaceColor = 1 - options.BarFaceOpacity*(1-options.color{col});
-            bar(x(col),mean(colData,'all'),FaceColor=barFaceColor,EdgeColor=options.color{col},LineWidth=options.LineWidth);
+            if strcmp(options.orientation,'vertical')
+                bar(x(col),mean(colData,'all'),FaceColor=barFaceColor,EdgeColor=options.color{col},LineWidth=options.LineWidth);
+            else
+                barh(x(col),mean(colData,'all'),FaceColor=barFaceColor,EdgeColor=options.color{col},LineWidth=options.LineWidth);
+            end
             hold on;
         
             SEM = getSEM(colData);
-            eb = errorbar(x(col),mean(colData,'all'),-SEM,SEM);
+            eb = errorbar(x(col),mean(colData,'all'),-SEM,SEM,options.orientation);
             eb.Color = options.color{col};                            
             eb.LineWidth = options.LineWidth;  
             hold on;
@@ -113,11 +132,19 @@ elseif size(data,2) == 2
         for col = 1:size(data,2)
             colData = data(:,col);
             xgroupdata = x(col) * ones(size(colData,1),1);
-            swarmchart(xgroupdata,colData,...
-                options.dotSize,options.color{col},'filled',...
-                'MarkerFaceAlpha',options.MarkerFaceAlpha,...
-                'XJitter',options.XJitter,'XJitterWidth',options.XJitterWidth); 
-            hold on;
+            if strcmp(options.orientation,'vertical')
+                swarmchart(xgroupdata,colData,...
+                    options.dotSize,options.color{col},'filled',...
+                    'MarkerFaceAlpha',options.MarkerFaceAlpha,...
+                    'XJitter',options.XJitter,'XJitterWidth',options.XJitterWidth); 
+                hold on;
+            else
+                swarmchart(colData,xgroupdata,...
+                    options.dotSize,options.color{col},'filled',...
+                    'MarkerFaceAlpha',options.MarkerFaceAlpha,...
+                    'YJitter',options.XJitter,'YJitterWidth',options.XJitterWidth); 
+                hold on;
+            end
         end
     end
 

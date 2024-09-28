@@ -67,8 +67,8 @@ end
 
 % Load existing table if reload is false
 dirsplit = split(options.sessionPath,filesep); expName = dirsplit{end};
-epochsFiles = sortrows(struct2cell(dir(fullfile(options.sessionPath,"epochs_*.mat")))',3);
-cellsFiles = sortrows(struct2cell(dir(fullfile(options.sessionPath,"cells_*.mat")))',3);
+epochsFiles = sortrows(struct2cell(dir(fullfile(options.sessionPath,"epochs_*.mat")))',[1 3]);
+cellsFiles = sortrows(struct2cell(dir(fullfile(options.sessionPath,"cells_*.mat")))',[1 3]);
 if ~options.reload && (~isempty(epochsFiles) || istable(exp))
     disp(['Loading stop: epochs file found for ',expName]);
     load(strcat(options.sessionPath,filesep,epochsFiles{end,1}));
@@ -237,6 +237,7 @@ if options.reload
         
         % Initialize some temporary matrix
         sweeps = zeros(length(sweepAcq), size(eval(['AD0_e',num2str(epoch),'p',namesplit{3},'avg.data']),2));
+        nAnalyzedSweeps = length(sweepAcq);
         processed = zeros(size(sweeps));
         QCs = cell(length(sweepAcq),1);
         cycles = cell(length(sweepAcq),1); % For detecting whether a sweep uses different cycle within an epoch
@@ -285,6 +286,7 @@ if options.reload
             try load(fullfile(epochList{row,2},strcat(sweepAcq{k},'.mat'))); 
             catch
                 warning(strcat("Sweep ",num2str(sweepAcq{k}), " not saved, skipping this sweep!"));
+                nAnalyzedSweeps = nAnalyzedSweeps - 1;
                 continue
             end
     
@@ -309,10 +311,12 @@ if options.reload
             % some sweeps by default will have different length
             if contains(protocol.cycle,'randomSearch')
                 disp(['     Sweep cycle is ',protocol.cycle,', skip epoch-level anlaysis below.']);
+                nAnalyzedSweeps = nAnalyzedSweeps - 1;
                 continue
             end
             if length(raw_trace) ~= size(sweeps,2)
                 warning("Sweep duration is different from epoch avg duration!!");
+                nAnalyzedSweeps = nAnalyzedSweeps - 1;
                 continue
             end
             sweeps(k,:) = raw_trace;
@@ -544,7 +548,7 @@ if options.reload
     
             %% Remove empty/erraneous sweeps
             if createNew || isfield(options,'include')
-                included = ones(length(sweepAcq),1);
+                included = ones(nAnalyzedSweeps,1);
     
                 % Remove sweeps with different Vhold
                 if options.filterSweeps && withVhold
@@ -618,7 +622,7 @@ if options.reload
         epochs{row,'Options'} = {options};
 
         %% Plot epoch analysis summary
-        if options.plot && ~isempty(fieldnames(QC))
+        if options.plot && ~isempty(fieldnames(QC)) && nAnalyzedSweeps > 0
             close all;
             plotEpochSummary(epochs,row,save=true,saveDataPath=options.saveDataPath);
         end

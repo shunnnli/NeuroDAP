@@ -44,15 +44,20 @@ for i = 1:length(expPath)
     QCThreshold.Ibaseline_std = 20;
 
     % Reprocess post QC epochs.mat
-    % [epochs_old,~] = loadSlices(expPath{i},reload=sessionParams(i).reload);
-    [epochs,cells] = loadSlices(expPath{i},reload=true,...
+    [epochs] = loadSlices(expPath{i},reload=true,...
                                 timeRange=timeRange,...
                                 filterSignal=false,filterSweeps=true,...
                                 calculateQC=sessionParams(i).calculateQC,...
                                 nArtifactSamples=nArtifactSamples,...
                                 saveDataPath=saveDataPath,...
                                 save=true,...
-                                QCThreshold=QCThreshold);
+                                QCThreshold=QCThreshold,...
+                                getCellTable=false,...
+                                animal=sessionParams(i).Animal,...
+                                task=taskOptions{sessionParams(i).Paradigm});
+
+    % Load & combine epochs.mat
+    % [epochs,cells] = loadSlices(expPath{i},reload=sessionParams(i).reload,reloadCell=true);
     % combined_epochs = [combined_epochs; epochs];
     % combined_cells = [combined_cells; cells];
 end
@@ -63,33 +68,36 @@ return
 
 notes = 'QC';
 sessionPath = epochs{1,'Session'};
-dirsplit = split(sessionPath,filesep); expName = dirsplit{end};
-save(strcat(sessionPath,filesep,'epochs_',today,'_',notes),'epochs','-v7.3');
-disp(strcat("Saved: ",expName," in session folder"));
 
 % Save current epochs to the newest results folder
-resultsFolders = sortrows(struct2cell(dir(fullfile(sessionPath,"Epochs-*")))',3);
+resultsFolders = sortrows(struct2cell(dir(fullfile(sessionPath,"Epochs-*")))',[1 3]);
 resultFolder = resultsFolders{end,1};
+
+dirsplit = split(sessionPath,filesep); expName = dirsplit{end};
+dirsplit = split(resultFolder,'-'); folderDate = dirsplit{end};
 savePath = fullfile(sessionPath,resultFolder);
 
-save(strcat(sessionPath,filesep,'epochs_',today,'_',notes),'epochs','-v7.3');
+save(strcat(sessionPath,filesep,'epochs_',folderDate,'_',notes),'epochs','-v7.3');
+disp(strcat("Saved: ",expName," in session folder"));
+
+save(strcat(savePath,filesep,'epochs_',folderDate,'_',notes),'epochs','-v7.3');
 disp(strcat("Saved: ",expName," in results folder"));
 
 %% Plot epoch summary
-
 
 for rowIdx = 1:size(epochs,1)
     close all;
     plotEpochSummary(epochs,rowIdx,save=true);
 end
+close all;
 
 %% Useful code to plot raw sweeps
 
 close all
 initializeFig(0.67, 0.5); tiledlayout(1,3);
-row = 1;
+row = 6;
 
-plotWholeTrace = true;
+plotWholeTrace = false;
 
 if plotWholeTrace
     plotWindow = 1:30000;
@@ -102,7 +110,7 @@ else
     timeRangeEndSample = 10000 + 10000*timeRange(2)/1000;
     plotWindow = timeRangeStartSample : timeRangeEndSample;
     timeRangeInms = (plotWindow-1*10000) ./ (10000/1000);
-    analysisWindow = (10000+nArtifactSamples)-timeRangeStartSample : length(plotWindow);
+    analysisWindow = (10000+10)-timeRangeStartSample : length(plotWindow);
 end
 
 % Plot all traces
