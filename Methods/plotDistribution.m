@@ -3,7 +3,7 @@ function plotDistribution(data,options)
 arguments
     data double
 
-    options.plotGroup logical = false % vector, plot this group or not
+    options.plotGroup logical = true % vector, plot this group or not
     options.groupIdx cell
 
     options.color
@@ -11,16 +11,24 @@ arguments
     options.nboot double = 5000
 
     options.masterlayout
-    options.tile double
+    options.tile double = 1
     options.tileSpan double = [1 1];
     options.dotSize double = 100
-    options.xlabel string
+    options.xlabel string = ''
 end
 
 %% Check input
 if ~isfield(options,'masterlayout')
     master = tiledlayout(1,1);
 else; master = options.masterlayout; 
+end
+
+if ~isfield(options,'groupIdx')
+    options.groupIdx = {1:size(data,1)};
+end
+
+if ~isfield(options,'color')
+    options.color = {[.7 .7 .7]};
 end
 
 if length(options.plotGroup) ~= size(options.groupIdx)
@@ -58,7 +66,7 @@ for group = 1:length(options.plotGroup)
     if options.plotGroup(group)
         groupIdx = options.groupIdx{group};
         groupColor = options.color{group};
-        bootIdx = groupIdx(round((size(groupIdx,1)-1).*rand(options.nboot,1) + 1));
+        bootIdx = groupIdx(round((length(groupIdx)-1).*rand(options.nboot,1) + 1));
         histogram(data(bootIdx),FaceColor=groupColor,EdgeColor=groupColor); hold on;
     end
 end
