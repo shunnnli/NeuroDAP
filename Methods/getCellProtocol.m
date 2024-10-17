@@ -9,6 +9,8 @@ arguments
 
     options.outputFs double = 10000
     options.rcCheckRecoveryWindow double = 100 % in ms
+
+    options.rig string
 end
 
 % Get cycle
@@ -37,14 +39,38 @@ protocol.stimOnset = protocol.delay + ((1:protocol.numPulses)-1)*protocol.isi;
 protocol.stimOnset = protocol.stimOnset * (options.outputFs/1000); % in samples
 
 % Get RC check params
-rcCheckOnset = getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck',pulseVar='delay') * (options.outputFs/1000);
-rcCheckPulseWidth = getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck',pulseVar='pulseWidth') * (options.outputFs/1000);
-rcCheckEnd = rcCheckOnset + rcCheckPulseWidth + (options.rcCheckRecoveryWindow*(options.outputFs/1000));
-rcCheckAmplitude = getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck',pulseVar='amplitude');
-protocol.rcCheckOnset = rcCheckOnset;
-protocol.rcCheckPulseWidth = rcCheckPulseWidth;
-protocol.rcCheckEnd = rcCheckEnd;
-protocol.rcCheckAmplitude = rcCheckAmplitude;
+if isempty(getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck'))
+    if strcmpi(options.rig,'Wengang')
+        rcString = 'amplitude=-5;duration=3000;offset=0;numPulses=1;isi=0;pulseWidth=100;delay=2800;ramp=0;patternRepeats=0;patternISI=0;';
+        rcCheckOnset = getHeaderValue(rcString,'',pulseVar='delay') * (options.outputFs/1000);
+        rcCheckPulseWidth = getHeaderValue(rcString,'',pulseVar='pulseWidth') * (options.outputFs/1000);
+        rcCheckEnd = rcCheckOnset + rcCheckPulseWidth + (options.rcCheckRecoveryWindow*(options.outputFs/1000));
+        rcCheckAmplitude = getHeaderValue(rcString,'',pulseVar='amplitude');
+        protocol.rcCheckOnset = rcCheckOnset;
+        protocol.rcCheckPulseWidth = rcCheckPulseWidth;
+        protocol.rcCheckEnd = rcCheckEnd;
+        protocol.rcCheckAmplitude = rcCheckAmplitude;
+    elseif strcmpi(options.rig,'Paolo')
+        rcString = 'amplitude=-10;duration=1000;offset=0;numPulses=1;isi=0;pulseWidth=20;delay=100;ramp=0;patternRepeats=0;patternISI=0;';
+        rcCheckOnset = getHeaderValue(rcString,'',pulseVar='delay') * (options.outputFs/1000);
+        rcCheckPulseWidth = getHeaderValue(rcString,'',pulseVar='pulseWidth') * (options.outputFs/1000);
+        rcCheckEnd = rcCheckOnset + rcCheckPulseWidth + (options.rcCheckRecoveryWindow*(options.outputFs/1000));
+        rcCheckAmplitude = getHeaderValue(rcString,'',pulseVar='amplitude');
+        protocol.rcCheckOnset = rcCheckOnset;
+        protocol.rcCheckPulseWidth = rcCheckPulseWidth;
+        protocol.rcCheckEnd = rcCheckEnd;
+        protocol.rcCheckAmplitude = rcCheckAmplitude;
+    end
+else
+    rcCheckOnset = getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck',pulseVar='delay') * (options.outputFs/1000);
+    rcCheckPulseWidth = getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck',pulseVar='pulseWidth') * (options.outputFs/1000);
+    rcCheckEnd = rcCheckOnset + rcCheckPulseWidth + (options.rcCheckRecoveryWindow*(options.outputFs/1000));
+    rcCheckAmplitude = getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck',pulseVar='amplitude');
+    protocol.rcCheckOnset = rcCheckOnset;
+    protocol.rcCheckPulseWidth = rcCheckPulseWidth;
+    protocol.rcCheckEnd = rcCheckEnd;
+    protocol.rcCheckAmplitude = rcCheckAmplitude;
+end
 
 % Extract DMD related params
 if contains(protocol.cycle,'randomSearch')

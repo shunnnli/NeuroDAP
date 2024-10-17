@@ -19,6 +19,8 @@ arguments
     options.currentClamp logical = false
     options.amplitude double = -5
     options.mode char {mustBeMember(options.mode,['peak', 'last10%', 'last30%', 'last50%'])} = 'last30%'
+
+    options.rig string
 end
 
 %% Check input
@@ -38,10 +40,18 @@ end
 options.currentClamp = getHeaderValue(headerString,'state.phys.settings.currentClamp0');
 options.Fs = getHeaderValue(headerString,'state.phys.settings.inputRate', convert=true); % ms
 
-options.amplitude = getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck', pulseVar='amplitude');
-options.onset = getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck', pulseVar='delay');
-options.pulseWidth = getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck', pulseVar='pulseWidth');
-options.duration = getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck', pulseVar='duration');
+if isempty(getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck'))
+    warning('No RC check detected!!!');
+    qc.Rs = nan; qc.Rm = nan; qc.Cm = nan; 
+    qc.Ibaseline = nan; qc.Ibaseline_std = nan; qc.Ibaseline_var = nan;
+    qc.tau = nan; qc.Verror = nan;
+    return
+else
+    options.amplitude = getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck', pulseVar='amplitude');
+    options.onset = getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck', pulseVar='delay');
+    options.pulseWidth = getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck', pulseVar='pulseWidth');
+    options.duration = getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck', pulseVar='duration');
+end
 
 %% Adapted from Sanika's code
 

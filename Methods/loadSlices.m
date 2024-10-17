@@ -137,6 +137,8 @@ cellFolders = cellFolders(~ismember({cellFolders.name}, {'.', '..'}));
 if isempty(cellFolders); rig = 'Wengang';
 else; rig = 'Paolo'; end
 
+options.rig = rig;
+
 %% Generate epochs.mat
 
 if options.reload
@@ -299,7 +301,8 @@ if options.reload
             % Extract experiment protocol from header string
             protocol = getCellProtocol(headerString,...
                                        outputFs=options.outputFs,...
-                                       rcCheckRecoveryWindow=options.rcCheckRecoveryWindow);
+                                       rcCheckRecoveryWindow=options.rcCheckRecoveryWindow,...
+                                       rig=rig);
             protocols{k} = protocol;
             cycles{k} = protocol.cycle;
 
@@ -385,7 +388,7 @@ if options.reload
             % Calcultate QC for all sweeps
             qc = getCellQC(headerString,calculate=options.calculateQC,...
                             data=raw_trace,baselineWindow=baselineWindow,...
-                            plot=false);
+                            plot=false,rig=rig);
             QCs{k} = qc;
     
 
@@ -555,7 +558,8 @@ if options.reload
                     % rounded_epoch_vhold = roundToTarget(vholdEpochMean,[-70,0,8]);
                     % rounded_sweeps_vhold = roundToTarget(vholdSweepsMean,[-70,0,8]);
                     % included = (rounded_sweeps_vhold == rounded_epoch_vhold);
-                    included = ~isoutlier(vholdInfo.vholdSweepsMean,'mean');
+                    % diffVhold_included = ~isoutlier(vholdInfo.vholdSweepsMean,'mean');
+                    % included = all([included,diffVhold_included],2);
                 end 
         
                 % Remove sweeps with different cycles
@@ -564,18 +568,24 @@ if options.reload
                     cyclesCount = tabulate(cycles);
                     [~, mostCommonIdx] = max([cyclesCount{:, 2}]);
                     if ~all(strcmp(cycles, cycles{mostCommonIdx}))
-                        included = strcmp(cycles, cycles{mostCommonIdx});
+                        cycles_included = strcmp(cycles, cycles{mostCommonIdx});
                         % protocol = protocols{mostCommonIdx};
+                        included = all([included,cycles_included],2);
                     end
                 end
     
                 % Remove sweeps based on QC
                 if ~isempty(fieldnames(QC))
                     % Remove sweeps from QC based on baseline current
-                    Ibaseline_avg_filter = QC.Ibaseline >= options.QCThreshold.Ibaseline;
-                    Ibaseline_std_filter = QC.Ibaseline_std <= options.QCThreshold.Ibaseline_std;
-                    QCIncluded = all([Ibaseline_avg_filter,Ibaseline_std_filter],2);
-                    QC.included = QCIncluded;
+                    if all(isnan(QC.Ibaseline)) || all(isnan(QC.Ibaseline_std))
+                        QCIncluded = zeros(length(included),1);
+                        QC.included = QCIncluded;
+                    else
+                        Ibaseline_avg_filter = QC.Ibaseline >= options.QCThreshold.Ibaseline;
+                        Ibaseline_std_filter = QC.Ibaseline_std <= options.QCThreshold.Ibaseline_std;
+                        QCIncluded = all([Ibaseline_avg_filter,Ibaseline_std_filter],2);
+                        QC.included = QCIncluded;
+                    end
                     included = all([included,QCIncluded],2);
     
                     % Remove epochs with high Rs or high Verror

@@ -21,7 +21,7 @@ Formats(4,1).type = 'check';      % calculateQC
 Formats(5,1).type = 'check';      % red stim or blue during behavior
 Formats(6,1).style = 'popupmenu'; % Behavior paradigm
 Formats(6,1).type = 'list';
-Formats(6,1).items = {'random','reward pairing','punish pairing'};
+Formats(6,1).items = {'random','reward pairing','punish pairing','reward ctrl','punish ctrl'};
 Formats(7,1).type = 'edit';       % timeRange
 Formats(8,1).type = 'edit';       % nArtifactSamples
 

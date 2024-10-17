@@ -101,7 +101,7 @@ else
     options.reloadAll = true;
     save(behaviorOutputName,'sessionName','session','-v7.3');
     save(syncOutputName,'sessionName','session','-v7.3');
-    if withPhotometry; save(timeseriesOutputName,'sessionName','session','-v7.3'); end
+    save(timeseriesOutputName,'sessionName','session','-v7.3');
     save(dataOutputName,'sessionName','session','-v7.3');
 end
 

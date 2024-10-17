@@ -61,7 +61,13 @@ function masterStruct = mergeStructFields(masterStruct,currentStruct,nStructs,st
             % Convert cell arrays to vectors if possible
             if structIdx == nStructs
                 if options.combine && all(cellfun(@isnumeric, masterStruct.(field)))
-                    values = cell2mat(masterStruct.(field));
+                    try
+                        values = cell2mat(masterStruct.(field));
+                    catch ME
+                        disp(getReport(ME));
+                        warning(['Field ', field, ' have an error, skipped for now!!!!']);
+                        continue
+                    end
                     
                     % Normally not needed
                     if options.reshape

@@ -203,6 +203,9 @@ for i = 1:length(animalList)
             end
         end
 
+        % Remove not included sweeps from responses
+        responses.raw{EPSCrows}
+
         % Get response statistics
         if options.calculate
             % Not finished: did not consider included

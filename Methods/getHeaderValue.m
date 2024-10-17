@@ -44,6 +44,7 @@ end
 
 % Extract pulse value if necessary
 if isfield(options,'pulseVar')
+    if isempty(varName); out = header; end
     pString = out; out = [];
     ff = strfind(pString, options.pulseVar);
 

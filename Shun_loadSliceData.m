@@ -23,7 +23,7 @@ saveDataPath = 'default'; % strcat(parentPath,filesep,'20231221_ally');
                                 paradigm=1,redStim=true,...
                                 reload=false,calculateQC=true,...
                                 timeRange='[-10,50]',nArtifactSamples='10');
-taskOptions = {'random','reward pairing','punish pairing'};
+taskOptions = {'Random','Reward pairing','Punish pairing','Reward control','Punish control'};
 
 [~,~,~,~,~,~,bluePurpleRed] = loadColors;
 today = char(datetime('today','Format','yyyyMMdd')); 
@@ -62,6 +62,7 @@ for i = 1:length(expPath)
     % combined_cells = [combined_cells; cells];
 end
 
+close all;
 return
 
 %% Save current epochs to session folder
@@ -87,7 +88,9 @@ disp(strcat("Saved: ",expName," in results folder"));
 
 for rowIdx = 1:size(epochs,1)
     close all;
-    plotEpochSummary(epochs,rowIdx,save=true);
+    if ~iscell(epochs.Protocol{rowIdx})
+        plotEpochSummary(epochs,rowIdx,save=true,rig='Paolo');
+    end
 end
 close all;
 
