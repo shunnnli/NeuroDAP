@@ -36,74 +36,6 @@ save(fullfile(resultPath,strcat('combined_epochs_',today,'.mat')),"combined_epoc
 nCells = size(combined_cells,1);
 disp(strcat("Finished: saving ",num2str(nCells),' cells to combined_cells'));
 
-%% Extract cell QC data
-
-qcIdx = cellfun(@(x) find(x==-70,1), combined_cells.Vhold);
-QCs = struct2table(cellfun(@(q, idx) q{idx}, combined_cells.QC, num2cell(qcIdx)));
-
-included = cellfun(@(q, idx) q{idx}, combined_cells.Included, num2cell(qcIdx),UniformOutput=false);
-included = cellfun(@(x) x + (~any(x))*ones(size(x)), included, UniformOutput=false);
-
-Rs = cellfun(@(x,idx) mean(x(find(idx))), QCs.Rs, included);
-Rm = cellfun(@(x,idx) mean(x(find(idx))), QCs.Rm, included);
-Cm = cellfun(@(x,idx) mean(x(find(idx))), QCs.Cm, included);
-
-%% Extract response trace (stupid for-loop way)
-
-timeRange = [-10,50]; 
-time2sample = 10000/1000; 
-timeRangeSamples = timeRange * time2sample;
-timeWindowLength = timeRangeSamples(2) - timeRangeSamples(1) + 1;
-timeRangeInms = linspace(-10,50,timeWindowLength);
-nCells = size(combined_cells,1);
-
-EPSC_traces = []; IPSC_traces = [];
-
-for c = 1:nCells
-    curCell = combined_cells(c,:); 
-
-    % Get rows
-    EPSCrows = curCell.Vhold{1} == -70;
-    IPSCrows = curCell.Vhold{1} >= 0;
-
-    % Get included
-    if sum(EPSCrows)>0; EPSCincluded = curCell.Included{1}{EPSCrows};
-    else; EPSCincluded = []; end
-    if sum(IPSCrows)>0; IPSCincluded = curCell.Included{1}{IPSCrows};
-    else; IPSCincluded = []; end
-    if sum(EPSCincluded) == 0; EPSCincluded = ones(length(EPSCincluded),1); end
-    if sum(IPSCincluded) == 0; IPSCincluded = ones(length(IPSCincluded),1); end
-    EPSCincluded = logical(EPSCincluded);
-    IPSCincluded = logical(IPSCincluded);
-
-    % Concatenate traces
-    if sum(EPSCrows) ~= 0
-        EPSCIdx = find(EPSCrows); curTrace = [];
-        for epsc = EPSCIdx'
-            stimOnset = curCell.Protocol{1}{epsc}.stimOnset(1);
-            timeRangeWindow = stimOnset+timeRangeSamples(1) : stimOnset+timeRangeSamples(2);
-            curTrace = [curTrace;curCell.('Processed sweeps'){1}{epsc}(:,timeRangeWindow)];
-            curTrace(~EPSCincluded,:) = [];
-        end
-        EPSC_traces = [EPSC_traces;mean(curTrace,1)];
-    else
-        EPSC_traces = [EPSC_traces;nan(1,size(EPSC_traces,2))];
-    end
-
-    if sum(IPSCrows) ~= 0
-        IPSCIdx = find(IPSCrows); curTrace = [];
-        for ipsc = IPSCIdx'
-            stimOnset = curCell.Protocol{1}{ipsc}.stimOnset(1);
-            timeRangeWindow = stimOnset+timeRangeSamples(1) : stimOnset+timeRangeSamples(2);
-            curTrace = [curTrace;curCell.('Processed sweeps'){1}{ipsc}(:,timeRangeWindow)];
-            curTrace(~IPSCincluded,:) = [];
-        end
-        IPSC_traces = [IPSC_traces;mean(curTrace,1)];
-    else
-        IPSC_traces = [IPSC_traces;nan(1,size(IPSC_traces,2))];
-    end
-end
-
 %% Extract EI information from combined_epochs
 
 EPSC_peaks = cellfun(@(x) x.summary.EPSC.peakAvg, combined_cells.Stats);
@@ -160,52 +92,6 @@ bs_EIsum_aucs = arrayfun(@(x) EIsum_aucs(x), pooledIdx_shuffled);
 bs_EIsum_peaks = arrayfun(@(x) EIsum_peaks(x), pooledIdx_shuffled);
 bs_EIindex_aucs = arrayfun(@(x) EIindex_aucs(x), pooledIdx_shuffled);
 bs_EIindex_peaks = arrayfun(@(x) EIindex_peaks(x), pooledIdx_shuffled);
-
-%% Plot response traces
-
-% Plot params
-initializeFig(.7,1); tiledlayout(2,3);
-
-plotIndividual = false;
-nexttile;
-plotSEM(timeRangeInms,EPSC_traces(randomIdx,:),bluePurpleRed(end,:),plotIndividual=plotIndividual,label='EPSC');
-plotSEM(timeRangeInms,IPSC_traces(randomIdx,:),bluePurpleRed(1,:),plotIndividual=plotIndividual,label='IPSC');
-xlabel('Time (ms)'); ylabel('Current (pA)'); legend; ylim([-400,500]);
-title('Baseline');
-
-nexttile;
-plotSEM(timeRangeInms,EPSC_traces(rewardIdx,:),bluePurpleRed(end,:),plotIndividual=plotIndividual,label='EPSC');
-plotSEM(timeRangeInms,IPSC_traces(rewardIdx,:),bluePurpleRed(1,:),plotIndividual=plotIndividual,label='IPSC');
-xlabel('Time (ms)'); ylabel('Current (pA)'); legend; ylim([-400,500]);
-title('Reward pairing');
-
-nexttile;
-plotSEM(timeRangeInms,EPSC_traces(punishIdx,:),bluePurpleRed(end,:),plotIndividual=plotIndividual,label='EPSC');
-plotSEM(timeRangeInms,IPSC_traces(punishIdx,:),bluePurpleRed(1,:),plotIndividual=plotIndividual,label='IPSC');
-xlabel('Time (ms)'); ylabel('Current (pA)'); legend; ylim([-400,500]);
-title('Punish pairing');
-
-plotIndividual = true;
-nexttile;
-plotSEM(timeRangeInms,EPSC_traces(randomIdx,:),bluePurpleRed(end,:),plotIndividual=plotIndividual,label='EPSC');
-plotSEM(timeRangeInms,IPSC_traces(randomIdx,:),bluePurpleRed(1,:),plotIndividual=plotIndividual,label='IPSC');
-xlabel('Time (ms)'); ylabel('Current (pA)'); legend;
-title('Baseline');
-
-nexttile;
-plotSEM(timeRangeInms,EPSC_traces(rewardIdx,:),bluePurpleRed(end,:),plotIndividual=plotIndividual,label='EPSC');
-plotSEM(timeRangeInms,IPSC_traces(rewardIdx,:),bluePurpleRed(1,:),plotIndividual=plotIndividual,label='IPSC');
-xlabel('Time (ms)'); ylabel('Current (pA)'); legend;
-title('Reward pairing');
-
-nexttile;
-plotSEM(timeRangeInms,EPSC_traces(punishIdx,:),bluePurpleRed(end,:),plotIndividual=plotIndividual,label='EPSC');
-plotSEM(timeRangeInms,IPSC_traces(punishIdx,:),bluePurpleRed(1,:),plotIndividual=plotIndividual,label='IPSC');
-xlabel('Time (ms)'); ylabel('Current (pA)'); legend;
-title('Punish pairing');
-
-saveFigures(gcf,'Trace',resultPath,...
-            saveFIG=true,savePDF=true,savePNG=true);
 
 %% Plot multiple conditions
 
@@ -384,6 +270,108 @@ xlabel('EI amplitude index'); ylabel('CDF'); box off; grid off;
 % saveFigures(fig,'Summary-reward-punish',resultPath,...
 %             saveFIG=true,savePDF=true,savePNG=true);
 
+%% Extract response trace (stupid for-loop way)
+
+timeRange = [-10,50]; 
+time2sample = 10000/1000; 
+timeRangeSamples = timeRange * time2sample;
+timeWindowLength = timeRangeSamples(2) - timeRangeSamples(1) + 1;
+timeRangeInms = linspace(-10,50,timeWindowLength);
+nCells = size(combined_cells,1);
+
+EPSC_traces = []; IPSC_traces = [];
+
+for c = 1:nCells
+    curCell = combined_cells(c,:); 
+
+    % Get rows
+    EPSCrows = curCell.Vhold{1} == -70;
+    IPSCrows = curCell.Vhold{1} >= 0;
+
+    % Get included
+    if sum(EPSCrows)>0; EPSCincluded = curCell.Included{1}{EPSCrows};
+    else; EPSCincluded = []; end
+    if sum(IPSCrows)>0; IPSCincluded = curCell.Included{1}{IPSCrows};
+    else; IPSCincluded = []; end
+    if sum(EPSCincluded) == 0; EPSCincluded = ones(length(EPSCincluded),1); end
+    if sum(IPSCincluded) == 0; IPSCincluded = ones(length(IPSCincluded),1); end
+    EPSCincluded = logical(EPSCincluded);
+    IPSCincluded = logical(IPSCincluded);
+
+    % Concatenate traces
+    if sum(EPSCrows) ~= 0
+        EPSCIdx = find(EPSCrows); curTrace = [];
+        for epsc = EPSCIdx'
+            stimOnset = curCell.Protocol{1}{epsc}.stimOnset(1);
+            timeRangeWindow = stimOnset+timeRangeSamples(1) : stimOnset+timeRangeSamples(2);
+            curTrace = [curTrace;curCell.('Processed sweeps'){1}{epsc}(:,timeRangeWindow)];
+            curTrace(~EPSCincluded,:) = [];
+        end
+        EPSC_traces = [EPSC_traces;mean(curTrace,1)];
+    else
+        EPSC_traces = [EPSC_traces;nan(1,size(EPSC_traces,2))];
+    end
+
+    if sum(IPSCrows) ~= 0
+        IPSCIdx = find(IPSCrows); curTrace = [];
+        for ipsc = IPSCIdx'
+            stimOnset = curCell.Protocol{1}{ipsc}.stimOnset(1);
+            timeRangeWindow = stimOnset+timeRangeSamples(1) : stimOnset+timeRangeSamples(2);
+            curTrace = [curTrace;curCell.('Processed sweeps'){1}{ipsc}(:,timeRangeWindow)];
+            curTrace(~IPSCincluded,:) = [];
+        end
+        IPSC_traces = [IPSC_traces;mean(curTrace,1)];
+    else
+        IPSC_traces = [IPSC_traces;nan(1,size(IPSC_traces,2))];
+    end
+end
+
+
+%% Plot response traces
+
+% Plot params
+initializeFig(.7,1); tiledlayout(2,3);
+
+plotIndividual = false;
+nexttile;
+plotSEM(timeRangeInms,EPSC_traces(randomIdx,:),bluePurpleRed(end,:),plotIndividual=plotIndividual,label='EPSC');
+plotSEM(timeRangeInms,IPSC_traces(randomIdx,:),bluePurpleRed(1,:),plotIndividual=plotIndividual,label='IPSC');
+xlabel('Time (ms)'); ylabel('Current (pA)'); legend; ylim([-400,500]);
+title('Baseline');
+
+nexttile;
+plotSEM(timeRangeInms,EPSC_traces(rewardIdx,:),bluePurpleRed(end,:),plotIndividual=plotIndividual,label='EPSC');
+plotSEM(timeRangeInms,IPSC_traces(rewardIdx,:),bluePurpleRed(1,:),plotIndividual=plotIndividual,label='IPSC');
+xlabel('Time (ms)'); ylabel('Current (pA)'); legend; ylim([-400,500]);
+title('Reward pairing');
+
+nexttile;
+plotSEM(timeRangeInms,EPSC_traces(punishIdx,:),bluePurpleRed(end,:),plotIndividual=plotIndividual,label='EPSC');
+plotSEM(timeRangeInms,IPSC_traces(punishIdx,:),bluePurpleRed(1,:),plotIndividual=plotIndividual,label='IPSC');
+xlabel('Time (ms)'); ylabel('Current (pA)'); legend; ylim([-400,500]);
+title('Punish pairing');
+
+plotIndividual = true;
+nexttile;
+plotSEM(timeRangeInms,EPSC_traces(randomIdx,:),bluePurpleRed(end,:),plotIndividual=plotIndividual,label='EPSC');
+plotSEM(timeRangeInms,IPSC_traces(randomIdx,:),bluePurpleRed(1,:),plotIndividual=plotIndividual,label='IPSC');
+xlabel('Time (ms)'); ylabel('Current (pA)'); legend;
+title('Baseline');
+
+nexttile;
+plotSEM(timeRangeInms,EPSC_traces(rewardIdx,:),bluePurpleRed(end,:),plotIndividual=plotIndividual,label='EPSC');
+plotSEM(timeRangeInms,IPSC_traces(rewardIdx,:),bluePurpleRed(1,:),plotIndividual=plotIndividual,label='IPSC');
+xlabel('Time (ms)'); ylabel('Current (pA)'); legend;
+title('Reward pairing');
+
+nexttile;
+plotSEM(timeRangeInms,EPSC_traces(punishIdx,:),bluePurpleRed(end,:),plotIndividual=plotIndividual,label='EPSC');
+plotSEM(timeRangeInms,IPSC_traces(punishIdx,:),bluePurpleRed(1,:),plotIndividual=plotIndividual,label='IPSC');
+xlabel('Time (ms)'); ylabel('Current (pA)'); legend;
+title('Punish pairing');
+
+saveFigures(gcf,'Trace',resultPath,...
+            saveFIG=true,savePDF=true,savePNG=true);
 
 %% Plot DA vs EI charge index
 
@@ -408,6 +396,18 @@ p = polyfit(DA, EI, 1);
 yfit = polyval(p, DA);
 plot(DA, yfit, LineWidth=3);
 
+
+%% Extract cell QC data
+
+qcIdx = cellfun(@(x) find(x==-70,1), combined_cells.Vhold);
+QCs = struct2table(cellfun(@(q, idx) q{idx}, combined_cells.QC, num2cell(qcIdx)));
+
+included = cellfun(@(q, idx) q{idx}, combined_cells.Included, num2cell(qcIdx),UniformOutput=false);
+included = cellfun(@(x) x + (~any(x))*ones(size(x)), included, UniformOutput=false);
+
+Rs = cellfun(@(x,idx) mean(x(find(idx))), QCs.Rs, included);
+Rm = cellfun(@(x,idx) mean(x(find(idx))), QCs.Rm, included);
+Cm = cellfun(@(x,idx) mean(x(find(idx))), QCs.Cm, included);
 
 %% Plot QC vs response
 

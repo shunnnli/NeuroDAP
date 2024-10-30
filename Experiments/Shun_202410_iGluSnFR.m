@@ -109,18 +109,18 @@
 %% Setup
 
 clear; close all;
-addpath(genpath(osPathSwitch('/Volumes/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
+addpath(genpath(osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
 [~,~,~,~,~,~,bluePurpleRed] = loadColors;
 
 % Define result directory
-resultspath = osPathSwitch('/Volumes/MICROSCOPE/Shun/Project valence/Results');
+resultspath = osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Results');
 
 % Building summary struct from selected sessions
 answer = questdlg('Group sessions or load combined data?','Select load sources',...
                   'Group single sessions','Load combined data','Load sample data','Load combined data');
 
 if strcmpi(answer,'Group single sessions')
-    sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/MICROSCOPE/Shun/Project valence/Recordings'));
+    sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Recordings'));
     groupSessions = true;
     % Update resultspath
     dirsplit = strsplit(sessionList{1},filesep); projectName = dirsplit{end-1}; 
@@ -129,7 +129,7 @@ if strcmpi(answer,'Group single sessions')
     if isempty(dir(resultspath)); mkdir(resultspath); end
 
 elseif strcmpi(answer,'Load combined data')
-    fileList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/MICROSCOPE/Shun/Project valence/Results'));
+    fileList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Results'));
     groupSessions = false;
     % Update resultspath
     dirsplit = strsplit(fileList{1},filesep); projectName = dirsplit{end-1}; 
@@ -146,7 +146,7 @@ elseif strcmpi(answer,'Load sample data')
     groupSessions = false;
     % Update resultspath
     dirsplit = strsplit(fileList{1},filesep); projectName = dirsplit{end-1}; 
-    resultspath = strcat(osPathSwith('/Volumes/MICROSCOPE/Shun/Analysis/NeuroDAP/Tutorials/Sample data/Results'),filesep,projectName);
+    resultspath = strcat(osPathSwith('/Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDAP/Tutorials/Sample data/Results'),filesep,projectName);
     % Load selected files
     for file = 1:length(fileList)
         dirsplit = strsplit(fileList{file},filesep);
@@ -182,20 +182,12 @@ for i = 1:length(summary)
     cur_event = summary(i).event;
     cur_date = str2double(summary(i).date);
 
-    if contains('random',cur_task,IgnoreCase=true)
+    if strcmp('random',cur_task)
         summary(i).task = 'Random';
-    elseif cur_date < 20240729
-        if contains('reward pairing',cur_task,IgnoreCase=true)
-            summary(i).task = 'Reward1 (paAIP2)';
-        elseif contains('punish pairing',cur_task,IgnoreCase=true)
-            summary(i).task = 'Punish1 (paAIP2)';
-        end
-    else
-        if contains('reward pairing',cur_task,IgnoreCase=true)
-            summary(i).task = 'Reward2 (ctrl)';
-        elseif contains('punish pairing',cur_task,IgnoreCase=true)
-            summary(i).task = 'Punish2 (paAIP2)';
-        end
+    elseif contains('reward pairing',cur_task,IgnoreCase=true)
+        summary(i).task = 'Reward';
+    elseif contains('punish pairing',cur_task,IgnoreCase=true)
+        summary(i).task = 'Punish';
     end
 
     if contains('Stim only',cur_event,IgnoreCase=true)
@@ -206,37 +198,8 @@ for i = 1:length(summary)
 end
 
 % Remove some rows if needed
-eventIdx = cellfun(@(x) contains(x,'Blue stim',IgnoreCase=true), {summary.event});
-summary(eventIdx) = [];
-
-%% Optional: make change to summary for further analysis (second punish sessions)
-
-% Change some names if needed
-for i = 1:length(summary)
-    cur_task = summary(i).task;
-    cur_event = summary(i).event;
-    cur_date = str2double(summary(i).date);
-
-    if contains('random',cur_task,IgnoreCase=true)
-        summary(i).task = 'Random';
-    else
-        if contains('reward pairing',cur_task,IgnoreCase=true)
-            summary(i).task = 'Reward (paAIP2)';
-        elseif contains('punish pairing',cur_task,IgnoreCase=true)
-            summary(i).task = 'Punish (paAIP2)';
-        end
-    end
-
-    if contains('Stim only',cur_event,IgnoreCase=true)
-        summary(i).event = 'Stim';
-    elseif contains('Tone only',cur_event,IgnoreCase=true)
-        summary(i).event = 'Tone';
-    end
-end
-
-% Remove some rows if needed
-eventIdx = cellfun(@(x) contains(x,'Blue stim',IgnoreCase=true), {summary.event});
-summary(eventIdx) = [];
+% eventIdx = cellfun(@(x) contains(x,'Blue stim',IgnoreCase=true), {summary.event});
+% summary(eventIdx) = [];
 
 %% Create animals struct
 
@@ -253,7 +216,7 @@ today = char(datetime('today','Format','yyyyMMdd'));
 filename = strcat('animals_',today,'_',answer{1});
 
 % Save animals.mat
-if ~isempty(answer)
+if ~isempty(answer) 
     disp(['Ongoing: saving animals.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
     save(strcat(resultspath,filesep,filename),'animals','trialTables','sessionList','-v7.3');
     disp(['Finished: saved animals.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
