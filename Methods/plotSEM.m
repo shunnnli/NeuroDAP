@@ -16,13 +16,14 @@ arguments
 
     options.plotIndividual logical = false % plot individual trace in the background
     options.individualColor = 'same' % Color of individual trace
-    options.individualAlpha double = 0.2
+    options.individualAlpha double = 0.3 % 1 is not transparent, 0 is fully transparent
 
     options.LineStyle (1,1) string = "-"
     options.LineWidth (1,1) {mustBeNumeric} = 2
     options.plotStyle string = 'line'
     options.delta double = []
     options.label string = ''
+    options.plotStyleIndividual string = 'overlay'
 end
 
 %% Set up
@@ -48,7 +49,7 @@ if ~isstring(options.individualColor) && ~ischar(options.individualColor)
     end
 else
     if strcmp(options.individualColor,'same')
-        options.individualColor = color;
+        options.individualColor = 1 - options.individualAlpha*(1-color);
     elseif strcmp(options.individualColor,'gray')
         options.individualColor = [0.6, 0.6, 0.6];
     end
@@ -71,16 +72,16 @@ else
     ySEM = options.delta;
 end
 
-% Update individual color
-if options.individualAlpha ~= 0 
-    options.individualColor = [options.individualColor,options.individualAlpha];
-end
-
 %% Plot
 if strcmp(options.plotStyle,'line')
     if options.plotIndividual
-        for i = 1:size(y,1)
-            l = plot(x,y(i,:),'Color',options.individualColor,'LineWidth',max(0.01,options.LineWidth-1),'LineStyle',options.LineStyle,'HandleVisibility','off'); hold on
+        if strcmp(options.plotStyleIndividual,'overlay')
+            for i = 1:size(y,1)
+                l = plot(x,y(i,:),'Color',options.individualColor,'LineWidth',max(0.01,options.LineWidth-1),'LineStyle',options.LineStyle,'HandleVisibility','off'); hold on
+            end
+        elseif strcmp(options.plotStyleIndividual,'stack')
+            options.plotMean = false; % By default do not plot mean
+            % Get max and min value
         end
     end
     if options.plotMean

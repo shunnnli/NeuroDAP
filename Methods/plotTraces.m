@@ -42,7 +42,7 @@ arguments
     
     options.plotIndividual logical = false
     options.individualColor = 'same'
-    options.individualAlpha double = 0
+    options.individualAlpha double = 0.3 %1 is not transparent, 0 is fully transparent
 
     options.plotStyle string = 'line'
     options.plotPatch logical = true

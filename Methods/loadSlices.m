@@ -58,6 +58,7 @@ if strcmp(options.saveDataPath,'default')
     if createNew; options.rawDataPath = exp;
     else; options.rawDataPath = exp{1,"Session"}; end
     options.saveDataPath = strcat(options.rawDataPath,filesep,'Epochs-',today);
+    mkdir(options.saveDataPath);
     options.sessionPath = options.rawDataPath;
 else
     if createNew; options.rawDataPath = exp;

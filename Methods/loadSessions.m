@@ -26,6 +26,8 @@ arguments
    % Stimulation digital line params
    options.invertStim logical = true % Invert signal from arduino for stimulation
    options.getConsecutive logical = true
+   options.saveDigitalNI logical = false % if true, save digitalNI
+   options.saveDigitalNIChannelIdx double % channel of digitalNI to save
    
    % Photometry related params
    options.recordLJ double = [1,1,0]
@@ -183,6 +185,7 @@ if withNI
     %     title(i);
     % end
     % autoArrangeFigures();
+    % close all;
     
     % Read Digital Channels in NIDAQ data
     d_ch_start = str2double(nidq.meta.niXDChans1(1));
@@ -193,9 +196,6 @@ if withNI
     % (1-based). For imec data there is never more than one saved digital word.
     dw = 1;
     digitalNI = ExtractDigital(nidqData, nidq.meta, dw, d_ch_list);
-    % syncNI = digitalNI(2,:); % Save sync channel from NIDAQ data separately
-    
-    close all;
 
     %% Read behavior/photometry (NI) data
     
@@ -213,6 +213,16 @@ if withNI
             leftTone = channels{9}; rightTone = channels{10};
             redLaser = channels{11}; blueLaser = channels{12};
             syncNI = channels{14};
+            
+            if options.saveDigitalNI
+                if ~isfield(options,'saveDigitalNIChannelIdx')
+                    options.saveDigitalNIChannelIdx = 1:size(digitalNI,1);
+                end
+                savedDigitalNI = digitalNI(options.saveDigitalNIChannelIdx,:);
+            else
+                savedDigitalNI = [];
+            end
+
         elseif strcmpi(options.NISetup,'Kevin')
             syncNI = channels{1}; leftLick = channels{2};
             rightLick_analog = channels{3}; leftNose = channels{4};
@@ -230,12 +240,12 @@ if withNI
                 save(dataOutputName,...
                     'airpuff','leftLick','rightLick','leftTone','rightTone',....
                     'leftSolenoid','rightSolenoid','allTones','blink','gyro',...
-                    'photometry_raw','blueLaser','redLaser','-append');
+                    'photometry_raw','blueLaser','redLaser','savedDigitalNI','-append');
             else
                 save(dataOutputName,...
                     'airpuff','leftLick','rightLick','leftTone','rightTone',....
                     'leftSolenoid','rightSolenoid','allTones','blink','gyro',...
-                    'blueLaser','redLaser','-append');
+                    'blueLaser','redLaser','savedDigitalNI','-append');
             end
         elseif strcmpi(options.NISetup,'Kevin')
             save(dataOutputName,...
@@ -1231,8 +1241,12 @@ params.session = session;
 % toml.signal_indices.total_channels = labjack.nSignals;
 
 
+% if (withPhotometry || options.withPhotometryNI || withCamera)
+%     save(timeseriesOutputName,'timeSeries','-append'); 
+% end
+
 save(syncOutputName,'params','-append');
-if withPhotometry; save(timeseriesOutputName,'timeSeries','-append'); end
+save(timeseriesOutputName,'timeSeries','-append'); 
 disp('Finished: struct params, session saved in sync_.mat');
 
 return

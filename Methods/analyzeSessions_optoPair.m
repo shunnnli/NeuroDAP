@@ -52,12 +52,12 @@ elseif isunix; projectPath = strcat('/',fullfile(dirsplit{2:end-1}));
 end
 
 % Get animal name and session date
-if ~contains(options.outputName,'-')
+if ~contains(options.outputName,{'-','_'})
     sessionName = dirsplit{end-1};
-    dirsplit = strsplit(sessionName,'-');
+    dirsplit = strsplit(sessionName,{'-','_'});
 else
     sessionName = options.outputName;
-    dirsplit = strsplit(options.outputName,'-'); 
+    dirsplit = strsplit(options.outputName,{'-','_'}); 
 end
 date = dirsplit{1}; animal = dirsplit{2}; sessionTask = dirsplit{3};
 clear dirsplit
@@ -188,10 +188,12 @@ disp(['Behavior params: reactionTime = ',num2str(params.analyze.reactionTime)]);
 disp(['Behavior params: minLicks = ',num2str(params.analyze.minLicks)]);
 
 % Load camera signal
-eyeAreaIdx = find(cellfun(@(x) strcmpi(x,'eyeArea'), {timeSeries.name}));
-if ~isempty(eyeAreaIdx); eyeArea_detrend = timeSeries(eyeAreaIdx).data; end
-pupilAreaIdx = find(cellfun(@(x) strcmpi(x,'pupilArea'), {timeSeries.name}));
-if ~isempty(pupilAreaIdx); pupilArea_detrend = timeSeries(pupilAreaIdx).data; end
+if params.session.withCamera
+    eyeAreaIdx = find(cellfun(@(x) strcmpi(x,'eyeArea'), {timeSeries.name}));
+    if ~isempty(eyeAreaIdx); eyeArea_detrend = timeSeries(eyeAreaIdx).data; end
+    pupilAreaIdx = find(cellfun(@(x) strcmpi(x,'pupilArea'), {timeSeries.name}));
+    if ~isempty(pupilAreaIdx); pupilArea_detrend = timeSeries(pupilAreaIdx).data; end
+end
 
 save(strcat(sessionpath,filesep,'sync_',options.outputName),'params','-append');
 

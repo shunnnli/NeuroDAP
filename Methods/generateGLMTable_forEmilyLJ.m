@@ -50,6 +50,12 @@ total_ds_samples = min(total_ds_Behsamples, total_ds_TSsamples);
 glm_ds = table('Size',[total_ds_samples length(varNames)],...
     'VariableTypes',varTypes,'VariableNames',varNames);
 
+% Find start of events (because of LJ recording system)
+leftTone = findStart(leftTone);
+rightTone = findStart(rightTone); 
+rightSolenoid = findStart(rightSolenoid); 
+% rightLick is already in right format
+
 % Downsample behavior data & match nSamples
 BehWindow = params.sync.commonStartPhotometry : params.sync.commonStartPhotometry+total_ds_samples*BehSamplesPerBin-1;
 go_ds = squeeze(sum(...

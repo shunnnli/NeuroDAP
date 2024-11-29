@@ -178,7 +178,7 @@ for d = 1:nDepth
     optoMax = max(optoData,[],'all'); optoMin = min(optoData,[],'all');
 
     % (Optional) Change hotspot criteria
-    XXXXXXXXX
+    % XXXXXXXXX
 
     % Get hotspot vs null spot
     hotspot_spotIdx = cell2mat(cellfun(@(x) sum(x)>=1, search_hotspot{d}, UniformOutput=false));

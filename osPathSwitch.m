@@ -1,4 +1,4 @@
-function output = osPathSwitch(input,options)
+function outputPath = osPathSwitch(input,options)
 
 arguments
     input % string or char
@@ -25,7 +25,7 @@ end
 
 % Determine whether to swtich or not
 if strcmp(options.inputOS,targetOS)
-    output = input;
+    outputPath = input;
     return
 else
     switchOS = true;
@@ -34,13 +34,13 @@ end
 % Detect and replace server path
 if contains(input,server_mac) && switchOS % change from mac to windows
     splitted = strsplit(input,server_mac);
-    output = [server_win,splitted{2}];
-    output(strfind(output,'/')) = '\';
+    outputPath = [server_win,splitted{2}];
+    outputPath(strfind(outputPath,'/')) = '\';
 elseif contains(input,server_win) && switchOS % change from windows to mac
     input(strfind(input,'\')) = '/';
     server_win(strfind(server_win,'\')) = '/';
     splitted = strsplit(input,server_win);
-    output = [server_mac,splitted{2}];
+    outputPath = [server_mac,splitted{2}];
 end
 
 end

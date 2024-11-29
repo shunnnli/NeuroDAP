@@ -30,7 +30,7 @@ if mod(nSampPerBin,1) == 0
     for k = 1:length(photometry_downsample)
         firstBinTime = floor(nSampPerBin*(k-1)+1);
         lastBinTime = floor(nSampPerBin*k);
-        photometry_downsample(k) = sum(rawTraces(floor(firstBinTime:lastBinTime)));
+        photometry_downsample(k) = mean(rawTraces(floor(firstBinTime:lastBinTime)));
 
         % if k==length(photometry_downsample) && lastBinTime < length(rawTraces)
         %     firstBinTime = lastBinTime + 1;
@@ -57,7 +57,7 @@ else
         for k = 1:length(photometry_downsample)
             firstBinTime = floor(nSampPerBin*(k-1)+1);
             lastBinTime = floor(nSampPerBin*k);
-            photometry_downsample(k) = sum(rawTraces(floor(firstBinTime:lastBinTime)));
+            photometry_downsample(k) = mean(rawTraces(floor(firstBinTime:lastBinTime)));
         end
         clear nSampPerBin firstBinTime lastBinTime
 
