@@ -68,8 +68,8 @@ return
 %% Plot search summary
 % Just plot results for a specific search in a session
 
-c = 1; searchIdx = 1; pairIdx = 1; close all;
-disp(['Ongoing: plotting searches for cell',num2str(c)]);
+cellIdx = 3; searchIdx = 1; pairIdx = 1; close all;
+disp(['Ongoing: plotting searches for cell',num2str(cellIdx)]);
 curCell = cells(cells.Cell == cellIdx,:); 
 searchPerCell = length(curCell.Vhold{1});
 

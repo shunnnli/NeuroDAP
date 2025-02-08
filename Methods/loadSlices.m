@@ -270,7 +270,7 @@ if options.reload
         % Load csv file for vhold
         if ~strcmp(rig,'Wengang')
             csvOpts = detectImportOptions(fullfile(epochList{row,2},'InfoPatching.xlsx'));
-            csvOpts.SelectedVariableNames = 1:9;
+            csvOpts.SelectedVariableNames = 1:11;%1:9
             csvOpts.VariableNamesRange = 25;
             info = readtable(fullfile(epochList{row,2},'InfoPatching.xlsx'),csvOpts);
             info = rmmissing(info,DataVariables="acq_");
@@ -478,7 +478,7 @@ if options.reload
         end
 
         %% Merge protocol/qc/stats for each sweep into one for each epoch
-        if ~contains(protocol.cycle,'randomSearch')
+        if ~contains(protocol.cycle,{'randomSearch','plasticity'})
             protocols = mergeStructs(protocols);
             statistics = mergeStructs(statistics);
             QC = mergeStructs(QCs);

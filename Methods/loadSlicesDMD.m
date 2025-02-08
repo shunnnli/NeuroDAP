@@ -84,7 +84,8 @@ warning('off','MATLAB:table:RowsAddedExistingVars');
 
 %% Select randomSearch epochs
 % randomSearchIdx = cellfun(@(x) contains(x.cycle, 'randomSearch'), epochs.("Protocol"));
-randomSearchIdx = cellfun(@(x) iscell(x),epochs.("Protocol"));
+% randomSearchIdx = cellfun(@(x) iscell(x), epochs.("Protocol"));
+randomSearchIdx = cellfun(@(x) iscell(x) && contains(x{1}.cycle, 'randomSearch', IgnoreCase=true), epochs.("Protocol"));
 exp = sortrows(epochs(randomSearchIdx,:),'Cell'); % randomSearchEpochs
 
 %% Build spots.mat and cells.mat

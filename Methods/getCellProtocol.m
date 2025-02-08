@@ -84,8 +84,8 @@ if contains(protocol.cycle,'randomSearch')
         protocol.cellY = 304 + round(tVector(2));
     elseif strcmp(protocol.stimChannel,'ao2')
         tVector = eval(getHeaderValue(headerString,'state.zDMD.tVectorRed'));
-        protocol.cellX = 342 - round(tVector(2));
-        protocol.cellY = 304 + round(tVector(1));
+        protocol.cellX = 342 + round(tVector(1));
+        protocol.cellY = 304 + round(tVector(2));
     end
 end
 

@@ -99,7 +99,7 @@ close all;
 
 % Select data to plot
 groupIdx = {randomIdx,rewardIdx,punishIdx,rewardCtrlIdx,punishCtrlIdx}; 
-plotGroup = [1,0,0,0,1];
+plotGroup = [1,1,0,1,0];
 
 if sum(plotGroup) == 1; plotBootstrap = true; 
 else; plotBootstrap = false; end
