@@ -11,6 +11,7 @@ arguments
     options.eventRange   
     options.inTrialTable logical
     options.xlimIdx double = 0
+    options.xlim double
     options.ylim double
     options.dotSize double = 200
 
@@ -98,9 +99,17 @@ for task = 1:length(stats)
     end
 
     % Adjust xlim
-    if options.xlimIdx ~= 0
+    if isfield(options,'xlim') && options.xlimIdx == 0
+        if size(options.xlim,1)==1; xlimit = options.xlim; 
+        else; xlimit = options.xlim(task,:); end
+        xlim(xlimit);
+    elseif options.xlimIdx ~= 0 && ~isfield(options,'xlim')
         xlim([0,xlimList(options.xlimIdx)]);
-    end 
+    else
+        if size(options.xlim,1)==1; xlimit = options.xlim; 
+        else; xlimit = options.xlim(task,:); end
+        xlim([0,min(xlimList(options.xlimIdx),xlimit(2))]);
+    end
     xlabel('Trials'); ylabel(ylabels{task});
     legend(options.eventRange);
 

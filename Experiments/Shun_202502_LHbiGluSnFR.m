@@ -320,7 +320,7 @@ end
 %% Test: Plot traces from summary/animals struct
 
 event = 'Stim';
-animal = 'SL174';
+animal = 'all';
 task = 'Reward';
 signal = 'iGluSnFR';
 session = 'all';
@@ -342,7 +342,7 @@ legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,.
 plotEvent('Stim',0,color=bluePurpleRed(500,:))
 xlabel('Time (s)'); ylabel('z-score');
 
-%% Baseline dLight: plot water, airpuff, stim, tone
+%% Baseline iGluSnFR: plot water, airpuff, stim, tone
 
 timeRange = [-0.5,3];
 eventRange = {'Rewarded Licks','Airpuff','Stim','Tone'};
@@ -377,7 +377,7 @@ for s = 1:length(signalRange)
     %         saveFIG=true,savePDF=true);
 end
 
-%% Plot overall to show animal learned
+%% dLight: Plot overall to show animal learned
 
 timeRange = [-0.5,3];
 eventRange = {'Stim','Pair','Tone'};
@@ -417,7 +417,7 @@ for task = 1:length(taskRange)
     %     saveFIG=true,savePDF=true);
 end
 
-%% Plot overall to show animal learned
+%% iGluSnFR: Plot overall to show animal learned
 
 timeRange = [-0.5,3];
 eventRange = {'Stim','Pair','Tone'};
@@ -427,10 +427,10 @@ trialRange = 'All';
 signalRange = 'iGluSnFR';
 
 colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),bluePurpleRed(100,:)};
-groupSizeList = [50;50;10];
+groupSizeList = [20;20;10];
 nGroupsList = [15;15;15];
 
-taskRange = {'Reward'}; % second part
+taskRange = {'Punish'}; % second part
 ylimList = [-1.5,1; -1.5,1; -1.5,1; -1.25,1.75]; % Second part
 
 for task = 1:length(taskRange)
@@ -446,7 +446,7 @@ for task = 1:length(taskRange)
                                     signalRange=signalRange);
         legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,...
                         groupSize=groupSizeList(event),nGroups=nGroupsList(event),...
-                        groupby='sessions',startIdx=combined.options.startIdx,remaining='include');
+                        groupby='trials',startIdx=combined.options.startIdx,remaining='include');
         % ylim(ylimList(task,:));
         plotEvent(eventRange{event},.5,color=colorList{event});
         xlabel('Time (s)'); ylabel([signalRange,' z-score']);
@@ -501,8 +501,8 @@ end
 %% Plot grouped CS DA response (grouped across animal and 10 trials)
 
 taskRange = {'Reward','Punish'};
-statsTypes = {'stageMax','stageMax'}; ylabelList = {'Avg DA response during cue','Avg DA response during cue'};
-ylim = [-0.5,5; -1.5,2.5];
+statsTypes = {'stageMax','stageMax'}; ylabelList = {'Max DA response during cue','Max DA response during cue'};
+ylimit = [-0.5,5; -0.5,5];
 
 animalRange = 'All';
 conditionRange = 'All';
@@ -523,7 +523,39 @@ combinedStats = getGroupedTrialStats(animals,statsTypes,...
                             signalRange=signalRange);
 
 initializeFig(.7,.7); tiledlayout('flow');
-results = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,color=colorList,xlimIdx=4,ylim=ylim);
+results = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,color=colorList,xlimIdx=4,xlim=[0,170],ylim=ylimit);
+% 
+% saveFigures(gcf,'Summary_CSvsTrialsGrouped_Punish_Avg',...
+%         strcat(resultspath),...
+%         saveFIG=true,savePDF=true);
+
+
+%% Plot grouped CS iGluSnFR response (grouped across animal and 10 trials)
+
+taskRange = {'Reward','Punish'};
+statsTypes = {'stageMax','stageMax'}; ylabelList = {'Max iGluSnFR response during cue','Max iGluSnFR response during cue'};
+ylimit = [-0.5,5; -0.5,5];
+
+animalRange = 'All';
+conditionRange = 'All';
+signalRange = 'iGluSnFR';
+
+eventRange = {'Baseline','Pair','Tone','Stim'};
+colorList = {[0.8,0.8,0.8],bluePurpleRed(300,:),bluePurpleRed(100,:),bluePurpleRed(500,:)};
+% eventRange = {'Baseline','Stim','Pair'};
+% colorList = {[0.8,0.8,0.8],bluePurpleRed(500,:),bluePurpleRed(300,:)};
+
+stage = 2; % Plot CS only
+groupSize = 10; % numbers of trials to calculate average
+combinedStats = getGroupedTrialStats(animals,statsTypes,...
+                            eventRange=eventRange,...
+                            animalRange=animalRange,...
+                            taskRange=taskRange,...
+                            totalTrialRange=conditionRange,...
+                            signalRange=signalRange);
+
+initializeFig(.7,.7); tiledlayout('flow');
+results = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,color=colorList,xlimIdx=4,xlim=[0,170],ylim=ylimit);
 % 
 % saveFigures(gcf,'Summary_CSvsTrialsGrouped_Punish_Avg',...
 %         strcat(resultspath),...
@@ -593,7 +625,7 @@ end
 
 eventRange = {'Stim','Pair'};
 animalRange = 'All';
-taskRange = {'Reward1','Punish1'};
+taskRange = {'Reward','Punish'};
 signalRange = 'dLight';
 colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),bluePurpleRed(100,:),[0.75, 0.75, 0.75]};
 ylabelList = {'Anticipatory licks','Anticipatory licks'};
@@ -665,7 +697,7 @@ end
 %% Plot CS DA response vs trials
 eventRange = {'Stim','Pair'};
 animalRange = 'All';
-taskRange = {'Reward1','Punish1'};
+taskRange = {'Reward','Punish'};
 conditionRange = [1,150];
 signalRange = 'NAc';
 conditionColors = {bluePurpleRed(1,:),[.213 .543 .324]};

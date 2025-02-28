@@ -1246,7 +1246,7 @@ params.session = session;
 % end
 
 save(syncOutputName,'params','-append');
-save(timeseriesOutputName,'timeSeries','-append'); 
+if exist('timeSeries', 'var'); save(timeseriesOutputName,'timeSeries','-append'); end
 disp('Finished: struct params, session saved in sync_.mat');
 
 return

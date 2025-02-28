@@ -143,10 +143,16 @@ for i = 1:options.nGroups
         plotSEM(timestamp,plotData,colormap(nColors(i),:),LineStyle=options.LineStyle,LineWidth=options.LineWidth);
         legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial),' (n=',num2str(size(plotData,1)),')'];
     elseif sum(strcmpi(options.groupby,["session","sessions"]))
+        % Get trial window
         trialWindow = [];
         for animal = 1:size(trialStart_sessions,2)
             trialWindow = [trialWindow,trialStart_sessions(i,animal):trialEnd_sessions(i,animal)];
         end
+        % Check and remove indices that are not valid
+        validIdx = trialWindow >= 1 & trialWindow <= size(traces, 1);
+        trialWindow = trialWindow(validIdx);
+
+        % Plot data
         plotData = traces(trialWindow,:);
         plotSEM(timestamp,plotData,colormap(nColors(i),:),LineStyle=options.LineStyle,LineWidth=options.LineWidth);
         legendList{i} = ['Session ', num2str(i),' (n=',num2str(size(plotData,1)),')'];

@@ -286,7 +286,7 @@ for signal = 1:length(options.signalRange)
         if ~isempty(row.trialInfo.trialNumber) && ~isempty(row.trialInfo.trialTable)
             cur_trialNumber = row.trialInfo.trialNumber(trialRange);
             trialNumData{signal} = [trialNumData{signal}; reshape(cur_trialNumber,[length(cur_trialNumber),1])];
-            trialTableData{signal} = [trialTableData{signal}; row.trialInfo.trialTable(trialRange,:)];
+            trialTableData{signal} = concatTables(trialTableData{signal}, row.trialInfo.trialTable(trialRange,:));
         else
             warning('combineTraces: empty trialNumber or trialTable found, skipped for now');
             disp(options);

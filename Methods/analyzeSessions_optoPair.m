@@ -537,7 +537,7 @@ end
 
 %% Save photometry/lick/eye PSTHs
 
-if options.analyzeTraces
+if options.analyzeTraces && exist('timeSeries','var')
     analysis = analyzeTraces(timeSeries,rightLick,analysisEvents,analysisLabels,params,...
                          stageTime=stageTime,...
                          trialNumber=eventTrialNum,trialTable=trials);
@@ -545,13 +545,13 @@ end
 
 %% Plot photometry summary plots
 
-% Find the number of photometry channels
-photometryIdx = find(cellfun(@(x) contains(x,["NI","LJ"],"IgnoreCase",true), {timeSeries.system}));
-photometryName = cellfun(@(x) unique(x,'rows'), {timeSeries(photometryIdx).name},'UniformOutput',false);
-nSignals = length(photometryIdx);
-disp(['Finished: found ', num2str(nSignals),' photometry signals']);
+if options.plotPhotometry && exist('timeSeries','var')
+    %% Find the number of photometry channels
+    photometryIdx = find(cellfun(@(x) contains(x,["NI","LJ"],"IgnoreCase",true), {timeSeries.system}));
+    photometryName = cellfun(@(x) unique(x,'rows'), {timeSeries(photometryIdx).name},'UniformOutput',false);
+    nSignals = length(photometryIdx);
+    disp(['Finished: found ', num2str(nSignals),' photometry signals']);
 
-if options.plotPhotometry
     %% Plot pre-processing steps
     initializeFig(.67,.67); tiledlayout('flow');
     
