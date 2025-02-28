@@ -23,6 +23,8 @@ arguments
     options.rcCheckRecoveryWindow double = 100 % in ms
     options.peakWindow double = 1 % in ms around the peak to average
 
+    options.vholdChannel string = 'AD1'
+
     options.feature = 'auc'
     options.thresholdFactor double = 3 % 3*std
 
@@ -274,10 +276,17 @@ if options.reloadCells
                 stats.baseline.std = std(processed_trace(baselineWindow));
         
                 % Determine Vhold
-                % Find in .xlsx file first, if can't find, use the heuristic that
-                % cells with negative leak current Vhold=-70, otherwise Vhold = 10;
-                acqsplit = split(sweepAcq{k},'_'); acqNum = str2double(acqsplit{end});
-                vhold = info{info.acq_ == acqNum,'holding'};
+                if strcmpi(options.vholdChannel,'excel')
+                    % Find in .xlsx file first, if can't find, use the heuristic that
+                    % cells with negative leak current Vhold=-70, otherwise Vhold = 10;
+                    acqsplit = split(sweepAcq{k},'_'); acqNum = str2double(acqsplit{end});
+                    vhold = info{info.acq_ == acqNum,'holding'};
+                else
+                    acqsplit = split(sweepAcq{k},'_'); acqNum = str2double(acqsplit{end});
+                    curVholdChannel = strcat(['AD1','_',num2str(acqNum)]); %changed to AD1 by Paolo
+                    load(fullfile(epochPath,strcat(curVholdChannel,'.mat')));
+                    vhold = extractHoldingVoltage(eval([curVholdChannel])); %mean(eval([curVholdChannel,'.data']))*100;
+                end
                 if isempty(vhold)
                     if stats.baseline.avg < 0; vhold = -70;
                     else; vhold = 10; end

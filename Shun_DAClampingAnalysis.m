@@ -8,7 +8,7 @@ addpath(genpath(osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDA
 %% (Optional) Load sessions
 
 % Select sessions via uipickfiles
-sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project clamping/Recordings'));
+sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project clamping/Recordings'))';
 errorSessionIdx = [];
 
 % Select anlaysis params
@@ -17,7 +17,7 @@ errorSessionIdx = [];
                                 recordLJ='[0 0 0]',...
                                 plotPhotometry=true,...
                                 plotBehavior=true,...
-                                withPhotometryNI=false);
+                                withPhotometryNI=true);
 if canceled; return; end
 for s = 1:length(sessionList)
     analysisParams(s).rollingWindowTime = str2double(analysisParams(s).rollingWindowTime);
@@ -25,7 +25,7 @@ for s = 1:length(sessionList)
 end 
 % Select session params
 [sessionParams,canceled] = inputSessionParams(sessionList,...
-                                paradigm=2,...
+                                paradigm=1,...
                                 redStim=true,pavlovian=true,...
                                 reactionTime=2,...
                                 redPulseFreq=50,redPulseDuration=5,redStimDuration=500,...
@@ -224,7 +224,7 @@ subtitle({strcat("Basline std: ",num2str(std(baseline_raw)),", PID std: ",num2st
 
 nexttile(5,[1 2]);
 yyaxis left
-[baseline_rewardTraces,~] = plotTraces(baseline_waterLickIdx(1:100),[-1,5],baseline_raw,...
+[baseline_rewardTraces,~] = plotTraces(baseline_waterLickIdx,[-1,5],baseline_raw,...
                          signalFs=originalFs,sameSystem=true,...
                          plotIndividual=false,color=baselineColor,...
                          xlabel='Time (s)',ylabel='Intensity');
@@ -244,7 +244,7 @@ plotEvent('Water',0);
 
 
 nexttile(3,[2 1]);
-plotHeatmap(pid_toneTraces,timestamp);
+plotHeatmap(pid_rewardTraces,timestamp);
 xlabel('Time (s)'); ylabel('Trials');
 title('PID: water');
 

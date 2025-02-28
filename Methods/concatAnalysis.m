@@ -14,7 +14,7 @@ for s = 1:length(sessionList)
     sessionName = dirsplit{end}; clear dirsplit
 
     % Load session
-    load(strcat(sessionList{s},filesep,'analysis_',sessionName,'.mat'));
+    load(strcat(sessionList{s},filesep,'analysis_',sessionName,'.mat'),'analysis');
 
     summary = [summary,analysis];
     disp(['Finished: session ', sessionName,' loaded (',...

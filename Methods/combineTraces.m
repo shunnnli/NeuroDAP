@@ -83,7 +83,7 @@ end
 
 % Select rows based on sessionRange if database have field session (ie summary struct)
 if isfield(database,'session')
-    if  ~any((strcmpi(options.sessionRange,'All')))
+    if ~any((strcmpi(options.sessionRange,'All')))
         sessionIdx = cellfun(@(x) contains(x,options.sessionRange,IgnoreCase=true), {database(finalIdx).session});
         finalIdx = finalIdx(sessionIdx);
         % will save options.sessionList later
@@ -240,7 +240,7 @@ for signal = 1:length(options.signalRange)
                 row.options.sessionList = {};
             end
             sessionIdx = cellfun(@(x) contains(x,options.sessionRange,IgnoreCase=true), row.options.sessionList);
-            options.sessionList = [options.sessionList,row.options.sessionList(sessionIdx)];
+            options.sessionList = unique([options.sessionList,row.options.sessionList(sessionIdx)]);
             sessionTrials = [];
             for s = 1:length(sessionIdx)
                 if sessionIdx(s)

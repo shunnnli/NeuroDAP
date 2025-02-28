@@ -309,18 +309,17 @@ for i = 1:size(animals,2)
 end
 
 %% Test: Plot traces from summary/animals struct
-
 initializeFig(0.5,0.5);
 combined = combineTraces(animals,timeRange=[-0.5,3],...
-                            eventRange='Airpuff',...
-                            animalRange="All",...
+                            eventRange='Stim',...
+                            animalRange="SL175",...
                             taskRange='Random',...
                             totalTrialRange='All',...
                             trialRange='All',...
-                            signalRange='dLight',...
+                            signalRange='Angled',...
                             sessionRange='All');
-plotTraces(combined.data{1},combined.timestamp,color=bluePurpleRed(1,:));
-plotEvent('Water',0,color=bluePurpleRed(1,:))
+plotTraces(combined.data{1},combined.timestamp,color=bluePurpleRed(500,:));
+plotEvent('Stim',0,color=bluePurpleRed(500,:))
 xlabel('Time (s)'); ylabel('z-score');
 
 %% Baseline dLight: plot water, airpuff, stim, tone
@@ -331,7 +330,7 @@ animalRange = 'All';
 taskRange = 'Random';
 trialRange = 'All'; % range of trials in each session
 totalTrialRange = 'All';
-signalRange = {'dLight'};
+signalRange = {'Angled'};
 
 colorList = {bluePurpleRed(1,:),[.2,.2,.2],bluePurpleRed(500,:),bluePurpleRed(100,:)};
 eventDuration = [0,.1,.5,.5];
@@ -353,9 +352,9 @@ for s = 1:length(signalRange)
         legend({[eventRange{i},' (n=',num2str(size(combined.data{1},1)),')']},...
                 'Location','northeast');
     end
-    saveFigures(gcf,'Summary_random_NAc',...
-            strcat(resultspath),...
-            saveFIG=true,savePDF=true);
+    % saveFigures(gcf,'Summary_random_NAc',...
+    %         strcat(resultspath),...
+    %         saveFIG=true,savePDF=true);
 end
 
 %% Plot overall to show animal learned
@@ -365,16 +364,13 @@ eventRange = {'Stim','Pair','Tone'};
 animalRange = 'All';
 totalTrialRange = 'All';
 trialRange = 'All';
-signalRange = 'dLight';
+signalRange = 'Angled';
 
 colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),bluePurpleRed(100,:)};
 groupSizeList = [50;50;10];
 nGroupsList = [15;15;15];
 
-% taskRange = {'Reward1 (paAIP2)','Punish1 (paAIP2)','Reward2 (Ctrl)','Punish2 (paAIP2)'}; % first part
-% ylimList = [-0.75,2.5; -0.75,1.5; -1,2.5; -1.25,1.75]; % first part
-
-taskRange = {'Punish (paAIP2)'}; % second part
+taskRange = {'Reward'}; % second part
 ylimList = [-1.5,1; -1.5,1; -1.5,1; -1.25,1.75]; % Second part
 
 for task = 1:length(taskRange)
@@ -390,15 +386,15 @@ for task = 1:length(taskRange)
                                     signalRange=signalRange);
         legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,...
                         groupSize=groupSizeList(event),nGroups=nGroupsList(event),...
-                        groupby='trials',startIdx=combined.options.startIdx,remaining='include');
-        ylim(ylimList(task,:));
+                        groupby='sessions',startIdx=combined.options.startIdx,remaining='include');
+        % ylim(ylimList(task,:));
         plotEvent(eventRange{event},.5,color=colorList{event});
         xlabel('Time (s)'); ylabel([signalRange,' z-score']);
         legend(legendList,'Location','northeast');
     end
-    saveFigures(gcf,['Summary_pairing_',taskRange{task}],...
-        strcat(resultspath),...
-        saveFIG=true,savePDF=true);
+    % saveFigures(gcf,['Summary_pairing_',taskRange{task}],...
+    %     strcat(resultspath),...
+    %     saveFIG=true,savePDF=true);
 end
 
 %% Plot lick trace
@@ -414,12 +410,8 @@ colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),bluePurpleRed(100,:)};
 groupSizeList = [30;30;30];
 nGroupsList = [5;5;5];
 
-% First part
-% taskRange = {'Reward1 (paAIP2)','Punish1 (paAIP2)','Reward2 (Ctrl)','Punish2 (paAIP2)'};
-% ylimList = [0,5; 0,5; 0,6.5; 0,6.5];
-
 % Second part
-taskRange = {'Punish (paAIP2)'}; % second part
+taskRange = {'Reward'}; % second part
 ylimList = [-1.5,1; -1.5,1; -1.5,1; -1.25,1.75]; % Second part
 
 for task = 1:length(taskRange)
@@ -436,7 +428,7 @@ for task = 1:length(taskRange)
         legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,...
                         groupSize=groupSizeList(event),nGroups=nGroupsList(event),...
                         groupby='sessions',startIdx=combined.options.startIdx);
-        ylim(ylimList(task,:));
+        % ylim(ylimList(task,:));
         plotEvent(eventRange{event},.5,color=colorList{event});
         xlabel('Time (s)'); ylabel('Licks/s'); ylim([0 Inf]);
         legend(legendList,'Location','northeast');

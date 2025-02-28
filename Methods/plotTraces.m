@@ -100,7 +100,7 @@ elseif nInputs == 5
             disp(['plotTraces: ',num2str(nInputs),' inputs are detected, execute extract']);
         end
     end
-elseif nInputs == 2
+elseif nInputs <= 2
     if ~options.plot
         if options.print
             disp('plotTraces: plot is false but 2 inputs are provided, changed to true!'); 
@@ -114,7 +114,11 @@ elseif nInputs == 2
         options.extract = false;
     end
     options.traces = varargin{1};
-    options.timestamp = varargin{2};
+    if nInputs == 2
+        options.timestamp = varargin{2};
+    else
+        options.timestamp = 1:size(options.traces,2);
+    end
     if options.print
         disp(['plotTraces: ',num2str(nInputs),' inputs are detected, execute plot']);
     end
