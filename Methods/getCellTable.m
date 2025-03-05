@@ -245,7 +245,7 @@ for i = 1:length(animalList)
 
     if options.save
         today = char(datetime('today','Format','yyyyMMdd')); 
-        save(strcat(animalEpochs{1,'Session'},filesep,'cells_',today),'cells');
+        save(strcat(osPathSwitch(animalEpochs{1,'Session'}),filesep,'cells_',today),'cells');
     end
     allCells = [allCells; cells];
 end

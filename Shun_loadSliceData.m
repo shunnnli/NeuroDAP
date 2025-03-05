@@ -68,7 +68,7 @@ return
 %% Save current epochs to session folder
 
 notes = 'QC';
-sessionPath = epochs{1,'Session'};
+sessionPath = osPathSwitch(epochs{1,'Session'});
 
 % Save current epochs to the newest results folder
 resultsFolders = sortrows(struct2cell(dir(fullfile(sessionPath,"Epochs-*")))',[1 3]);

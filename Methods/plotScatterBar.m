@@ -24,10 +24,15 @@ end
 %% Check inputs
 
 if size(data,2) == 2
-    % Check whether x is in correct dimention
+    % Check whether x is in correct dimension
     if length(x) ~= 2
         warning('x should be a vector with 2 elements indicating where each column is on the x axis! Reset to x=[1,2]');
         x = [1,2];
+    end
+
+    if ~isfield(options,'color')
+        warning('No color provided, reset to default red & black');
+        options.color = [1 0.196 0.227; .2 .2 .2];
     end
 
     if ismatrix(options.color) && all(size(options.color) ~= [2,3])
@@ -96,6 +101,7 @@ if isvector(data)
 
 elseif size(data,2) == 2
     
+    % Plot box or bar for each column
     for col = 1:size(data,2)
         colData = data(:,col);
 
@@ -122,27 +128,61 @@ elseif size(data,2) == 2
         end  
     end
 
-    % Connect pairs
-    if options.connectPairs
-        plot(x,data,color=options.connectColor,LineWidth=options.LineWidth); hold on;
+    % Pre calculate jitter
+    jitterData = cell(1,2);
+    for col = 1:2
+        colData = data(:,col);
+        % Base x position for this group
+        xBase = x(col) * ones(size(colData));
+        % Compute jitter: here we approximate density jitter with random offsets 
+        jitterOffset = (rand(size(colData))-0.5) * options.XJitterWidth;
+        jitterData{col} = xBase + jitterOffset;
     end
 
-    % Plot scatter
-    if options.plotScatter
-        for col = 1:size(data,2)
-            colData = data(:,col);
-            xgroupdata = x(col) * ones(size(colData,1),1);
+    % Connect pairs using the computed jittered positions.
+    if options.connectPairs
+        nPoints = size(data,1);
+        for i = 1:nPoints
             if strcmp(options.orientation,'vertical')
-                swarmchart(xgroupdata,colData,...
-                    options.dotSize,options.color{col},'filled',...
-                    'MarkerFaceAlpha',options.MarkerFaceAlpha,...
-                    'XJitter',options.XJitter,'XJitterWidth',options.XJitterWidth); 
+                if options.plotScatter
+                    x1 = jitterData{1}(i);
+                    x2 = jitterData{2}(i);
+                else
+                    x1 = x(1);
+                    x2 = x(2);
+                end
+                y1 = data(i,1);
+                y2 = data(i,2);
+                plot([x1, x2], [y1, y2], 'Color', options.connectColor, 'LineWidth', options.LineWidth);
                 hold on;
             else
-                swarmchart(colData,xgroupdata,...
-                    options.dotSize,options.color{col},'filled',...
-                    'MarkerFaceAlpha',options.MarkerFaceAlpha,...
-                    'YJitter',options.XJitter,'YJitterWidth',options.XJitterWidth); 
+                if options.plotScatter
+                    y1 = jitterData{1}(i);
+                    y2 = jitterData{2}(i);
+                else
+                    y1 = x(1);
+                    y2 = x(2);
+                end
+                x1 = data(i,1);
+                x2 = data(i,2);
+                plot([x1, x2], [y1, y2], 'Color', options.connectColor, 'LineWidth', options.LineWidth);
+                hold on;
+            end
+        end
+    end
+
+    % Plot scatter points
+    if options.plotScatter
+        for col = 1:2
+            colData = data(:,col);
+            if strcmp(options.orientation,'vertical')
+                % Use scatter (or you can use plot with marker) to plot at the jittered positions
+                scatter(jitterData{col}, colData, options.dotSize, options.color{col}, 'filled',...
+                    'MarkerFaceAlpha', options.MarkerFaceAlpha);
+                hold on;
+            else
+                scatter(colData, jitterData{col}, options.dotSize, options.color{col}, 'filled',...
+                    'MarkerFaceAlpha', options.MarkerFaceAlpha);
                 hold on;
             end
         end

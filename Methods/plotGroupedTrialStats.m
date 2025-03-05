@@ -16,6 +16,7 @@ arguments
     options.dotSize double = 200
 
     % plotTraces options
+    options.plot logical = true
     options.plotPatch logical = true
     options.plotIndividual logical = false
     options.individualColor = 'gray'
@@ -45,7 +46,7 @@ avgStats = cell(length(stats),1);
 %% Loop through tasks
 for task = 1:length(stats)
     % Plot grouped traces
-    nexttile; 
+    if options.plot; nexttile; end
     stats_combined = stats{task};
 
     % Initialize data matrix
@@ -79,39 +80,43 @@ for task = 1:length(stats)
 
         % Save event specific results
         groupedTraces{event} = grouped;
-        xlimList(event) = nCommonTrials;
+        if options.plot; xlimList(event) = nCommonTrials; end
         groupedStats{event} = animalStats;
 
         % Plot average data
-        if iscell(options.individualColor); individualColor = options.individualColor{event};
-        else; individualColor = options.individualColor; end
-        scatter(x,mean(grouped,1),options.dotSize,options.color{event},'filled',HandleVisibility='off'); hold on
-        plotTraces(grouped,x,color=options.color{event},extract=false,...
-            plotPatch=options.plotPatch,...
-            plotIndividual=options.plotIndividual,...
-            individualColor=individualColor);
+        if options.plot
+            if iscell(options.individualColor); individualColor = options.individualColor{event};
+            else; individualColor = options.individualColor; end
+            scatter(x,mean(grouped,1),options.dotSize,options.color{event},'filled',HandleVisibility='off'); hold on
+            plotTraces(grouped,x,color=options.color{event},extract=false,...
+                plotPatch=options.plotPatch,...
+                plotIndividual=options.plotIndividual,...
+                individualColor=individualColor);
+        end
     end
 
-    % Adjust ylim
-    if isfield(options,'ylim')
-        if size(options.ylim,1)==1; ylim(options.ylim); 
-        else; ylim(options.ylim(task,:)); end
+    if options.plot
+        % Adjust ylim
+        if isfield(options,'ylim')
+            if size(options.ylim,1)==1; ylim(options.ylim); 
+            else; ylim(options.ylim(task,:)); end
+        end
+    
+        % Adjust xlim
+        if isfield(options,'xlim') && options.xlimIdx == 0
+            if size(options.xlim,1)==1; xlimit = options.xlim; 
+            else; xlimit = options.xlim(task,:); end
+            xlim(xlimit);
+        elseif options.xlimIdx ~= 0 && ~isfield(options,'xlim')
+            xlim([0,xlimList(options.xlimIdx)]);
+        else
+            if size(options.xlim,1)==1; xlimit = options.xlim; 
+            else; xlimit = options.xlim(task,:); end
+            xlim([0,min(xlimList(options.xlimIdx),xlimit(2))]);
+        end
+        xlabel('Trials'); ylabel(ylabels{task});
+        legend(options.eventRange);
     end
-
-    % Adjust xlim
-    if isfield(options,'xlim') && options.xlimIdx == 0
-        if size(options.xlim,1)==1; xlimit = options.xlim; 
-        else; xlimit = options.xlim(task,:); end
-        xlim(xlimit);
-    elseif options.xlimIdx ~= 0 && ~isfield(options,'xlim')
-        xlim([0,xlimList(options.xlimIdx)]);
-    else
-        if size(options.xlim,1)==1; xlimit = options.xlim; 
-        else; xlimit = options.xlim(task,:); end
-        xlim([0,min(xlimList(options.xlimIdx),xlimit(2))]);
-    end
-    xlabel('Trials'); ylabel(ylabels{task});
-    legend(options.eventRange);
 
     % Save results
     traces{task} = groupedTraces;
