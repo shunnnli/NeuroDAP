@@ -1,3 +1,5 @@
 # MATLAB files
 *.mat
 *.asv
+
+.DS_Store
