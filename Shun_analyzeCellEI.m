@@ -31,6 +31,7 @@ combined_cells.Analyze = logical(combined_cells.Learned);
 combined_cells.Analyze(notLearnedIdx) = 0;
 
 disp('Saving combined_cells and combined_epochs...');
+resultPath = osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Patch/Combined');
 resultPath = strcat(resultPath,filesep,today);
 if ~isfolder(resultPath); mkdir(resultPath); end
 save(fullfile(resultPath,strcat('combined_cells_',today,'.mat')),"combined_cells","-v7.3");
@@ -99,6 +100,8 @@ animalRange = 'SL208';
 
 %% Plot cell EI based on tasks
 
+figureName = 'CellEI-Task';
+
 % Select data to plot
 groupIdx = {randomIdx,rewardIdx,punishIdx,rewardCtrlIdx,punishCtrlIdx}; 
 plotGroup = [0,1,1,0,0];
@@ -114,9 +117,11 @@ groupColors = {[.7 .7 .7],rewardColor,punishColor,...
 close all;
 plotCellEI(combined_cells,groupIdx,...
            plotGroup=plotGroup,groupColors=groupColors,groupNames=groupNames,...
-           save=false,print=true);
+           save=true,figureName=figureName,resultPath=resultPath,print=true);
 
 %% Plot cell EI based on DA amplitude trend
+
+figureName = 'CellEI-DAtrend';
 
 % Select data to plot
 groupIdx = {stableDAIdx,upDAIdx,downDAIdx,randomIdx,rewardCtrlIdx,punishCtrlIdx}; 
@@ -133,7 +138,7 @@ groupColors = {[.2 .2 .2],upColor,downColor,...
 close all;
 plotCellEI(combined_cells,groupIdx,...
            plotGroup=plotGroup,groupColors=groupColors,groupNames=groupNames,...
-           save=false,print=true);
+           save=true,figureName=figureName,resultPath=resultPath,print=true);
 
 %% Plot response traces
 
@@ -274,6 +279,15 @@ scatter(Cm,abs(IPSC_aucs),dotSize,IPSCcolor,"filled"); hold on; lsline;
 % diagonal = refline; diagonal.Color=[.8 .8 .8]; diagonal.LineWidth=4; diagonal.LineStyle='--'; hold on;
 xlabel('Cm'), ylabel('Charge');
 title('Cm vs IPSC charge');
+
+
+%% Extract DA response from last session
+
+% Load DA data for the session in the patch day
+% If there's no recording, use recording from previou day
+
+
+
 
 %% Plot summay trace (for TRN-LHb)
 

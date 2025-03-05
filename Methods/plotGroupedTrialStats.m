@@ -21,10 +21,11 @@ arguments
     options.plotIndividual logical = false
     options.individualColor = 'gray'
     options.individualAlpha double = 0
+    options.plotNextTile logical = true
 end
 
 %% Parse inputs
-if ~iscell(ylabels); ylabels = repelem(string(ylabels),length(options.taskRange),1); end
+if ~iscell(ylabels); ylabels = repelem(string(ylabels),length(stats),1); end
 
 if isstruct(stats)
     options.inTrialTable = stats.options.inTrialTable;
@@ -39,6 +40,20 @@ else
     end
 end
 
+% Set color
+if ~isfield(options,'color')
+    options.color = {[.23 .34 .45]};
+end
+if ~iscell(options.color)
+    options.color = {options.color};
+end
+
+% Set y labels
+if isempty(ylabels)
+    warning('y label is not provided!');
+    ylabels = {'Stats'};
+end
+
 %% Initialize statistics
 traces = cell(length(stats),1);
 avgStats = cell(length(stats),1);
@@ -46,7 +61,9 @@ avgStats = cell(length(stats),1);
 %% Loop through tasks
 for task = 1:length(stats)
     % Plot grouped traces
-    if options.plot; nexttile; end
+    if options.plot 
+        if options.plotNextTile; nexttile; end
+    end
     stats_combined = stats{task};
 
     % Initialize data matrix
@@ -108,6 +125,9 @@ for task = 1:length(stats)
             else; xlimit = options.xlim(task,:); end
             xlim(xlimit);
         elseif options.xlimIdx ~= 0 && ~isfield(options,'xlim')
+            xlim([0,xlimList(options.xlimIdx)]);
+        elseif ~isfield(options,'xlim') && options.xlimIdx == 0
+            options.xlimIdx = 1;
             xlim([0,xlimList(options.xlimIdx)]);
         else
             if size(options.xlim,1)==1; xlimit = options.xlim; 

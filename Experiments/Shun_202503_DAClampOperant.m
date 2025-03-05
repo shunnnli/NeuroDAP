@@ -113,14 +113,14 @@ addpath(genpath(osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDA
 [~,~,~,~,~,~,bluePurpleRed] = loadColors;
 
 % Define result directory
-resultspath = osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Results');
+resultspath = osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project clamping/Results');
 
 % Building summary struct from selected sessions
 answer = questdlg('Group sessions or load combined data?','Select load sources',...
                   'Group single sessions','Load combined data','Load sample data','Load combined data');
 
 if strcmpi(answer,'Group single sessions')
-    sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Recordings'));
+    sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project clamping/Recordings'))';
     groupSessions = true;
     % Update resultspath
     dirsplit = strsplit(sessionList{1},filesep); projectName = dirsplit{end-1}; 
@@ -129,7 +129,7 @@ if strcmpi(answer,'Group single sessions')
     if isempty(dir(resultspath)); mkdir(resultspath); end
 
 elseif strcmpi(answer,'Load combined data')
-    fileList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Results'));
+    fileList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project clamping/Results'))';
     groupSessions = false;
     % Update resultspath
     dirsplit = strsplit(fileList{1},filesep); projectName = dirsplit{end-1}; 
@@ -156,6 +156,9 @@ elseif strcmpi(answer,'Load sample data')
     end
 end
 
+baselineColor = [.7 .7 .7];
+pidColor = [.232 .76 .58];
+
 %% Optional: Create summary struct (only need to do this for initial loading)
 
 if groupSessions    
@@ -180,7 +183,7 @@ disp('Finished: summary struct and trialtables loaded');
 for i = 1:length(summary)
     cur_task = summary(i).task;
     cur_event = summary(i).event;
-    cur_date = str2double(summary(i).date);
+    cur_name = summary(i).name;
 
     if strcmp('random',cur_task)
         summary(i).task = 'Random';
@@ -194,21 +197,21 @@ for i = 1:length(summary)
         summary(i).event = 'Stim';
     elseif contains('Tone only',cur_event,IgnoreCase=true)
         summary(i).event = 'Tone';
+    elseif contains('Pair',cur_event,IgnoreCase=true)
+        summary(i).event = 'Tone';
     end
 
-    if strcmp('Angled',summary(i).name)
-        summary(i).name = 'iGluSnFR';
-    elseif strcmp('Staight',summary(i).name)
-        summary(i).name = 'Straight';
+    if strcmpi('PMT',cur_name)
+        summary(i).name = 'dLight';
     end
 end
 
 % Remove some rows if needed
-eventIdx = cellfun(@(x) contains(x,'Straight',IgnoreCase=true), {summary.name});
-summary(eventIdx) = [];
+rowIdx = cellfun(@(x) contains(x,'Blue stim',IgnoreCase=true), {summary.event});
+summary(rowIdx) = [];
 
-eventIdx = cellfun(@(x) contains(x,'PMT',IgnoreCase=true), {summary.name});
-summary(eventIdx) = [];
+rowIdx = cellfun(@(x) contains(x,'Stim',IgnoreCase=true), {summary.event});
+summary(rowIdx) = [];
 
 %% Create animals struct
 
@@ -231,98 +234,13 @@ if ~isempty(answer)
     disp(['Finished: saved animals.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
 end
 
-%% (Optional) Calculate periMax and periMin response
-
-finalTrialsWindow = 25; % use last 50 trials to average
-stageEndWindow = 120; % in ms, include these in previous stages
-peakWindowWidth = 25; % in ms
-
-for i = 1:size(animals,2)
-    % Get traces for each animal and for each signal and event
-    traces = animals(i).data;
-    finalFs = animals(i).options.finalFs;
-    eventSample = find(animals(i).timestamp==0);
-    
-    % Find the final session and plot the average trace for each animal
-    fianlWindowStart = max(size(traces,1)-finalTrialsWindow-1,1);
-    finalTrialsAvg = mean(traces(fianlWindowStart:end,:),1);
-    
-    % Find stage windows
-    if ~isfield(animals(i).options,'stageTime')
-        if strcmpi(animals(i).task,'random'); stageTime = [-2,0;0,2];
-        else; stageTime = [-2,0;0,0.5;0.5,5]; end
-    else
-        stageTime = animals(i).options.stageTime;
-    end
-    stageWindow = stageTime * finalFs + eventSample;
-    stageWindow(:,2) = round(stageWindow(:,2) + stageEndWindow/1000 * finalFs);
-    periDelta = nan(size(traces,1),size(stageWindow,1));
-    
-    % Loop for each stage
-    for stageIdx = 1:size(stageWindow,1)
-        % Get current stage window
-        curStageWindow = stageWindow(stageIdx,1):stageWindow(stageIdx,2);
-        stageTraces = traces(:,curStageWindow);
-
-        % Find the max and min window (+- 50ms)
-        peakWindowWidthSamples = max(round(peakWindowWidth/1000 * finalFs),1);
-        [~,maxIdx] = max(finalTrialsAvg(curStageWindow)); 
-        maxWindowStart = max(1,maxIdx-peakWindowWidthSamples);
-        maxWindowEnd = min(maxIdx+peakWindowWidthSamples,size(stageTraces,2));
-        [~,minIdx] = min(finalTrialsAvg(curStageWindow));
-        minWindowStart = max(1,minIdx-peakWindowWidthSamples);
-        minWindowEnd = min(minIdx+peakWindowWidthSamples,size(stageTraces,2));
-        
-        % Create periMax and perMin calculation for each trace
-        periMax = mean(stageTraces(:,maxWindowStart:maxWindowEnd),2);
-        periMin = mean(stageTraces(:,minWindowStart:minWindowEnd),2);
-        
-        absDelta = abs(periMax)-abs(periMin);
-        pickMaxIdx = absDelta > 0;
-        pickMinIdx = absDelta < 0;
-        pickAvgIdx = absDelta == 0;
-        periDelta(pickMaxIdx,stageIdx) = periMax(pickMaxIdx);
-        periDelta(pickMinIdx,stageIdx) = periMin(pickMinIdx);
-        periDelta(pickAvgIdx,stageIdx) = periMax(pickAvgIdx) + periMin(pickAvgIdx);
-        % periDelta(:,stageIdx) = periMax + periMin;
-
-        % Test plotting
-        % if stageIdx == 2 && any(strcmpi(animals(i).event,{'Stim','Pair'}))
-        %     initializeFig(0.3,0.7); tiledlayout(4,1);
-        %     nexttile; 
-        %     plot(finalTrialsAvg); hold on;
-        %     xline(curStageWindow(1),'Color','r'); hold on;
-        %     xline(curStageWindow(end),'Color','r'); hold on;
-        %     nexttile; 
-        %     plot(finalTrialsAvg(curStageWindow)); hold on;
-        %     xline(maxWindowStart,'Color','magenta'); hold on; 
-        %     xline(maxWindowEnd,'Color','magenta'); hold on;
-        %     xline(minWindowStart,'Color','k'); hold on;
-        %     xline(minWindowEnd,'Color','k'); hold on;
-        %     nexttile; 
-        %     plot(periMax,'Color','magenta'); hold on
-        %     plot(periMin,'Color','k'); hold on
-        %     % plot(periDelta(:,2),'Color','r');
-        %     nexttile;
-        %     plot(periDelta(:,2),s'Color','r');
-        %     disp(animals(i).name);
-        %     disp(animals(i).event);
-        %     disp('-------');
-        %    close all;
-        % end
-    end
-
-    % Save to animals
-    animals(i).stageDelta.data = periDelta;
-    animals(i).options.statsType{end+1} = 'stageDelta';
-end
 
 %% Test: Plot traces from summary/animals struct
 
-event = 'Stim';
-animal = 'all';
+event = 'Tone';
+animal = 'All';
 task = 'Reward';
-signal = 'iGluSnFR';
+signal = 'Lick';
 session = 'all';
 
 initializeFig(0.5,0.5);
@@ -339,43 +257,8 @@ combined = combineTraces(animals,timeRange=[-0.5,3],...
 legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,...
                         groupby='sessions',startIdx=combined.options.startIdx,remaining='include');
 
-plotEvent('Stim',0,color=bluePurpleRed(500,:))
+plotEvent('Tone',0,color=bluePurpleRed(500,:))
 xlabel('Time (s)'); ylabel('z-score');
-
-%% Baseline iGluSnFR: plot water, airpuff, stim, tone
-
-timeRange = [-0.5,3];
-eventRange = {'Airpuff','Stim','Tone'};
-animalRange = 'All';
-taskRange = 'Random';
-trialRange = 'All'; % range of trials in each session
-totalTrialRange = 'All';
-signalRange = {'iGluSnFR'};
-
-colorList = {[.2,.2,.2],bluePurpleRed(500,:),bluePurpleRed(100,:)};
-eventDuration = [.1,.5,.5];
-
-for s = 1:length(signalRange)
-    initializeFig(.5,.5);
-    legendEntries = {};
-    for i = 1:length(eventRange)
-        combined = combineTraces(animals,timeRange=timeRange,...
-                                    eventRange=eventRange{i},...
-                                    animalRange=animalRange,...
-                                    taskRange=taskRange,...
-                                    totalTrialRange=totalTrialRange,...
-                                    trialRange=trialRange,...
-                                    signalRange=signalRange{s});
-        plotTraces(combined.data{1},combined.timestamp,color=colorList{i},plotShuffled=false);
-        xlabel('Time (s)'); ylabel([signalRange{s},' z-score']); ylim([-1,4]);
-        plotEvent(eventRange{i},eventDuration(i),color=colorList{i});
-        legendEntries{end+1} = [eventRange{i},' (n=',num2str(size(combined.data{1},1)),')'];
-    end
-    legend(legendEntries, 'Location', 'northeast');
-    saveFigures(gcf,'Summary_random_iGluSnFR',...
-            strcat(resultspath),...
-            saveFIG=true,savePDF=true);
-end
 
 %% dLight: Plot overall to show animal learned
 
@@ -417,50 +300,10 @@ for task = 1:length(taskRange)
         saveFIG=true,savePDF=true);
 end
 
-%% iGluSnFR: Plot overall to show animal learned
-
-timeRange = [-0.5,3];
-eventRange = {'Stim','Pair','Tone'};
-animalRange = 'All';
-totalTrialRange = 'All';
-trialRange = [1,150];
-signalRange = 'iGluSnFR';
-
-colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),bluePurpleRed(100,:)};
-groupSizeList = [30;30;10];
-nGroupsList = [15;15;15];
-
-taskRange = {'Reward','Punish'};
-ylimList = [-1,2; -0.5,2.5];
-
-for task = 1:length(taskRange)
-    initializeFig(1,0.5); tiledlayout('flow');
-    for event = 1:length(eventRange)
-        nexttile;
-        combined = combineTraces(animals,timeRange=timeRange,...
-                                    eventRange=eventRange{event},...
-                                    animalRange=animalRange,...
-                                    taskRange=taskRange{task},...
-                                    totalTrialRange=totalTrialRange,...
-                                    trialRange=trialRange,...
-                                    signalRange=signalRange);
-        legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,...
-                        groupSize=groupSizeList(event),nGroups=nGroupsList(event),...
-                        groupby='trials',startIdx=combined.options.startIdx,remaining='include');
-        ylim(ylimList(task,:));
-        plotEvent(eventRange{event},.5,color=colorList{event});
-        xlabel('Time (s)'); ylabel([signalRange,' z-score']);
-        legend(legendList,'Location','northeast');
-    end
-    % saveFigures(gcf,['Summary_iGluSnFR_',taskRange{task}],...
-    %     strcat(resultspath),...
-    %     saveFIG=true,savePDF=true);
-end
-
 %% Plot lick trace
 
 timeRange = [-0.5,3];
-eventRange = {'Stim','Pair','Tone'};
+eventRange = {'Tone'};
 animalRange = 'All';
 totalTrialRange = 'All';
 trialRange = 'All';
@@ -471,7 +314,7 @@ groupSizeList = [30;30;30];
 nGroupsList = [5;5;5];
 
 % Second part
-taskRange = {'Reward','Punish'};
+taskRange = {'Reward'};
 ylimList = [0,7; 0,3.5];
 
 for task = 1:length(taskRange)
@@ -493,9 +336,9 @@ for task = 1:length(taskRange)
         xlabel('Time (s)'); ylabel('Licks/s'); ylim([0 Inf]);
         legend(legendList,'Location','northeast');
     end
-    saveFigures(gcf,['Summary_licking_',taskRange{task}],...
-        strcat(resultspath),...
-        saveFIG=true,savePDF=true);
+    % saveFigures(gcf,['Summary_licking_',taskRange{task}],...
+    %     strcat(resultspath),...
+    %     saveFIG=true,savePDF=true);
 end
 
 %% Plot grouped CS DA response (grouped across animal and 10 trials)
@@ -515,7 +358,7 @@ colorList = {[0.8,0.8,0.8],bluePurpleRed(300,:),bluePurpleRed(100,:),bluePurpleR
 
 stage = 2; % Plot CS only
 groupSize = 10; % numbers of trials to calculate average
-pairingStats_DA = getGroupedTrialStats(animals,statsTypes,...
+pairingStats_ = getGroupedTrialStats(animals,statsTypes,...
                             eventRange=eventRange,...
                             animalRange=animalRange,...
                             taskRange=taskRange,...
@@ -523,117 +366,11 @@ pairingStats_DA = getGroupedTrialStats(animals,statsTypes,...
                             signalRange=signalRange);
 
 initializeFig(.7,.7); tiledlayout('flow');
-results_dLight = plotGroupedTrialStats(pairingStats_DA,ylabelList,groupSize=10,color=colorList,xlimIdx=4,xlim=[0,170],ylim=ylimit);
+results_dLight = plotGroupedTrialStats(pairingStats_Glu,ylabelList,groupSize=10,color=colorList,xlimIdx=4,xlim=[0,170],ylim=ylimit);
 
 % saveFigures(gcf,'Summary_CSvsTrialsGrouped_dLight',...
 %         strcat(resultspath),...
 %         saveFIG=true,savePDF=true);
-
-
-%% Plot grouped CS iGluSnFR response (grouped across animal and 10 trials)
-
-taskRange = {'Reward','Punish'};
-statsTypes = {'stageMax','stageMax'}; ylabelList = {'Max iGluSnFR response during cue','Max iGluSnFR response during cue'};
-ylimit = [0,4.5; 0,4.5];
-
-animalRange = 'All';
-conditionRange = 'All';
-signalRange = 'iGluSnFR';
-
-eventRange = {'Baseline','Pair','Tone','Stim'};
-colorList = {[0.8,0.8,0.8],bluePurpleRed(300,:),bluePurpleRed(100,:),bluePurpleRed(500,:)};
-% eventRange = {'Baseline','Stim','Pair'};
-% colorList = {[0.8,0.8,0.8],bluePurpleRed(500,:),bluePurpleRed(300,:)};
-
-stage = 2; % Plot CS only
-groupSize = 10; % numbers of trials to calculate average
-pairingStats_Glu = getGroupedTrialStats(animals,statsTypes,...
-                            eventRange=eventRange,...
-                            animalRange=animalRange,...
-                            taskRange=taskRange,...
-                            totalTrialRange=conditionRange,...
-                            signalRange=signalRange);
-
-initializeFig(.7,.7); tiledlayout('flow');
-randomResults_Glu = plotGroupedTrialStats(pairingStats_Glu,ylabelList,groupSize=10,color=colorList,xlimIdx=4,xlim=[0,170],ylim=ylimit);
-
-% saveFigures(gcf,'Summary_CSvsTrialsGrouped_iGluSnFR',...
-%         strcat(resultspath),...
-%         saveFIG=true,savePDF=true);
-
-%% Plot bar plot of iGluSnFR slopes
-
-% results_Glu = plotGroupedTrialStats(combinedStats_Glu,ylabelList,groupSize=1,color=colorList,xlimIdx=4,xlim=[0,170],ylim=ylimit);
-
-initializeFig(.7,.7); tiledlayout('flow');
-for task = 1:length(randomResults_Glu.stats)
-    nexttile;
-    cur_stats = randomResults_Glu.stats{task};
-    for event = 1:length(eventRange)
-        slopes = cur_stats{event}(:,1);
-        plotScatterBar(slopes,event,color=colorList{event},LineWidth=3,dotSize=200);
-
-        % Calculate significance
-        if event < length(eventRange)
-            for i = event+1:length(eventRange)
-                plotStats(slopes,cur_stats{i}(:,1),[event i],testType='kstest');
-            end
-        end
-    end
-
-    xticks(1:length(eventRange)); xticklabels(eventRange);
-    ylim([-0.1, 0.1]);
-    ylabel('iGluSnFR slope');
-end
-
-% saveFigures(gcf,'Summary_CSvsTrialsGrouped_slope',...
-%         strcat(resultspath),...
-%         saveFIG=true,savePDF=true);
-
-%% Plot bar plot of iGluSnFR final values
-
-eventRange = {'Tone','Stim'};
-taskRange = {'Reward','Punish'};
-randomStats_Glu = getGroupedTrialStats(animals,statsTypes,...
-                            eventRange=eventRange,...
-                            animalRange='All',...
-                            taskRange='Random',...
-                            totalTrialRange=conditionRange,...
-                            signalRange='iGluSnFR');
-randomResults_Glu = plotGroupedTrialStats(randomStats_Glu,ylabelList,groupSize=1,color=colorList,xlimIdx=4,xlim=[0,170],ylim=ylimit,plot=false);
-pairingStats_Glu = getGroupedTrialStats(animals,statsTypes,...
-                            eventRange=eventRange,...
-                            animalRange='All',...
-                            taskRange={'Reward','Punish'},...
-                            totalTrialRange=conditionRange,...
-                            signalRange='iGluSnFR');
-pairingResults_Glu = plotGroupedTrialStats(pairingStats_Glu,ylabelList,groupSize=1,color=colorList,xlimIdx=4,xlim=[0,170],ylim=ylimit,plot=false);
-
-
-initializeFig(.5,.5); tiledlayout('flow');
-colorList = {bluePurpleRed(100,:),bluePurpleRed(500,:)};
-
-for task = 1:length(pairingResults_Glu.stats)
-    nexttile;
-    cur_randomTraces = randomResults_Glu.traces{1};
-    cur_pairingTraces = pairingResults_Glu.traces{task};
-    for event = 1:length(eventRange)
-        animalData_pairing = mean(cur_pairingTraces{event}(:,end-15:end),2);
-        animalData_random = mean(cur_randomTraces{event}(:,end-15:end),2);
-        animalData = [animalData_pairing,animalData_random];
-
-        plotScatterBar(animalData,[2*event-1,2*event],LineWidth=3,dotSize=200,connectPairs=true,...
-            color=[colorList{event};addOpacity(colorList{event},0.5)]);
-        plotStats(animalData_pairing,animalData_random,[2*event-1,2*event],testType='kstest');
-    end
-    xticks(1:length(eventRange)*2); 
-    xticklabels({['Tone (',taskRange{task},')'],'Tone (Random)',['Stim (',taskRange{task},')'],'Stim (Random)'});
-    ylabel('Max iGluSnFR response during cue');
-end
-
-saveFigures(gcf,'Summary_iGluSnFR_finalVal',...
-        strcat(resultspath),...
-        saveFIG=true,savePDF=true);
 
 %% Plot DA vs iGluSnFR
 
@@ -685,3 +422,63 @@ for task = 1:length(taskRange)
         ylabel('Max iGluSnFR response during cue');
     end
 end
+
+
+%% Behavior: anticipatory licking vs trials
+
+eventRange = 'Tone';
+taskRange = 'Reward';
+statsTypes = 'nAnticipatoryLicks';
+conditionRange = 'All';
+ylabels = 'Anticipatory licks';
+
+tone_al_unclamped = getGroupedTrialStats(animals,statsTypes,...
+                            eventRange=eventRange,...
+                            animalRange={'SL340','SL341'},...
+                            taskRange=taskRange,...
+                            totalTrialRange=conditionRange,...
+                            signalRange='Lick');
+tone_al_clamped = getGroupedTrialStats(animals,statsTypes,...
+                            eventRange=eventRange,...
+                            animalRange={'SL287'},...
+                            taskRange=taskRange,...
+                            totalTrialRange=conditionRange,...
+                            signalRange='Lick');
+
+results_tone_al_unclamped = plotGroupedTrialStats(tone_al_unclamped,ylabels,groupSize=1,...
+                            color=baselineColor,...
+                            plot=true,plotNextTile=false);
+results_tone_al_clamped = plotGroupedTrialStats(tone_al_clamped,ylabels,groupSize=1,...
+                            color=pidColor,...
+                            plot=true,plotNextTile=false);
+
+
+%% Behavior: total licks vs trial
+
+eventRange = 'Tone';
+taskRange = 'Reward';
+statsTypes = 'nLicks';
+conditionRange = 'All';
+ylabels = 'Total licks';
+
+tone_al_unclamped = getGroupedTrialStats(animals,statsTypes,...
+                            eventRange=eventRange,...
+                            animalRange={'SL340','SL341'},...
+                            taskRange=taskRange,...
+                            totalTrialRange=conditionRange,...
+                            signalRange='Lick');
+tone_al_clamped = getGroupedTrialStats(animals,statsTypes,...
+                            eventRange=eventRange,...
+                            animalRange={'SL287'},...
+                            taskRange=taskRange,...
+                            totalTrialRange=conditionRange,...
+                            signalRange='Lick');
+
+results_tone_al_unclamped = plotGroupedTrialStats(tone_al_unclamped,ylabels,groupSize=1,...
+                            color=baselineColor,...
+                            plot=true,plotNextTile=false);
+results_tone_al_clamped = plotGroupedTrialStats(tone_al_clamped,ylabels,groupSize=1,...
+                            color=pidColor,...
+                            plot=true,plotNextTile=false);
+
+%% Behavior: CDF of success trials

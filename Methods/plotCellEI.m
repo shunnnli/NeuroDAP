@@ -11,6 +11,8 @@ arguments
     options.groupNames cell
 
     options.save logical = true
+    options.resultPath string
+    options.figureName string
     options.print logical = true
 end
 
@@ -248,7 +250,7 @@ end
 xlabel('EI amplitude index'); ylabel('CDF'); box off; grid off;
 
 if options.save
-    saveFigures(fig,'Summary-reward-punish',resultPath,...
+    saveFigures(fig,options.figureName,options.resultPath,...
                 saveFIG=true,savePDF=true,savePNG=true);
 end
 

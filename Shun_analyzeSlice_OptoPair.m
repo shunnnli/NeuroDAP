@@ -76,5 +76,4 @@ end
 %% Plot EPSC/IPSC ratio against DA response
 
 
-
 %% Plot multiple sessions

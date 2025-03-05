@@ -16,7 +16,7 @@ for s = 1:length(sessionList)
     % Load session
     load(strcat(sessionList{s},filesep,'analysis_',sessionName,'.mat'),'analysis');
 
-    summary = [summary,analysis];
+    if exist('analysis','var'); summary = [summary,analysis]; end
     disp(['Finished: session ', sessionName,' loaded (',...
           num2str(s),'/',num2str(length(sessionList)),')']);
 end

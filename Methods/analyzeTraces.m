@@ -58,49 +58,51 @@ for i = 1:length(analysisEvents)
         continue
     end
     %% 1. Loop through all timeSeries
-    for signal = 1:size(timeSeries,2)
-        disp(['     Ongoing: analyze ',analysisLabels{i},' in ',timeSeries(signal).name,' signal']);
-
-        % Load signal of interest
-        data = timeSeries(signal).data;
-        finalFs = round(timeSeries(signal).finalFs);
-        system = timeSeries(signal).system;
-
-        % Save overall traces
-        [trace,t] = plotTraces(analysisEvents{i},timeRange,data,params,...
-                        signalFs=finalFs,signalSystem=system,plot=false);
-        if isempty(trace)
-            disp(['     Ongoing: ',analysisLabels{i},' is empty, skipped!']); 
-            continue; 
+    if ~isempty(timeSeries)
+        for signal = 1:size(timeSeries,2)
+            disp(['     Ongoing: analyze ',analysisLabels{i},' in ',timeSeries(signal).name,' signal']);
+    
+            % Load signal of interest
+            data = timeSeries(signal).data;
+            finalFs = round(timeSeries(signal).finalFs);
+            system = timeSeries(signal).system;
+    
+            % Save overall traces
+            [trace,t] = plotTraces(analysisEvents{i},timeRange,data,params,...
+                            signalFs=finalFs,signalSystem=system,plot=false);
+            if isempty(trace)
+                disp(['     Ongoing: ',analysisLabels{i},' is empty, skipped!']); 
+                continue; 
+            end
+    
+            % analyzeStages
+            stats = analyzeStages(trace,stageTime,nboot=options.nboot,finalFs=finalFs);
+    
+            % Save traces and anlaysis data
+            row = size(analysis,2) + 1;
+            analysis(row).animal = params.session.animal;
+            analysis(row).date = params.session.date;
+            analysis(row).session = params.session.name;
+            analysis(row).task = options.task;
+            analysis(row).event = analysisLabels{i};
+            analysis(row).name = timeSeries(signal).name;
+            analysis(row).system = system;
+            analysis(row).data = trace;
+            analysis(row).timestamp = t;
+            analysis(row).timeRange = timeRange;
+            analysis(row).finalFs = finalFs;
+    
+            analysis(row).stageAvg = stats.stageAvg;
+            analysis(row).stageMax = stats.stageMax;
+            analysis(row).stageMin = stats.stageMin;
+            analysis(row).stageArea = stats.stageArea;
+            
+            analysis(row).trialInfo.trialNumber = options.trialNumber{i};
+            if ~isempty(options.trialTable)
+                analysis(row).trialInfo.trialTable = options.trialTable(options.trialNumber{i},:);
+            end
+            analysis(row).options = options;
         end
-
-        % analyzeStages
-        stats = analyzeStages(trace,stageTime,nboot=options.nboot,finalFs=finalFs);
-
-        % Save traces and anlaysis data
-        row = size(analysis,2) + 1;
-        analysis(row).animal = params.session.animal;
-        analysis(row).date = params.session.date;
-        analysis(row).session = params.session.name;
-        analysis(row).task = options.task;
-        analysis(row).event = analysisLabels{i};
-        analysis(row).name = timeSeries(signal).name;
-        analysis(row).system = system;
-        analysis(row).data = trace;
-        analysis(row).timestamp = t;
-        analysis(row).timeRange = timeRange;
-        analysis(row).finalFs = finalFs;
-
-        analysis(row).stageAvg = stats.stageAvg;
-        analysis(row).stageMax = stats.stageMax;
-        analysis(row).stageMin = stats.stageMin;
-        analysis(row).stageArea = stats.stageArea;
-        
-        analysis(row).trialInfo.trialNumber = options.trialNumber{i};
-        if ~isempty(options.trialTable)
-            analysis(row).trialInfo.trialTable = options.trialTable(options.trialNumber{i},:);
-        end
-        analysis(row).options = options;
     end
     
     %% 2. Get lick events

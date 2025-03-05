@@ -537,7 +537,10 @@ end
 
 %% Save photometry/lick/eye PSTHs
 
-if options.analyzeTraces && exist('timeSeries','var')
+if options.analyzeTraces
+    if ~exist('timeSeries','var')
+        timeSeries = struct([]);
+    end
     analysis = analyzeTraces(timeSeries,rightLick,analysisEvents,analysisLabels,params,...
                          stageTime=stageTime,...
                          trialNumber=eventTrialNum,trialTable=trials);
