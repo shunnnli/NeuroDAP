@@ -85,6 +85,21 @@ disp(['Finished: Session ',options.outputName,' loaded']);
 %% Load behaivor params
 
 % Load stim patterns
+
+% For old recordings (SL060-068)
+% if ~options.redo && isfield(params,'stim')
+%     params.stim.pulseFreq_red = params.stim.pulseFreq; 
+%     params.stim.pulseDuration_red = params.stim.pulseDuration; 
+%     params.stim.stimDuration_red = params.stim.stimDuration;
+%     params.stim.nPulsesPerStim_red = params.stim.nPulsesPerStim;
+%     params.stim.pulseInterval_red = params.stim.pulseInterval;
+%     params.stim.pulseFreq_blue = 30; 
+%     params.stim.pulseDuration_blue = 10; 
+%     params.stim.stimDuration_blue = 500;
+%     params.stim.nPulsesPerStim_blue = (params.stim.stimDuration_blue/1000) * params.stim.pulseFreq_blue;
+%     params.stim.pulseInterval_blue = (1000/params.stim.pulseFreq_blue) - params.stim.pulseDuration_blue;
+% end
+
 if isfield(options,'redStimPattern') && (options.redo || ~isfield(params,'stim'))
     params.stim.pulseFreq_red = str2double(options.redStimPattern{1}); 
     params.stim.pulseDuration_red = str2double(options.redStimPattern{2}); 
@@ -227,14 +242,14 @@ end
 blueStimIdx = find(blueLaser);
 redStimIdx = find(redLaser);
 
-if strcmp(params.stim.color,'red')
+if strcmpi(params.stim.color,'red')
     cueStimPulses = redStimIdx; 
     nPulsesPerStim_cue = params.stim.nPulsesPerStim_red;
     stimDuration_cue = params.stim.stimDuration_red;
     otherStimPulses = blueStimIdx;
     nPulsesPerStim_other = params.stim.nPulsesPerStim_blue;
     stimDuration_other = params.stim.stimDuration_blue;
-elseif strcmp(params.stim.color,'blue')
+elseif strcmpi(params.stim.color,'blue')
     cueStimPulses = blueStimIdx; 
     nPulsesPerStim_cue = params.stim.nPulsesPerStim_blue;
     stimDuration_cue = params.stim.stimDuration_blue;

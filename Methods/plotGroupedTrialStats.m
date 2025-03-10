@@ -60,12 +60,15 @@ avgStats = cell(length(stats),1);
 
 %% Loop through tasks
 for task = 1:length(stats)
+    stats_combined = stats{task};
+    % Skip if there's no stats for this task
+    if all(cellfun(@isempty, stats_combined)); continue; end
+
     % Plot grouped traces
     if options.plot 
         if options.plotNextTile; nexttile; end
     end
-    stats_combined = stats{task};
-
+    
     % Initialize data matrix
     xlimList = nan(length(options.eventRange),1);
     groupedTraces = cell(length(options.eventRange),1);
@@ -134,7 +137,11 @@ for task = 1:length(stats)
             else; xlimit = options.xlim(task,:); end
             xlim([0,min(xlimList(options.xlimIdx),xlimit(2))]);
         end
-        xlabel('Trials'); ylabel(ylabels{task});
+
+        xlabel('Trials');
+        if ~iscell(ylabels); ylabel(ylabels);
+        else; ylabel(ylabels{task}); end
+
         legend(options.eventRange);
     end
 

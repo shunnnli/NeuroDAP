@@ -113,26 +113,26 @@ addpath(genpath(osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDA
 [~,~,~,~,~,~,bluePurpleRed] = loadColors;
 
 % Define result directory
-resultspath = osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project clamping/Results');
+resultspath = osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Results');
 
 % Building summary struct from selected sessions
 answer = questdlg('Group sessions or load combined data?','Select load sources',...
                   'Group single sessions','Load combined data','Load sample data','Load combined data');
 
 if strcmpi(answer,'Group single sessions')
-    sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project clamping/Recordings'))';
+    sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Recordings'))';
     groupSessions = true;
     % Update resultspath
-    dirsplit = strsplit(sessionList{1},filesep); projectName = dirsplit{end-1}; 
+    projectName = 'Summary-LastSessions'; 
     resultspath = strcat(resultspath,filesep,projectName);
     % Create resultspath if necessary
     if isempty(dir(resultspath)); mkdir(resultspath); end
 
 elseif strcmpi(answer,'Load combined data')
-    fileList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project clamping/Results'))';
+    fileList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Results'))';
     groupSessions = false;
     % Update resultspath
-    dirsplit = strsplit(fileList{1},filesep); projectName = dirsplit{end-1}; 
+    projectName = 'Summary-LastSessions'; 
     resultspath = strcat(resultspath,filesep,projectName);
     % Load selected files
     for file = 1:length(fileList)
@@ -156,9 +156,6 @@ elseif strcmpi(answer,'Load sample data')
     end
 end
 
-baselineColor = [.7 .7 .7];
-pidColor = [.232 .76 .58];
-
 %% Optional: Create summary struct (only need to do this for initial loading)
 
 if groupSessions    
@@ -170,7 +167,7 @@ end
 stringColumnsLabels = {'animal','date','session','task','event','name','system'};
 for i = 1:length(stringColumnsLabels)
     for row = 1:length(summary)
-        if isstring(summary(row).(stringColumnsLabels{1})) 
+        if isstring(summary(row).(stringColumnsLabels{1}))
             summary(row).(stringColumnsLabels{i}) = convertStringsToChars(summary(row).(stringColumnsLabels{i}));
         end
     end
@@ -184,6 +181,7 @@ for i = 1:length(summary)
     cur_task = summary(i).task;
     cur_event = summary(i).event;
     cur_name = summary(i).name;
+    cur_animal = summary(i).animal;
 
     if strcmp('random',cur_task)
         summary(i).task = 'Random';
@@ -198,20 +196,20 @@ for i = 1:length(summary)
     elseif contains('Tone only',cur_event,IgnoreCase=true)
         summary(i).event = 'Tone';
     elseif contains('Pair',cur_event,IgnoreCase=true)
-        summary(i).event = 'Tone';
+        summary(i).event = 'Pair';
     end
 
-    if strcmpi('PMT',cur_name)
+    if strcmpi('NAc-green',cur_name)
         summary(i).name = 'dLight';
+    % elseif strcmpi('PMT',cur_name)
+    %     disp(i);
+    %     summary(i).name = 'GCaMP8m';
     end
 end
 
 % Remove some rows if needed
-rowIdx = cellfun(@(x) contains(x,'Blue stim',IgnoreCase=true), {summary.event});
-summary(rowIdx) = [];
-
-rowIdx = cellfun(@(x) contains(x,'Stim',IgnoreCase=true), {summary.event});
-summary(rowIdx) = [];
+% rowIdx = cellfun(@(x) contains(x,'Blue stim',IgnoreCase=true), {summary.event});
+% summary(rowIdx) = [];
 
 %% Create animals struct
 
@@ -234,17 +232,13 @@ if ~isempty(answer)
     disp(['Finished: saved animals.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
 end
 
-%% Define animal group
-
-clampAnimals = {'SL287'};
-unclampAnimals = setdiff(unique({animals.animal}),clampAnimals);
 
 %% Test: Plot traces from summary/animals struct
 
-event = 'Tone';
+event = 'Stim';
 animal = 'All';
 task = 'Reward';
-signal = 'Lick';
+signal = 'dLight';
 session = 'all';
 
 initializeFig(0.5,0.5);
@@ -261,208 +255,83 @@ combined = combineTraces(animals,timeRange=[-0.5,3],...
 legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,...
                         groupby='sessions',startIdx=combined.options.startIdx,remaining='include');
 
-plotEvent('Tone',0,color=bluePurpleRed(500,:))
+plotEvent('Stim',0.5,color=bluePurpleRed(500,:))
 xlabel('Time (s)'); ylabel('z-score');
 
-%% dLight: Plot overall to show animal learned
 
-timeRange = [-0.5,3];
-eventRange = {'Stim','Pair','Tone'};
-animalRange = 'All';
-totalTrialRange = 'All';
-trialRange = [1,150];
-signalRange = 'dLight';
+%% Calculate DA trend for each animal
 
-colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),bluePurpleRed(100,:)};
-groupSizeList = [30;30;10];
-nGroupsList = [15;15;15];
+eventRange = 'Stim';
+animalRange = unique({animals.animal});
+DAtrend = struct([]);
 
-taskRange = {'Reward','Punish'}; % second part
-ylimList = [-1,4; -1, 2.5]; % Second part
+for a = 1:length(animalRange)
+    cur_animal = animalRange{a};
+    cur_task = unique({animals(strcmp({animals.animal}, cur_animal)).task});
+    DA_Max = getGroupedTrialStats(animals,'stageMax',...
+                                eventRange=eventRange,...
+                                animalRange=cur_animal,...
+                                taskRange=cur_task,...
+                                signalRange='dLight');
+    DA_Min = getGroupedTrialStats(animals,'stageMin',...
+                                eventRange=eventRange,...
+                                animalRange=cur_animal,...
+                                taskRange=cur_task,...
+                                signalRange='dLight');
+    DA_Avg = getGroupedTrialStats(animals,'stageAvg',...
+                                eventRange=eventRange,...
+                                animalRange=cur_animal,...
+                                taskRange=cur_task,...
+                                signalRange='dLight');
+    % initializeFig(.7,.7); tiledlayout('flow');
+    % DA_stageMax_result = plotGroupedTrialStats(DA_stageMax,'DA Max',groupSize=1,color=bluePurpleRed(500,:));
 
-for task = 1:length(taskRange)
-    initializeFig(1,0.5); tiledlayout('flow');
-    for event = 1:length(eventRange)
-        nexttile;
-        combined = combineTraces(animals,timeRange=timeRange,...
-                                    eventRange=eventRange{event},...
-                                    animalRange=animalRange,...
-                                    taskRange=taskRange{task},...
-                                    totalTrialRange=totalTrialRange,...
-                                    trialRange=trialRange,...
-                                    signalRange=signalRange);
-        legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,...
-                        groupSize=groupSizeList(event),nGroups=nGroupsList(event),...
-                        groupby='trials',startIdx=combined.options.startIdx,remaining='include');
-        ylim(ylimList(task,:));
-        plotEvent(eventRange{event},.5,color=colorList{event});
-        xlabel('Time (s)'); ylabel([signalRange,' z-score']);
-        legend(legendList,'Location','northeast');
-    end
-    saveFigures(gcf,['Summary_dLight_',taskRange{task}],...
-        strcat(resultspath),...
-        saveFIG=true,savePDF=true);
-end
+    % Save to DAtrend
+    DAtrend(a).animal = cur_animal;
+    DAtrend(a).task   = cur_task;
+    DAtrend(a).CueMax = DA_Max.stats{1}{1}(:,2);
+    DAtrend(a).CueMin = DA_Min.stats{1}{1}(:,2);
+    DAtrend(a).CueAvg = DA_Avg.stats{1}{1}(:,2);
+    DAtrend(a).CueAmp = getAmplitude(DA_Max.stats{1}{1}(:,2),DA_Min.stats{1}{1}(:,2));
 
-%% Plot lick trace
-
-timeRange = [-0.5,3];
-eventRange = {'Tone'};
-animalRange = 'All';
-totalTrialRange = 'All';
-trialRange = 'All';
-signalRange = 'Lick';
-
-colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),bluePurpleRed(100,:)};
-groupSizeList = [30;30;30];
-nGroupsList = [5;5;5];
-
-% Second part
-taskRange = {'Reward'};
-ylimList = [0,7; 0,3.5];
-
-for task = 1:length(taskRange)
-    initializeFig(1,.5); tiledlayout('flow');
-    for event = 1:length(eventRange)
-        nexttile;
-        combined = combineTraces(animals,timeRange=timeRange,...
-                                    eventRange=eventRange{event},...
-                                    animalRange=animalRange,...
-                                    taskRange=taskRange{task},...
-                                    totalTrialRange=totalTrialRange,...
-                                    trialRange=trialRange,...
-                                    signalRange=signalRange);
-        legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,...
-                        groupSize=groupSizeList(event),nGroups=nGroupsList(event),...
-                        groupby='trials',startIdx=combined.options.startIdx);
-        ylim(ylimList(task,:));
-        plotEvent(eventRange{event},.5,color=colorList{event});
-        xlabel('Time (s)'); ylabel('Licks/s'); ylim([0 Inf]);
-        legend(legendList,'Location','northeast');
-    end
-    % saveFigures(gcf,['Summary_licking_',taskRange{task}],...
-    %     strcat(resultspath),...
-    %     saveFIG=true,savePDF=true);
-end
-
-%% Plot grouped CS DA response (grouped across animal and 10 trials)
-
-taskRange = {'Reward','Punish'};
-statsTypes = {'stageMax','stageMax'}; ylabelList = {'Max DA response during cue','Max DA response during cue'};
-ylimit = [0,4.5; 0,4.5];
-
-animalRange = 'All';
-conditionRange = 'All';
-signalRange = 'dLight';
-
-eventRange = {'Baseline','Pair','Tone','Stim'};
-colorList = {[0.8,0.8,0.8],bluePurpleRed(300,:),bluePurpleRed(100,:),bluePurpleRed(500,:)};
-% eventRange = {'Baseline','Stim','Pair'};
-% colorList = {[0.8,0.8,0.8],bluePurpleRed(500,:),bluePurpleRed(300,:)};
-
-stage = 2; % Plot CS only
-groupSize = 10; % numbers of trials to calculate average
-pairingStats_ = getGroupedTrialStats(animals,statsTypes,...
-                            eventRange=eventRange,...
-                            animalRange=animalRange,...
-                            taskRange=taskRange,...
-                            totalTrialRange=conditionRange,...
-                            signalRange=signalRange);
-
-initializeFig(.7,.7); tiledlayout('flow');
-results_dLight = plotGroupedTrialStats(pairingStats_Glu,ylabelList,groupSize=10,color=colorList,xlimIdx=4,xlim=[0,170],ylim=ylimit);
-
-% saveFigures(gcf,'Summary_CSvsTrialsGrouped_dLight',...
-%         strcat(resultspath),...
-%         saveFIG=true,savePDF=true);
-
-
-%% Behavior: anticipatory licking vs trials
-
-eventRange = 'Tone';
-taskRange = 'Reward';
-statsTypes = 'nAnticipatoryLicks';
-conditionRange = 'All';
-ylabels = 'Anticipatory licks';
-
-tone_al_unclamped = getGroupedTrialStats(animals,statsTypes,...
-                            eventRange=eventRange,...
-                            animalRange=unclampAnimals,...
-                            taskRange=taskRange,...
-                            totalTrialRange=conditionRange,...
-                            signalRange='Lick');
-tone_al_clamped = getGroupedTrialStats(animals,statsTypes,...
-                            eventRange=eventRange,...
-                            animalRange=clampAnimals,...
-                            taskRange=taskRange,...
-                            totalTrialRange=conditionRange,...
-                            signalRange='Lick');
-
-results_tone_al_unclamped = plotGroupedTrialStats(tone_al_unclamped,ylabels,groupSize=10,...
-                            color=baselineColor,...
-                            plot=true,plotNextTile=false);
-results_tone_al_clamped = plotGroupedTrialStats(tone_al_clamped,ylabels,groupSize=10,...
-                            color=pidColor,...
-                            plot=true,plotNextTile=false);
-
-
-%% Behavior: total licks vs trial
-
-eventRange = 'Tone';
-taskRange = 'Reward';
-statsTypes = 'nLicks';
-conditionRange = 'All';
-ylabels = 'Total licks';
-
-tone_al_unclamped = getGroupedTrialStats(animals,statsTypes,...
-                            eventRange=eventRange,...
-                            animalRange=unclampAnimals,...
-                            taskRange=taskRange,...
-                            totalTrialRange=conditionRange,...
-                            signalRange='Lick');
-tone_al_clamped = getGroupedTrialStats(animals,statsTypes,...
-                            eventRange=eventRange,...
-                            animalRange=clampAnimals,...
-                            taskRange=taskRange,...
-                            totalTrialRange=conditionRange,...
-                            signalRange='Lick');
-
-results_tone_al_unclamped = plotGroupedTrialStats(tone_al_unclamped,ylabels,groupSize=10,...
-                            color=baselineColor,...
-                            plot=true,plotNextTile=false);
-results_tone_al_clamped = plotGroupedTrialStats(tone_al_clamped,ylabels,groupSize=10,...
-                            color=pidColor,...
-                            plot=true,plotNextTile=false);
-
-%% Behavior: CDF of success trials
-
-successData_clamped = cell(size(clampAnimals));
-successData_unclamped = cell(size(unclampAnimals));
-
-for a = 1:length(clampAnimals)
-    cur_animal = clampAnimals{a};
+    % Calculate DA trending stats
+    fields = {'CueMax', 'CueMin', 'CueAvg', 'CueAmp'};
+    nTrials = length(DAtrend(a).CueMax); % assuming all have the same length
     
-    % Extract anticipatory licking from the current animal
-    % nAnticipatoryLicks = [0 3 1 5 4 2 1 4];
-
-    % Convert anticipatory licking to successTrials
-    % successTrials = [0 1 0 1 1 0 0 1];
-
-    % Stored data into successData
-    successData_clamped{a} = successTrials;
+    for f = 1:numel(fields)
+        data = DAtrend(a).(fields{f});
+        slopes = nan(nTrials, 1);
+        pvals  = nan(nTrials, 1);
+        
+        % Loop for trending statistics: last n trials (n = 1:nTrials)
+        for n = 2:nTrials
+            Y = data(end-n+1:end);  % last n trials
+            X = (1:n)';             % corresponding trial indices for regression
+            stats = regstats(Y, X, 'linear', {'tstat'});
+            slopes(n) = stats.tstat.beta(2);  % slope coefficient
+            pvals(n)  = stats.tstat.pval(2);   % p-value for the slope
+        end
+        
+        % Store the trending statistics into DAtrend
+        DAtrend(a).([fields{f} '_slope']) = slopes;
+        DAtrend(a).([fields{f} '_pval'])  = pvals;
+        
+        % Compute difference between the last 10 trials and the first 10 trials
+        if nTrials >= 10
+            DAtrend(a).([fields{f} '_diff']) = mean(data(end-9:end)) - mean(data(1:10));
+        else
+            DAtrend(a).([fields{f} '_diff']) = NaN;  % Not enough trials
+        end
+    end
 end
 
-for a = 1:length(unclampAnimals)
-    cur_animal = unclampAnimals{a};
-    
-    % Extract anticipatory licking from the current animal
-    % nAnticipatoryLicks = [0 3 1 5 4 2 1 4];
+%% Save DAtrend struct
+prompt = 'Enter database notes (DAtrend_20230326_notes.mat):';
+dlgtitle = 'Save DAtrend struct'; fieldsize = [1 45]; definput = {''};
+answer = inputdlg(prompt,dlgtitle,fieldsize,definput);
+today = char(datetime('today','Format','yyyyMMdd'));
+filename = strcat('DAtrend_',today,'_',answer{1});
 
-    % Convert anticipatory licking to successTrials
-    % successTrials = [0 1 0 1 1 0 0 1];
-
-    % Stored data into successData
-    successData_unclamped{a} = successTrials;
-end
-
-% Plot CDF (ask ChatGPT)
+disp(['Ongoing: saving DAtrend.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
+save(strcat(resultspath,filesep,filename),'DAtrend','sessionList','-v7.3');
+disp(['Finished: saved DAtrend.mat (',char(datetime('now','Format','HH:mm:ss')),')']);

@@ -5,6 +5,7 @@ arguments
 end
 
 summary = struct([]);
+errorSessions = {};
 disp('Ongoing: summary.mat not found, creating a new one');
 
 % Group sessions to summary
@@ -16,7 +17,15 @@ for s = 1:length(sessionList)
     % Load session
     load(strcat(sessionList{s},filesep,'analysis_',sessionName,'.mat'),'analysis');
 
-    if exist('analysis','var'); summary = [summary,analysis]; end
+    if exist('analysis','var')
+        try
+            summary = [summary,analysis]; 
+        catch e
+            disp(strcat('  concatAnalysis: ', getReport(e)));
+            errorSessions{end+1} = sessionList{s};
+            continue
+        end
+    end
     disp(['Finished: session ', sessionName,' loaded (',...
           num2str(s),'/',num2str(length(sessionList)),')']);
 end

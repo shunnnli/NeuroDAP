@@ -7,13 +7,19 @@
 clear; close all;
 addpath(genpath(osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
 
-% Select sessions for analysis
-% parentPath = osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Patch/');
-% expPath = uipickfiles('FilterSpec',parentPath,'Prompt','Select experiment folders');
-
-resultPath = osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Patch/Combined');
+rootPath = osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Patch/Combined');
 [~,~,~,~,~,~,bluePurpleRed] = loadColors;
 today = char(datetime('today','Format','yyyyMMdd'));
+
+% Select combined_cells and combined_epochs
+expPath = uipickfiles('FilterSpec',rootPath,'Prompt','Select experiment folders');
+files = dir(fullfile(expPath{1}, 'combined_*.mat'));
+for k = 1:length(files)
+    filename = files(k).name;
+    disp(['Loading: ', filename]);
+    load(fullfile(expPath{1}, filename));
+end
+disp('Finished: combined_cells and combined_epochs loaded');
 
 %% (Optional) Add epochs to combined_epochs
 
@@ -31,8 +37,8 @@ combined_cells.Analyze = logical(combined_cells.Learned);
 combined_cells.Analyze(notLearnedIdx) = 0;
 
 disp('Saving combined_cells and combined_epochs...');
-resultPath = osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Patch/Combined');
-resultPath = strcat(resultPath,filesep,today);
+rootPath = osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Patch/Combined');
+resultPath = strcat(rootPath,filesep,today);
 if ~isfolder(resultPath); mkdir(resultPath); end
 save(fullfile(resultPath,strcat('combined_cells_',today,'.mat')),"combined_cells","-v7.3");
 save(fullfile(resultPath,strcat('combined_epochs_',today,'.mat')),"combined_epochs","-v7.3");
@@ -95,7 +101,7 @@ downDAIdx = find(ismember(combined_cells.Animal, downAnimals) & ...
 
 %% (Optional) Extract response trace
 
-animalRange = 'SL208';
+animalRange = 'SL043';
 [~,~] = getResponseTraces(combined_cells,animalRange=animalRange,plot=true);
 
 %% Plot cell EI based on tasks
@@ -281,14 +287,6 @@ xlabel('Cm'), ylabel('Charge');
 title('Cm vs IPSC charge');
 
 
-%% Extract DA response from last session
-
-% Load DA data for the session in the patch day
-% If there's no recording, use recording from previou day
-
-
-
-
 %% Plot summay trace (for TRN-LHb)
 
 %{
@@ -299,3 +297,276 @@ resultPath = '/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Patch/TRN-LHb';
 today = char(datetime('today','Format','yyyyMMdd')); 
 
 %}
+
+%% (Analysis) Load DAtrend struct
+
+DAtrend_path = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Results/Summary-LastSessions'))';
+load(DAtrend_path{1});
+disp('Finished: DAtrend loaded');
+
+%% (Analysis) Calculate animal avg EI charge & amplitude index
+
+EPSC_peaks = cellfun(@(x) x.summary.EPSC.peakAvg, combined_cells.Stats);
+IPSC_peaks = cellfun(@(x) x.summary.IPSC.peakAvg, combined_cells.Stats);
+
+EPSC_aucs = cellfun(@(x) x.summary.EPSC.aucAvg, combined_cells.Stats);
+IPSC_aucs = cellfun(@(x) x.summary.IPSC.aucAvg, combined_cells.Stats);
+
+% EI statistics
+% 1. EPSC + IPSC
+EIsum_peaks = IPSC_peaks + EPSC_peaks;
+EIsum_aucs = IPSC_aucs + EPSC_aucs;
+
+% 2. EPSC/IPSC
+% EIratio_peaks = abs(EPSC_peaks) ./ abs(IPSC_peaks);
+% EIratio_aucs = abs(EPSC_aucs) ./ abs(IPSC_aucs);
+
+% 3. EI index (-1: all excitatory & 1: all inhibitory)
+EIindex_peaks = (abs(IPSC_peaks)-abs(EPSC_peaks)) ./ (abs(IPSC_peaks)+abs(EPSC_peaks));
+EIindex_aucs = (abs(IPSC_aucs)-abs(EPSC_aucs)) ./ (abs(IPSC_aucs)+abs(EPSC_aucs));
+
+% Calculate animal average
+animalList = unique({DAtrend.animal})';
+animalEIindex_peaks = cellfun(@(a) mean(EIindex_peaks(strcmp(combined_cells.Animal, a))), animalList);
+animalEIindex_aucs = cellfun(@(a) mean(EIindex_aucs(strcmp(combined_cells.Animal, a))), animalList);
+
+%% (Analysis) Calculate relationship between DA slope and patch data
+% Calculate the slope of last n trials vs animal avg EI index
+
+% Determine the minimum number of trials across animals (using the CueMax_slope field as an example)
+minTrials = min(arrayfun(@(x) length(x.CueMax_slope), DAtrend));
+numTrials = minTrials;  % Number of regression iterations (n = 2:numTrials)
+statsTypes = {'CueMax','CueMin','CueAvg','CueAmp'};
+
+% Preallocate structures to store slopes and p-values for each cue type and each EI measure
+for st = 1:length(statsTypes)
+    slopes_aucs.(statsTypes{st})  = nan(numTrials,1);
+    pvals_aucs.(statsTypes{st})   = nan(numTrials,1);
+    slopes_peaks.(statsTypes{st}) = nan(numTrials,1);
+    pvals_peaks.(statsTypes{st})  = nan(numTrials,1);
+end
+
+% Loop over n (starting at 2 since regression needs at least 2 data points)
+for n = 2:numTrials
+    % For each cue type, extract the nth slope from each animal in DAtrend
+    nthSlopes.CueMax = arrayfun(@(d) d.CueMax_slope(n),  DAtrend)';
+    nthSlopes.CueMin = arrayfun(@(d) d.CueMin_slope(n),  DAtrend)';
+    nthSlopes.CueAvg = arrayfun(@(d) d.CueAvg_slope(n),  DAtrend)';
+    nthSlopes.CueAmp = arrayfun(@(d) d.CueAmp_slope(n), DAtrend)';
+    
+    % For each cue type, fit regressions for both EI measures and store the results
+    for st = 1:length(statsTypes)
+        cue = statsTypes{st};
+        
+        % Regression with animalEIindex_aucs
+        stats = regstats(animalEIindex_aucs, nthSlopes.(cue), 'linear', {'tstat'});
+        slopes_aucs.(cue)(n) = stats.tstat.beta(2);
+        pvals_aucs.(cue)(n)  = stats.tstat.pval(2);
+        
+        % Regression with animalEIindex_peaks
+        stats = regstats(animalEIindex_peaks, nthSlopes.(cue), 'linear', {'tstat'});
+        slopes_peaks.(cue)(n) = stats.tstat.beta(2);
+        pvals_peaks.(cue)(n)  = stats.tstat.pval(2);
+    end
+end
+
+%% (Analysis) Plot the relationship between DA trend and animal EI
+
+% Positive slope here means that increase in DA amplitude in the last n trials
+% corresponds to more cells being inhibitory
+
+nTrialsUsed = 2:numTrials;  % n values corresponding to regressions (starting at 2)
+figure;
+for st = 1:length(statsTypes)
+    cue = statsTypes{st};
+    subplot(2,2,st);
+    
+    % Left y-axis: plot slopes
+    yyaxis left;
+    plot(nTrialsUsed, slopes_aucs.(cue)(2:end), '-o', 'LineWidth', 1.5);
+    ylabel('Slope');
+    xlabel('n trials used');
+    title(sprintf('%s: Slope and p-value vs n', cue));
+    
+    % Right y-axis: plot p-values
+    yyaxis right;
+    plot(nTrialsUsed, pvals_aucs.(cue)(2:end), '-s', 'LineWidth', 1.5, 'Color', 'r');
+    ylabel('p-value');
+    ylim([0 1]);  % p-values are between 0 and 1
+    hold on;
+    % Optional: add a horizontal line at p=0.05 to mark significance threshold
+    plot(nTrialsUsed, repmat(0.05, size(nTrialsUsed)), '--k', 'LineWidth', 1);
+    hold off;
+end
+
+%% (Analysis) Calculate slopes of last n trials
+
+shortWindow = 16:21;
+longWindow  = 38:43;
+
+% Calculate average slopes in shortWindow
+avgCueMaxSlope_short  = arrayfun(@(d) mean(d.CueMax_slope(shortWindow)),  DAtrend)';
+avgCueMinSlope_short  = arrayfun(@(d) mean(d.CueMin_slope(shortWindow)),  DAtrend)';
+avgCueAvgSlope_short  = arrayfun(@(d) mean(d.CueAvg_slope(shortWindow)),  DAtrend)';
+avgCueAmpSlope_short = arrayfun(@(d) mean(d.CueAmp_slope(shortWindow)), DAtrend)';
+
+% Calculate average slopes in longWindow
+avgCueMaxSlope_long  = arrayfun(@(d) mean(d.CueMax_slope(longWindow)),  DAtrend)';
+avgCueMinSlope_long  = arrayfun(@(d) mean(d.CueMin_slope(longWindow)),  DAtrend)';
+avgCueAvgSlope_long  = arrayfun(@(d) mean(d.CueAvg_slope(longWindow)),  DAtrend)';
+avgCueAmpSlope_long = arrayfun(@(d) mean(d.CueAmp_slope(longWindow)), DAtrend)';
+
+% % Calculate average p value in lastTrialWindow
+% avgCueMaxPval  = arrayfun(@(d) mean(d.CueMax_pval(lastTrialWindow)),  DAtrend)';
+% avgCueMinPval  = arrayfun(@(d) mean(d.CueMin_pval(lastTrialWindow)),  DAtrend)';
+% avgCueAvgPval  = arrayfun(@(d) mean(d.CueAvg_pval(lastTrialWindow)),  DAtrend)';
+% avgCueAreaPval = arrayfun(@(d) mean(d.CueAmp_pval(lastTrialWindow)), DAtrend)';
+
+% Define the eight slope vectors in a cell array and label them
+slopeVectors = {avgCueMaxSlope_short, avgCueMinSlope_short, avgCueAvgSlope_short, avgCueAmpSlope_short, ...
+                avgCueMaxSlope_long,  avgCueMinSlope_long,  avgCueAvgSlope_long,  avgCueAmpSlope_long};
+slopeNames = {'CueMax Slope (Short)', 'CueMin Slope (Short)', 'CueAvg Slope (Short)', 'CueAmp Slope (Short)', ...
+              'CueMax Slope (Long)',  'CueMin Slope (Long)',  'CueAvg Slope (Long)',  'CueAmp Slope (Long)'};
+
+
+% Set group names
+numGroups = 3;
+groupNames = {'Down DA','Stable DA','Up DA'};
+
+% Set color
+upColor = bluePurpleRed(1,:); 
+downColor = bluePurpleRed(end,:); 
+groupColors = {downColor,[.2 .2 .2],upColor};
+
+%% Histograms of 
+
+%% (Analysis) kmeans clustering to define up/down/stable animals
+
+% Preallocate cell arrays to save grouping results for each slope vector
+downAnimals_kmeans = cell(numel(slopeVectors),1);
+stableAnimals_kmeans = cell(numel(slopeVectors),1);
+upAnimals_kmeans = cell(numel(slopeVectors),1);
+
+figure; tiledlayout(2,4);
+
+for i = 1:numel(slopeVectors)
+    nexttile;
+    data = slopeVectors{i};
+    
+    % Perform k-means clustering with replicates for stability
+    [groupIdx, groupCenters] = kmeans(data, numGroups, 'Replicates', 100);
+    
+    % Sort group centers so that:
+    %   Group 1: obvious negative (lowest center)
+    %   Group 2: ambiguous (middle center)
+    %   Group 3: obvious positive (highest center)
+    [~, sortOrder] = sort(groupCenters);
+    mapping = zeros(numGroups,1);
+    mapping(sortOrder) = 1:numGroups;
+    groupLabels = mapping(groupIdx);
+    
+    % Save grouping results
+    downAnimals_kmeans{i} = find(groupLabels == 1);
+    stableAnimals_kmeans{i} = find(groupLabels == 2);
+    upAnimals_kmeans{i} = find(groupLabels == 3);
+    
+    hold on;
+    for j = 1:numGroups
+        idx = groupLabels == j;
+        scatter(find(idx), data(idx), 100, groupColors{j}, 'filled', DisplayName=groupNames{j});
+    end
+    hold off;
+    
+    title(slopeNames{i});
+    xlabel('Animal');
+    ylabel('Slope');
+    legend('Location','southeast');
+end
+sgtitle('K-means classification');
+
+%% (Analysis) Quantile based method to define up/down/stable animals
+
+% Preallocate cell arrays to save grouping results for each slope vector
+downAnimals_quant = cell(numel(slopeVectors),1);
+stableAnimals_quant = cell(numel(slopeVectors),1);
+upAnimals_quant = cell(numel(slopeVectors),1);
+
+figure; tiledlayout(2,4);
+
+for i = 1:numel(slopeVectors)
+    nexttile;
+    data = slopeVectors{i};
+    
+    % Use quantiles to classify data into three groups
+    edges = quantile(data, [0, 1/numGroups, 2/numGroups, 1]);
+    groupLabels = discretize(data, edges);
+    
+    % Save grouping results
+    downAnimals_quant{i} = find(groupLabels == 1);
+    stableAnimals_quant{i} = find(groupLabels == 2);
+    upAnimals_quant{i} = find(groupLabels == 3);
+    
+    hold on;
+    for j = 1:numGroups
+        idx = groupLabels == j;
+        scatter(find(idx), data(idx), 100, groupColors{j}, 'filled', DisplayName=groupNames{j});
+    end
+    hold off;
+    
+    title(slopeNames{i});
+    xlabel('Animal');
+    ylabel('Slope');
+    legend('Location','southeast');
+end
+sgtitle('Quantiles classification');
+
+
+%% (Analysis) Plot cell EI
+
+% Set up getCellIndices function
+getCellIndices = @(indices) cell2mat(arrayfun(@(idx) find(strcmpi(combined_cells.Animal, animalList{idx})), indices, 'UniformOutput', false));
+
+for i = 4:4%numel(slopeNames)
+    % Get the animal indices from k-means
+    animalIdxDown = downAnimals_kmeans{i}; 
+    animalIdxStable = stableAnimals_kmeans{i};
+    animalIdxUp = upAnimals_kmeans{i};
+
+    % Convert animal indices to cell indices
+    cellIdxDown   = getCellIndices(animalIdxDown);
+    cellIdxStable = getCellIndices(animalIdxStable);
+    cellIdxUp     = getCellIndices(animalIdxUp);
+    groupIdx = {cellIdxDown,cellIdxStable,cellIdxUp};
+    plotGroup = [1, 1, 1];
+    
+    % Create a figure name based on the current criterion (e.g., "CellEI-CueMaxSlopeShort")
+    % Removing spaces and parentheses for a clean filename.
+    figureName = ['CellEI-' regexprep(slopeNames{i}, '[ ()]', ''),'-kmeans'];
+    close all;
+    plotCellEI(combined_cells,groupIdx,...
+           plotGroup=plotGroup,groupColors=groupColors,groupNames=groupNames,...
+           save=false,figureName=figureName,resultPath=resultPath,print=true);
+
+
+    % Get the animal indices from k-means
+    animalIdxDown = downAnimals_quant{i}; 
+    animalIdxStable = stableAnimals_quant{i};
+    animalIdxUp = upAnimals_quant{i};
+
+    % Convert animal indices to cell indices
+    cellIdxDown   = getCellIndices(animalIdxDown);
+    cellIdxStable = getCellIndices(animalIdxStable);
+    cellIdxUp     = getCellIndices(animalIdxUp);
+    groupIdx = {cellIdxDown,cellIdxStable,cellIdxUp};
+    plotGroup = [1, 1, 1];
+    
+    % Create a figure name based on the current criterion (e.g., "CellEI-CueMaxSlopeShort")
+    % Removing spaces and parentheses for a clean filename.
+    figureName = ['CellEI-' regexprep(slopeNames{i}, '[ ()]', ''),'-quantile'];
+    close all;
+    plotCellEI(combined_cells,groupIdx,...
+           plotGroup=plotGroup,groupColors=groupColors,groupNames=groupNames,...
+           save=false,figureName=figureName,resultPath=resultPath,print=true);
+end
+
+%% (Analysis) Check relationship between DA start & end diff and patch data
