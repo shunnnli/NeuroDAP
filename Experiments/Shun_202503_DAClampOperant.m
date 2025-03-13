@@ -466,3 +466,44 @@ for a = 1:length(unclampAnimals)
 end
 
 % Plot CDF (ask ChatGPT)
+
+
+%% Behavior: CDF of success trials
+
+successData_clamped = cell(size(clampAnimals));
+successData_unclamped = cell(size(unclampAnimals));
+newLength = 100;
+
+for a = 1:length(clampAnimals)
+    cur_animal = clampAnimals{a}; 
+
+    % Select out all the rows for this animal
+    cur_row = find(strcmp({animals.animal}, cur_animal) & strcmp({animals.event}, 'Tone'),1);
+    
+    % Extract anticipatory licking for the current animal
+    nAnticipatoryLicks = animals(cur_row).trialInfo.trialTable.nAnticipatoryLicks;
+  
+    % Convert anticipatory licking to successTrials 
+    successTrials = nAnticipatoryLicks >= 3; 
+    
+    % Store success data
+    successData_clamped{a} = successTrials;
+end
+
+for a = 1:length(unclampAnimals)
+    cur_animal = unclampAnimals{a}; 
+
+    % Select out all the rows for this animal
+    cur_row = find(strcmp({animals.animal}, cur_animal) & strcmp({animals.event}, 'Tone'),1);
+    
+    % Extract anticipatory licking for the current animal
+    nAnticipatoryLicks = animals(cur_row).trialInfo.trialTable.nAnticipatoryLicks;
+    
+    % Convert anticipatory licking to successTrials
+    successTrials = nAnticipatoryLicks >= 3; 
+    
+    % Store success data
+    successData_unclamped{a} = successTrials;
+end
+
+% Plot CDF (ask ChatGPT)

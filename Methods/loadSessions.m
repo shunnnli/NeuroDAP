@@ -44,6 +44,7 @@ arguments
 
    % Sync related params
    options.syncPulseWindow double = 5000 % #of sync pulse to xcorr
+   options.photometrySyncWindow double = 500 % seconds of photometry window to sync
 
    % Output file name
    options.outputName string % use the same name as the session folder if emtpy
@@ -232,11 +233,18 @@ if withNI
             centerLED = channels{9}; centerNose = channels{10};
             leftLED = channels{11}; leftSolenoid = channels{12};
         end
-        
+
+        % Check whether there is a sync pulse
+        if sum(syncNI) <= 100
+            warning('   loadSessions: No sync pulse detected in NI!!');
+            options.noSyncPulse = true;
+            options.withCamera = false; withCamera = 0;
+            options.withPhotometryNI = true;
+        end
         
         %% Save behavioral data
         if strcmpi(options.NISetup,'Shun')
-            if options.withPhotometryNI
+            if options.withPhotometryNI || options.noSyncPulse
                 save(dataOutputName,...
                     'airpuff','leftLick','rightLick','leftTone','rightTone',....
                     'leftSolenoid','rightSolenoid','allTones','blink','gyro',...
@@ -817,55 +825,44 @@ end
 
 %% (Ver5) Sync data using xcorr
 
-% Convert sync signals to digital signal (boolean);
-if withNI
-    syncNI = (syncNI==1);
-    % Extract location of rising edge
-    temp = [false,diff(syncNI)]; % diff(syncImec) records time of rising edge (1) and falling edge (0)
-    syncNI_diff = (temp==1);
-end
-
-if withRecording && ~options.noSyncPulse
-    syncImec = (syncImec > (max(syncImec)/2));
-    temp = [false,diff(syncImec)];
-    syncImec_diff = (temp==1);
-
-    syncLFP = (syncLFP > (max(syncLFP)/2));
-    temp = [false,diff(syncLFP)];
-    syncLFP_diff = (temp==1);
-
-    if ~any(find(syncImec_diff, 1) & find(syncLFP_diff,1), "all") 
-        options.noSyncPulse = true;
+if ~options.noSyncPulse
+    % Convert sync signals to digital signal (boolean);
+    if withNI
+        syncNI = (syncNI==1);
+        % Extract location of rising edge
+        temp = [false,diff(syncNI)]; % diff(syncImec) records time of rising edge (1) and falling edge (0)
+        syncNI_diff = (temp==1);
     end
-end
-
-if withCamera
-    syncCam = (camera{:,1} > max(camera{:,1}/2))';
-    temp = [false,diff(syncCam)];
-    syncCam_diff = (temp==1);
-end
-
-if withPhotometry
-    sync_labjack = (sync_labjack > (max(sync_labjack)/2));
-    temp = [false,diff(sync_labjack)];
-    syncLJ_diff = (temp==1);
-end
-
-% Extract start of sync pulse
-% 1. Loop over first n pulse
-syncPulseWindow = options.syncPulseWindow;
-ni_idx = []; lj_idx = []; cam_idx = []; imec_idx = []; lfp_idx = [];
-if withNI; ni_idx = find(syncNI_diff>0,syncPulseWindow); end
-if withPhotometry; lj_idx = find(syncLJ_diff>0,syncPulseWindow); end
-if withCamera; cam_idx = find(syncCam_diff>0,syncPulseWindow); end
-if withRecording && ~options.noSyncPulse
-    imec_idx = find(syncImec_diff>0,syncPulseWindow); 
-    lfp_idx = find(syncLFP_diff>0,syncPulseWindow); 
-end
-
-minSyncPulse = min(nonzeros([length(ni_idx), length(lj_idx), length(cam_idx), length(imec_idx), length(lfp_idx)]));
-if syncPulseWindow > minSyncPulse
-    syncPulseWindow = minSyncPulse;
+    
+    if withRecording && ~options.noSyncPulse
+        syncImec = (syncImec > (max(syncImec)/2));
+        temp = [false,diff(syncImec)];
+        syncImec_diff = (temp==1);
+    
+        syncLFP = (syncLFP > (max(syncLFP)/2));
+        temp = [false,diff(syncLFP)];
+        syncLFP_diff = (temp==1);
+    
+        if ~any(find(syncImec_diff, 1) & find(syncLFP_diff,1), "all") 
+            options.noSyncPulse = true;
+        end
+    end
+    
+    if withCamera
+        syncCam = (camera{:,1} > max(camera{:,1}/2))';
+        temp = [false,diff(syncCam)];
+        syncCam_diff = (temp==1);
+    end
+    
+    if withPhotometry
+        sync_labjack = (sync_labjack > (max(sync_labjack)/2));
+        temp = [false,diff(sync_labjack)];
+        syncLJ_diff = (temp==1);
+    end
+    
+    % Extract start of sync pulse
+    % 1. Loop over first n pulse
+    syncPulseWindow = options.syncPulseWindow;
     ni_idx = []; lj_idx = []; cam_idx = []; imec_idx = []; lfp_idx = [];
     if withNI; ni_idx = find(syncNI_diff>0,syncPulseWindow); end
     if withPhotometry; lj_idx = find(syncLJ_diff>0,syncPulseWindow); end
@@ -874,299 +871,486 @@ if syncPulseWindow > minSyncPulse
         imec_idx = find(syncImec_diff>0,syncPulseWindow); 
         lfp_idx = find(syncLFP_diff>0,syncPulseWindow); 
     end
-end
-
-% 2. Calculate ISI
-if withNI; ISI_ni = (ni_idx(2:end) - ni_idx(1:end-1)) / nidq.Fs; end
-if withCamera; ISI_cam = (cam_idx(2:end) - cam_idx(1:end-1)) / params.sync.camFs; end
-if withPhotometry; ISI_lj = (lj_idx(2:end) - lj_idx(1:end-1)) / params.sync.labjackFs; end
-if withRecording && ~options.noSyncPulse
-    ISI_imec = (imec_idx(2:end) - imec_idx(1:end-1)) / params.sync.apFs; 
-    ISI_lfp = (lfp_idx(2:end) - lfp_idx(1:end-1)) / params.sync.lfpFs; 
-end
-
-% 3. Cross correlation
-if strcmpi(session.baselineSystem,'NI')
-    if withCamera; [r_cam, l_cam] = xcorr(zscore(ISI_ni), zscore(ISI_cam),'normalized'); end
-    if withPhotometry; [r_lj, l_lj] = xcorr(zscore(ISI_ni), zscore(ISI_lj),'normalized'); end
-    if withRecording && ~options.noSyncPulse
-        [r_imec, l_imec] = xcorr(zscore(ISI_ni), zscore(ISI_imec),'normalized'); 
-        [r_lfp,l_lfp] = xcorr(zscore(ISI_ni), zscore(ISI_lfp),'normalized');
-    end
-elseif strcmpi(session.baselineSystem,'LJ')
-    if withCamera; [r_cam, l_cam] = xcorr(zscore(ISI_lj), zscore(ISI_cam),'normalized'); end
-end
-
-% 4. Find the max of xcorr
-initializeFig(0.67,0.67); tiledlayout('flow');
-if strcmpi(session.baselineSystem,'NI')
-    Cam_inBaseline = 0; LJ_inBaseline = 0; Imec_inBaseline = 0; LFP_inBaseline = 0;
-    Cam_inBaselineIdx = 0; LJ_inBaselineIdx = 0; Imec_inBaselineIdx = 0; LFP_inBaselineIdx = 0;
-
-    if withCamera
-        [~,maxIdx] = max(r_cam); lags_cam = l_cam(maxIdx); 
-        if lags_cam >= 0; firstPulse_inCam = cam_idx(1); Cam_inBaseline = ni_idx(1+lags_cam);
-        else; firstPulse_inCam = cam_idx(1-lags_cam); Cam_inBaseline = ni_idx(1); end
-        Cam_inBaselineIdx = max([1+lags_cam,1]); firstPulse_inCamIdx = max([1-lags_cam,1]);
-        nexttile; stem(l_cam,r_cam); title('NI vs Cam xcor');
-    end
-    if withPhotometry
-        [~,maxIdx] = max(r_lj); lags_lj = l_lj(maxIdx); 
-        if lags_lj >= 0; firstPulse_inLJ = lj_idx(1); LJ_inBaseline = ni_idx(1+lags_lj);
-        else; firstPulse_inLJ = lj_idx(1-lags_lj); LJ_inBaseline = ni_idx(1); end
-        LJ_inBaselineIdx = max([1+lags_lj,1]); firstPulse_inLJIdx = max([1-lags_lj,1]);
-        nexttile; stem(l_lj,r_lj); title('NI vs Labjack xcor');
-    end
-    if withRecording
-        if ~options.noSyncPulse
-            [~,maxIdx] = max(r_imec); lags_imec = l_imec(maxIdx); 
-            [~,maxIdx] = max(r_lfp); lags_lfp = l_lfp(maxIdx);
-            if lags_imec >= 0
-                firstPulse_inImec = imec_idx(1); Imec_inBaseline = ni_idx(1+lags_imec);
-                firstPulse_inLFP = lfp_idx(1); LFP_inBaseline = ni_idx(1+lags_lfp);
-            else
-                firstPulse_inImec = imec_idx(1-lags_imec); Imec_inBaseline = ni_idx(1);
-                firstPulse_inLFP = lfp_idx(1-lags_lfp); LFP_inBaseline = ni_idx(1);
-            end
-            Imec_inBaselineIdx = max([1+lags_imec,1]); firstPulse_inImecIdx = max([1-lags_imec,1]);
-            LFP_inBaselineIdx = max([1+lags_lfp,1]); firstPulse_inLFPIdx = max([1-lags_lfp,1]);
-            nexttile; stem(l_imec,r_imec); title('NI vs Imec xcor');
-            nexttile; stem(l_lfp,r_lfp); title('NI vs LFP xcor');
+    
+    minSyncPulse = min(nonzeros([length(ni_idx), length(lj_idx), length(cam_idx), length(imec_idx), length(lfp_idx)]));
+    if syncPulseWindow > minSyncPulse
+        syncPulseWindow = minSyncPulse;
+        ni_idx = []; lj_idx = []; cam_idx = []; imec_idx = []; lfp_idx = [];
+        if withNI; ni_idx = find(syncNI_diff>0,syncPulseWindow); end
+        if withPhotometry; lj_idx = find(syncLJ_diff>0,syncPulseWindow); end
+        if withCamera; cam_idx = find(syncCam_diff>0,syncPulseWindow); end
+        if withRecording && ~options.noSyncPulse
+            imec_idx = find(syncImec_diff>0,syncPulseWindow); 
+            lfp_idx = find(syncLFP_diff>0,syncPulseWindow); 
         end
     end
-elseif strcmpi(session.baselineSystem,'LJ')
-    Cam_inBaseline = 0; LJ_inBaseline = 0; Imec_inBaseline = 0; LFP_inBaseline = 0;
-    Cam_inBaselineIdx = 0; LJ_inBaselineIdx = 0; Imec_inBaselineIdx = 0; LFP_inBaselineIdx = 0;
-
-    if withCamera
-        [~,maxIdx] = max(r_cam); lags_cam = l_cam(maxIdx); 
-        if lags_cam >= 0; firstPulse_inCam = cam_idx(1); Cam_inBaseline = lj_idx(1+lags_cam);
-        else; firstPulse_inCam = cam_idx(1-lags_cam); Cam_inBaseline = lj_idx(1); end
-        Cam_inBaselineIdx = max([1+lags_cam,1]); firstPulse_inCamIdx = max([1-lags_cam,1]);
-        nexttile; stem(l_cam,r_cam); title('LJ vs Cam xcor');
+    
+    % 2. Calculate ISI
+    if withNI; ISI_ni = (ni_idx(2:end) - ni_idx(1:end-1)) / nidq.Fs; end
+    if withCamera; ISI_cam = (cam_idx(2:end) - cam_idx(1:end-1)) / params.sync.camFs; end
+    if withPhotometry; ISI_lj = (lj_idx(2:end) - lj_idx(1:end-1)) / params.sync.labjackFs; end
+    if withRecording && ~options.noSyncPulse
+        ISI_imec = (imec_idx(2:end) - imec_idx(1:end-1)) / params.sync.apFs; 
+        ISI_lfp = (lfp_idx(2:end) - lfp_idx(1:end-1)) / params.sync.lfpFs; 
     end
-end
-
-% 5. Find the first common sync pulse of all system
-if ~(withRecording || withPhotometry || withCamera) % Only nidq
-    firstPulse_inNI = find(syncNI_diff>0,1);
-elseif ~(withRecording || withNI || withCamera) % Only Labjack
-    firstPulse_inLJ = find(syncLJ_diff>0,1);
-    if isempty(firstPulse_inLJ); firstPulse_inLJ = 1; end
-else
-    firstPulse_inNI = find(syncNI_diff>0,1);
-    firstSamp = [firstPulse_inNI,Imec_inBaseline,Cam_inBaseline,LJ_inBaseline,LFP_inBaseline];
-    firstIdx = [firstPulse_inNI,Imec_inBaselineIdx,Cam_inBaselineIdx,LJ_inBaselineIdx,LFP_inBaselineIdx];
+    
+    % 3. Cross correlation
     if strcmpi(session.baselineSystem,'NI')
-        [firstPulse_inNI,system] = max(firstSamp);
-        if system ~= 1 % if some system comes online after NI
-            if withCamera
-                diffIdx = firstIdx(system) - Cam_inBaselineIdx; 
-                firstPulse_inCam = cam_idx(firstPulse_inCamIdx + diffIdx);
-            end
-            if withPhotometry
-                diffIdx = firstIdx(system) - LJ_inBaselineIdx; 
-                firstPulse_inLJ = lj_idx(firstPulse_inLJIdx + diffIdx);
-            end
-            if withRecording && ~options.noSyncPulse
-                diffIdx_imec = firstIdx(system) - Imec_inBaselineIdx; 
-                firstPulse_inImec = imec_idx(firstPulse_inImecIdx + diffIdx_imec);
-                diffIdx_lfp = firstIdx(system) - LFP_inBaselineIdx; 
-                firstPulse_inLFP = lfp_idx(firstPulse_inLFPIdx + diffIdx_lfp);
+        if withCamera; [r_cam, l_cam] = xcorr(zscore(ISI_ni), zscore(ISI_cam),'normalized'); end
+        if withPhotometry; [r_lj, l_lj] = xcorr(zscore(ISI_ni), zscore(ISI_lj),'normalized'); end
+        if withRecording && ~options.noSyncPulse
+            [r_imec, l_imec] = xcorr(zscore(ISI_ni), zscore(ISI_imec),'normalized'); 
+            [r_lfp,l_lfp] = xcorr(zscore(ISI_ni), zscore(ISI_lfp),'normalized');
+        end
+    elseif strcmpi(session.baselineSystem,'LJ')
+        if withCamera; [r_cam, l_cam] = xcorr(zscore(ISI_lj), zscore(ISI_cam),'normalized'); end
+    end
+    
+    % 4. Find the max of xcorr
+    initializeFig(0.67,0.67); tiledlayout('flow');
+    if strcmpi(session.baselineSystem,'NI')
+        Cam_inBaseline = 0; LJ_inBaseline = 0; Imec_inBaseline = 0; LFP_inBaseline = 0;
+        Cam_inBaselineIdx = 0; LJ_inBaselineIdx = 0; Imec_inBaselineIdx = 0; LFP_inBaselineIdx = 0;
+    
+        if withCamera
+            [~,maxIdx] = max(r_cam); lags_cam = l_cam(maxIdx); 
+            if lags_cam >= 0; firstPulse_inCam = cam_idx(1); Cam_inBaseline = ni_idx(1+lags_cam);
+            else; firstPulse_inCam = cam_idx(1-lags_cam); Cam_inBaseline = ni_idx(1); end
+            Cam_inBaselineIdx = max([1+lags_cam,1]); firstPulse_inCamIdx = max([1-lags_cam,1]);
+            nexttile; stem(l_cam,r_cam); title('NI vs Cam xcor');
+        end
+        if withPhotometry
+            [~,maxIdx] = max(r_lj); lags_lj = l_lj(maxIdx); 
+            if lags_lj >= 0; firstPulse_inLJ = lj_idx(1); LJ_inBaseline = ni_idx(1+lags_lj);
+            else; firstPulse_inLJ = lj_idx(1-lags_lj); LJ_inBaseline = ni_idx(1); end
+            LJ_inBaselineIdx = max([1+lags_lj,1]); firstPulse_inLJIdx = max([1-lags_lj,1]);
+            nexttile; stem(l_lj,r_lj); title('NI vs Labjack xcor');
+        end
+        if withRecording
+            if ~options.noSyncPulse
+                [~,maxIdx] = max(r_imec); lags_imec = l_imec(maxIdx); 
+                [~,maxIdx] = max(r_lfp); lags_lfp = l_lfp(maxIdx);
+                if lags_imec >= 0
+                    firstPulse_inImec = imec_idx(1); Imec_inBaseline = ni_idx(1+lags_imec);
+                    firstPulse_inLFP = lfp_idx(1); LFP_inBaseline = ni_idx(1+lags_lfp);
+                else
+                    firstPulse_inImec = imec_idx(1-lags_imec); Imec_inBaseline = ni_idx(1);
+                    firstPulse_inLFP = lfp_idx(1-lags_lfp); LFP_inBaseline = ni_idx(1);
+                end
+                Imec_inBaselineIdx = max([1+lags_imec,1]); firstPulse_inImecIdx = max([1-lags_imec,1]);
+                LFP_inBaselineIdx = max([1+lags_lfp,1]); firstPulse_inLFPIdx = max([1-lags_lfp,1]);
+                nexttile; stem(l_imec,r_imec); title('NI vs Imec xcor');
+                nexttile; stem(l_lfp,r_lfp); title('NI vs LFP xcor');
             end
         end
     elseif strcmpi(session.baselineSystem,'LJ')
-        [firstPulse_inLJ,system] = max(firstSamp);
-        if system ~= 1 % if some system comes online after baseline
-            if withCamera
-                diffIdx = firstIdx(system) - Cam_inBaselineIdx; 
-                firstPulse_inCam = cam_idx(firstPulse_inCamIdx + diffIdx);
+        Cam_inBaseline = 0; LJ_inBaseline = 0; Imec_inBaseline = 0; LFP_inBaseline = 0;
+        Cam_inBaselineIdx = 0; LJ_inBaselineIdx = 0; Imec_inBaselineIdx = 0; LFP_inBaselineIdx = 0;
+    
+        if withCamera
+            [~,maxIdx] = max(r_cam); lags_cam = l_cam(maxIdx); 
+            if lags_cam >= 0; firstPulse_inCam = cam_idx(1); Cam_inBaseline = lj_idx(1+lags_cam);
+            else; firstPulse_inCam = cam_idx(1-lags_cam); Cam_inBaseline = lj_idx(1); end
+            Cam_inBaselineIdx = max([1+lags_cam,1]); firstPulse_inCamIdx = max([1-lags_cam,1]);
+            nexttile; stem(l_cam,r_cam); title('LJ vs Cam xcor');
+        end
+    end
+    
+    % 5. Find the first common sync pulse of all system
+    if ~(withRecording || withPhotometry || withCamera) % Only nidq
+        firstPulse_inNI = find(syncNI_diff>0,1);
+    elseif ~(withRecording || withNI || withCamera) % Only Labjack
+        firstPulse_inLJ = find(syncLJ_diff>0,1);
+        if isempty(firstPulse_inLJ); firstPulse_inLJ = 1; end
+    else
+        firstPulse_inNI = find(syncNI_diff>0,1);
+        firstSamp = [firstPulse_inNI,Imec_inBaseline,Cam_inBaseline,LJ_inBaseline,LFP_inBaseline];
+        firstIdx = [firstPulse_inNI,Imec_inBaselineIdx,Cam_inBaselineIdx,LJ_inBaselineIdx,LFP_inBaselineIdx];
+        if strcmpi(session.baselineSystem,'NI')
+            [firstPulse_inNI,system] = max(firstSamp);
+            if system ~= 1 % if some system comes online after NI
+                if withCamera
+                    diffIdx = firstIdx(system) - Cam_inBaselineIdx; 
+                    firstPulse_inCam = cam_idx(firstPulse_inCamIdx + diffIdx);
+                end
+                if withPhotometry
+                    diffIdx = firstIdx(system) - LJ_inBaselineIdx; 
+                    firstPulse_inLJ = lj_idx(firstPulse_inLJIdx + diffIdx);
+                end
+                if withRecording && ~options.noSyncPulse
+                    diffIdx_imec = firstIdx(system) - Imec_inBaselineIdx; 
+                    firstPulse_inImec = imec_idx(firstPulse_inImecIdx + diffIdx_imec);
+                    diffIdx_lfp = firstIdx(system) - LFP_inBaselineIdx; 
+                    firstPulse_inLFP = lfp_idx(firstPulse_inLFPIdx + diffIdx_lfp);
+                end
+            end
+        elseif strcmpi(session.baselineSystem,'LJ')
+            [firstPulse_inLJ,system] = max(firstSamp);
+            if system ~= 1 % if some system comes online after baseline
+                if withCamera
+                    diffIdx = firstIdx(system) - Cam_inBaselineIdx; 
+                    firstPulse_inCam = cam_idx(firstPulse_inCamIdx + diffIdx);
+                end
             end
         end
     end
-end
-
-% 5.1. Save all sync related data
-if withCamera; params.sync.commonStartCamera = firstPulse_inCam; end
-if withPhotometry; params.sync.commonStartPhotometry = firstPulse_inLJ; end
-if withRecording
-    if options.noSyncPulse
-        firstPulse_inNI = 0;
-        firstPulse_inImec = firstPulse_inNI * (params.sync.apFs/params.sync.behaviorFs); 
-        firstPulse_inLFP = firstPulse_inNI * (params.sync.lfpFs/params.sync.behaviorFs);
+    
+    % 5.1. Save all sync related data
+    if withCamera; params.sync.commonStartCamera = firstPulse_inCam; end
+    if withPhotometry; params.sync.commonStartPhotometry = firstPulse_inLJ; end
+    if withRecording
+        if options.noSyncPulse
+            firstPulse_inNI = 0;
+            firstPulse_inImec = firstPulse_inNI * (params.sync.apFs/params.sync.behaviorFs); 
+            firstPulse_inLFP = firstPulse_inNI * (params.sync.lfpFs/params.sync.behaviorFs);
+        end
+        params.sync.commonStartAP = firstPulse_inImec; 
+        params.sync.commonStartLFP = firstPulse_inLFP;
     end
-    params.sync.commonStartAP = firstPulse_inImec; 
-    params.sync.commonStartLFP = firstPulse_inLFP;
-end
-if withNI; params.sync.commonStartNI = firstPulse_inNI; end
+    if withNI; params.sync.commonStartNI = firstPulse_inNI; end
+    
+    disp("Finished: find common start using xcorr");
 
-disp("Finished: find common start using xcorr");
-
-%% (Ver5) Assign common time stamp
-% 6.1. Initialize time stamp array
-if withNI; timeNI = zeros(1,length(syncNI)); end
-if withCamera; timeCamera = zeros(1,length(syncCam)); end
-if withPhotometry; timePhotometry = zeros(1,length(sync_labjack)); end
-if withRecording
-    if options.noSyncPulse
-        timeImec = zeros(1,session.totalImecSamp); 
-        timeLFP = zeros(1,session.totalLFPSamp); 
-    else
-        timeImec = zeros(1,length(syncImec)); 
-        timeLFP = zeros(1,length(syncLFP)); 
+    %% (Ver5) Assign common time stamp
+    % 6.1. Initialize time stamp array
+    if withNI; timeNI = zeros(1,length(syncNI)); end
+    if withCamera; timeCamera = zeros(1,length(syncCam)); end
+    if withPhotometry; timePhotometry = zeros(1,length(sync_labjack)); end
+    if withRecording
+        if options.noSyncPulse
+            timeImec = zeros(1,session.totalImecSamp); 
+            timeLFP = zeros(1,session.totalLFPSamp); 
+        else
+            timeImec = zeros(1,length(syncImec)); 
+            timeLFP = zeros(1,length(syncLFP)); 
+        end
     end
-end
-
-% 6.2. Filling in time
-% Fill in the Imec and NI time
-if withRecording
-    if options.noSyncPulse
-        for i=1:session.totalImecSamp
-            timeImec(i) = (i-firstPulse_inImec)/params.sync.apFs; % Time of each timebin of Imec in sec
+    
+    % 6.2. Filling in time
+    % Fill in the Imec and NI time
+    if withRecording
+        if options.noSyncPulse
+            for i=1:session.totalImecSamp
+                timeImec(i) = (i-firstPulse_inImec)/params.sync.apFs; % Time of each timebin of Imec in sec
+            end
+            for i=1:session.totalLFPSamp
+                timeLFP(i) = (i-firstPulse_inLFP)/params.sync.lfpFs; % Time of each timebin of Imec in sec
+            end
+            t0 = 0;
+            disp("Finished: Imec&LFP timestamp assigned");
+        else
+            for i=1:length(syncImec)
+                timeImec(i) = (i-firstPulse_inImec)/params.sync.apFs; % Time of each timebin of Imec in sec
+            end
+            idx_Imec = find(syncImec_diff(firstPulse_inImec:end)==1)+firstPulse_inImec-1;
+            t0 = timeImec(firstPulse_inImec);
+            disp("Finished: Imec/NI timestamp assigned");
         end
-        for i=1:session.totalLFPSamp
-            timeLFP(i) = (i-firstPulse_inLFP)/params.sync.lfpFs; % Time of each timebin of Imec in sec
+    elseif withNI
+        for i=1:length(syncNI)
+            timeNI(i) = (i-firstPulse_inNI)/params.sync.behaviorFs; % Time of each timebin of NI in sec
         end
-        t0 = 0;
-        disp("Finished: Imec&LFP timestamp assigned");
-    else
-        for i=1:length(syncImec)
-            timeImec(i) = (i-firstPulse_inImec)/params.sync.apFs; % Time of each timebin of Imec in sec
-        end
-        idx_Imec = find(syncImec_diff(firstPulse_inImec:end)==1)+firstPulse_inImec-1;
-        t0 = timeImec(firstPulse_inImec);
+        idx_NI = find(syncNI_diff(firstPulse_inNI:end)==1)+firstPulse_inNI-1;
+        t0 = timeNI(firstPulse_inNI);
         disp("Finished: Imec/NI timestamp assigned");
     end
-elseif withNI
+    
+    % Fill in photometry time
+    if withPhotometry
+        if strcmpi(session.baselineSystem,'LJ')
+            for i=1:length(sync_labjack)
+                timePhotometry(i) = (i-firstPulse_inLJ)/params.sync.labjackFs; % Time of each timebin of labjack in sec
+            end
+            idx_LJ = find(syncLJ_diff(firstPulse_inLJ:end)==1)+firstPulse_inLJ-1;
+            t0 = timePhotometry(firstPulse_inLJ);
+            disp("Finished: Labjack timestamp assigned");
+        elseif strcmpi(session.baselineSystem,'NI') 
+            if withRecording && ~options.noSyncPulse
+                % Index of all sync pulses starting from the first common pulse
+                idx_LJ = find(syncLJ_diff(firstPulse_inLJ:end)==1)+firstPulse_inLJ-1;
+                [timePhotometry,l_LJImec] = assignTimeStamp(timePhotometry,timeImec,idx_LJ,idx_Imec,params.sync.labjackFs);
+                timePhotometry = timePhotometry - t0; % align timePhotometry to timeNI
+            else
+                % Index of all sync pulses starting from the first common pulse
+                idx_LJ = find(syncLJ_diff(firstPulse_inLJ:end)==1)+firstPulse_inLJ-1;
+                [timePhotometry,l_LJNI] = assignTimeStamp(timePhotometry,timeNI,idx_LJ,idx_NI,params.sync.labjackFs);
+                timePhotometry = timePhotometry - t0; % align timePhotometry to timeNI
+            end
+        end
+        disp("Finished: labjack timestamp assigned");
+    end
+    
+    % Fill in camera
+    if withCamera
+        if withRecording && ~options.noSyncPulse
+            % Index of all sync pulses starting from the first common pulse
+            idx_Cam = find(syncCam_diff(firstPulse_inCam:end)==1)+firstPulse_inCam-1;
+            [timeCamera,l_CamImec] = assignTimeStamp(timeCamera,timeImec,idx_Cam,idx_Imec,params.sync.camFs);
+            timeCamera = timeCamera - t0; % align timeCamera to timeImec
+        else
+            if strcmpi(session.baselineSystem,'NI')
+                % Index of all sync pulses starting from the first common pulse
+                idx_Cam = find(syncCam_diff(firstPulse_inCam:end)==1)+firstPulse_inCam-1;
+                [timeCamera,l_CamNI] = assignTimeStamp(timeCamera,timeNI,idx_Cam,idx_NI,params.sync.camFs);
+                timeCamera = timeCamera - t0; % align timeCamera to timeNI
+            elseif strcmpi(session.baselineSystem,'LJ')
+                % Index of all sync pulses starting from the first common pulse
+                idx_Cam = find(syncCam_diff(firstPulse_inCam:end)==1)+firstPulse_inCam-1;
+                [timeCamera,l_CamLJ] = assignTimeStamp(timeCamera,timePhotometry,idx_Cam,idx_LJ,params.sync.camFs);
+                timeCamera = timeCamera - t0; % align timeCamera to timeNI
+            end
+        end
+        disp("Finished: camera timestamp assigned");
+    end
+    
+    % Fill in NI if withRecording == true
+    if withRecording && ~options.noSyncPulse
+        % Index of all sync pulses starting from the first common pulse
+        % idx_Imec = find(syncImec_diff(firstPulse_inImec:end)==1)+firstPulse_inImec-1;
+        % [timeImec,l_ImecNI] = assignTimeStamp(timeImec,timeNI,idx_Imec,idx_NI,params.sync.apFs);
+        idx_NI = find(syncNI_diff(firstPulse_inNI:end)==1)+firstPulse_inNI-1;
+        [timeNI,l_NIImec] = assignTimeStamp(timeNI,timeImec,idx_NI,idx_Imec,params.sync.behaviorFs);
+        timeNI = timeNI - t0; % align timePhotometry to timeNI
+    
+        idx_LFP = find(syncLFP_diff(firstPulse_inLFP:end)==1)+firstPulse_inLFP-1;
+        [timeLFP,l_LFPImec] = assignTimeStamp(timeLFP,timeImec,idx_LFP,idx_Imec,params.sync.lfpFs);
+        timeLFP = timeLFP - t0; % align timePhotometry to timeNI
+        disp("Finished: LFP timestamp assigned");
+    end
+    
+    % Align to common start pulse
+    if withRecording && ~options.noSyncPulse; timeImec = timeImec - t0;
+    elseif strcmpi(session.baselineSystem,'NI'); timeNI = timeNI - t0; 
+    elseif strcmpi(session.baselineSystem,'LJ'); timePhotometry = timePhotometry-t0;
+    end
+
+    % 7. Plot summary plot
+    if withRecording && ~options.noSyncPulse
+        title('LFP vs Imec');
+        nexttile; plot(timeImec); title('Imec time in sec');
+        nexttile; plot(timeLFP); title('LFP time in sec');
+        nexttile; plot(diff(timeImec)); title('d(timeImec)');
+        nexttile; plot(diff(timeLFP)); title('d(timeLFP)');
+       
+        nexttile; title('NI vs Imec');
+        nexttile; plot(timeNI); title('NI time in sec');
+        nexttile; plot(diff(timeNI)); title('d(timeNI)');
+        nexttile; plot(timeImec(idx_Imec(1:l_NIImec))-timeNI(idx_NI(1:l_NIImec))); title('Imec-NI');
+        nexttile; plot(timeLFP(idx_LFP(1:l_LFPImec))-timeLFP(idx_LFP(1:l_LFPImec))); title('LFP-NI');
+        disp("Finished: Imec/NI timestamp plotted");
+    elseif withNI
+        nexttile; plot(timeNI); title('NI time in sec');
+        nexttile; plot(diff(timeNI)); title('d(timeNI)');
+        disp("Finished: Imec/NI timestamp plotted");  
+    end
+    
+    if withCamera
+        title('Camera vs Imec/NI');
+        nexttile; plot(timeCamera); title('Camera time in sec'); 
+        nexttile; plot(diff(timeCamera)); title('d(timeCamera)');
+        if withRecording && ~options.noSyncPulse
+            nexttile; plot(timeImec(idx_Imec(1:l_CamImec))-timeCamera(idx_Cam(1:l_CamImec))); title('Imec-cam');
+        elseif strcmpi(session.baselineSystem,'NI')
+            nexttile; plot(timeNI(idx_NI(1:l_CamNI))-timeCamera(idx_Cam(1:l_CamNI))); title('NI-cam');
+        elseif strcmpi(session.baselineSystem,'LJ')
+            nexttile; plot(timePhotometry(idx_LJ(1:l_CamLJ))-timeCamera(idx_Cam(1:l_CamLJ))); title('LJ-cam');
+        end
+        disp("Finished: camera timestamp plotted");
+    end
+    
+    if withPhotometry
+        if strcmpi(session.baselineSystem,'NI')
+            title('Labjack vs Imec/NI');
+            nexttile; plot(timePhotometry); title('Photometry time in sec'); 
+            nexttile; plot(diff(timePhotometry)); title('d(timePhotometry)');
+            if withRecording && ~options.noSyncPulse
+                nexttile; plot(timeImec(idx_Imec(1:l_LJImec))-timePhotometry(idx_LJ(1:l_LJImec))); title('Imec-photometry');
+            else
+                nexttile; plot(timeNI(idx_NI(1:l_LJNI))-timePhotometry(idx_LJ(1:l_LJNI))); title('NI-photometry');
+            end
+            disp("Finished: Labjack timestamp plotted");
+        elseif strcmpi(session.baselineSystem,'LJ')
+            nexttile; plot(timePhotometry); title('LJ time in sec');
+            nexttile; plot(diff(timePhotometry)); title('d(timePhotometry)');
+            disp("Finished: LJ timestamp plotted");
+        end
+    end
+    saveas(gcf,strcat(options.outputPath,filesep,'Summary_syncing_timestamp.png'));
+
+%% Try align using photometry if there's no sync pulse
+elseif options.noSyncPulse && withPhotometry
+    disp("Ongoing: No sync pulse, try using photometry signal to align");
+
+    % 5.2.1 Use the first 60 second to find location
+    %% Define sync window
+    photometrySyncWindow_ni = 1 : options.photometrySyncWindow*nidq.Fs;
+    photometrySyncWindow_lj = 1 : options.photometrySyncWindow*labjack.samplerate;
+    
+    % Downsample NI data
+    syncSignal_ni = zscore(photometry_raw(photometrySyncWindow_ni));
+    syncSignal_ni_ds = resample(syncSignal_ni, labjack.samplerate, nidq.Fs);
+    syncSignal_ni_smoothed = movmean(syncSignal_ni_ds,1000);
+    
+    % Initialize matrix to store lags and corr for each pair
+    lags = zeros(size(labjack.raw,1),1);
+    xcorrs = zeros(size(labjack.raw,1),1);
+    
+    for i = 1:1%size(labjack.raw,1)
+        syncSignal_lj = zscore(labjack.raw(i,photometrySyncWindow_lj));
+        syncSignal_lj_smoothed = movmean(syncSignal_lj,1000);
+    
+        % Calculate xcorr
+        [r_lj, l_lj] = xcorr(syncSignal_ni_smoothed, syncSignal_lj_smoothed,'normalized');
+        % Find the lag (in samples of the downsampled ni_data)
+        [~, idx] = max(r_lj);
+        lags(i) = l_lj(idx);
+        xcorrs(i) = r_lj(idx);
+        % stem(l_lj,r_lj);
+    end
+    
+    % Find the pair that geneartes the largest xcorr
+    [~,signalIdx] = max(xcorrs);
+    lag = lags(signalIdx);
+    
+    % Determine the common start sample indices
+    if lag >= 0
+        firstPulse_inNI_ds = 1 + lag;
+        firstPulse_inLJ = 1;
+    else
+        firstPulse_inNI_ds = 1;
+        firstPulse_inLJ = 1 - lag;
+    end
+    firstPulse_inNI = (firstPulse_inNI_ds - 1) * (nidq.Fs / labjack.samplerate) + 1;
+    
+    initializeFig(0.7,0.7); tiledlayout(4,4);
+    nexttile([1 4]);
+    plot(syncSignal_ni_smoothed(firstPulse_inNI_ds:end)-syncSignal_lj_smoothed(firstPulse_inLJ:end-firstPulse_inNI_ds+1));
+    xlabel('Samples'); ylabel('Residual alignment error');
+    nexttile([1 4]);
+    plot(syncSignal_ni_smoothed(firstPulse_inNI_ds:end));
+    hold on;
+    plot(syncSignal_lj_smoothed(firstPulse_inLJ:end));
+    xlabel('Samples'); ylabel('Value');
+    nexttile([1 4]);
+    time = 300;
+    photometryTestWindow_ni = firstPulse_inNI : firstPulse_inNI+time*nidq.Fs;
+    photometryTestWindow_lj = firstPulse_inLJ : firstPulse_inLJ+time*labjack.samplerate;
+    x_ni = linspace(1,time+1,length(photometryTestWindow_ni));
+    x_lj = linspace(1,time+1,length(photometryTestWindow_lj));
+    plot(x_ni,photometry_raw(photometryTestWindow_ni)); hold on
+    plot(x_lj,labjack.raw(signalIdx,photometryTestWindow_lj));
+    xlim([1 time]); xlabel('Samples'); ylabel('Value');
+
+    % 5.2.3 Save all sync related data
+    params.sync.commonStartPhotometry = firstPulse_inLJ;
+    params.sync.commonStartNI = firstPulse_inNI;
+
+    % 6. Fill in time
+    timeNI = zeros(1,length(syncNI));
+    timePhotometry = zeros(1,length(sync_labjack));
+    
     for i=1:length(syncNI)
         timeNI(i) = (i-firstPulse_inNI)/params.sync.behaviorFs; % Time of each timebin of NI in sec
     end
-    idx_NI = find(syncNI_diff(firstPulse_inNI:end)==1)+firstPulse_inNI-1;
     t0 = timeNI(firstPulse_inNI);
     disp("Finished: Imec/NI timestamp assigned");
-end
-
-% Fill in photometry time
-if withPhotometry
-    if strcmpi(session.baselineSystem,'LJ')
-        for i=1:length(sync_labjack)
-            timePhotometry(i) = (i-firstPulse_inLJ)/params.sync.labjackFs; % Time of each timebin of labjack in sec
-        end
-        idx_LJ = find(syncLJ_diff(firstPulse_inLJ:end)==1)+firstPulse_inLJ-1;
-        t0 = timePhotometry(firstPulse_inLJ);
-        disp("Finished: Labjack timestamp assigned");
-    elseif strcmpi(session.baselineSystem,'NI') 
-        if withRecording && ~options.noSyncPulse
-            % Index of all sync pulses starting from the first common pulse
-            idx_LJ = find(syncLJ_diff(firstPulse_inLJ:end)==1)+firstPulse_inLJ-1;
-            [timePhotometry,l_LJImec] = assignTimeStamp(timePhotometry,timeImec,idx_LJ,idx_Imec,params.sync.labjackFs);
-            timePhotometry = timePhotometry - t0; % align timePhotometry to timeNI
-        else
-            % Index of all sync pulses starting from the first common pulse
-            idx_LJ = find(syncLJ_diff(firstPulse_inLJ:end)==1)+firstPulse_inLJ-1;
-            [timePhotometry,l_LJNI] = assignTimeStamp(timePhotometry,timeNI,idx_LJ,idx_NI,params.sync.labjackFs);
-            timePhotometry = timePhotometry - t0; % align timePhotometry to timeNI
-        end
+    
+    for i=1:length(sync_labjack)
+        timePhotometry(i) = (i-firstPulse_inLJ)/params.sync.labjackFs; % Time of each timebin of NI in sec
     end
+    timePhotometry = timePhotometry - t0;
     disp("Finished: labjack timestamp assigned");
-end
 
-% Fill in camera
-if withCamera
-    if withRecording && ~options.noSyncPulse
-        % Index of all sync pulses starting from the first common pulse
-        idx_Cam = find(syncCam_diff(firstPulse_inCam:end)==1)+firstPulse_inCam-1;
-        [timeCamera,l_CamImec] = assignTimeStamp(timeCamera,timeImec,idx_Cam,idx_Imec,params.sync.camFs);
-        timeCamera = timeCamera - t0; % align timeCamera to timeImec
-    else
-        if strcmpi(session.baselineSystem,'NI')
-            % Index of all sync pulses starting from the first common pulse
-            idx_Cam = find(syncCam_diff(firstPulse_inCam:end)==1)+firstPulse_inCam-1;
-            [timeCamera,l_CamNI] = assignTimeStamp(timeCamera,timeNI,idx_Cam,idx_NI,params.sync.camFs);
-            timeCamera = timeCamera - t0; % align timeCamera to timeNI
-        elseif strcmpi(session.baselineSystem,'LJ')
-            % Index of all sync pulses starting from the first common pulse
-            idx_Cam = find(syncCam_diff(firstPulse_inCam:end)==1)+firstPulse_inCam-1;
-            [timeCamera,l_CamLJ] = assignTimeStamp(timeCamera,timePhotometry,idx_Cam,idx_LJ,params.sync.camFs);
-            timeCamera = timeCamera - t0; % align timeCamera to timeNI
-        end
-    end
-    disp("Finished: camera timestamp assigned");
-end
+    % Align to common start pulse
+    timeNI = timeNI - t0;
 
-% Fill in NI if withRecording == true
-if withRecording && ~options.noSyncPulse
-    % Index of all sync pulses starting from the first common pulse
-    % idx_Imec = find(syncImec_diff(firstPulse_inImec:end)==1)+firstPulse_inImec-1;
-    % [timeImec,l_ImecNI] = assignTimeStamp(timeImec,timeNI,idx_Imec,idx_NI,params.sync.apFs);
-    idx_NI = find(syncNI_diff(firstPulse_inNI:end)==1)+firstPulse_inNI-1;
-    [timeNI,l_NIImec] = assignTimeStamp(timeNI,timeImec,idx_NI,idx_Imec,params.sync.behaviorFs);
-    timeNI = timeNI - t0; % align timePhotometry to timeNI
-
-    idx_LFP = find(syncLFP_diff(firstPulse_inLFP:end)==1)+firstPulse_inLFP-1;
-    [timeLFP,l_LFPImec] = assignTimeStamp(timeLFP,timeImec,idx_LFP,idx_Imec,params.sync.lfpFs);
-    timeLFP = timeLFP - t0; % align timePhotometry to timeNI
-    disp("Finished: LFP timestamp assigned");
-end
-
-% Align to common start pulse
-if withRecording && ~options.noSyncPulse; timeImec = timeImec - t0;
-elseif strcmpi(session.baselineSystem,'NI'); timeNI = timeNI - t0; 
-elseif strcmpi(session.baselineSystem,'LJ'); timePhotometry = timePhotometry-t0;
-end
-
-% 7. Plot summary plot
-if withRecording && ~options.noSyncPulse
-    title('LFP vs Imec');
-    nexttile; plot(timeImec); title('Imec time in sec');
-    nexttile; plot(timeLFP); title('LFP time in sec');
-    nexttile; plot(diff(timeImec)); title('d(timeImec)');
-    nexttile; plot(diff(timeLFP)); title('d(timeLFP)');
-   
-    nexttile; title('NI vs Imec');
-    nexttile; plot(timeNI); title('NI time in sec');
-    nexttile; plot(diff(timeNI)); title('d(timeNI)');
-    nexttile; plot(timeImec(idx_Imec(1:l_NIImec))-timeNI(idx_NI(1:l_NIImec))); title('Imec-NI');
-    nexttile; plot(timeLFP(idx_LFP(1:l_LFPImec))-timeLFP(idx_LFP(1:l_LFPImec))); title('LFP-NI');
-    disp("Finished: Imec/NI timestamp plotted");
-elseif withNI
+    % 7. Plot summary plot
     nexttile; plot(timeNI); title('NI time in sec');
     nexttile; plot(diff(timeNI)); title('d(timeNI)');
     disp("Finished: Imec/NI timestamp plotted");  
+    nexttile; plot(timePhotometry); title('Photometry time in sec'); 
+    nexttile; plot(diff(timePhotometry)); title('d(timePhotometry)');
+    disp("Finished: Labjack timestamp plotted");
+    saveas(gcf,strcat(options.outputPath,filesep,'Summary_syncing_timestamp.png'));
 end
 
-if withCamera
-    title('Camera vs Imec/NI');
-    nexttile; plot(timeCamera); title('Camera time in sec'); 
-    nexttile; plot(diff(timeCamera)); title('d(timeCamera)');
-    if withRecording && ~options.noSyncPulse
-        nexttile; plot(timeImec(idx_Imec(1:l_CamImec))-timeCamera(idx_Cam(1:l_CamImec))); title('Imec-cam');
-    elseif strcmpi(session.baselineSystem,'NI')
-        nexttile; plot(timeNI(idx_NI(1:l_CamNI))-timeCamera(idx_Cam(1:l_CamNI))); title('NI-cam');
-    elseif strcmpi(session.baselineSystem,'LJ')
-        nexttile; plot(timePhotometry(idx_LJ(1:l_CamLJ))-timeCamera(idx_Cam(1:l_CamLJ))); title('LJ-cam');
-    end
-    disp("Finished: camera timestamp plotted");
-end
+% % 5.2.1 Use the first 60 second to find location
+% % Define sync window
+% photometrySyncWindow_ni = 1 : options.photometrySyncWindow*nidq.Fs;
+% photometrySyncWindow_lj = 1 : options.photometrySyncWindow*labjack.samplerate;
+% 
+% % Downsample NI data
+% syncSignal_ni = zscore(photometry_raw(photometrySyncWindow_ni));
+% syncSignal_ni_ds = resample(syncSignal_ni, labjack.samplerate, nidq.Fs);
+% syncSignal_ni_smoothed = movmean(syncSignal_ni_ds,1000);
+% 
+% % Initialize matrix to store lags and corr for each pair
+% lags = zeros(size(labjack.raw,1),1);
+% xcorrs = zeros(size(labjack.raw,1),1);
+% 
+% for i = 1:1%size(labjack.raw,1)
+%     syncSignal_lj = zscore(labjack.raw(i,photometrySyncWindow_lj));
+%     syncSignal_lj_smoothed = movmean(syncSignal_lj,1000);
+% 
+%     % Calculate xcorr
+%     [r_lj, l_lj] = xcorr(syncSignal_ni_smoothed, syncSignal_lj_smoothed,'normalized');
+%     % Find the lag (in samples of the downsampled ni_data)
+%     [~, idx] = max(r_lj);
+%     lags(i) = l_lj(idx);
+%     xcorrs(i) = r_lj(idx);
+%     % stem(l_lj,r_lj);
+% end
+% 
+% % Find the pair that geneartes the largest xcorr
+% [~,signalIdx] = max(xcorrs);
+% lag = lags(signalIdx);
+% 
+% % Determine the common start sample indices
+% if lag >= 0
+%     firstPulse_inNI_ds = 1 + lag;
+%     firstPulse_inLJ = 1;
+% else
+%     firstPulse_inNI_ds = 1;
+%     firstPulse_inLJ = 1 - lag;
+% end
+% firstPulse_inNI = (firstPulse_inNI_ds - 1) * (nidq.Fs / labjack.samplerate) + 1;
+% 
+% initializeFig(0.7,0.7); tiledlayout(2,1);
+% nexttile;
+% plot(syncSignal_ni_smoothed(firstPulse_inNI_ds:end)-syncSignal_lj_smoothed(firstPulse_inLJ:end-firstPulse_inNI_ds+1));
+% nexttile;
+% plot(syncSignal_ni_smoothed(firstPulse_inNI_ds:end));
+% hold on;
+% plot(syncSignal_lj_smoothed(firstPulse_inLJ:end));
 
-if withPhotometry
-    if strcmpi(session.baselineSystem,'NI')
-        title('Labjack vs Imec/NI');
-        nexttile; plot(timePhotometry); title('Photometry time in sec'); 
-        nexttile; plot(diff(timePhotometry)); title('d(timePhotometry)');
-        if withRecording && ~options.noSyncPulse
-            nexttile; plot(timeImec(idx_Imec(1:l_LJImec))-timePhotometry(idx_LJ(1:l_LJImec))); title('Imec-photometry');
-        else
-            nexttile; plot(timeNI(idx_NI(1:l_LJNI))-timePhotometry(idx_LJ(1:l_LJNI))); title('NI-photometry');
-        end
-        disp("Finished: Labjack timestamp plotted");
-    elseif strcmpi(session.baselineSystem,'LJ')
-        nexttile; plot(timePhotometry); title('LJ time in sec');
-        nexttile; plot(diff(timePhotometry)); title('d(timePhotometry)');
-        disp("Finished: LJ timestamp plotted");
-    end
-end
-saveas(gcf,strcat(options.outputPath,filesep,'Summary_syncing_timestamp.png'));
+
+%%
+
+% time = 500; minPeakSeparation = 1000; % in ms
+% minPeakProminence = 10;
+% 
+% photometryTestWindow_ni = firstPulse_inNI : firstPulse_inNI+time*nidq.Fs;
+% photometryTestWindow_lj = firstPulse_inLJ : firstPulse_inLJ+time*labjack.samplerate;
+% photometry_ni_smoothed = zscore(movmean(photometry_raw(photometryTestWindow_ni),1000));
+% photometry_lj_smoothed = zscore(movmean(labjack.raw(signalIdx,photometryTestWindow_lj),1000));
+% 
+% [~,niLocs] = findpeaks(photometry_ni_smoothed,MinPeakProminence=minPeakProminence,MinPeakDistance=minPeakSeparation/1000*nidq.Fs);
+% [~,ljLocs] = findpeaks(photometry_lj_smoothed,MinPeakProminence=minPeakProminence,MinPeakDistance=minPeakSeparation/1000*labjack.samplerate);
+% 
+% disp(sum(niLocs>=firstPulse_inNI));
+% disp(length(ljLocs));
+% 
+% initializeFig(0.7,0.7); tiledlayout(3,1);
+% nexttile;
+% x_ni = linspace(1,time+1,length(photometryTestWindow_ni));
+% x_lj = linspace(1,time+1,length(photometryTestWindow_lj));
+% plot(x_ni,photometry_ni_smoothed); hold on
+% plot(x_lj,photometry_lj_smoothed);
+% nexttile;
+% findpeaks(photometry_ni_smoothed,MinPeakProminence=minPeakProminence,MinPeakDistance=minPeakSeparation/1000*nidq.Fs);
+% nexttile;
+% findpeaks(photometry_lj_smoothed,MinPeakProminence=minPeakProminence,MinPeakDistance=minPeakSeparation/1000*labjack.samplerate);
+
 
 %% (Ver5) Save sync and other data
 

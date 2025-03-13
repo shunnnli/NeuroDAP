@@ -22,8 +22,20 @@ arguments
 end
 
 %% Check inputs
-
-if size(data,2) == 2
+if isvector(data)
+    if isscalar(data)
+        x = 1;
+        if ~isfield(options,'color'); options.color = [.2 .2 .2]; end
+    else
+        x = 1:numel(data);
+        if ~isfield(options,'color')
+            options.color = cell(numel(data),1);
+            for c = 1:numel(data)
+                options.color{c} = rand(1,3);
+            end
+        end
+    end
+elseif size(data,2) == 2
     % Check whether x is in correct dimension
     if length(x) ~= 2
         warning('x should be a vector with 2 elements indicating where each column is on the x axis! Reset to x=[1,2]');

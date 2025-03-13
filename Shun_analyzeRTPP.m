@@ -10,32 +10,53 @@ clear; close all;
 addpath(genpath(osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
 
 filename = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Recordings'));
-data = readtable(filename{1});
 
+sessionList = dir(filename{1});
+sessionList = sessionList(~ismember({sessionList.name},{'.','..'}));
+nSessions = length(sessionList);
+
+sessions = struct([]);
+for s = 1:nSessions
+    cur_session = dir(fullfile(sessionList(s).folder,sessionList(s).name));
+    tableName = cur_session(contains({cur_session.name},'times-')).name;
+    tablePath = cur_session(contains({cur_session.name},'times-')).folder;
+    cur_data = readtable(fullfile(tablePath,tableName));
+
+    dirsplit = split(tablePath,filesep);
+    sessions(s).name = dirsplit{end};
+    sessions(s).path = tablePath;
+    sessions(s).data = cur_data;
+end
 Fs = 30; % frame rate
 
-%% Extract columns
-X = data.Item3_X;
-Y = data.Item3_Y;
-stim = strcmp(data.Item2,'True'); % Assuming Stim is a binary column (0 = Off, 1 = On)
+%% Plot summary figure
 
-% Remove artifact (to remove wall edges)
-% x_artifact = X < 5.5 & X > 5;
-% y_artifact = Y < 650 & Y > 600;
-% artifact_idx = intersect(find(x_artifact),find(y_artifact));
-% X(artifact_idx) = nan;
-% Y(artifact_idx) = nan;
+initializeFig(0.5,1); tiledlayout(1,nSessions);
 
-% Plot the trajectory
-figure; hold on;
-plot(X(stim == 0), Y(stim == 0), 'k', 'LineWidth', 1); % Black for OFF
-plot(X(stim == 1), Y(stim == 1), 'b', 'LineWidth', 1); % Red for ON
+for s = 1:nSessions
+    cur_data = sessions(s).data;
+    cur_name = sessions(s).name;
 
-% Labels and title
-xlim([300,650]); xlabel('X Position');
-ylim([0,700]);ylabel('Y Position');
-title('Animal Trajectory');
-legend({'Stim OFF', 'Stim ON'}, 'Location', 'northeast');
+    X = cur_data.Item3_X;
+    Y = cur_data.Item3_Y;
+    Y_midpoint = (min(Y)+max(Y))/2;
+    
+    % Plot the trajectory
+    nexttile;
+    if contains(cur_name,'Habit')
+        plot(X(Y>=Y_midpoint), Y(Y>=Y_midpoint), 'k', 'LineWidth', 2); hold on; % Black for OFF
+        plot(X(Y<Y_midpoint), Y(Y<Y_midpoint), 'b', 'LineWidth', 2); % Red for ON
+        legend({'Right', 'Left'}, 'Location', 'northeast');
+    else
+        plot(X(Y>=Y_midpoint), Y(Y>=Y_midpoint), 'b', 'LineWidth', 2); hold on; % Black for OFF
+        plot(X(Y<Y_midpoint), Y(Y<Y_midpoint), 'k', 'LineWidth', 2); % Red for ON
+        legend({'Stim OFF', 'Stim ON'}, 'Location', 'northeast');
+    end
+    
+    xlim([300,650]); xlabel('X Position');
+    ylim([0,700]);ylabel('Y Position');
+    title(cur_name);
+end
 
 
 %% Heatmap
@@ -67,7 +88,26 @@ title ('Heatmap');
 
 %% Bar plot of %time at opto side
 
-stim_pct = sum(stim)/length(stim) * 100;
+stim_pct = zeros(1,nSessions);
+for s = 1:nSessions
+    cur_data = sessions(s).data;
+    cur_name = sessions(s).name;
 
-% % Plot bar plot
-% figure; hold on;
+    X = cur_data.Item3_X;
+    Y = cur_data.Item3_Y;
+    Y_midpoint = (min(Y)+max(Y))/2;
+
+    % stim = strcmp(cur_data.Item2,'True'); % Assuming Stim is a binary column (0 = Off, 1 = On)
+    stim = find(Y>=Y_midpoint);
+    stim_pct(s) = length(stim)/length(Y) * 100;
+end
+
+% Plot bar plot
+initializeFig(0.3,0.5);
+bar(1,stim_pct(1),'k'); hold on
+bar(2,stim_pct(2),'b'); hold on
+xticks([1 2]);
+xticklabels({'Habituation','RTPP1'});
+ylabel('Time spent in stimulated side (%)');
+
+
