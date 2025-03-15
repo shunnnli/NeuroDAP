@@ -264,25 +264,30 @@ xlabel('Time (s)'); ylabel('z-score');
 eventRange = 'Stim';
 animalRange = unique({animals.animal});
 DAtrend = struct([]);
+nboot = 1000;
+trialConditions = 'trials.performing';
 
 for a = 1:length(animalRange)
-    cur_animal = animalRange{a};
+    cur_animal = animalRange{a}; disp(['Ongoing: analyzing ',cur_animal]);
     cur_task = unique({animals(strcmp({animals.animal}, cur_animal)).task});
     DA_Max = getGroupedTrialStats(animals,'stageMax',...
                                 eventRange=eventRange,...
                                 animalRange=cur_animal,...
                                 taskRange=cur_task,...
-                                signalRange='dLight');
+                                signalRange='dLight',...
+                                trialConditions=trialConditions);
     DA_Min = getGroupedTrialStats(animals,'stageMin',...
                                 eventRange=eventRange,...
                                 animalRange=cur_animal,...
                                 taskRange=cur_task,...
-                                signalRange='dLight');
+                                signalRange='dLight',...
+                                trialConditions=trialConditions);
     DA_Avg = getGroupedTrialStats(animals,'stageAvg',...
                                 eventRange=eventRange,...
                                 animalRange=cur_animal,...
                                 taskRange=cur_task,...
-                                signalRange='dLight');
+                                signalRange='dLight',...
+                                trialConditions=trialConditions);
     % initializeFig(.7,.7); tiledlayout('flow');
     % DA_stageMax_result = plotGroupedTrialStats(DA_stageMax,'DA Max',groupSize=1,color=bluePurpleRed(500,:));
 
@@ -294,8 +299,15 @@ for a = 1:length(animalRange)
     DAtrend(a).CueAvg = DA_Avg.stats{1}{1}(:,2);
     DAtrend(a).CueAmp = getAmplitude(DA_Max.stats{1}{1}(:,2),DA_Min.stats{1}{1}(:,2));
 
+    % Save smoothed DAtrend
+    DAtrend(a).CueMax_smoothed = smoothdata(DAtrend(a).CueMax,'movmean',3);
+    DAtrend(a).CueMin_smoothed = smoothdata(DAtrend(a).CueMin,'movmean',3);
+    DAtrend(a).CueAvg_smoothed = smoothdata(DAtrend(a).CueAvg,'movmean',3);
+    DAtrend(a).CueAmp_smoothed = smoothdata(DAtrend(a).CueAmp,'movmean',3);
+
     % Calculate DA trending stats
-    fields = {'CueMax', 'CueMin', 'CueAvg', 'CueAmp'};
+    fields = {'CueMax', 'CueMin', 'CueAvg', 'CueAmp',...
+              'CueMax_smoothed','CueMin_smoothed','CueAvg_smoothed','CueAmp_smoothed'};
     nTrials = length(DAtrend(a).CueMax); % assuming all have the same length
     
     for f = 1:numel(fields)
@@ -304,21 +316,22 @@ for a = 1:length(animalRange)
         pvals  = nan(nTrials, 1);
         
         % Loop for trending statistics: last n trials (n = 1:nTrials)
-        for n = 2:nTrials
+        for n = 3:nTrials
             Y = data(end-n+1:end);  % last n trials
             X = (1:n)';             % corresponding trial indices for regression
-            stats = regstats(Y, X, 'linear', {'tstat'});
-            slopes(n) = stats.tstat.beta(2);  % slope coefficient
-            pvals(n)  = stats.tstat.pval(2);   % p-value for the slope
+            fit_obs = polyfit(X, Y, 1); obsSlope = fit_obs(1);
+            fit_boot = bootstrp(nboot, @(i) polyfit(X, Y(i), 1), 1:length(Y));
+            slopes(n) = obsSlope;
+            pvals(n)  = sum(abs(fit_boot(:,1)) >= abs(obsSlope))/nboot;   % p-value for the slope
         end
         
         % Store the trending statistics into DAtrend
         DAtrend(a).([fields{f} '_slope']) = slopes;
         DAtrend(a).([fields{f} '_pval'])  = pvals;
         
-        % Compute difference between the last 10 trials and the first 10 trials
-        if nTrials >= 10
-            DAtrend(a).([fields{f} '_diff']) = mean(data(end-9:end)) - mean(data(1:10));
+        % Compute difference between the last 20 trials and the last 40 trials
+        if nTrials >= 40
+            DAtrend(a).([fields{f} '_diff']) = mean(data(end-40+1:end-20)) - mean(data(end-20+1:end));
         else
             DAtrend(a).([fields{f} '_diff']) = NaN;  % Not enough trials
         end
@@ -335,3 +348,186 @@ filename = strcat('DAtrend_',today,'_',answer{1});
 disp(['Ongoing: saving DAtrend.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
 save(strcat(resultspath,filesep,filename),'DAtrend','sessionList','-v7.3');
 disp(['Finished: saved DAtrend.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
+
+
+%% Plot DA trend for each animal
+
+animalRange = unique({animals.animal});
+shortWindow = 20;%16:21;
+longWindow  = 40;%38:43;
+
+shortWindowColor = [128, 179, 255]./255;
+longWindowColor = [143, 88, 219]./255;
+
+for a = 1:length(animalRange)
+    
+    % Calculate p-value during plasticity window
+    cur_animal = animalRange{a};
+
+    % Plot DA trend summary for this animal
+    close all; initializeFig(.5,1); tiledlayout(4,3);
+
+    nexttile([2 1]);
+    combined = combineTraces(animals,timeRange=[-0.5,1],...
+                                eventRange='Stim',...
+                                animalRange=cur_animal,...
+                                signalRange='dLight');
+    legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,...
+                            groupby='trials',groupSize=10,remaining='include',...
+                            LineWidth=5,plotPatch=true);
+    plotEvent('Stim',0.5,color=bluePurpleRed(500,:));
+    xlabel('Time (s)'); ylabel('dLight z-score'); legend(legendList);
+
+    nexttile; 
+    data = DAtrend(a).CueAmp; smoothed = DAtrend(a).CueAmp_smoothed;
+    scatter(1:length(data),data,80,[0.3010 0.7450 0.9330],'filled'); hold on
+    plot(smoothed,color=[0 0.4470 0.7410],LineWidth=5);
+    plotEvent('Long window',range(longWindow),color=longWindowColor,x=numel(data)-longWindow(end));
+    plotEvent('',longWindow(1),color=longWindowColor,x=numel(data)-longWindow(1));
+    plotEvent('Short window',range(shortWindow),color=shortWindowColor,x=numel(data)-shortWindow(end));
+    plotEvent('',shortWindow(1),color=shortWindowColor,x=numel(data)-shortWindow(1));
+    xlabel('Trials'); ylabel('DA Amp during cue');
+    xlim([1,numel(data)]);
+    title('DA Amplitude'); box off;
+
+    nexttile;
+    plotScatterBar(1,mean(DAtrend(a).CueAmp_slope(shortWindow)),color=shortWindowColor,style='bar'); hold on;
+    plotScatterBar(2,mean(DAtrend(a).CueAmp_smoothed_slope(shortWindow)),color=shortWindowColor,style='bar'); hold on;
+    plotScatterBar(3,mean(DAtrend(a).CueAmp_slope(longWindow)),color=longWindowColor,style='bar'); hold on;
+    plotScatterBar(4,mean(DAtrend(a).CueAmp_smoothed_slope(longWindow)),color=longWindowColor,style='bar'); hold on;
+    % plotScatterBar(5,DAtrend(a).CueAmp_diff,style='bar'); hold on;
+    text(1-0.15,mean(DAtrend(a).CueAmp_slope(shortWindow)),num2str(mean(DAtrend(a).CueAmp_pval(shortWindow)),'%.3f'));
+    text(2-0.15,mean(DAtrend(a).CueAmp_smoothed_slope(shortWindow)),num2str(mean(DAtrend(a).CueAmp_smoothed_pval(shortWindow)),'%.3f'));
+    text(3-0.15,mean(DAtrend(a).CueAmp_slope(longWindow)),num2str(mean(DAtrend(a).CueAmp_pval(longWindow)),'%.3f'));
+    text(4-0.15,mean(DAtrend(a).CueAmp_smoothed_slope(longWindow)),num2str(mean(DAtrend(a).CueAmp_smoothed_pval(longWindow)),'%.3f'));
+    xticks([1 2 3 4]);
+    xticklabels({'Amp (short)','Amp smoothed (short)',...
+                 'Amp (long)','Amp smoothed (long)'});
+    ylabel('Slope');
+
+    nexttile;
+    data = DAtrend(a).CueAvg; smoothed = DAtrend(a).CueAvg_smoothed;
+    scatter(1:length(data),data,80,[0.3010 0.7450 0.9330],'filled'); hold on
+    plot(smoothed,color=[0 0.4470 0.7410],LineWidth=5);
+    plotEvent('Long window',range(longWindow),color=longWindowColor,x=numel(data)-longWindow(end));
+    plotEvent('',longWindow(1),color=longWindowColor,x=numel(data)-longWindow(1));
+    plotEvent('Short window',range(shortWindow),color=shortWindowColor,x=numel(data)-shortWindow(end));
+    plotEvent('',shortWindow(1),color=shortWindowColor,x=numel(data)-shortWindow(1));
+    xlabel('Trials'); ylabel('DA Avg during cue');
+    xlim([1,numel(data)]);
+    title('DA Average'); box off;
+
+    nexttile;
+    plotScatterBar(1,mean(DAtrend(a).CueAvg_slope(shortWindow)),color=shortWindowColor,style='bar'); hold on;
+    plotScatterBar(2,mean(DAtrend(a).CueAvg_smoothed_slope(shortWindow)),color=shortWindowColor,style='bar'); hold on;
+    plotScatterBar(3,mean(DAtrend(a).CueAvg_slope(longWindow)),color=longWindowColor,style='bar'); hold on;
+    plotScatterBar(4,mean(DAtrend(a).CueAvg_smoothed_slope(longWindow)),color=longWindowColor,style='bar'); hold on;
+    text(1-0.15,mean(DAtrend(a).CueAvg_slope(shortWindow)),num2str(mean(DAtrend(a).CueAvg_pval(shortWindow)),'%.3f'));
+    text(2-0.15,mean(DAtrend(a).CueAvg_smoothed_slope(shortWindow)),num2str(mean(DAtrend(a).CueAvg_smoothed_pval(shortWindow)),'%.3f'));
+    text(3-0.15,mean(DAtrend(a).CueAvg_slope(longWindow)),num2str(mean(DAtrend(a).CueAvg_pval(longWindow)),'%.3f'));
+    text(4-0.15,mean(DAtrend(a).CueAvg_smoothed_slope(longWindow)),num2str(mean(DAtrend(a).CueAvg_smoothed_pval(longWindow)),'%.3f'));
+    xticks([1 2 3 4]);
+    xticklabels({'Avg (short)','Avg smoothed (short)',...
+                 'Avg (long)','Avg smoothed (long)'});
+    ylabel('Slope');
+
+    nexttile([2 1]);
+    plotHeatmap(combined.data{1},combined.timestamp);
+    plotEvent('Stim',0.5,color=bluePurpleRed(500,:));
+    xlabel('Time (s)'); ylabel('dLight z-score');
+    
+
+    nexttile;
+    data = DAtrend(a).CueMax; smoothed = DAtrend(a).CueMax_smoothed;
+    scatter(1:length(data),data,80,[0.3010 0.7450 0.9330],'filled'); hold on
+    plot(smoothed,color=[0 0.4470 0.7410],LineWidth=5);
+    plotEvent('Long window',range(longWindow),color=longWindowColor,x=numel(data)-longWindow(end));
+    plotEvent('',longWindow(1),color=longWindowColor,x=numel(data)-longWindow(1));
+    plotEvent('Short window',range(shortWindow),color=shortWindowColor,x=numel(data)-shortWindow(end));
+    plotEvent('',shortWindow(1),color=shortWindowColor,x=numel(data)-shortWindow(1));
+    xlabel('Trials'); ylabel('DA Max during cue');
+    xlim([1,numel(data)]);
+    title('DA Max'); box off;
+
+    nexttile;
+    plotScatterBar(1,mean(DAtrend(a).CueMax_slope(shortWindow)),color=shortWindowColor,style='bar'); hold on;
+    plotScatterBar(2,mean(DAtrend(a).CueMax_smoothed_slope(shortWindow)),color=shortWindowColor,style='bar'); hold on;
+    plotScatterBar(3,mean(DAtrend(a).CueMax_slope(longWindow)),color=longWindowColor,style='bar'); hold on;
+    plotScatterBar(4,mean(DAtrend(a).CueMax_smoothed_slope(longWindow)),color=longWindowColor,style='bar'); hold on;
+    text(1-0.15,mean(DAtrend(a).CueMax_slope(shortWindow)),num2str(mean(DAtrend(a).CueMax_pval(shortWindow)),'%.3f'));
+    text(2-0.15,mean(DAtrend(a).CueMax_smoothed_slope(shortWindow)),num2str(mean(DAtrend(a).CueMax_smoothed_pval(shortWindow)),'%.3f'));
+    text(3-0.15,mean(DAtrend(a).CueMax_slope(longWindow)),num2str(mean(DAtrend(a).CueMax_pval(longWindow)),'%.3f'));
+    text(4-0.15,mean(DAtrend(a).CueMax_smoothed_slope(longWindow)),num2str(mean(DAtrend(a).CueMax_smoothed_pval(longWindow)),'%.3f'));
+    xticks([1 2 3 4]);
+    xticklabels({'Max (short)','Max smoothed (short)',...
+                 'Max (long)','Max smoothed (long)'});
+    ylabel('Slope');
+
+    nexttile([1 1]);
+    data = DAtrend(a).CueMin; smoothed = DAtrend(a).CueMin_smoothed;
+    scatter(1:length(data),data,80,[0.3010 0.7450 0.9330],'filled'); hold on
+    plot(smoothed,color=[0 0.4470 0.7410],LineWidth=5);
+    plotEvent('Long window',range(longWindow),color=longWindowColor,x=numel(data)-longWindow(end));
+    plotEvent('',longWindow(1),color=longWindowColor,x=numel(data)-longWindow(1));
+    plotEvent('Short window',range(shortWindow),color=shortWindowColor,x=numel(data)-shortWindow(end));
+    plotEvent('',shortWindow(1),color=shortWindowColor,x=numel(data)-shortWindow(1));
+    xlabel('Trials'); ylabel('DA Min during cue');
+    xlim([1,numel(data)]);
+    title('DA Min'); box off;
+
+    nexttile;
+    plotScatterBar(1,mean(DAtrend(a).CueMin_slope(shortWindow)),color=shortWindowColor,style='bar'); hold on;
+    plotScatterBar(2,mean(DAtrend(a).CueMin_smoothed_slope(shortWindow)),color=shortWindowColor,style='bar'); hold on;
+    plotScatterBar(3,mean(DAtrend(a).CueMin_slope(longWindow)),color=longWindowColor,style='bar'); hold on;
+    plotScatterBar(4,mean(DAtrend(a).CueMin_smoothed_slope(longWindow)),color=longWindowColor,style='bar'); hold on;
+    text(1-0.15,mean(DAtrend(a).CueMin_slope(shortWindow)),num2str(mean(DAtrend(a).CueMin_pval(shortWindow)),'%.3f'));
+    text(2-0.15,mean(DAtrend(a).CueMin_smoothed_slope(shortWindow)),num2str(mean(DAtrend(a).CueMin_smoothed_pval(shortWindow)),'%.3f'));
+    text(3-0.15,mean(DAtrend(a).CueMin_slope(longWindow)),num2str(mean(DAtrend(a).CueMin_pval(longWindow)),'%.3f'));
+    text(4-0.15,mean(DAtrend(a).CueMin_smoothed_slope(longWindow)),num2str(mean(DAtrend(a).CueMin_smoothed_pval(longWindow)),'%.3f'));
+    xticks([1 2 3 4]);
+    xticklabels({'Min (short)','Min smoothed (short)',...
+                 'Min (long)','Min smoothed (long)'});
+    ylabel('Slope');
+
+    saveFigures(gcf,cur_animal,strcat(resultspath,filesep,'DAtrend'),...
+            saveFIG=false,savePDF=false,savePNG=true);
+end
+
+
+%%
+
+animal = 'SL068';
+
+initializeFig(.5,1); tiledlayout(3,1);
+
+nexttile;
+statsTypes = 'nAnticipatoryLicks';
+ylabels = 'Anticipatory licks';
+stats = getGroupedTrialStats(animals,statsTypes,...
+                            eventRange='Stim',...
+                            animalRange=animal,...
+                            signalRange='dLight');
+results = plotGroupedTrialStats(stats,ylabels,groupSize=1,...
+                            plot=true,plotNextTile=false);
+
+
+nexttile;
+statsTypes = 'nLicks';
+ylabels = 'Total licks';
+stats = getGroupedTrialStats(animals,statsTypes,...
+                            eventRange='Stim',...
+                            animalRange=animal,...
+                            signalRange='dLight');
+results = plotGroupedTrialStats(stats,ylabels,groupSize=1,...
+                            plot=true,plotNextTile=false);
+
+
+nexttile;
+statsTypes = 'nOutcomeLicks';
+ylabels = 'Outcome licks';
+stats = getGroupedTrialStats(animals,statsTypes,...
+                            eventRange='Stim',...
+                            animalRange=animal,...
+                            signalRange='dLight');
+results = plotGroupedTrialStats(stats,ylabels,groupSize=1,...
+                            plot=true,plotNextTile=false);

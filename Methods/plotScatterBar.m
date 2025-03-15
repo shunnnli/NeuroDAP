@@ -1,8 +1,8 @@
-function plotScatterBar(data,x,options)
+function plotScatterBar(x,data,options)
 
 arguments
-    data double
     x double % value on the x axis
+    data double
 
     options.color 
     options.dotSize double = 70;
@@ -24,10 +24,8 @@ end
 %% Check inputs
 if isvector(data)
     if isscalar(data)
-        x = 1;
         if ~isfield(options,'color'); options.color = [.2 .2 .2]; end
     else
-        x = 1:numel(data);
         if ~isfield(options,'color')
             options.color = cell(numel(data),1);
             for c = 1:numel(data)

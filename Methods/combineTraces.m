@@ -28,8 +28,8 @@ arguments
     options.withStageArea logical = true
     options.empty logical = false
 
-    options.trialConditions string
-    options.historyConditions string
+    options.trialConditions
+    options.historyConditions
     options.trialTables table % total trial table generated from loadTrialTables()
 end
 
@@ -260,7 +260,7 @@ for signal = 1:length(options.signalRange)
         end
 
         % Check trialConditions in trialTable
-        if isfield(options,'trialConditions')
+        if isfield(options,'trialConditions') && ~isempty(options.trialConditions)
             trials = row.trialInfo.trialTable; % required!!
             trialRange = intersect(trialRange,find(eval(options.trialConditions)));
             if isempty(trialRange); warning('Did not find trials that fits trialConditions! Check expression!'); end

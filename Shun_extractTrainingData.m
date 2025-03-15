@@ -10,7 +10,7 @@ clear; close all;
 % sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project clamping/Recordings'));
 sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/MICROSCOPE/Shun/Project clamping/Recordings'));
 
-targetFs = 1000;
+targetFs = 200;
 originalFs = 10000;
 today = char(datetime('today','Format','yyyyMMdd'));
 
@@ -64,4 +64,4 @@ end
 % Store in .mat file
 save(strcat('/Volumes/MICROSCOPE/Shun/Project clamping/Results/',filename),...
     'sessionList',"reward_data","punish_data");
-disp(strcat('Finished: ',filename,'.mat saved'));
+disp(strcat(filename,'.mat saved'));

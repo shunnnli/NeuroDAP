@@ -61,7 +61,7 @@ for group = 1:length(options.plotGroup)
     if options.plotGroup(group)
         groupIdx = options.groupIdx{group};
         groupColor = options.color{group};
-        plotScatterBar(data(groupIdx),group,color=groupColor,dotSize=options.dotSize,orientation='horizontal'); hold on;
+        plotScatterBar(group,data(groupIdx),color=groupColor,dotSize=options.dotSize,orientation='horizontal'); hold on;
     end
 end
 

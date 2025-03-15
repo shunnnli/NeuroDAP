@@ -450,15 +450,15 @@ for d = 1:length(commonDepth)
     peakLayout1.Layout.Tile = 1; peakLayout1.Layout.TileSpan = [1 3];
     peakLayout1.TileSpacing = 'compact'; peakLayout1.Padding = 'tight'; axis off;
     nexttile(peakLayout1,1,[1 5]);
-    if find(hotspot1_spotIdx); plotScatterBar(spotMin1_avg(hotspot1_spotIdx),1,color=red); end
-    if find(~hotspot1_spotIdx); plotScatterBar(spotMin1_avg(~hotspot1_spotIdx),2,color=[.6 .6 .6]); end
-    if find(hotspot2_spotIdx); plotScatterBar(spotMin2_avg(hotspot2_spotIdx),5,color=red); end
-    if find(~hotspot2_spotIdx); plotScatterBar(spotMin2_avg(~hotspot2_spotIdx),7,color=[.6 .6 .6]); end
+    if find(hotspot1_spotIdx); plotScatterBar(1,spotMin1_avg(hotspot1_spotIdx),color=red); end
+    if find(~hotspot1_spotIdx); plotScatterBar(2,spotMin1_avg(~hotspot1_spotIdx),color=[.6 .6 .6]); end
+    if find(hotspot2_spotIdx); plotScatterBar(5,spotMin2_avg(hotspot2_spotIdx),color=red); end
+    if find(~hotspot2_spotIdx); plotScatterBar(7,spotMin2_avg(~hotspot2_spotIdx),color=[.6 .6 .6]); end
     % Plot hotspot vs nullspot max response
-    if find(hotspot1_spotIdx); plotScatterBar(spotMax1_avg(hotspot1_spotIdx),9,color=blue); end
-    if find(~hotspot1_spotIdx); plotScatterBar(spotMax1_avg(~hotspot1_spotIdx),11,color=[.6 .6 .6]); end  
-    if find(hotspot2_spotIdx); plotScatterBar(spotMax2_avg(hotspot2_spotIdx),13,color=blue); end
-    if find(~hotspot2_spotIdx); plotScatterBar(spotMax2_avg(~hotspot2_spotIdx),15,color=[.6 .6 .6]); end  
+    if find(hotspot1_spotIdx); plotScatterBar(9,spotMax1_avg(hotspot1_spotIdx),color=blue); end
+    if find(~hotspot1_spotIdx); plotScatterBar(11,spotMax1_avg(~hotspot1_spotIdx),color=[.6 .6 .6]); end  
+    if find(hotspot2_spotIdx); plotScatterBar(13,spotMax2_avg(hotspot2_spotIdx),color=blue); end
+    if find(~hotspot2_spotIdx); plotScatterBar(15,spotMax2_avg(~hotspot2_spotIdx),color=[.6 .6 .6]); end  
     ticks = {'Min hotspot','','Min nullspot','Min hotspot','','Min nullspot',...
             'Max hotspot','','Max nullspot','Max hotspot','','Max nullspot';...
             '','Search 1','','','Search 2','','','Search 1','','','Search 2',''};
@@ -471,19 +471,19 @@ for d = 1:length(commonDepth)
 
     % Plot ctrl min/max response
     nexttile(peakLayout1,6);
-    plotScatterBar([ctrlMin1_avg;ctrlMin2_avg],1,color=[.8 .8 .8]);
-    plotScatterBar([ctrlMax1_avg;ctrlMax2_avg],2,color=[.8 .8 .8]);
+    plotScatterBar(1,[ctrlMin1_avg;ctrlMin2_avg],color=[.8 .8 .8]);
+    plotScatterBar(2,[ctrlMax1_avg;ctrlMax2_avg],color=[.8 .8 .8]);
     xticks([1 2]); xticklabels({'Excitatory','Inhibitory'});
     ylabel('Current (pA)');
     title('Max ctrl current');
 
     % Plot hotspot vs nullspot AUC
     nexttile(statLayout1,4);
-    if find(hotspot1_spotIdx); plotScatterBar(spotAUC1_avg(hotspot1_spotIdx),1,color=red); end
-    if find(~hotspot1_spotIdx); plotScatterBar(spotAUC1_avg(~hotspot1_spotIdx),3,color=[.6 .6 .6]); end
-    if find(hotspot2_spotIdx); plotScatterBar(spotAUC2_avg(hotspot2_spotIdx),5,color=red); end
-    if find(~hotspot2_spotIdx); plotScatterBar(spotAUC2_avg(~hotspot2_spotIdx),7,color=[.6 .6 .6]); end
-    plotScatterBar([ctrlAUC1_avg;ctrlAUC2_avg],9,color=[.8 .8 .8]);
+    if find(hotspot1_spotIdx); plotScatterBar(1,spotAUC1_avg(hotspot1_spotIdx),color=red); end
+    if find(~hotspot1_spotIdx); plotScatterBar(3,spotAUC1_avg(~hotspot1_spotIdx),color=[.6 .6 .6]); end
+    if find(hotspot2_spotIdx); plotScatterBar(5,spotAUC2_avg(hotspot2_spotIdx),color=red); end
+    if find(~hotspot2_spotIdx); plotScatterBar(7,spotAUC2_avg(~hotspot2_spotIdx),color=[.6 .6 .6]); end
+    plotScatterBar(9,[ctrlAUC1_avg;ctrlAUC2_avg],color=[.8 .8 .8]);
     ticks = {'Hotspot','','Nullspot','Hotspot','','Nullspot','Ctrl';...
             '','Search 1','','','Search 2','',''};
     ticksAdjusted = strjust(pad(ticks),'center');
@@ -495,11 +495,11 @@ for d = 1:length(commonDepth)
 
     % Plot hotspot vs nullspot absolute AUC
     nexttile(statLayout1,5);
-    if find(hotspot1_spotIdx); plotScatterBar(spotAbsAUC1_avg(hotspot1_spotIdx),1,color=red); end
-    if find(~hotspot1_spotIdx); plotScatterBar(spotAbsAUC1_avg(~hotspot1_spotIdx),3,color=[.6 .6 .6]); end
-    if find(hotspot2_spotIdx); plotScatterBar(spotAbsAUC2_avg(hotspot2_spotIdx),5,color=red); end
-    if find(~hotspot2_spotIdx); plotScatterBar(spotAbsAUC2_avg(~hotspot2_spotIdx),7,color=[.6 .6 .6]); end
-    plotScatterBar([ctrlAbsAUC1_avg;ctrlAbsAUC2_avg],9,color=[.8 .8 .8]);
+    if find(hotspot1_spotIdx); plotScatterBar(1,spotAbsAUC1_avg(hotspot1_spotIdx),color=red); end
+    if find(~hotspot1_spotIdx); plotScatterBar(3,spotAbsAUC1_avg(~hotspot1_spotIdx),color=[.6 .6 .6]); end
+    if find(hotspot2_spotIdx); plotScatterBar(5,spotAbsAUC2_avg(hotspot2_spotIdx),color=red); end
+    if find(~hotspot2_spotIdx); plotScatterBar(7,spotAbsAUC2_avg(~hotspot2_spotIdx),color=[.6 .6 .6]); end
+    plotScatterBar(9,[ctrlAbsAUC1_avg;ctrlAbsAUC2_avg],color=[.8 .8 .8]);
     ticks = {'Hotspot','','Nullspot','Hotspot','','Nullspot','Ctrl';...
             '','Search 1','','','Search 2','',''};
     ticksAdjusted = strjust(pad(ticks),'center');
@@ -522,15 +522,15 @@ for d = 1:length(commonDepth)
     peakLayout2.Layout.Tile = 1; peakLayout2.Layout.TileSpan = [1 3];
     peakLayout2.TileSpacing = 'compact'; peakLayout2.Padding = 'tight'; axis off;
     nexttile(peakLayout2,1,[1 5]);
-    if find(hotspot1_spotIdx); plotScatterBar(spotMinTime1_avg(hotspot1_spotIdx),1,color=red); end
-    if find(~hotspot1_spotIdx); plotScatterBar(spotMinTime1_avg(~hotspot1_spotIdx),3,color=[.6 .6 .6]); end
-    if find(hotspot2_spotIdx); plotScatterBar(spotMinTime2_avg(hotspot2_spotIdx),5,color=red); end
-    if find(~hotspot2_spotIdx); plotScatterBar(spotMinTime2_avg(~hotspot2_spotIdx),7,color=[.6 .6 .6]); end
+    if find(hotspot1_spotIdx); plotScatterBar(1,spotMinTime1_avg(hotspot1_spotIdx),color=red); end
+    if find(~hotspot1_spotIdx); plotScatterBar(3,spotMinTime1_avg(~hotspot1_spotIdx),color=[.6 .6 .6]); end
+    if find(hotspot2_spotIdx); plotScatterBar(5,spotMinTime2_avg(hotspot2_spotIdx),color=red); end
+    if find(~hotspot2_spotIdx); plotScatterBar(7,spotMinTime2_avg(~hotspot2_spotIdx),color=[.6 .6 .6]); end
     % Plot hotspot vs nullspot maxTime
-    if find(hotspot1_spotIdx); plotScatterBar(spotMaxTime1_avg(hotspot1_spotIdx),9,color=blue); end
-    if find(~hotspot1_spotIdx); plotScatterBar(spotMaxTime1_avg(~hotspot1_spotIdx),11,color=[.6 .6 .6]); end  
-    if find(hotspot2_spotIdx); plotScatterBar(spotMaxTime2_avg(hotspot2_spotIdx),13,color=blue); end
-    if find(~hotspot2_spotIdx); plotScatterBar(spotMaxTime2_avg(~hotspot2_spotIdx),15,color=[.6 .6 .6]); end  
+    if find(hotspot1_spotIdx); plotScatterBar(9,spotMaxTime1_avg(hotspot1_spotIdx),color=blue); end
+    if find(~hotspot1_spotIdx); plotScatterBar(11,spotMaxTime1_avg(~hotspot1_spotIdx),color=[.6 .6 .6]); end  
+    if find(hotspot2_spotIdx); plotScatterBar(13,spotMaxTime2_avg(hotspot2_spotIdx),color=blue); end
+    if find(~hotspot2_spotIdx); plotScatterBar(15,spotMaxTime2_avg(~hotspot2_spotIdx),color=[.6 .6 .6]); end  
     ticks = {'Min hotspot','','Min nullspot','Min hotspot','','Min nullspot',...
             'Max hotspot','','Max nullspot','Max hotspot','','Max nullspot';...
             '','Search 1','','','Search 2','','','Search 1','','','Search 2',''};
@@ -543,8 +543,8 @@ for d = 1:length(commonDepth)
 
     % Plot control minTime/maxTime
     nexttile(peakLayout2,6);
-    plotScatterBar([ctrlMinTime1_avg;ctrlMinTime2_avg],1,color=[.8 .8 .8]);
-    plotScatterBar([ctrlMaxTime1_avg;ctrlMaxTime2_avg],2,color=[.8 .8 .8]);
+    plotScatterBar(1,[ctrlMinTime1_avg;ctrlMinTime2_avg],color=[.8 .8 .8]);
+    plotScatterBar(2,[ctrlMaxTime1_avg;ctrlMaxTime2_avg],color=[.8 .8 .8]);
     xticks([1 2 3 4 5 6]); 
     xticklabels({'Excitatory','Inhibitory'});
     ylabel('Time (ms)');
@@ -552,11 +552,11 @@ for d = 1:length(commonDepth)
 
     % Plot spot response rate vs noise response rate (excitatory)
     nexttile(statLayout2,4); 
-    if find(hotspot1_spotIdx); plotScatterBar(Erate1_opto(hotspot1_spotIdx),1,color=red); end
-    if find(~hotspot1_spotIdx); plotScatterBar(Erate1_opto(~hotspot1_spotIdx),3,color=[.6 .6 .6]); end
-    if find(hotspot2_spotIdx); plotScatterBar(Erate2_opto(hotspot2_spotIdx),5,color=red); end
-    if find(~hotspot2_spotIdx); plotScatterBar(Erate2_opto(~hotspot2_spotIdx),7,color=[.6 .6 .6]); end
-    plotScatterBar([Erate1_ctrl;Erate2_ctrl],9,color=[.8 .8 .8]);
+    if find(hotspot1_spotIdx); plotScatterBar(1,Erate1_opto(hotspot1_spotIdx),color=red); end
+    if find(~hotspot1_spotIdx); plotScatterBar(3,Erate1_opto(~hotspot1_spotIdx),color=[.6 .6 .6]); end
+    if find(hotspot2_spotIdx); plotScatterBar(5,Erate2_opto(hotspot2_spotIdx),color=red); end
+    if find(~hotspot2_spotIdx); plotScatterBar(7,Erate2_opto(~hotspot2_spotIdx),color=[.6 .6 .6]); end
+    plotScatterBar(9,[Erate1_ctrl;Erate2_ctrl],color=[.8 .8 .8]);
     ticks = {'Hotspot','','Nullspot','Hotspot','','Nullspot','Ctrl';...
             '','Search 1','','','Search 2','',''};
     ticksAdjusted = strjust(pad(ticks),'center');
@@ -569,11 +569,11 @@ for d = 1:length(commonDepth)
     
     % Plot spot response rate vs noise response rate (inhibitory)
     nexttile(statLayout2,5); 
-    if find(hotspot1_spotIdx); plotScatterBar(Irate1_opto(hotspot1_spotIdx),1,color=blue); end
-    if find(~hotspot1_spotIdx); plotScatterBar(Irate1_opto(~hotspot1_spotIdx),3,color=[.6 .6 .6]); end
-    if find(hotspot2_spotIdx); plotScatterBar(Irate2_opto(hotspot2_spotIdx),5,color=blue); end
-    if find(~hotspot2_spotIdx); plotScatterBar(Irate2_opto(~hotspot2_spotIdx),7,color=[.6 .6 .6]); end
-    plotScatterBar([Irate1_ctrl;Irate2_ctrl],9,color=[.8 .8 .8]);
+    if find(hotspot1_spotIdx); plotScatterBar(1,Irate1_opto(hotspot1_spotIdx),color=blue); end
+    if find(~hotspot1_spotIdx); plotScatterBar(3,Irate1_opto(~hotspot1_spotIdx),color=[.6 .6 .6]); end
+    if find(hotspot2_spotIdx); plotScatterBar(5,Irate2_opto(hotspot2_spotIdx),color=blue); end
+    if find(~hotspot2_spotIdx); plotScatterBar(7,Irate2_opto(~hotspot2_spotIdx),color=[.6 .6 .6]); end
+    plotScatterBar(9,[Irate1_ctrl;Irate2_ctrl],color=[.8 .8 .8]);
     ticks = {'Hotspot','','Nullspot','Hotspot','','Nullspot','Ctrl';...
             '','Search 1','','','Search 2','',''};
     ticksAdjusted = strjust(pad(ticks),'center');

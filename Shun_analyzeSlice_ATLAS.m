@@ -251,7 +251,7 @@ pairPeaks = abs(pairPeaks); pairAUCs = abs(pairAUCs);
 
 % Plot peaks
 nexttile;
-plotScatterBar(pairPeaks,[1 2],color=colors,XJitterWidth=0.01,dotSize=100,style='bar');
+plotScatterBar([1 2],pairPeaks,color=colors,XJitterWidth=0.01,dotSize=100,style='bar');
 
 % [~,p,~] = kstest2(pairPeaks(:,1),pairPeaks(:,2));
 p = signrank(pairPeaks(:,1),pairPeaks(:,2));
@@ -262,7 +262,7 @@ ylabel('Amplitude (pA)');
 
 % Plot AUCs
 nexttile;
-plotScatterBar(pairAUCs,[1 2],color=colors,XJitterWidth=0.01,dotSize=100,style='bar');
+plotScatterBar([1 2],pairAUCs,color=colors,XJitterWidth=0.01,dotSize=100,style='bar');
 
 % [~,p,~] = kstest2(pairAUCs(:,1),pairAUCs(:,2));
 p = signrank(pairAUCs(:,1),pairAUCs(:,2));

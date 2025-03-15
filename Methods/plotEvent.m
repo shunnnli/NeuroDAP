@@ -49,8 +49,8 @@ else
 end
 
 % Plot events
-patch([options.x duration duration options.x],[bottom bottom top top],options.color,...
-        'FaceAlpha',options.FaceAlpha,'EdgeColor','none','HandleVisibility','off'); hold on
+patch([options.x duration+options.x duration+options.x options.x],[bottom bottom top top],...
+        options.color,'FaceAlpha',options.FaceAlpha,'EdgeColor','none','HandleVisibility','off'); hold on
 if ~options.shadeOnly
     if options.percentY == 100
         xline(options.x,options.LineStyle,label,'Color',options.color,'LineWidth',options.LineWidth,'HandleVisibility','off'); hold on

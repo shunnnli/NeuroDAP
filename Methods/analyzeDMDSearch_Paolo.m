@@ -346,11 +346,11 @@ for d = 1:nDepth
 
     % Plot hotspot vs nullspot min response
     nexttile(statLayout1,1,[1 2]);
-    if find(hotspot_spotIdx); plotScatterBar(spotMin_avg(hotspot_spotIdx),1,color=blue); end
-    if find(~hotspot_spotIdx); plotScatterBar(spotMin_avg(~hotspot_spotIdx),2,color=[.6 .6 .6]); end
+    if find(hotspot_spotIdx); plotScatterBar(1,spotMin_avg(hotspot_spotIdx),color=blue); end
+    if find(~hotspot_spotIdx); plotScatterBar(2,spotMin_avg(~hotspot_spotIdx),color=[.6 .6 .6]); end
     % Plot hotspot vs nullspot max response
-    if find(hotspot_spotIdx); plotScatterBar(spotMax_avg(hotspot_spotIdx),3,color=red); end
-    if find(~hotspot_spotIdx); plotScatterBar(spotMax_avg(~hotspot_spotIdx),4,color=[.6 .6 .6]); end  
+    if find(hotspot_spotIdx); plotScatterBar(3,spotMax_avg(hotspot_spotIdx),color=red); end
+    if find(~hotspot_spotIdx); plotScatterBar(4,spotMax_avg(~hotspot_spotIdx),color=[.6 .6 .6]); end  
     xticks([1 2 3 4]); 
     xticklabels({'Min hotspot','Min nullspot','Max hotspot','Max nullspot'});
     ylabel('Current (pA)');
@@ -358,26 +358,26 @@ for d = 1:nDepth
 
     % Plot ctrl min/max response
     nexttile(statLayout1,3);
-    plotScatterBar(ctrlMin_avg,1,color=[.8 .8 .8]);
-    plotScatterBar(ctrlMax_avg,2,color=[.8 .8 .8]);
+    plotScatterBar(1,ctrlMin_avg,color=[.8 .8 .8]);
+    plotScatterBar(2,ctrlMax_avg,color=[.8 .8 .8]);
     xticks([1 2]); xticklabels({'Excitatory','Inhibitory'});
     ylabel('Current (pA)');
     title('Max ctrl current');
 
     % Plot hotspot vs nullspot AUC
     nexttile(statLayout1,4);
-    if find(hotspot_spotIdx); plotScatterBar(spotAUC_avg(hotspot_spotIdx),1,color=stimColor); end
-    if find(~hotspot_spotIdx); plotScatterBar(spotAUC_avg(~hotspot_spotIdx),2,color=[.6 .6 .6]); end
-    plotScatterBar(ctrlAUC_avg,3,color=[.8 .8 .8]);
+    if find(hotspot_spotIdx); plotScatterBar(1,spotAUC_avg(hotspot_spotIdx),color=stimColor); end
+    if find(~hotspot_spotIdx); plotScatterBar(2,spotAUC_avg(~hotspot_spotIdx),color=[.6 .6 .6]); end
+    plotScatterBar(3,ctrlAUC_avg,color=[.8 .8 .8]);
     xticks([1 2 3]); xticklabels({'Hotspot','Nullspot','Ctrl'});
     ylabel('Net total charge (pC)');
     title('Net total charge');
 
     % Plot hotspot vs nullspot absolute AUC
     nexttile(statLayout1,5);
-    if find(hotspot_spotIdx); plotScatterBar(spotAbsAUC_avg(hotspot_spotIdx),1,color=stimColor); end
-    if find(~hotspot_spotIdx); plotScatterBar(spotAbsAUC_avg(~hotspot_spotIdx),2,color=[.6 .6 .6]); end
-    plotScatterBar(ctrlAbsAUC_avg,3,color=[.8 .8 .8]);
+    if find(hotspot_spotIdx); plotScatterBar(1,spotAbsAUC_avg(hotspot_spotIdx),color=stimColor); end
+    if find(~hotspot_spotIdx); plotScatterBar(2,spotAbsAUC_avg(~hotspot_spotIdx),color=[.6 .6 .6]); end
+    plotScatterBar(3,ctrlAbsAUC_avg,color=[.8 .8 .8]);
     xticks([1 2 3]); xticklabels({'Hotspot','Nullspot','Ctrl'});
     ylabel('Absolute total charge (pC)');
     title('Absolute total charge');
@@ -391,11 +391,11 @@ for d = 1:nDepth
 
     % Plot hotspot vs nullspot minTime
     nexttile(statLayout2,1,[1 2]);
-    if find(hotspot_spotIdx); plotScatterBar(spotMinTime_avg(hotspot_spotIdx),1,color=blue); end
-    if find(~hotspot_spotIdx); plotScatterBar(spotMinTime_avg(~hotspot_spotIdx),2,color=[.6 .6 .6]); end
+    if find(hotspot_spotIdx); plotScatterBar(1,spotMinTime_avg(hotspot_spotIdx),color=blue); end
+    if find(~hotspot_spotIdx); plotScatterBar(2,spotMinTime_avg(~hotspot_spotIdx),color=[.6 .6 .6]); end
     % Plot hotspot vs nullspot maxTime
-    if find(hotspot_spotIdx); plotScatterBar(spotMaxTime_avg(hotspot_spotIdx),3,color=red); end
-    if find(~hotspot_spotIdx); plotScatterBar(spotMaxTime_avg(~hotspot_spotIdx),4,color=[.6 .6 .6]); end
+    if find(hotspot_spotIdx); plotScatterBar(3,spotMaxTime_avg(hotspot_spotIdx),color=red); end
+    if find(~hotspot_spotIdx); plotScatterBar(4,spotMaxTime_avg(~hotspot_spotIdx),color=[.6 .6 .6]); end
     xticks([1 2 3 4]); 
     xticklabels({'Min hotspot','Min nullspot','Max hotspot','Max nullspot'});
     ylabel('Time (ms)');
@@ -403,8 +403,8 @@ for d = 1:nDepth
 
     % Plot control minTime/maxTime
     nexttile(statLayout2,3);
-    plotScatterBar(ctrlMinTime_avg,1,color=[.8 .8 .8]);
-    plotScatterBar(ctrlMaxTime_avg,2,color=[.8 .8 .8]);
+    plotScatterBar(1,ctrlMinTime_avg,color=[.8 .8 .8]);
+    plotScatterBar(2,ctrlMaxTime_avg,color=[.8 .8 .8]);
     xticks([1 2 3 4 5 6]); 
     xticklabels({'Excitatory','Inhibitory'});
     ylabel('Time (ms)');
@@ -412,18 +412,18 @@ for d = 1:nDepth
 
     % Plot spot response rate vs noise response rate (excitatory)
     nexttile(statLayout2,4); 
-    if find(hotspot_spotIdx); plotScatterBar(Erate_opto(hotspot_spotIdx),1,color=blue); end
-    if find(~hotspot_spotIdx); plotScatterBar(Erate_opto(~hotspot_spotIdx),2,color=[.6 .6 .6]); end
-    plotScatterBar(Erate_ctrl,3,color=[.8 .8 .8]);
+    if find(hotspot_spotIdx); plotScatterBar(1,Erate_opto(hotspot_spotIdx),color=blue); end
+    if find(~hotspot_spotIdx); plotScatterBar(2,Erate_opto(~hotspot_spotIdx),color=[.6 .6 .6]); end
+    plotScatterBar(3,Erate_ctrl,color=[.8 .8 .8]);
     xticks([1 2 3]); xticklabels({'Hotspot opto','Nullspot opto','Ctrl'});
     ylabel('Excitatory response rate');
     title('Excitatory response rate');
     
     % Plot spot response rate vs noise response rate (inhibitory)
     nexttile(statLayout2,5); 
-    if find(hotspot_spotIdx); plotScatterBar(Irate_opto(hotspot_spotIdx),1,color=red); end
-    if find(~hotspot_spotIdx); plotScatterBar(Irate_opto(~hotspot_spotIdx),2,color=[.6 .6 .6]); end
-    plotScatterBar(Irate_ctrl,3,color=[.8 .8 .8]);
+    if find(hotspot_spotIdx); plotScatterBar(1,Irate_opto(hotspot_spotIdx),color=red); end
+    if find(~hotspot_spotIdx); plotScatterBar(2,Irate_opto(~hotspot_spotIdx),color=[.6 .6 .6]); end
+    plotScatterBar(3,Irate_ctrl,color=[.8 .8 .8]);
     xticks([1 2 3]); xticklabels({'Hotspot opto','Nullspot opto','Ctrl'});
     ylabel('Inhibitory response rate');
     title('Inhibitory response rate');

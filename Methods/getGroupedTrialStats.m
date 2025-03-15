@@ -14,7 +14,7 @@ arguments
     options.signalRange string = 'All'
     options.totalTrialRange = 'All'
     options.trialRange = 'All' % index from totalTrialRange
-    % options.trialConditions
+    options.trialConditions = ''
 
     options.inTrialTable
 end
@@ -60,7 +60,8 @@ for task = 1:length(options.taskRange)
                                     taskRange=options.taskRange{task},...
                                     signalRange=options.signalRange,...
                                     totalTrialRange=options.totalTrialRange,...
-                                    trialRange=options.trialRange);
+                                    trialRange=options.trialRange,...
+                                    trialConditions=options.trialConditions);
             if combined.options.empty; continue; end
 
             % Extract stats
