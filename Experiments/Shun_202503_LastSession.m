@@ -266,6 +266,7 @@ animalRange = unique({animals.animal});
 DAtrend = struct([]);
 nboot = 1000;
 trialConditions = 'trials.performing';
+maxTrials = max(arrayfun(@(x) length(x.CueMax_slope), DAtrend));
 
 for a = 1:length(animalRange)
     cur_animal = animalRange{a}; disp(['Ongoing: analyzing ',cur_animal]);
@@ -329,9 +330,9 @@ for a = 1:length(animalRange)
         DAtrend(a).([fields{f} '_slope']) = slopes;
         DAtrend(a).([fields{f} '_pval'])  = pvals;
         
-        % Compute difference between the last 20 trials and the last 40 trials
+        % Compute difference between the last 10 trials and the last 30-40 trials
         if nTrials >= 40
-            DAtrend(a).([fields{f} '_diff']) = mean(data(end-40+1:end-20)) - mean(data(end-20+1:end));
+            DAtrend(a).([fields{f} '_diff']) = mean(data(end-40+1:end-30)) - mean(data(end-10+1:end));
         else
             DAtrend(a).([fields{f} '_diff']) = NaN;  % Not enough trials
         end
