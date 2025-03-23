@@ -30,7 +30,7 @@ screenSize(3) = screenSize(3) * horizontalPortion;
 screenSize(4) = screenSize(4) * verticalPortion;
 
 fig = figure('Position',screenSize);
-set(gcf,'Color','w'); box off
+set(gcf,'Color','w'); box off;
 % set(gca,'FontSize',options.FontSize);
 % set(gca,'LineWidth',options.AxesLineWidth);
 

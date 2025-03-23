@@ -13,7 +13,6 @@ clear; close all;
 addpath(genpath(osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
 
 % Select sessions for analysis
-% parentPath = osPathSwitch('/Volumes/MICROSCOPE/wengang/Exp_withShun/');
 parentPath = osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Patch/');
 expPath = uipickfiles('FilterSpec',parentPath,'Prompt','Select experiment folders');
 saveDataPath = 'default'; % strcat(parentPath,filesep,'20231221_ally');

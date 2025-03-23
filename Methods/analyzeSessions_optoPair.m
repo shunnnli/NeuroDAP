@@ -738,7 +738,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                 eventIdxes = {stimIdx,waterLickIdx,toneIdx,airpuffIdx,optoStim2};
                 labels = {'Stim','Water','Tone','Airpuff','Blue stim'};
                 eventDurations = [stimDuration_cue/1000,0,0.5,0.02,stimDuration_other/1000];
-                groupSizes = [20,30,10,30,10];
+                groupSizes = [20,30,10,30,20];
                 longTimeRange = options.longTimeRange;
                 shortTimeRange = options.shortTimeRange; 
             else
@@ -805,7 +805,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                 omissionIdxes = {stimOmissionIdx, pairOmissionIdx,toneOmissionIdx,[],[],[]};
                 labels = {'Stim','Pair','Tone','Water','Airpuff','Blue stim'};
                 eventDurations = [stimDuration_cue/1000,0.5,0.5,0,0.02,stimDuration_other/1000];
-                groupSizes = [10,10,10,30,30,10];
+                groupSizes = [10,10,10,30,30,20];
                 longTimeRange = options.longTimeRange;
                 shortTimeRange = options.shortTimeRange; 
             else

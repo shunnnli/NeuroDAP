@@ -8,7 +8,7 @@ clear; close all;
 addpath(genpath(osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
 
 rootPath = osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Patch/Combined');
-[~,~,~,~,~,~,bluePurpleRed] = loadColors;
+[~,~,~,~,blueWhiteRed,~,bluePurpleRed] = loadColors;
 today = char(datetime('today','Format','yyyyMMdd'));
 
 % Select cell and DA trend data
@@ -34,6 +34,7 @@ disp('Finished: DAtrend loaded');
 %% (Optional) Add epochs to combined_epochs
 
 combined_epochs = [combined_epochs;epochs];
+disp('Finished: epochs added to combined_epochs.mat');
 
 %% (Optional) Get cell table
 
@@ -335,137 +336,71 @@ animalEIindex_peaks = cellfun(@(a) mean(EIindex_peaks(strcmp(combined_cells.Anim
 animalEIindex_aucs = cellfun(@(a) mean(EIindex_aucs(strcmp(combined_cells.Animal, a))), animalList);
 
 %% (Analysis) Calculate relationship between DA slope and patch data
-% Calculate the slope of last n trials vs animal avg EI index
+% Calculate the slope of pairwise trials vs animal avg EI index
 
-nboot = 1000;
-maxTrials = max(arrayfun(@(x) length(x.CueMax_slope), DAtrend));
-statsTypes = {'CueMax', 'CueMin', 'CueAvg', 'CueAmp',...
-              'CueMax_smoothed','CueMin_smoothed','CueAvg_smoothed','CueAmp_smoothed'};
+nTrials = 30; % look at first 30 trials + last 30 trials
+metric = 'slope';
 
-% Preallocate structures to store slopes and p-values for each cue type and each EI measure
-for st = 1:length(statsTypes)
-    slopes_aucs.(statsTypes{st})  = nan(numTrials,1);
-    pvals_aucs.(statsTypes{st})   = nan(numTrials,1);
-    slopes_peaks.(statsTypes{st}) = nan(numTrials,1);
-    pvals_peaks.(statsTypes{st})  = nan(numTrials,1);
-end
+% Get DA vs EI map
+DAvsEIaucs_slopeMap  = getDAvsEImap(DAtrend,animalEIindex_aucs,mapType='slope',...
+                                    nTrials=nTrials,metric=metric);
+DAvsEIaucs_diffMap   = getDAvsEImap(DAtrend,animalEIindex_aucs,mapType='diff',...
+                                    nTrials=nTrials,metric=metric);
+DAvsEIpeaks_slopeMap = getDAvsEImap(DAtrend,animalEIindex_peaks,mapType='slope',...
+                                    nTrials=nTrials,metric=metric);
+DAvsEIpeaks_diffMap  = getDAvsEImap(DAtrend,animalEIindex_peaks,mapType='diff',...
+                                    nTrials=nTrials,metric=metric);
 
-% Loop over n
-for n = 1:maxTrials
+%% (Analysis) Plot DA vs EI heatmap
 
-    % For each cue type, extract the nth slope from each animal in DAtrend
-    nthSlopes = getNthSlope(DAtrend,n);
-
-    % Skip fitting if animal number is less than 5
-    validIdx = ~isnan(nthSlopes.CueMax);
-    if sum(validIdx) <= 5; continue; end
-    disp(['Ongoing: calculating fits for last ',num2str(n),' trials']);
-    
-    % For each cue type, fit regressions for both EI measures and store the results
-    for st = 1:length(statsTypes)
-        % Regression with animalEIindex_aucs
-        Y = nthSlopes.(statsTypes{st})(validIdx); 
-        X = animalEIindex_aucs(validIdx);
-        fit_obs = polyfit(X, Y, 1);
-        fit_boot = bootstrp(nboot, @(i) polyfit(X, Y(i), 1), 1:length(Y));
-        slopes_aucs.(statsTypes{st})(n) = fit_obs(1);
-        pvals_aucs.(statsTypes{st})(n)  = sum(abs(fit_boot(:,1)) >= abs(fit_obs(1)))/nboot;   % p-value for the slope
-
-        % stats = regstats(animalEIindex_aucs, nthSlopes.(statsTypes{st}), 'linear', {'tstat'});
-        % slopes_aucs.(statsTypes{st})(n) = stats.tstat.beta(2);
-        % pvals_aucs.(statsTypes{st})(n)  = stats.tstat.pval(2);
-        
-        % Regression with animalEIindex_peaks
-        Y = nthSlopes.(statsTypes{st})(validIdx); 
-        X = animalEIindex_peaks(validIdx);
-        fit_obs = polyfit(X, Y, 1);
-        fit_boot = bootstrp(nboot, @(i) polyfit(X, Y(i), 1), 1:length(Y));
-        slopes_aucs.(statsTypes{st})(n) = fit_obs(1);
-        pvals_aucs.(statsTypes{st})(n)  = sum(abs(fit_boot(:,1)) >= abs(fit_obs(1)))/nboot;   % p-value for the slope
-    end
-end
-disp('Finished: slopes fitted for animal EI vs DA trend');
-
-
-%% Plot summary scatters for each statstype with top slope with
-% significant p values
-
-nTrialsUsed = 5:50;
-minTrials = min(arrayfun(@(x) length(x.CueMax_slope), DAtrend)); 
-
-initializeFig(1,1); tiledlayout(2,8);
-for st = 1:length(statsTypes)
-    cue = statsTypes{st};
-    
-    % Find top slope with significant p values
-    significantIdx = pvals_aucs.(cue) <= 0.05;
-    [maxSlope,idx] = max(slopes_aucs.(cue)(significantIdx));
-    significantTrials = find(significantIdx); maxIdx = significantTrials(idx);
-
-    % Get slopes and calculate fit
-    topSlopes = getNthSlope(DAtrend,maxIdx);
-    validIdx = ~isnan(topSlopes.CueMax);
-    Y = topSlopes.(cue)(validIdx); 
-    X = animalEIindex_aucs(validIdx);
-    fit = polyfit(X, Y, 1);
-
-    % Plot scatter plot and fitted line
-    nexttile;
-    scatter(X,Y,100,'filled'); hold on;
-    plot(X,polyval(fit,X),LineWidth=5);
-    xlabel('Animal EI charge index');
-    ylabel(['Slope for ',cue]);
-    title(['Last ',num2str(maxIdx),' trials']);
-
-
-    % Get slopes and calculate fit
-    ctrlIdx = 10;
-    topSlopes = getNthSlope(DAtrend,ctrlIdx);
-    validIdx = ~isnan(topSlopes.CueMax);
-    Y = topSlopes.(cue)(validIdx); 
-    X = animalEIindex_aucs(validIdx);
-    fit = polyfit(X, Y, 1);
-
-    % Plot scatter plot and fitted line
-    nexttile;
-    scatter(X,Y,100,'filled'); hold on;
-    plot(X,polyval(fit,X),LineWidth=5);
-    xlabel('Animal EI charge index');
-    ylabel(['Slope for ',cue]);
-    title(['Last ',num2str(ctrlIdx),' trials']);
-end
-
-%% (Analysis) Plot the relationship between DA trend and animal EI
-
-% Positive slope here means that increase in DA amplitude in the last n trials
-% corresponds to more cells being inhibitory
-nTrialsUsed = 5:77;
 initializeFig(1,1); tiledlayout(2,4);
-for st = 1:length(statsTypes)
-    cue = statsTypes{st};
-    nexttile;
-    
-    % Left y-axis: plot slopes
-    yyaxis left;
-    plot(nTrialsUsed, slopes_aucs.(cue)(nTrialsUsed), '-o', 'LineWidth', 1.5);
-    ylabel('Slope');
-    xlabel('n trials used'); xlim([nTrialsUsed(1),nTrialsUsed(end)]);
-    title(sprintf('%s: Slope and p-value vs n', cue));
-    
-    % Right y-axis: plot p-values
-    yyaxis right;
-    plot(nTrialsUsed, pvals_aucs.(cue)(nTrialsUsed), '-s', 'LineWidth', 1.5);
-    xlim([nTrialsUsed(1),nTrialsUsed(end)]);
-    ylabel('p-value');
-    ylim([0 1]); hold on;
-    plot(nTrialsUsed, repmat(0.05, size(nTrialsUsed)), '--k', 'LineWidth', 1);
-    hold off; box off;
-end
+
+DAvsEImap = DAvsEIaucs_slopeMap; figureName = getVarName(DAvsEIaucs_slopeMap);
+EItype = 'EI charge index'; mapType = 'slope';
+
+% DAvsEImap = DAvsEIaucs_diffMap; figureName = getVarName(DAvsEIaucs_diffMap);
+% EItype = 'EI charge index'; mapType = 'diff';
+
+% DAvsEImap = DAvsEIpeaks_slopeMap; figureName = getVarName(DAvsEIpeaks_slopeMap);
+% EItype = 'EI amplitude index'; mapType = 'slope';
+
+% DAvsEImap = DAvsEIpeaks_diffMap; figureName = getVarName(DAvsEIpeaks_diffMap);
+% EItype = 'EI amplitude index'; mapType = 'diff';
+
+ax = nexttile;
+plotDAvsEImap(DAvsEImap,statType='max',dataType='raw',tile=ax);
+title(['DA ',mapType,' (raw max) vs ', EItype]);
+ax = nexttile;
+plotDAvsEImap(DAvsEImap,statType='min',dataType='raw',tile=ax);
+title(['DA ',mapType,' (raw min) vs ', EItype]);
+ax = nexttile;
+plotDAvsEImap(DAvsEImap,statType='avg',dataType='raw',tile=ax);
+title(['DA ',mapType,' (raw avg) vs ', EItype]);
+ax = nexttile;
+plotDAvsEImap(DAvsEImap,statType='amp',dataType='raw',tile=ax);
+title(['DA ',mapType,' (raw amp) vs ', EItype]);
+
+ax = nexttile;
+plotDAvsEImap(DAvsEImap,statType='max',dataType='smooth',tile=ax);
+title(['DA ',mapType,' (smoothed max) vs ', EItype]);
+ax = nexttile;
+plotDAvsEImap(DAvsEImap,statType='min',dataType='smooth',tile=ax);
+title(['DA ',mapType,' (smoothed min) vs ', EItype]);
+ax = nexttile;
+plotDAvsEImap(DAvsEImap,statType='avg',dataType='smooth',tile=ax);
+title(['DA ',mapType,' (smoothed avg) vs ', EItype]);
+ax = nexttile;
+plotDAvsEImap(DAvsEImap,statType='amp',dataType='smooth',tile=ax);
+title(['DA ',mapType,' (smoothed amp) vs ', EItype]);
+
+saveFigures(gcf,figureName,resultPath,...
+            saveFIG=true,savePDF=true,savePNG=true);
+close all;
 
 %% (Analysis) Calculate slopes of last n trials
 
-shortWindow = 14:24;
-longWindow  = 36:40;
+shortWindow = 15:20;
+% longWindow  = 35:39;
 
 % Calculate average slopes in shortWindow
 avgCueMaxSlope_short  = arrayfun(@(d) mean(d.CueMax_slope(shortWindow)),  DAtrend)';
@@ -473,35 +408,23 @@ avgCueMinSlope_short  = arrayfun(@(d) mean(d.CueMin_slope(shortWindow)),  DAtren
 avgCueAvgSlope_short  = arrayfun(@(d) mean(d.CueAvg_slope(shortWindow)),  DAtrend)';
 avgCueAmpSlope_short = arrayfun(@(d) mean(d.CueAmp_slope(shortWindow)), DAtrend)';
 
-% Calculate average slopes in longWindow
-avgCueMaxSlope_long  = arrayfun(@(d) mean(d.CueMax_slope(longWindow)),  DAtrend)';
-avgCueMinSlope_long  = arrayfun(@(d) mean(d.CueMin_slope(longWindow)),  DAtrend)';
-avgCueAvgSlope_long  = arrayfun(@(d) mean(d.CueAvg_slope(longWindow)),  DAtrend)';
-avgCueAmpSlope_long = arrayfun(@(d) mean(d.CueAmp_slope(longWindow)), DAtrend)';
-
-% % Calculate average p value in lastTrialWindow
-% avgCueMaxPval  = arrayfun(@(d) mean(d.CueMax_pval(lastTrialWindow)),  DAtrend)';
-% avgCueMinPval  = arrayfun(@(d) mean(d.CueMin_pval(lastTrialWindow)),  DAtrend)';
-% avgCueAvgPval  = arrayfun(@(d) mean(d.CueAvg_pval(lastTrialWindow)),  DAtrend)';
-% avgCueAreaPval = arrayfun(@(d) mean(d.CueAmp_pval(lastTrialWindow)), DAtrend)';
-
 % Define the eight slope vectors in a cell array and label them
-slopeVectors = {avgCueMaxSlope_short, avgCueMinSlope_short, avgCueAvgSlope_short, avgCueAmpSlope_short, ...
-                avgCueMaxSlope_long,  avgCueMinSlope_long,  avgCueAvgSlope_long,  avgCueAmpSlope_long};
-slopeNames = {'CueMax Slope (Short)', 'CueMin Slope (Short)', 'CueAvg Slope (Short)', 'CueAmp Slope (Short)', ...
-              'CueMax Slope (Long)',  'CueMin Slope (Long)',  'CueAvg Slope (Long)',  'CueAmp Slope (Long)'};
-
-
-% Set group names
-numGroups = 2;
-groupNames = {'Down DA','Stable DA','Up DA'};
+slopeVectors = {avgCueMaxSlope_short, avgCueMinSlope_short, avgCueAvgSlope_short, avgCueAmpSlope_short};
+slopeNames = {'CueMax Slope (Short)', 'CueMin Slope (Short)', 'CueAvg Slope (Short)', 'CueAmp Slope (Short)'};
 
 % Set color
 upColor = bluePurpleRed(1,:); 
 downColor = bluePurpleRed(end,:); 
-groupColors = {downColor,[.2 .2 .2],upColor};
 
-%% (Analysis) TODO: Histograms of slope EI
+% Set group names
+numGroups = 2;
+groupNames = {'Down DA','Up DA'};
+groupColors = {downColor,upColor};
+
+% numGroups = 3;
+% groupNames = {'Down DA','Stable DA','Up DA'};
+% groupColors = {downColor,[.2 .2 .2],upColor};
+
 
 %% (Analysis) kmeans clustering to define up/down/stable animals
 
@@ -510,7 +433,7 @@ downAnimals_kmeans = cell(numel(slopeVectors),1);
 stableAnimals_kmeans = cell(numel(slopeVectors),1);
 upAnimals_kmeans = cell(numel(slopeVectors),1);
 
-figure; tiledlayout(2,4);
+figure; tiledlayout(2,2);
 
 for i = 1:numel(slopeVectors)
     nexttile;
@@ -529,9 +452,14 @@ for i = 1:numel(slopeVectors)
     groupLabels = mapping(groupIdx);
     
     % Save grouping results
-    downAnimals_kmeans{i} = find(groupLabels == 1);
-    stableAnimals_kmeans{i} = find(groupLabels == 2);
-    upAnimals_kmeans{i} = find(groupLabels == 3);
+    if numGroups == 2
+        downAnimals_kmeans{i} = find(groupLabels == 1);
+        upAnimals_kmeans{i} = find(groupLabels == 2);
+    elseif numGroups == 3
+        downAnimals_kmeans{i} = find(groupLabels == 1);
+        stableAnimals_kmeans{i} = find(groupLabels == 2);
+        upAnimals_kmeans{i} = find(groupLabels == 3);
+    end
     
     hold on;
     for j = 1:numGroups
@@ -554,20 +482,26 @@ downAnimals_quant = cell(numel(slopeVectors),1);
 stableAnimals_quant = cell(numel(slopeVectors),1);
 upAnimals_quant = cell(numel(slopeVectors),1);
 
-figure; tiledlayout(2,4);
+figure; tiledlayout(2,2);
 
 for i = 1:numel(slopeVectors)
     nexttile;
     data = slopeVectors{i};
     
-    % Use quantiles to classify data into three groups
-    edges = quantile(data, [0, 1/numGroups, 2/numGroups, 1]);
-    groupLabels = discretize(data, edges);
-    
+    % Use quantiles to classify data into groups
     % Save grouping results
-    downAnimals_quant{i} = find(groupLabels == 1);
-    stableAnimals_quant{i} = find(groupLabels == 2);
-    upAnimals_quant{i} = find(groupLabels == 3);
+    if numGroups == 2
+        edges = quantile(data, [0, 1/numGroups, 2/numGroups, 1]);
+        groupLabels = discretize(data, edges);
+        downAnimals_quant{i} = find(groupLabels == 1);
+        upAnimals_quant{i} = find(groupLabels == 2);
+    elseif numGroups == 3
+        edges = quantile(data, [0, 1/numGroups, 2/numGroups, 1]);
+        groupLabels = discretize(data, edges);
+        downAnimals_quant{i} = find(groupLabels == 1);
+        stableAnimals_quant{i} = find(groupLabels == 2);
+        upAnimals_quant{i} = find(groupLabels == 3);
+    end
     
     hold on;
     for j = 1:numGroups
@@ -599,8 +533,13 @@ for i = 4:4%numel(slopeNames)
     cellIdxDown   = getCellIndices(animalIdxDown);
     cellIdxStable = getCellIndices(animalIdxStable);
     cellIdxUp     = getCellIndices(animalIdxUp);
-    groupIdx = {cellIdxDown,cellIdxStable,cellIdxUp};
-    plotGroup = [1, 1, 0];
+    if numGroups == 2
+        groupIdx = {cellIdxDown,cellIdxUp};
+        plotGroup = [1, 1];
+    elseif numGroups == 3
+        groupIdx = {cellIdxDown,cellIdxStable,cellIdxUp};
+        plotGroup = [1, 1, 1];
+    end
     
     % Create a figure name based on the current criterion (e.g., "CellEI-CueMaxSlopeShort")
     % Removing spaces and parentheses for a clean filename.
@@ -620,8 +559,13 @@ for i = 4:4%numel(slopeNames)
     cellIdxDown   = getCellIndices(animalIdxDown);
     cellIdxStable = getCellIndices(animalIdxStable);
     cellIdxUp     = getCellIndices(animalIdxUp);
-    groupIdx = {cellIdxDown,cellIdxStable,cellIdxUp};
-    plotGroup = [1, 1, 1];
+    if numGroups == 2
+        groupIdx = {cellIdxDown,cellIdxUp};
+        plotGroup = [1, 1];
+    elseif numGroups == 3
+        groupIdx = {cellIdxDown,cellIdxStable,cellIdxUp};
+        plotGroup = [1, 1, 1];
+    end
     
     % Create a figure name based on the current criterion (e.g., "CellEI-CueMaxSlopeShort")
     % Removing spaces and parentheses for a clean filename.
