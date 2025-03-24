@@ -7,6 +7,7 @@ arguments
     options.dataType string = 'trials'
     options.flipYAxis logical = false
 
+    options.plotColorBar logical = true
     options.colorlim double
     options.colorBarLabel string
     options.colormap
@@ -23,6 +24,11 @@ if ~isfield(options,'colormap')
     options.colormap = blueWhiteRed;
 end
 
+% Define color bar label
+if ~isfield(options,'colorBarLabel')
+    options.colorBarLabel = "Value";
+end
+
 %% Plot heatmap
 if strcmpi(options.dataType,'trials')
     imagesc(timestamp,1:size(data,1),data);
@@ -32,24 +38,36 @@ if strcmpi(options.dataType,'trials')
     colorbar; box off
     return;
 elseif strcmpi(options.dataType,'heatmap')
-    h = imagesc(data); hold on; box off; 
-    
-    cb = colorbar; 
-    cb.Label.String = options.colorBarLabel;
+    if isfield(options,'tile') 
+        h = imagesc(options.tile,data); hold on; box off; 
+    else
+        h = imagesc(data); hold on; box off; 
+    end
 
-    % Determine cb location
-    if isfield(options,'tile')
-        cb.Units = 'normalized';
-        tilePos = options.tile.Position; 
-        if isfield(options,'colorBarPosition')
-            cbWidth  = tilePos(3) * options.colorBarPosition(3);
-            cbHeight = tilePos(4) * options.colorBarPosition(4);
-            newX = tilePos(1) + tilePos(3) * options.colorBarPosition(1);
-            newY = tilePos(2) + tilePos(4) * options.colorBarPosition(2);
-            cb.Position = [newX, newY, cbWidth, cbHeight];
+    % Plot color bar
+    if options.plotColorBar
+        if isfield(options,'tile')
+            cb = colorbar(options.tile); 
+            cb.Label.String = options.colorBarLabel;
+            cb.Units = 'normalized';
+
+            options.tile.Units = 'normalized';
+            tilePos = options.tile.Position;
+
+            if isfield(options,'colorBarPosition')
+                cbWidth  = tilePos(3) * options.colorBarPosition(3);
+                cbHeight = tilePos(4) * options.colorBarPosition(4);
+                newX = tilePos(1) + tilePos(3) * options.colorBarPosition(1);
+                newY = tilePos(2) + tilePos(4) * options.colorBarPosition(2);
+                cb.Position = [newX, newY, cbWidth, cbHeight];
+            end
+        else
+            cb = colorbar; 
+            cb.Label.String = options.colorBarLabel;
+            cb.Location = 'westoutside';
         end
     end
-    
+
     clim(options.colorlim);
     colormap(options.colormap);
 

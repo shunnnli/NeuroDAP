@@ -5,18 +5,22 @@ arguments
 
     options.dataType string = 'raw'
     options.statType string = 'amp'
-    options.nTrials double = 30
+    options.nTrials double
 
-    options.tile
+    options.layout
+    options.tileSize double = [1,1]
+
     options.colorlim double
     options.colorBarLabel string = 'Slope'
     options.colormap
-    options.colorBarPosition double = [0.05, 0.02, 0.025, 0.5]
+    options.colorBarPosition double = [0, 0, 0.025, 0.5]
 
     % p value map options
     options.pval logical = true
     options.pvalColor double = [.3 .3 .3]
     options.pvalLineWidth double = 3
+
+    options.title
 end
 
 %% Check input
@@ -45,42 +49,140 @@ if ~isfield(options,'colormap')
     options.colormap = blueWhiteRed;
 end
 
-% Get tick marks
-trialIdx = [1:options.nTrials,-options.nTrials:-1];
-trialTickLoc = round(linspace(1,options.nTrials*2,5)); 
+%% Load in map data
 
-%% Plot heatmap
+% nTrials
+if ~isfield(options,'nTrials')
+    if ~isfield(DAvsEImap,'options')
+        options.nTrials = 30;
+    else
+        options.nTrials = DAvsEImap.options.nTrials;
+    end
+end
+    
+
+% See whether whole session correlations needs to be plotted (default is false)
+skipWholeSession = DAvsEImap.options.skipWholeSession;
+if ~isfield(options,'layout')
+    error('Need to provide tiledlayout instance to the method!');
+end
+
+if skipWholeSession
+    % Get map range
+    earlyIdx = 1:options.nTrials;
+    lateIdx = options.nTrials+1:options.nTrials*2;
+    % Get tick marks
+    earlyTicks = 1:options.nTrials;
+    lateTicks = -options.nTrials:-1;
+    trialTickLoc = floor(linspace(1,options.nTrials,3));
+else
+    % Get tick marks
+    trialIdx = [1:options.nTrials,-options.nTrials:-1];
+    trialTickLoc = floor(linspace(1,options.nTrials,3));
+    options.colorBarPosition = [0.02, 0.01, 0.025, 0.5];
+end
+
+%% Extract heatmap
 
 map = DAvsEImap.(statType).(dataType);
+pvalMap = DAvsEImap.(statType).(strcat('pval_',dataType));
+
+if skipWholeSession
+    earlyMap = map(earlyIdx,earlyIdx);
+    lateMap = map(lateIdx,lateIdx);
+    earlyPvalMap = pvalMap(earlyIdx,earlyIdx);
+    latePvalMap = pvalMap(lateIdx,lateIdx);
+end
 
 % Define colorlim
 if ~isfield(options,'colorlim')
-    % Get the max and min of colormap
-    climit = max([abs(max(map,[],'all')),abs(min(map,[],'all'))]);
+    if skipWholeSession
+        climit = max([abs(earlyMap),abs(lateMap)]);
+    else
+        climit = max(abs(map),[],'all');
+    end
     options.colorlim = [-climit,climit];
 end
 
-plotHeatmap(map,[],dataType='heatmap',...
-            colormap=options.colormap,...
-            colorlim=options.colorlim,...
-            colorBarLabel=options.colorBarLabel,...
-            tile=options.tile,...
-            colorBarPosition=options.colorBarPosition);
+%% Plot heatmap
+if skipWholeSession
+    heatmapLayout = options.layout;
+    heatmapLayout.Layout.TileSpan = options.tileSize;
+    heatmapLayout.TileSpacing = 'tight'; heatmapLayout.Padding = 'tight'; axis off;
 
-%% Plot pval
-if options.pval
-    pvalMap = DAvsEImap.(statType).(strcat('pval_',dataType));
-    significantMap = pvalMap <= 0.05;
-    if sum(significantMap,"all") > 0
-        contour(significantMap, [0.5 0.5],...
-                Color=options.pvalColor,LineWidth=options.pvalLineWidth);
+    % Plot early session triange
+    nexttile(heatmapLayout,1);
+    plotHeatmap(earlyMap,[],dataType='heatmap',...
+                colormap=options.colormap,...
+                colorlim=options.colorlim,...
+                colorBarLabel=options.colorBarLabel);
+    % Plot pval
+    if options.pval
+        significantMap = earlyPvalMap <= 0.05;
+        if sum(significantMap,"all") > 0
+            contour(significantMap, [0.5 0.5],...
+                    Color=options.pvalColor,LineWidth=options.pvalLineWidth);
+        end
+    end
+    % Plot axis label
+    set(gca, 'XAxisLocation', 'top','YAxisLocation', 'right');
+    xticks(trialTickLoc); yticks(trialTickLoc);
+    xticklabels(earlyTicks(trialTickLoc)); yticklabels(earlyTicks(trialTickLoc));
+    xlabel('Ending trial'); ylabel('Starting trial');
+
+
+    % Plot late session triange
+    nexttile(heatmapLayout,2);
+    plotHeatmap(lateMap,[],dataType='heatmap',...
+                colormap=options.colormap,...
+                colorlim=options.colorlim,...
+                plotColorBar=false);
+    % Plot pval
+    if options.pval
+        significantMap = latePvalMap <= 0.05;
+        if sum(significantMap,"all") > 0
+            contour(significantMap, [0.5 0.5],...
+                    Color=options.pvalColor,LineWidth=options.pvalLineWidth);
+        end
+    end
+    % Plot axis label
+    set(gca, 'XAxisLocation', 'top','YAxisLocation', 'right');
+    xticks(trialTickLoc); yticks(trialTickLoc);
+    xticklabels(lateTicks(trialTickLoc)); yticklabels(lateTicks(trialTickLoc));
+    xlabel('Ending trial'); ylabel('Starting trial');
+    
+    if isfield(options,'title')
+        sgtitle(heatmapLayout,options.title);
+    end
+
+else
+    ax = nexttile(options.tileSize);
+    plotHeatmap(map,[],dataType='heatmap',...
+                colormap=options.colormap,...
+                colorlim=options.colorlim,...
+                colorBarLabel=options.colorBarLabel,...
+                tile=ax,...
+                colorBarPosition=options.colorBarPosition);
+
+    % Plot pval
+    if options.pval
+        pvalMap = DAvsEImap.(statType).(strcat('pval_',dataType));
+        significantMap = pvalMap <= 0.05;
+        if sum(significantMap,"all") > 0
+            contour(significantMap, [0.5 0.5],...
+                    Color=options.pvalColor,LineWidth=options.pvalLineWidth);
+        end
+    end
+
+    % Plot axis label
+    set(gca, 'XAxisLocation', 'top','YAxisLocation', 'right');
+    xticks(trialTickLoc); yticks(trialTickLoc);
+    xticklabels(trialIdx(trialTickLoc)); yticklabels(trialIdx(trialTickLoc));
+    xlabel('Ending trial'); ylabel('Starting trial');
+
+    if isfield(options,'title')
+        sgtitle(options.title);
     end
 end
-
-%% Plot axis label
-set(gca, 'XAxisLocation', 'top','YAxisLocation', 'right');
-xticks(trialTickLoc); yticks(trialTickLoc);
-xticklabels(trialIdx(trialTickLoc)); yticklabels(trialIdx(trialTickLoc));
-xlabel('Trials'); ylabel('Trials');
 
 end

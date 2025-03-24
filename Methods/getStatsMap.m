@@ -4,7 +4,7 @@ function maps = getStatsMap(data,options)
 arguments
     data double
     
-    options.stat string = 'diff'
+    options.stat string = 'slope'
     options.pval logical = false
     options.nboot double = 1000
     options.reverse logical = false
@@ -16,6 +16,8 @@ if contains(options.stat,'diff',IgnoreCase=true)
     stat = 'diff';
 elseif contains(options.stat,'slope',IgnoreCase=true)
     stat = 'slope';
+elseif sum(contains(options.stat,["mean","average","avg"],IgnoreCase=true))
+    stat = 'mean';
 end
 
 % Reverse if neccessary
@@ -44,6 +46,9 @@ for i = 1:length(data)
         elseif strcmpi(stat,'diff')
             obs = data(j) - data(i);
             map_stat(i,j) = obs;
+        elseif strcmpi(stat,'mean')
+            obs = mean(data(i:j));
+            map_stat(i,j) = obs;
         end
     end
 end
@@ -55,6 +60,7 @@ end
 
 % Store results
 maps.map = map_stat;
+maps.options = options;
 if options.pval; maps.pval = map_pval; end
 
 end

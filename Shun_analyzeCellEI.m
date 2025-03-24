@@ -338,69 +338,81 @@ animalEIindex_aucs = cellfun(@(a) mean(EIindex_aucs(strcmp(combined_cells.Animal
 %% (Analysis) Calculate relationship between DA slope and patch data
 % Calculate the slope of pairwise trials vs animal avg EI index
 
-nTrials = 30; % look at first 30 trials + last 30 trials
+nTrials = 70; % look at first 30 trials + last 30 trials
 metric = 'slope';
+skipWholeSession = true;
 
 % Get DA vs EI map
 DAvsEIaucs_slopeMap  = getDAvsEImap(DAtrend,animalEIindex_aucs,mapType='slope',...
-                                    nTrials=nTrials,metric=metric);
+                                    nTrials=nTrials,metric=metric,...
+                                    skipWholeSession=skipWholeSession);
 DAvsEIaucs_diffMap   = getDAvsEImap(DAtrend,animalEIindex_aucs,mapType='diff',...
-                                    nTrials=nTrials,metric=metric);
+                                    nTrials=nTrials,metric=metric,...
+                                    skipWholeSession=skipWholeSession);
+DAvsEIaucs_avgMap    = getDAvsEImap(DAtrend,animalEIindex_aucs,mapType='avg',...
+                                    nTrials=nTrials,metric=metric,...
+                                    skipWholeSession=skipWholeSession);
+
 DAvsEIpeaks_slopeMap = getDAvsEImap(DAtrend,animalEIindex_peaks,mapType='slope',...
-                                    nTrials=nTrials,metric=metric);
+                                    nTrials=nTrials,metric=metric,...
+                                    skipWholeSession=skipWholeSession);
 DAvsEIpeaks_diffMap  = getDAvsEImap(DAtrend,animalEIindex_peaks,mapType='diff',...
-                                    nTrials=nTrials,metric=metric);
+                                    nTrials=nTrials,metric=metric,...
+                                    skipWholeSession=skipWholeSession);
+DAvsEIpeaks_avgMap   = getDAvsEImap(DAtrend,animalEIindex_peaks,mapType='avg',...
+                                    nTrials=nTrials,metric=metric,...
+                                    skipWholeSession=skipWholeSession);
+
+save(strcat(resultPath,filesep,'DAvsEImap'),...
+    'DAvsEIaucs_slopeMap','DAvsEIaucs_diffMap','DAvsEIaucs_avgMap',...
+    'DAvsEIpeaks_slopeMap','DAvsEIpeaks_diffMap','DAvsEIpeaks_avgMap',...
+    '-v7.3');
 
 %% (Analysis) Plot DA vs EI heatmap
 
-initializeFig(1,1); tiledlayout(2,4);
+mapsToPlot = {DAvsEIaucs_slopeMap; DAvsEIaucs_diffMap;  DAvsEIaucs_avgMap;...
+             DAvsEIpeaks_slopeMap; DAvsEIpeaks_diffMap; DAvsEIpeaks_avgMap};
+EItypeList = {'EI charge index'; 'EI charge index'; 'EI charge index';...
+              'EI amplitude index'; 'EI amplitude index'; 'EI amplitude index'};
+mapTypeList = {'slope';'diff';'avg';'slope';'diff';'avg'};
+figureNameList = {'DAvsEIaucs_slopeMap'; 'DAvsEIaucs_diffMap'; 'DAvsEIaucs_avgMap';...
+                  'DAvsEIpeaks_slopeMap'; 'DAvsEIpeaks_diffMap'; 'DAvsEIpeaks_avgMap'};
+fields = {'max','min','avg','amp'};
+nTrials = 50;
 
-DAvsEImap = DAvsEIaucs_slopeMap; figureName = getVarName(DAvsEIaucs_slopeMap);
-EItype = 'EI charge index'; mapType = 'slope';
+for i = 1:length(mapsToPlot)
+    
+    DAvsEImap = mapsToPlot{i}; figureName = figureNameList{i};
+    EItype = EItypeList{i}; mapType = mapTypeList{i};
+    
+    initializeFig(1,1); masterLayout = tiledlayout(2,4);
+    
+    for f = 1:length(fields)
+        cur_field = fields{f};
 
-% DAvsEImap = DAvsEIaucs_diffMap; figureName = getVarName(DAvsEIaucs_diffMap);
-% EItype = 'EI charge index'; mapType = 'diff';
-
-% DAvsEImap = DAvsEIpeaks_slopeMap; figureName = getVarName(DAvsEIpeaks_slopeMap);
-% EItype = 'EI amplitude index'; mapType = 'slope';
-
-% DAvsEImap = DAvsEIpeaks_diffMap; figureName = getVarName(DAvsEIpeaks_diffMap);
-% EItype = 'EI amplitude index'; mapType = 'diff';
-
-ax = nexttile;
-plotDAvsEImap(DAvsEImap,statType='max',dataType='raw',tile=ax);
-title(['DA ',mapType,' (raw max) vs ', EItype]);
-ax = nexttile;
-plotDAvsEImap(DAvsEImap,statType='min',dataType='raw',tile=ax);
-title(['DA ',mapType,' (raw min) vs ', EItype]);
-ax = nexttile;
-plotDAvsEImap(DAvsEImap,statType='avg',dataType='raw',tile=ax);
-title(['DA ',mapType,' (raw avg) vs ', EItype]);
-ax = nexttile;
-plotDAvsEImap(DAvsEImap,statType='amp',dataType='raw',tile=ax);
-title(['DA ',mapType,' (raw amp) vs ', EItype]);
-
-ax = nexttile;
-plotDAvsEImap(DAvsEImap,statType='max',dataType='smooth',tile=ax);
-title(['DA ',mapType,' (smoothed max) vs ', EItype]);
-ax = nexttile;
-plotDAvsEImap(DAvsEImap,statType='min',dataType='smooth',tile=ax);
-title(['DA ',mapType,' (smoothed min) vs ', EItype]);
-ax = nexttile;
-plotDAvsEImap(DAvsEImap,statType='avg',dataType='smooth',tile=ax);
-title(['DA ',mapType,' (smoothed avg) vs ', EItype]);
-ax = nexttile;
-plotDAvsEImap(DAvsEImap,statType='amp',dataType='smooth',tile=ax);
-title(['DA ',mapType,' (smoothed amp) vs ', EItype]);
-
-saveFigures(gcf,figureName,resultPath,...
-            saveFIG=true,savePDF=true,savePNG=true);
-close all;
+        nexttile(masterLayout,f); 
+        heatmapLayout = tiledlayout(masterLayout,1,2); 
+        heatmapLayout.Layout.Tile = f;
+        plotDAvsEImap(DAvsEImap,statType=cur_field,dataType='raw',nTrials=nTrials,...
+                      layout=heatmapLayout,...
+                      title=['DA ',mapType,' (raw ',cur_field,') vs ', EItype]);
+    
+        nexttile(masterLayout,f+length(fields)); 
+        heatmapLayout = tiledlayout(masterLayout,1,2); 
+        heatmapLayout.Layout.Tile = f+length(fields);
+        plotDAvsEImap(DAvsEImap,statType=cur_field,dataType='smoothed',nTrials=nTrials,...
+                      layout=heatmapLayout,...
+                      title=['DA ',mapType,' (smoothed ',cur_field,') vs ', EItype]);
+    end
+    
+    saveFigures(gcf,figureName,resultPath,...
+                saveFIG=true,savePDF=true,savePNG=true);
+    close all;
+end
 
 %% (Analysis) Calculate slopes of last n trials
 
 shortWindow = 15:20;
-% longWindow  = 35:39;
 
 % Calculate average slopes in shortWindow
 avgCueMaxSlope_short  = arrayfun(@(d) mean(d.CueMax_slope(shortWindow)),  DAtrend)';

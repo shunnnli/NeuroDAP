@@ -308,11 +308,13 @@ for a = 1:length(animalRange)
         raw_data = data.raw;
         smoothed_data = data.smoothed;
 
-        % Save forward map
+        % Generate stats map
         DAtrend(a).(fields{f}).slopeMap.raw = getStatsMap(data.raw,stat='slope',pval=true);
         DAtrend(a).(fields{f}).diffMap.raw = getStatsMap(data.raw,stat='diff');
         DAtrend(a).(fields{f}).slopeMap.smoothed = getStatsMap(data.smoothed,stat='slope',pval=true);
         DAtrend(a).(fields{f}).diffMap.smoothed = getStatsMap(data.smoothed,stat='diff');
+        DAtrend(a).(fields{f}).avgMap.raw = getStatsMap(data.raw,stat='mean');
+        DAtrend(a).(fields{f}).avgMap.smoothed = getStatsMap(data.smoothed,stat='mean');
     end
 end
 disp('Finished: DAtrend created');
@@ -328,7 +330,7 @@ if isempty(answer{1}); filename = strcat('DAtrend_',today);
 else; filename = strcat('DAtrend_',today,'_',answer{1}); end
 
 disp(['Ongoing: saving DAtrend.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
-save(strcat(resultspath,filesep,today,filesep,filename),'DAtrend','sessionList','-v7.3');
+save(strcat(resultspath,filesep,today,filesep,filename),'DAtrend','-v7.3');
 disp(['Finished: saved DAtrend.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
 
 %% Plot DA trend for each animal
@@ -492,58 +494,6 @@ for a = length(animalRange)
             saveFIG=false,savePDF=false,savePNG=true);
 end
 
-%% Find minimal window to have a significant p value for fitted slopes
-
-% We look at when the slope fitted from the last n trial reach significant
-% p values
-% Result: seems like the best window is 8
-
-% trialWindow = 3:40;
-% fields = {'max', 'min', 'avg', 'amp'};
-% sig_pct = nan(length(fields),length(trialWindow));
-% 
-% % For each n, plot p value histogram
-% for n = 1:length(trialWindow)
-%     pvals = getDAtrend(DAtrend,n,stat='p');
-% 
-%     % Plot histogram
-%     % close all;
-%     % initializeFig(0.5,0.5); tiledlayout(2,4);
-%     for st = 1:length(fields)
-%        statsType = fields{st};
-%        data = pvals.(statsType);
-%        sig_pct(st,n) = sum(data <= 0.05)/length(data) * 100;
-% 
-%        % nexttile;
-%        % edges = 0:0.05:1;
-%        % histogram(data,edges);
-%        % xline(0.05,LineWidth=3,Color='r');
-%        % xlabel('p value'); ylabel('Count');
-%        % title(strcat(statsType," (Significant: ",num2str(sig_pct),"%)"));
-%     end
-% end
-% 
-% % Plot sig_pct
-% initializeFig(.5,.5); tiledlayout(1,2);
-% 
-% nexttile;
-% legendList = {};
-% for st = 1:length(fields)
-%     plot(trialWindow,sig_pct(st,:),LineWidth=2); hold on
-%     legendList{end+1} = fields{st};
-% end
-% xlabel('Trial window'); ylabel('p value significant percentage');
-% legend(legendList);
-% 
-% nexttile;
-% plot(trialWindow,mean(sig_pct(1:4,:),1),LineWidth=2); hold on
-% plot(trialWindow,mean(sig_pct(5:8,:),1),LineWidth=2); hold on
-% xlabel('Trial window'); ylabel('p value significant percentage');
-% legend({'Raw','Smoothed'});
-% 
-% saveFigures(gcf,'nTrials-sig_pct',strcat(resultPath),...
-%             saveFIG=false,savePDF=false,savePNG=true);
-
 %% (Optional) Plot animal specific licking
 
 animal = 'SL068';
@@ -705,3 +655,55 @@ for a = 1:length(animalRange)
     end
 end
 disp('Finished: DAtrend created');
+
+%% Find minimal window to have a significant p value for fitted slopes
+
+% We look at when the slope fitted from the last n trial reach significant
+% p values
+% Result: seems like the best window is 8
+
+% trialWindow = 3:40;
+% fields = {'max', 'min', 'avg', 'amp'};
+% sig_pct = nan(length(fields),length(trialWindow));
+% 
+% % For each n, plot p value histogram
+% for n = 1:length(trialWindow)
+%     pvals = getDAtrend(DAtrend,n,stat='p');
+% 
+%     % Plot histogram
+%     % close all;
+%     % initializeFig(0.5,0.5); tiledlayout(2,4);
+%     for st = 1:length(fields)
+%        statsType = fields{st};
+%        data = pvals.(statsType);
+%        sig_pct(st,n) = sum(data <= 0.05)/length(data) * 100;
+% 
+%        % nexttile;
+%        % edges = 0:0.05:1;
+%        % histogram(data,edges);
+%        % xline(0.05,LineWidth=3,Color='r');
+%        % xlabel('p value'); ylabel('Count');
+%        % title(strcat(statsType," (Significant: ",num2str(sig_pct),"%)"));
+%     end
+% end
+% 
+% % Plot sig_pct
+% initializeFig(.5,.5); tiledlayout(1,2);
+% 
+% nexttile;
+% legendList = {};
+% for st = 1:length(fields)
+%     plot(trialWindow,sig_pct(st,:),LineWidth=2); hold on
+%     legendList{end+1} = fields{st};
+% end
+% xlabel('Trial window'); ylabel('p value significant percentage');
+% legend(legendList);
+% 
+% nexttile;
+% plot(trialWindow,mean(sig_pct(1:4,:),1),LineWidth=2); hold on
+% plot(trialWindow,mean(sig_pct(5:8,:),1),LineWidth=2); hold on
+% xlabel('Trial window'); ylabel('p value significant percentage');
+% legend({'Raw','Smoothed'});
+% 
+% saveFigures(gcf,'nTrials-sig_pct',strcat(resultPath),...
+%             saveFIG=false,savePDF=false,savePNG=true);

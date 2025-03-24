@@ -80,14 +80,14 @@ if isvector(data)
     elseif contains(options.style,'bar',IgnoreCase=true)
         barFaceColor = 1 - options.BarFaceOpacity*(1-options.color);
         if strcmp(options.orientation,'vertical')
-            bar(x,mean(data,'all'),FaceColor=barFaceColor,EdgeColor=options.color,LineWidth=options.LineWidth);
+            bar(x,mean(data,'all'),FaceColor=barFaceColor,EdgeColor=options.color,LineWidth=options.LineWidth,HandleVisibility="off");
         else
-            barh(x,mean(data,'all'),FaceColor=barFaceColor,EdgeColor=options.color,LineWidth=options.LineWidth);
+            barh(x,mean(data,'all'),FaceColor=barFaceColor,EdgeColor=options.color,LineWidth=options.LineWidth,HandleVisibility="off");
         end
         hold on;
     
         SEM = getSEM(data);
-        eb = errorbar(x,mean(data,'all'),-SEM,SEM,options.orientation);
+        eb = errorbar(x,mean(data,'all'),-SEM,SEM,options.orientation,HandleVisibility="off");
         eb.Color = options.color;                            
         eb.LineWidth = options.LineWidth;  
         hold on;
@@ -119,19 +119,19 @@ elseif size(data,2) == 2
         if contains(options.style,'box',IgnoreCase=true)
             boxchart(xgroupdata,colData,'BoxFaceColor',options.color{col},'WhiskerLineColor',options.color{col},...
                      LineWidth=options.LineWidth,...
-                     Orientation=options.orientation); 
+                     Orientation=options.orientation,HandleVisibility="off"); 
             hold on;
         elseif contains(options.style,'bar',IgnoreCase=true)
             barFaceColor = 1 - options.BarFaceOpacity*(1-options.color{col});
             if strcmp(options.orientation,'vertical')
-                bar(x(col),mean(colData,'all'),FaceColor=barFaceColor,EdgeColor=options.color{col},LineWidth=options.LineWidth);
+                bar(x(col),mean(colData,'all'),FaceColor=barFaceColor,EdgeColor=options.color{col},LineWidth=options.LineWidth,HandleVisibility="off");
             else
-                barh(x(col),mean(colData,'all'),FaceColor=barFaceColor,EdgeColor=options.color{col},LineWidth=options.LineWidth);
+                barh(x(col),mean(colData,'all'),FaceColor=barFaceColor,EdgeColor=options.color{col},LineWidth=options.LineWidth,HandleVisibility="off");
             end
             hold on;
         
             SEM = getSEM(colData);
-            eb = errorbar(x(col),mean(colData,'all'),-SEM,SEM,options.orientation);
+            eb = errorbar(x(col),mean(colData,'all'),-SEM,SEM,options.orientation,HandleVisibility="off");
             eb.Color = options.color{col};                            
             eb.LineWidth = options.LineWidth;  
             hold on;
@@ -163,7 +163,7 @@ elseif size(data,2) == 2
                 end
                 y1 = data(i,1);
                 y2 = data(i,2);
-                plot([x1, x2], [y1, y2], 'Color', options.connectColor, 'LineWidth', options.LineWidth);
+                plot([x1, x2], [y1, y2], 'Color', options.connectColor, 'LineWidth', options.LineWidth,HandleVisibility="off");
                 hold on;
             else
                 if options.plotScatter
@@ -175,7 +175,7 @@ elseif size(data,2) == 2
                 end
                 x1 = data(i,1);
                 x2 = data(i,2);
-                plot([x1, x2], [y1, y2], 'Color', options.connectColor, 'LineWidth', options.LineWidth);
+                plot([x1, x2], [y1, y2], 'Color', options.connectColor, 'LineWidth', options.LineWidth,HandleVisibility="off");
                 hold on;
             end
         end

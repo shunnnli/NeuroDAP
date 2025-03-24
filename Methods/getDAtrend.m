@@ -23,6 +23,8 @@ if sum(contains(options.mapType,["slope","slopes"]))
     mapType = 'slopeMap';
 elseif sum(contains(options.mapType,["diff","dif"]))
     mapType = 'diffMap';
+elseif sum(contains(options.mapType,["avg","averages","mean"]))
+    mapType = 'avgMap';
 end
 
 if contains(options.dataType,"raw")
@@ -48,7 +50,7 @@ for s = 1:length(DAstatsType)
     for a = 1:length(options.animalIdx)
         animalIdx = options.animalIdx(a);
         fieldData = DAtrend(animalIdx).(DAstatsType{s}).(mapType).(dataType).map;
-        if t1 > length(fieldData) || t2 > length(fieldData) || t1 <=0 || t2 <= 0
+        if t1 > length(fieldData) || t2 > length(fieldData) || t1 <=0 || t2 <= 0 || t1>t2
             cur_stat(a) = nan;
         else
             cur_stat(a) = fieldData(t1,t2);
