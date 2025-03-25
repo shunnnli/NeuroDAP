@@ -7,6 +7,8 @@ arguments
     options.statType string = 'amp'
     options.nTrials double
 
+    options.startingTrialAxis string = "x"
+
     options.layout
     options.tileSize double = [1,1]
 
@@ -68,13 +70,13 @@ if ~isfield(options,'layout')
 end
 
 if skipWholeSession
-    % Get map range
-    earlyIdx = 1:options.nTrials;
-    lateIdx = options.nTrials+1:options.nTrials*2;
     % Get tick marks
     earlyTicks = 1:options.nTrials;
-    lateTicks = -options.nTrials:-1;
-    trialTickLoc = floor(linspace(1,options.nTrials,3));
+    lateTicks = -flip(earlyTicks);
+    trialTickLoc = round(linspace(1,options.nTrials,3));
+    % Get map range
+    earlyIdx = earlyTicks;
+    lateIdx = 2*DAvsEImap.options.nTrials + lateTicks + 1;
 else
     % Get tick marks
     trialIdx = [1:options.nTrials,-options.nTrials:-1];
@@ -97,7 +99,7 @@ end
 % Define colorlim
 if ~isfield(options,'colorlim')
     if skipWholeSession
-        climit = max([abs(earlyMap),abs(lateMap)]);
+        climit = max([abs(earlyMap),abs(lateMap)],[],'all');
     else
         climit = max(abs(map),[],'all');
     end
@@ -110,12 +112,25 @@ if skipWholeSession
     heatmapLayout.Layout.TileSpan = options.tileSize;
     heatmapLayout.TileSpacing = 'tight'; heatmapLayout.Padding = 'tight'; axis off;
 
+    % Rotate map if needed
+    if strcmpi(options.startingTrialAxis,"x")
+        earlyMap = rot90(earlyMap,-1);
+        lateMap = rot90(lateMap,-1);
+        earlyPvalMap = rot90(earlyPvalMap,-1);
+        latePvalMap = rot90(latePvalMap,-1);
+
+        earlyMap = fliplr(earlyMap);
+        lateMap = fliplr(lateMap);
+        earlyPvalMap = fliplr(earlyPvalMap);
+        latePvalMap = fliplr(latePvalMap);
+    end
+
     % Plot early session triange
     nexttile(heatmapLayout,1);
     plotHeatmap(earlyMap,[],dataType='heatmap',...
                 colormap=options.colormap,...
                 colorlim=options.colorlim,...
-                colorBarLabel=options.colorBarLabel);
+                plotColorBar=false);
     % Plot pval
     if options.pval
         significantMap = earlyPvalMap <= 0.05;
@@ -125,10 +140,17 @@ if skipWholeSession
         end
     end
     % Plot axis label
-    set(gca, 'XAxisLocation', 'top','YAxisLocation', 'right');
-    xticks(trialTickLoc); yticks(trialTickLoc);
-    xticklabels(earlyTicks(trialTickLoc)); yticklabels(earlyTicks(trialTickLoc));
-    xlabel('Ending trial'); ylabel('Starting trial');
+    if strcmpi(options.startingTrialAxis,"x")
+        xticks(trialTickLoc); yticks(trialTickLoc);
+        xticklabels(earlyTicks(trialTickLoc)); yticklabels(earlyTicks(trialTickLoc));
+        xlabel('Starting trial'); ylabel('Ending trial');
+    else
+        set(gca, 'XAxisLocation', 'top','YAxisLocation', 'right');
+        xticks(trialTickLoc); yticks(trialTickLoc);
+        xticklabels(earlyTicks(trialTickLoc)); yticklabels(earlyTicks(trialTickLoc));
+        xlabel('Ending trial'); ylabel('Starting trial');
+    end
+    
 
 
     % Plot late session triange
@@ -136,7 +158,7 @@ if skipWholeSession
     plotHeatmap(lateMap,[],dataType='heatmap',...
                 colormap=options.colormap,...
                 colorlim=options.colorlim,...
-                plotColorBar=false);
+                colorBarLabel=options.colorBarLabel);
     % Plot pval
     if options.pval
         significantMap = latePvalMap <= 0.05;
@@ -146,10 +168,17 @@ if skipWholeSession
         end
     end
     % Plot axis label
-    set(gca, 'XAxisLocation', 'top','YAxisLocation', 'right');
-    xticks(trialTickLoc); yticks(trialTickLoc);
-    xticklabels(lateTicks(trialTickLoc)); yticklabels(lateTicks(trialTickLoc));
-    xlabel('Ending trial'); ylabel('Starting trial');
+    if strcmpi(options.startingTrialAxis,"x")
+        xticks(trialTickLoc); yticks(trialTickLoc);
+        xticklabels(lateTicks(trialTickLoc)); yticklabels(lateTicks(trialTickLoc));
+        xlabel('Starting trial'); ylabel('Ending trial');
+    else
+        set(gca, 'XAxisLocation', 'top','YAxisLocation', 'right');
+        xticks(trialTickLoc); yticks(trialTickLoc);
+        xticklabels(lateTicks(trialTickLoc)); yticklabels(lateTicks(trialTickLoc));
+        xlabel('Ending trial'); ylabel('Starting trial');
+    end
+    
     
     if isfield(options,'title')
         sgtitle(heatmapLayout,options.title);

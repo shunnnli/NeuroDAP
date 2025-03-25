@@ -1,5 +1,7 @@
 function plotHeatmap(data,timestamp,options)
 
+% Plot heatmap of data
+
 arguments
     data double
     timestamp double
@@ -27,6 +29,11 @@ end
 % Define color bar label
 if ~isfield(options,'colorBarLabel')
     options.colorBarLabel = "Value";
+end
+
+if ~isfield(options,'colorlim')
+    climit = max(abs(data),[],"all");
+    options.colorlim = [-climit, climit];
 end
 
 %% Plot heatmap
@@ -64,7 +71,7 @@ elseif strcmpi(options.dataType,'heatmap')
         else
             cb = colorbar; 
             cb.Label.String = options.colorBarLabel;
-            cb.Location = 'westoutside';
+            cb.Location = 'eastoutside';
         end
     end
 

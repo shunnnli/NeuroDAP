@@ -363,10 +363,21 @@ DAvsEIpeaks_avgMap   = getDAvsEImap(DAtrend,animalEIindex_peaks,mapType='avg',..
                                     nTrials=nTrials,metric=metric,...
                                     skipWholeSession=skipWholeSession);
 
-save(strcat(resultPath,filesep,'DAvsEImap'),...
-    'DAvsEIaucs_slopeMap','DAvsEIaucs_diffMap','DAvsEIaucs_avgMap',...
-    'DAvsEIpeaks_slopeMap','DAvsEIpeaks_diffMap','DAvsEIpeaks_avgMap',...
-    '-v7.3');
+% save(strcat(resultPath,filesep,'DAvsEImap'),...
+%     'DAvsEIaucs_slopeMap','DAvsEIaucs_diffMap','DAvsEIaucs_avgMap',...
+%     'DAvsEIpeaks_slopeMap','DAvsEIpeaks_diffMap','DAvsEIpeaks_avgMap',...
+%     '-v7.3');
+
+%% test
+
+% close all;
+initializeFig(1,1); masterLayout = tiledlayout(1,1);
+
+nexttile(masterLayout,1); 
+heatmapLayout = tiledlayout(masterLayout,1,2); 
+heatmapLayout.Layout.Tile = 1;
+plotDAvsEImap(DAvsEIaucs_slopeMap,statType='amp',dataType='smoothed',nTrials=70,...
+              layout=heatmapLayout,startingTrialAxis='y')
 
 %% (Analysis) Plot DA vs EI heatmap
 
@@ -378,7 +389,7 @@ mapTypeList = {'slope';'diff';'avg';'slope';'diff';'avg'};
 figureNameList = {'DAvsEIaucs_slopeMap'; 'DAvsEIaucs_diffMap'; 'DAvsEIaucs_avgMap';...
                   'DAvsEIpeaks_slopeMap'; 'DAvsEIpeaks_diffMap'; 'DAvsEIpeaks_avgMap'};
 fields = {'max','min','avg','amp'};
-nTrials = 50;
+nTrials = 70;
 
 for i = 1:length(mapsToPlot)
     
