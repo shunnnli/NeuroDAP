@@ -260,12 +260,12 @@ disp(['Finished: saved combined_animals.mat (',char(datetime('now','Format','HH:
 
 %% Calculate DA trend for each animal
 
-eventRange = 'Stim';
+eventRange = 'Pair';
 animalRange = unique({combined_animals.animal});
 DAtrend = struct([]);
 trialConditions = 'trials.performing';
 
-for a = 1:length(animalRange)
+for a = 20:length(animalRange)
     cur_animal = animalRange{a}; disp(['Ongoing: analyzing ',cur_animal]);
     cur_task = unique({combined_animals(strcmp({combined_animals.animal}, cur_animal)).task});
     DA_Max = getGroupedTrialStats(combined_animals,'stageMax',...
@@ -295,10 +295,10 @@ for a = 1:length(animalRange)
     DAtrend(a).min.raw = DA_Min.stats{1}{1}(:,2);
     DAtrend(a).avg.raw = DA_Avg.stats{1}{1}(:,2);
     DAtrend(a).amp.raw = getAmplitude(DA_Max.stats{1}{1}(:,2),DA_Min.stats{1}{1}(:,2));
-    DAtrend(a).max.smoothed = smoothdata(DAtrend(a).max.raw,'movmean',3);
-    DAtrend(a).min.smoothed = smoothdata(DAtrend(a).min.raw,'movmean',3);
-    DAtrend(a).avg.smoothed = smoothdata(DAtrend(a).avg.raw,'movmean',3);
-    DAtrend(a).amp.smoothed = smoothdata(DAtrend(a).amp.raw,'movmean',3);
+    DAtrend(a).max.smoothed = smoothdata(DAtrend(a).max.raw,'movmean',5);
+    DAtrend(a).min.smoothed = smoothdata(DAtrend(a).min.raw,'movmean',5);
+    DAtrend(a).avg.smoothed = smoothdata(DAtrend(a).avg.raw,'movmean',5);
+    DAtrend(a).amp.smoothed = smoothdata(DAtrend(a).amp.raw,'movmean',5);
 
     % Calculate DA trending stats
     fields = {'max', 'min', 'avg', 'amp'};
@@ -556,154 +556,3 @@ legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,.
 
 plotEvent('Stim',0.5,color=bluePurpleRed(500,:))
 xlabel('Time (s)'); ylabel('z-score');
-
-%% (Old) Calculate DA trend for each animal
-
-eventRange = 'Stim';
-animalRange = unique({combined_animals.animal});
-DAtrend = struct([]);
-nboot = 1000;
-trialConditions = 'trials.performing';
-maxTrials = max(arrayfun(@(x) length(x.CueMax_slope), DAtrend));
-movingWindowSize = 8;
-
-for a = 1:length(animalRange)
-    cur_animal = animalRange{a}; disp(['Ongoing: analyzing ',cur_animal]);
-    cur_task = unique({combined_animals(strcmp({combined_animals.animal}, cur_animal)).task});
-    DA_Max = getGroupedTrialStats(combined_animals,'stageMax',...
-                                eventRange=eventRange,...
-                                animalRange=cur_animal,...
-                                taskRange=cur_task,...
-                                signalRange='dLight',...
-                                trialConditions=trialConditions);
-    DA_Min = getGroupedTrialStats(combined_animals,'stageMin',...
-                                eventRange=eventRange,...
-                                animalRange=cur_animal,...
-                                taskRange=cur_task,...
-                                signalRange='dLight',...
-                                trialConditions=trialConditions);
-    DA_Avg = getGroupedTrialStats(combined_animals,'stageAvg',...
-                                eventRange=eventRange,...
-                                animalRange=cur_animal,...
-                                taskRange=cur_task,...
-                                signalRange='dLight',...
-                                trialConditions=trialConditions);
-    % initializeFig(.7,.7); tiledlayout('flow');
-    % DA_stageMax_result = plotGroupedTrialStats(DA_stageMax,'DA Max',groupSize=1,color=bluePurpleRed(500,:));
-
-    % Save to DAtrend
-    DAtrend(a).animal = cur_animal;
-    DAtrend(a).task   = cur_task;
-    DAtrend(a).CueMax = DA_Max.stats{1}{1}(:,2);
-    DAtrend(a).CueMin = DA_Min.stats{1}{1}(:,2);
-    DAtrend(a).CueAvg = DA_Avg.stats{1}{1}(:,2);
-    DAtrend(a).CueAmp = getAmplitude(DA_Max.stats{1}{1}(:,2),DA_Min.stats{1}{1}(:,2));
-
-    % Save smoothed DAtrend
-    DAtrend(a).CueMax_smoothed = smoothdata(DAtrend(a).CueMax,'movmean',3);
-    DAtrend(a).CueMin_smoothed = smoothdata(DAtrend(a).CueMin,'movmean',3);
-    DAtrend(a).CueAvg_smoothed = smoothdata(DAtrend(a).CueAvg,'movmean',3);
-    DAtrend(a).CueAmp_smoothed = smoothdata(DAtrend(a).CueAmp,'movmean',3);
-
-    % Calculate DA trending stats
-    fields = {'CueMax', 'CueMin', 'CueAvg', 'CueAmp',...
-              'CueMax_smoothed','CueMin_smoothed','CueAvg_smoothed','CueAmp_smoothed'};
-    nTrials = length(DAtrend(a).CueMax); % assuming all have the same length
-    
-    for f = 1:numel(fields)
-        data = DAtrend(a).(fields{f});
-        slopes = nan(nTrials, 1); movSlopes = nan(nTrials,1);
-        pvals  = nan(nTrials, 1); movPvals = nan(nTrials,1);
-        
-        % Loop for trending statistics: last n trials (n = 1:nTrials)
-        for n = 3:nTrials
-            Y = data(end-n+1:end);  % last n trials
-            X = (1:n)';             % corresponding trial indices for regression
-            fit_obs = polyfit(X, Y, 1); obsSlope = fit_obs(1);
-            fit_boot = bootstrp(nboot, @(i) polyfit(X, Y(i), 1), 1:length(Y));
-            slopes(n) = obsSlope;
-            pvals(n)  = sum(abs(fit_boot(:,1)) >= abs(obsSlope))/nboot;   % p-value for the slope
-        end
-        
-        % Store the trending statistics into DAtrend
-        DAtrend(a).([fields{f} '_slope']) = slopes;
-        DAtrend(a).([fields{f} '_pval'])  = pvals;
-        
-
-        % Moving window fit
-        movingWindowIdx = getMovingWindow(length(data),movingWindowSize,reverse=true);
-        for n = 1:size(movingWindowIdx,1)
-            movingWindow = movingWindowIdx(n,1):movingWindowIdx(n,2);
-            Y = data(movingWindow);
-            X = (1:length(movingWindow))';
-            fit_obs = polyfit(X, Y, 1); obsSlope = fit_obs(1);
-            fit_boot = bootstrp(nboot, @(i) polyfit(X, Y(i), 1), 1:length(Y));
-            movSlopes(n) = obsSlope;
-            movPvals(n)  = sum(abs(fit_boot(:,1)) >= abs(obsSlope))/nboot;   % p-value for the slope
-        end
-
-        % Store the trending statistics into DAtrend
-        DAtrend(a).([fields{f} '_movingSlope']) = movSlopes;
-        DAtrend(a).([fields{f} '_movingPval'])  = movPvals;
-
-        % % Compute difference between the last 10 trials and the last 30-40 trials
-        % if nTrials >= 40
-        %     DAtrend(a).([fields{f} '_diff']) = mean(data(end-40+1:end-30)) - mean(data(end-10+1:end));
-        % else
-        %     DAtrend(a).([fields{f} '_diff']) = NaN;  % Not enough trials
-        % end
-    end
-end
-disp('Finished: DAtrend created');
-
-%% Find minimal window to have a significant p value for fitted slopes
-
-% We look at when the slope fitted from the last n trial reach significant
-% p values
-% Result: seems like the best window is 8
-
-% trialWindow = 3:40;
-% fields = {'max', 'min', 'avg', 'amp'};
-% sig_pct = nan(length(fields),length(trialWindow));
-% 
-% % For each n, plot p value histogram
-% for n = 1:length(trialWindow)
-%     pvals = getDAtrend(DAtrend,n,stat='p');
-% 
-%     % Plot histogram
-%     % close all;
-%     % initializeFig(0.5,0.5); tiledlayout(2,4);
-%     for st = 1:length(fields)
-%        statsType = fields{st};
-%        data = pvals.(statsType);
-%        sig_pct(st,n) = sum(data <= 0.05)/length(data) * 100;
-% 
-%        % nexttile;
-%        % edges = 0:0.05:1;
-%        % histogram(data,edges);
-%        % xline(0.05,LineWidth=3,Color='r');
-%        % xlabel('p value'); ylabel('Count');
-%        % title(strcat(statsType," (Significant: ",num2str(sig_pct),"%)"));
-%     end
-% end
-% 
-% % Plot sig_pct
-% initializeFig(.5,.5); tiledlayout(1,2);
-% 
-% nexttile;
-% legendList = {};
-% for st = 1:length(fields)
-%     plot(trialWindow,sig_pct(st,:),LineWidth=2); hold on
-%     legendList{end+1} = fields{st};
-% end
-% xlabel('Trial window'); ylabel('p value significant percentage');
-% legend(legendList);
-% 
-% nexttile;
-% plot(trialWindow,mean(sig_pct(1:4,:),1),LineWidth=2); hold on
-% plot(trialWindow,mean(sig_pct(5:8,:),1),LineWidth=2); hold on
-% xlabel('Trial window'); ylabel('p value significant percentage');
-% legend({'Raw','Smoothed'});
-% 
-% saveFigures(gcf,'nTrials-sig_pct',strcat(resultPath),...
-%             saveFIG=false,savePDF=false,savePNG=true);

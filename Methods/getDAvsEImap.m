@@ -7,7 +7,7 @@ arguments
 
     options.metric string = 'cosine'
     options.mapType string = 'slope'
-    options.nTrials double = 30
+    options.nTrials double = 70
     options.skipWholeSession logical = true % only plot triangles of first & last n trials
 
     % P value options

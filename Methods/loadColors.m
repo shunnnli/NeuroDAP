@@ -1,5 +1,4 @@
 function varargout = loadColors()
-%LOADCOLORS Load color palette
 
 % RGB settings: 
 red = [255, 50, 58]; % FF323A

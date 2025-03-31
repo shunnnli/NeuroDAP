@@ -17,14 +17,14 @@ DAtrend_path = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCO
                            'Prompt','Select DAtrend.mat')';
 
 % Load combined_cells and combined_epochs
-for k = 1:length(length(expPath))
-    dirsplit = split(expPath{i},filesep); 
-    filename = dirsplit{end};
+files = dir(fullfile(expPath{1}, 'combined_*.mat'));
+for k = 1:length(files)
+    filename = files(k).name;
     disp(['Loading: ', filename]);
-    load(fullfile(expPath{i}));
+    load(fullfile(expPath{1}, filename));
     disp(['Finished: ',filename, ' loaded']);
 end
-resultPath = fileparts(expPath{1});
+resultPath = expPath{1};
 disp(strcat('resultPath: ',resultPath));
 
 % Load DAtrend struct
@@ -376,8 +376,8 @@ initializeFig(1,1); masterLayout = tiledlayout(1,1);
 nexttile(masterLayout,1); 
 heatmapLayout = tiledlayout(masterLayout,1,2); 
 heatmapLayout.Layout.Tile = 1;
-plotDAvsEImap(DAvsEIpeaks_slopeMap,statType='amp',dataType='smoothed',nTrials=70,...
-              layout=heatmapLayout,startingTrialAxis='x')
+plotDAvsEImap(DAvsEIaucs_slopeMap,statType='amp',dataType='smoothed',nTrials=70,...
+              layout=heatmapLayout,startingTrialAxis='y')
 
 %% (Analysis) Plot DA vs EI heatmap
 
@@ -389,7 +389,7 @@ mapTypeList = {'slope';'diff';'avg';'slope';'diff';'avg'};
 figureNameList = {'DAvsEIaucs_slopeMap'; 'DAvsEIaucs_diffMap'; 'DAvsEIaucs_avgMap';...
                   'DAvsEIpeaks_slopeMap'; 'DAvsEIpeaks_diffMap'; 'DAvsEIpeaks_avgMap'};
 fields = {'max','min','avg','amp'};
-nTrials = 50;
+nTrials = 70;
 
 for i = 1:length(mapsToPlot)
     
@@ -600,18 +600,3 @@ for i = 4:4%numel(slopeNames)
 end
 
 %% (Analysis) Check relationship between DA start & end diff and patch data
-
-
-%% Generate DAtrend_manim for plotting
-DAtrend_manim = struct([]);
-
-for a = 1:30
-    DAtrend_manim(a).animal = DAtrend(a).animal;
-    DAtrend_manim(a).nTrials = DAtrend(a).nTrials;
-    DAtrend_manim(a).slopeMap_raw = DAtrend(a).amp.slopeMap.raw.map;
-    DAtrend_manim(a).slopeMap_smoothed = DAtrend(a).amp.slopeMap.smoothed.map;
-end
-
-DAvsEImap_manim = DAvsEIpeaks_slopeMap.amp;
-
-% Save DAtrend_manim, DAvsEImap_manim, animalEIinex_peaks

@@ -433,9 +433,9 @@ for task = 1:length(taskRange)
         xlabel('Time (s)'); ylabel([signalRange,' z-score']);
         legend(legendList,'Location','northeast');
     end
-    saveFigures(gcf,['Summary_pairing_',taskRange{task}],...
-        strcat(resultspath),...
-        saveFIG=true,savePDF=true);
+    % saveFigures(gcf,['Summary_pairing_',taskRange{task}],...
+    %     strcat(resultspath),...
+    %     saveFIG=true,savePDF=true);
 end
 
 %% Plot lick trace
@@ -494,7 +494,7 @@ end
 
 % Second part
 taskRange = {'Punish (paAIP2)','Punish (paAIP2)'};
-statsTypes = {'stageAvg','stageDelta'}; ylabelList = {'Avg DA response during cue','Delta DA response during cue'};
+statsTypes = {'stageAvg','stageAvg'}; ylabelList = {'Avg DA response during cue','Avg DA response during cue'};
 ylim = [-0.5,1.5; -1.5,2.5];
 
 animalRange = 'All';
@@ -529,12 +529,8 @@ for task = 1:length(results.stats)
     cur_stats = results.stats{task};
     for event = 1:length(eventRange)
         slopes = cur_stats{event}(:,1);
-
-        % plot bar plots
-        scatter(event,slopes,200,colorList{event},'filled'); hold on
-        bar(event,mean(slopes),EdgeColor=colorList{event},FaceColor=colorList{event},...
-            FaceAlpha=0.5,LineWidth=3);
-        errorbar(event,mean(slopes),getSEM(slopes),Color=colorList{event},LineWidth=2);
+        plotScatterBar(event,slopes,color=colorList{event},...
+                       style='box',dotSize=200,LineWidth=2);
 
         % Calculate significance
         if event < length(eventRange)
@@ -553,24 +549,24 @@ end
 %         saveFIG=true,savePDF=true);
 
 %% Plot bar plot of DA final values
+
+finalWindow = 30; 
+
 initializeFig(.7,.7); tiledlayout('flow');
 for task = 1:length(results.stats)
     nexttile;
-    cur_traces = results.traces{task};
-    for event = 1:length(eventRange)
-        finalData = cur_traces{event}(:,end-3:end);
-        animalData = mean(finalData,2);
-
-        % plot bar plots
-        scatter(event,animalData,200,colorList{event},'filled'); hold on
-        bar(event,mean(animalData),EdgeColor=colorList{event},FaceColor=colorList{event},...
-            FaceAlpha=0.5,LineWidth=3);
-        errorbar(event,mean(animalData),getSEM(animalData),Color=colorList{event},LineWidth=2);
+    task_stats = combinedStats.stats{task};
+    for event = 1:length(eventRange)  
+        eventData = task_stats(:,event);
+        finalData = cell2mat(cellfun(@(m) m(end-finalWindow+1:end,2)', eventData, UniformOutput=false));
+        plotScatterBar(event,finalData(:),color=colorList{event},...
+                       style='box',dotSize=200,LineWidth=2);
 
         % Calculate significance
         if event < length(eventRange)
             for i = event+1:length(eventRange)
-                plotStats(animalData,mean(cur_traces{i}(:,end-3:end),2),[event i],testType='kstest');
+                otherConditionData = cell2mat(cellfun(@(m) m(end-finalWindow+1:end,2)', task_stats(:,i), UniformOutput=false));
+                plotStats(finalData(:),otherConditionData(:),[event i],testType='kstest');
             end
         end
     end
