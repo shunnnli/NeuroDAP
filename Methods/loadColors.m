@@ -1,4 +1,8 @@
-function varargout = loadColors()
+function varargout = loadColors(options)
+
+arguments
+    options.type string
+end
 
 % RGB settings: 
 red = [255, 50, 58]; % FF323A

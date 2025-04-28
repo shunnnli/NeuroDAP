@@ -5,12 +5,15 @@ arguments
 
     options.plot logical = false
     options.plotIndividual logical = true
+    options.color
     options.ylim double
+    options.newFig logical = true
     
     options.timeRange double = [-10,50]
     options.Fs double = 10000;
 
     options.animalRange string = 'All'
+    options.cellList double
 end
 
 timeRange = options.timeRange; 
@@ -19,18 +22,21 @@ timeRangeSamples = timeRange * time2sample;
 timeWindowLength = timeRangeSamples(2) - timeRangeSamples(1) + 1;
 timeRangeInms = linspace(-10,50,timeWindowLength);
 
-% Define cell to plot
-cellList = 1:size(combined_cells,1);
-if ~strcmpi(options.animalRange,'All')
-    cellList = cellList(contains(combined_cells.Animal,options.animalRange));
-end
 
+% Define cell to plot
+if ~isfield(options,'cellList')
+    cellList = 1:size(combined_cells,1);
+    if ~strcmpi(options.animalRange,'All')
+        cellList = cellList(contains(combined_cells.Animal,options.animalRange));
+    end
+else
+    cellList = options.cellList;
+end
 
 EPSC_traces = []; IPSC_traces = [];
 
-if options.plot
+if options.newFig
     initializeFig(1,1); tiledlayout('flow');
-    [~,~,~,~,~,~,bluePurpleRed] = loadColors;
 end
 
 for c = 1:length(cellList)
@@ -79,9 +85,25 @@ for c = 1:length(cellList)
     end
 
     if options.plot
+        if ~isfield(options,'color')
+            [~,~,~,~,~,~,bluePurpleRed] = loadColors;
+            EPSCcolor = bluePurpleRed(end,:);
+            IPSCcolor = bluePurpleRed(1,:);
+        else
+            if ~iscell(options.color)
+                EPSCcolor = options.color;
+                IPSCcolor = options.color;
+            elseif numel(options.color) == 1
+                EPSCcolor = options.color{1};
+                IPSCcolor = options.color{1};
+            elseif numel(options.color) == 2
+                EPSCcolor = options.color{1};
+                IPSCcolor = options.color{2};
+            end
+        end
         nexttile;
-        plotSEM(timeRangeInms,curTrace_EPSC,bluePurpleRed(end,:),plotIndividual=options.plotIndividual,label='EPSC');
-        plotSEM(timeRangeInms,curTrace_IPSC,bluePurpleRed(1,:),plotIndividual=options.plotIndividual,label='IPSC');
+        plotSEM(timeRangeInms,curTrace_EPSC,EPSCcolor,plotIndividual=options.plotIndividual,label='EPSC');
+        plotSEM(timeRangeInms,curTrace_IPSC,IPSCcolor,plotIndividual=options.plotIndividual,label='IPSC');
         xlabel('Time (ms)'); ylabel('Current (pA)'); legend; 
         if isfield(options,'ylim'); ylim(options.ylim); end
         title(strcat(curCell.Task,": Cell ",num2str(curCell.Cell)," (",curCell.Animal,")"));

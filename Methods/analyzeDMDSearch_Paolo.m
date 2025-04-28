@@ -62,6 +62,7 @@ purple = [232, 130, 250]./255;
 grey = [.95,.95,.95];
 cmapBlue = createcolormap(grey,blue); 
 cmapRed = createcolormap(red,grey);
+cmapPurple = createcolormap(purple,grey);
 
 % if ~isfield(options,'colormap'); options.colormap = cmapBlue; end
 % if options.redStim; stimColor = cmapBlue;
@@ -136,7 +137,9 @@ end
         stimColor = red;
         options.colormap = cmapRed;
     else
-        color = purple; 
+        color = purple;
+        stimColor = purple;
+        options.colormap = cmapPurple;
     end
 % end
 

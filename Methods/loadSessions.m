@@ -41,6 +41,7 @@ arguments
    options.removeTwoEnds logical = false % see demodulateSignal.m
    options.plotPhotometry logical = true % Plot photometry signals or not
    options.modFreq double
+   options.labjackName string = {'dLight','GCaMP8m','PMT'}
 
    % Sync related params
    options.syncPulseWindow double = 5000 % #of sync pulse to xcorr
@@ -49,6 +50,9 @@ arguments
    % Output file name
    options.outputName string % use the same name as the session folder if emtpy
    options.outputPath string % should be a folder, outputs to the session folder if empty
+
+   % Convert old sync files
+   options.convertOldSyncFile logical = false
    
 end
 
@@ -348,6 +352,12 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
         disp(['labjack.record: ',labjack.record]);
             disp(['options.recordLJ: ',options.recordLJ]);
             warning(['labjack.record does not agree with recordLJ, use labjack.record = ',num2str(labjack.record)]); 
+        end
+
+        % Update old recording's frequency modulation parameters
+        if sum(labjack.modFreq == [167,223,0]) == length(labjack.modFreq)
+            labjack.modFreq = [171,228,0];
+            save(strcat(session.path,filesep,'data_labjack.mat'));
         end
         disp('Finished: concatenate and saved raw photometry data in data_labjack.mat');
         disp(labjack);
@@ -670,7 +680,8 @@ if withCamera && (options.reloadAll || options.reloadCam)
                                 dsMethod='cloestInteger');
 
                 % Save to timeseries struct
-                row = size(timeSeries,2) + 1;
+                if exist('timeSeries','var'); row = size(timeSeries,2) + 1;
+                else; row = 1; end
                 timeSeries(row).name = trace_names{i};
                 timeSeries(row).data = processed_cam.dsData;
                 timeSeries(row).finalFs = options.downsampleFs;

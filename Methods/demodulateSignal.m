@@ -13,6 +13,9 @@ arguments
     options.bandWidth double = 3;            % number of frequency steps by Hz.  Eg 1 means analyze center frequency and +/- 1 Hz
     options.rollingWindowTime double = 180;      % seconds
     
+    options.LPfilter logical = false;
+    options.LPfreq double = 5;
+    
     options.removeTwoEnds logical = false;    % nan values for the first half of the first spectral window and last half of the last spectural window
     options.resample logical = true;          % resample to targetFs when demodulation didn't produce targetFs
     options.plotFFT logical = false;
@@ -50,30 +53,46 @@ end
 %% do the demodulation for the non-detrended data
 
 % Calculate demodulation params
-options.nSampPerDemodBin = (1/options.targetFs)*options.originalFs; % =40 if labjackFs=2000Hz; previously finalDownSample
-if mod(options.nSampPerDemodBin,1) ~= 0
-    warning('Demodulation: nSampPerDemodBin is not integer, use the nearest floor instead!');
-    options.nSampPerDemodBin = floor(options.nSampPerDemodBin);
+% use analysis code before 20231013 if modFreq is 171 or 228
+if options.modFreq == 171 || options.modFreq == 228
+    options.spectralWindow = 2*9*12;
+    options.nSampPerDemodBin = 20;
+    options.spectralWindowOverlap = options.spectralWindow-options.nSampPerDemodBin;
+    options.bandWidth = 5;
+    options.spectralFrequencies = (-options.bandWidth:options.bandWidth)+options.modFreq;
+    options.LPfilter = true;
+else
+    options.nSampPerDemodBin = (1/options.targetFs)*options.originalFs; % =40 if labjackFs=2000Hz; previously finalDownSample
+    if mod(options.nSampPerDemodBin,1) ~= 0
+        warning('Demodulation: nSampPerDemodBin is not integer, use the nearest floor instead!');
+        options.nSampPerDemodBin = floor(options.nSampPerDemodBin);
+    end
+    options.spectralFrequencies = (-options.bandWidth:options.bandWidth)+options.modFreq;
+    options.spectralWindow = 2*options.nSampPerDemodBin;
+    options.spectralWindowOverlap = options.nSampPerDemodBin; % previously: options.spectralWindow-options.nSampPerDemodBin;
 end
-options.spectralFrequencies = (-options.bandWidth:options.bandWidth)+options.modFreq;
-options.spectralWindow = 2*options.nSampPerDemodBin;
-options.spectralWindowOverlap = options.nSampPerDemodBin; % previously: options.spectralWindow-options.nSampPerDemodBin;
 
-% Calculte demodulation window
+% Calculte detrend window
 % ensures that it is an integer multiple of the sampling window
 options.detrendWindowSamples_rawFs = 2*floor(options.rollingWindowTime*options.originalFs/2); 
 options.detrendWindowSamples_targetFs = 2*floor(options.rollingWindowTime*options.targetFs/2);
 
+% Create low pass filter for final data
+if options.LPfilter
+    lpFilt = designfilt('lowpassiir','FilterOrder',8, 'PassbandFrequency',options.LPfreq,...
+        'PassbandRipple',0.01, 'Samplerate',options.originalFs/options.nSampPerDemodBin);
+end
+
 % Demod without detrend
 [spectVals, ~, dmTimes] = spectrogram(signal, options.spectralWindow, options.spectralWindowOverlap, options.spectralFrequencies, options.originalFs);
 demodulated.demodData_nodetrend = mean(abs(spectVals),1);    % save raw demodulated (not detrended)
-demodulated.demodTimes = dmTimes;                              % save time points
+demodulated.demodTimes = dmTimes;                            % save time points
 
 % Demod with detrend
 signal_detrended = rollingZ(signal, options.detrendWindowSamples_rawFs);
 [spectVals, ~, ~] = spectrogram(signal_detrended, options.spectralWindow, options.spectralWindowOverlap, options.spectralFrequencies, options.originalFs);
 dmData = mean(abs(spectVals),1); % convert spectrogram to power    
-
+if options.LPfilter; dmData = filtfilt(lpFilt,double(dmData)); end
 dmData = rollingZ(dmData, options.detrendWindowSamples_targetFs);
 if options.removeTwoEnds
     dmData(1:(options.detrendWindowSamples_targetFs/2)) = nan;

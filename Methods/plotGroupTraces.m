@@ -13,6 +13,7 @@ arguments
     options.groupby string = 'trials'
     options.nGroups double
     options.groupSize double
+    options.plotCommonTrials logical = false
 
     options.startIdx struct % from combineTraces()
     options.animalStartIdx double
@@ -55,7 +56,11 @@ if isfield(options,'animalStartIdx') && length(options.animalStartIdx)>1 && sum(
         traces_animals{i} = traces(startIdx:endIdx,:);
     end
     traces_animals_dim = cellfun('size',traces_animals,1);
-    nTraces = min(traces_animals_dim);
+    if options.plotCommonTrials
+        nTraces = min(traces_animals_dim);
+    else
+        nTraces = max(traces_animals_dim);
+    end
 else
     nTraces = size(traces,1);
 end

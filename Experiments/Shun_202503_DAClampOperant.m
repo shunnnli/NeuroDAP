@@ -353,7 +353,7 @@ ylimit = [0,4.5; 0,4.5];
 
 animalRange = 'All';
 conditionRange = 'All';
-signalRange = 'dLight';
+%signalRange = 'dLight';
 
 eventRange = {'Baseline','Pair','Tone','Stim'};
 colorList = {[0.8,0.8,0.8],bluePurpleRed(300,:),bluePurpleRed(100,:),bluePurpleRed(500,:)};
@@ -391,19 +391,19 @@ tone_al_unclamped = getGroupedTrialStats(animals,statsTypes,...
                             taskRange=taskRange,...
                             totalTrialRange=conditionRange,...
                             signalRange='Lick');
-tone_al_clamped = getGroupedTrialStats(animals,statsTypes,...
-                            eventRange=eventRange,...
-                            animalRange=clampAnimals,...
-                            taskRange=taskRange,...
-                            totalTrialRange=conditionRange,...
-                            signalRange='Lick');
+% tone_al_clamped = getGroupedTrialStats(animals,statsTypes,...
+%                             eventRange=eventRange,...
+%                             animalRange=clampAnimals,...
+%                             taskRange=taskRange,...
+%                             totalTrialRange=conditionRange,...
+%                             signalRange='Lick');
 
 results_tone_al_unclamped = plotGroupedTrialStats(tone_al_unclamped,ylabels,groupSize=10,...
                             color=baselineColor,...
                             plot=true,plotNextTile=false);
-results_tone_al_clamped = plotGroupedTrialStats(tone_al_clamped,ylabels,groupSize=10,...
-                            color=pidColor,...
-                            plot=true,plotNextTile=false);
+% results_tone_al_clamped = plotGroupedTrialStats(tone_al_clamped,ylabels,groupSize=10,...
+%                             color=pidColor,...
+%                             plot=true,plotNextTile=false);
 
 
 %% Behavior: total licks vs trial
@@ -420,90 +420,81 @@ tone_al_unclamped = getGroupedTrialStats(animals,statsTypes,...
                             taskRange=taskRange,...
                             totalTrialRange=conditionRange,...
                             signalRange='Lick');
-tone_al_clamped = getGroupedTrialStats(animals,statsTypes,...
-                            eventRange=eventRange,...
-                            animalRange=clampAnimals,...
-                            taskRange=taskRange,...
-                            totalTrialRange=conditionRange,...
-                            signalRange='Lick');
+% tone_al_clamped = getGroupedTrialStats(animals,statsTypes,...
+%                             eventRange=eventRange,...
+%                             animalRange=clampAnimals,...
+%                             taskRange=taskRange,...
+%                             totalTrialRange=conditionRange,...
+%                             signalRange='Lick');
 
 results_tone_al_unclamped = plotGroupedTrialStats(tone_al_unclamped,ylabels,groupSize=10,...
                             color=baselineColor,...
                             plot=true,plotNextTile=false);
-results_tone_al_clamped = plotGroupedTrialStats(tone_al_clamped,ylabels,groupSize=10,...
-                            color=pidColor,...
-                            plot=true,plotNextTile=false);
+% results_tone_al_clamped = plotGroupedTrialStats(tone_al_clamped,ylabels,groupSize=10,...
+%                             color=pidColor,...
+%                             plot=true,plotNextTile=false);
 
 %% Behavior: CDF of success trials
 
-successData_clamped = cell(size(clampAnimals));
-successData_unclamped = cell(size(unclampAnimals));
-
-for a = 1:length(clampAnimals)
-    cur_animal = clampAnimals{a};
-    
-    % Extract anticipatory licking from the current animal
-    % nAnticipatoryLicks = [0 3 1 5 4 2 1 4];
-
-    % Convert anticipatory licking to successTrials
-    % successTrials = [0 1 0 1 1 0 0 1];
-
-    % Stored data into successData
-    successData_clamped{a} = successTrials;
-end
-
-for a = 1:length(unclampAnimals)
-    cur_animal = unclampAnimals{a};
-    
-    % Extract anticipatory licking from the current animal
-    % nAnticipatoryLicks = [0 3 1 5 4 2 1 4];
-
-    % Convert anticipatory licking to successTrials
-    % successTrials = [0 1 0 1 1 0 0 1];
-
-    % Stored data into successData
-    successData_unclamped{a} = successTrials;
-end
-
-% Plot CDF (ask ChatGPT)
-
-
-%% Behavior: CDF of success trials
-
-successData_clamped = cell(size(clampAnimals));
+%successData_clamped = cell(size(clampAnimals));
 successData_unclamped = cell(size(unclampAnimals));
 newLength = 100;
 
-for a = 1:length(clampAnimals)
-    cur_animal = clampAnimals{a}; 
+terminateAtMinTrials = false;
+minTrials = inf;
+maxTrials = 0;
 
-    % Select out all the rows for this animal
-    cur_row = find(strcmp({animals.animal}, cur_animal) & strcmp({animals.event}, 'Tone'),1);
-    
-    % Extract anticipatory licking for the current animal
-    nAnticipatoryLicks = animals(cur_row).trialInfo.trialTable.nAnticipatoryLicks;
-  
-    % Convert anticipatory licking to successTrials 
-    successTrials = nAnticipatoryLicks >= 3; 
-    
-    % Store success data
-    successData_clamped{a} = successTrials;
-end
+% for a = 1:length(clampAnimals)
+%     cur_animal = clampAnimals{a}; 
+% 
+%     % Extract anticipatory licking for the current animal
+%     nAnticipatoryLicks = animals(a).trialInfo.trialTable.nAnticipatoryLicks;
+% 
+%     % Convert anticipatory licking to successTrials 
+%     successTrials = nAnticipatoryLicks >= 3; 
+% 
+%     % Store success data
+%     successData_clamped{a} = successTrials;
+% end
 
 for a = 1:length(unclampAnimals)
-    cur_animal = unclampAnimals{a}; 
-
-    % Select out all the rows for this animal
-    cur_row = find(strcmp({animals.animal}, cur_animal) & strcmp({animals.event}, 'Tone'),1);
+    % Find current animal row
+    nAnticipatoryLicks = tone_al_unclamped.stats{1}{a};
     
-    % Extract anticipatory licking for the current animal
-    nAnticipatoryLicks = animals(cur_row).trialInfo.trialTable.nAnticipatoryLicks;
-    
-    % Convert anticipatory licking to successTrials
+    % Convert anticipatory licking to success trials
     successTrials = nAnticipatoryLicks >= 3; 
     
-    % Store success data
-    successData_unclamped{a} = successTrials;
+    % Store the processed success data
+    successData_unclamped{a} = double(successTrials);
+end
+
+%cut at minimum number of trials or fill trials with 0 to max number of
+%trials f
+minTrials = 283;
+maxTrials = 378;
+unclampedData = [];
+for a = 1:length(unclampAnimals)
+    successTrials = successData_unclamped{a};
+    % Option to truncate to minimum trials or extend to maximum trials
+    if terminateAtMinTrials
+        % Truncate to the minimum number of trials
+        successTrials = successTrials(1:minTrials);
+    else
+        % Extend to the maximum number of trials by filling with 0s
+        if length(successTrials) < maxTrials
+            successTrials = [successTrials; false(maxTrials - length(successTrials),1)];
+        end
+    end
+    unclampedData = [unclampedData, successTrials];
 end
 
 % Plot CDF (ask ChatGPT)
+figure; hold on;
+
+%plot
+%ecdf(clampedData);
+%hold on;
+for a = 1:length(unclampAnimals)
+    ecdf(find(unclampedData(:,a)));
+    hold on;
+end

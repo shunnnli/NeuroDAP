@@ -9,8 +9,9 @@ arguments
     options.taskRange string = 'All'
     options.sessionRange string = 'All'
     options.signalRange string = 'All'
-    options.totalTrialRange = 'All'
-    options.trialRange = 'All' % index from totalTrialRange
+    options.totalTrialRange = 'All' % trial range within a session
+    options.trialRange = 'All'
+    options.totalTrialIdx double
 
     % trialRange idx explainer:
     % if options.totalTrialRange = [10,50]; found 10 trials [13,15,29,32,..,36,40,60]
@@ -31,6 +32,8 @@ arguments
     options.trialConditions
     options.historyConditions
     options.trialTables table % total trial table generated from loadTrialTables()
+
+    options.searchRows logical = false % if true, only return row index without actually combining
 end
 
 %% Check input
@@ -151,6 +154,10 @@ for signal = 1:length(options.signalRange)
     signalRows = cellfun(@(x) contains(x,options.signalRange{signal},IgnoreCase=true), {database(finalIdx).name});
     signalIdx = finalIdx(signalRows);
     options.signalRows = [options.signalRows; signalIdx];
+    if options.searchRows
+        combined = signalIdx;
+        return
+    end
 
     % Update sessionList (for generating animal struct specifically)
     if isfield(database,'session')

@@ -13,6 +13,8 @@ arguments
     % P value options
     options.pval logical = true
     options.nboot double = 1000
+    options.type string = 'weighted'
+    options.weights double
 end
 
 %% Check input
@@ -118,6 +120,7 @@ for i = 1:size(trialIdx,2)
             % Get raw heatmap
             X = DAstat_raw.(fields{f})(validIdx); 
             Y = animalEIindex(validIdx);
+            weights = options.weights(validIdx);
             if strcmpi(metric,'cosine')
                 metric_obs = dot(X, Y) / (norm(X) * norm(Y));
                 % Calculate p value
@@ -125,10 +128,13 @@ for i = 1:size(trialIdx,2)
                 boot_cosSim = bootstrp(options.nboot, cosSimFun, 1:length(Y));
                 metric_pval = sum(abs(boot_cosSim) >= abs(metric_obs))/options.nboot;
             elseif strcmpi(metric,'slope')
-                fit_obs = polyfit(X, Y, 1); metric_obs = fit_obs(1);
-                % Calculate p value
-                fit_boot = bootstrp(options.nboot, @(i) polyfit(X, Y(i), 1), 1:length(Y));
-                metric_pval = sum(abs(fit_boot(:,1)) >= abs(metric_obs))/options.nboot;
+                [obs_model,metric_pval,~] = fitScatter(X,Y,nboot=options.nboot,...
+                                                    type=options.type,...
+                                                    weights=weights);
+                metric_obs = obs_model(1);
+                % fit_obs = polyfit(X, Y, 1); metric_obs = fit_obs(1);
+                % fit_boot = bootstrp(options.nboot, @(i) polyfit(X, Y(i), 1), 1:length(Y));
+                % metric_pval = sum(abs(fit_boot(:,1)) >= abs(metric_obs))/options.nboot;
             end
             DAvsEImap.(fields{f}).raw(i,j) = metric_obs;
             DAvsEImap.(fields{f}).pval_raw(i,j) = metric_pval;
@@ -136,6 +142,7 @@ for i = 1:size(trialIdx,2)
             % Get smoothed heatmap
             X = DAstat_smoothed.(fields{f})(validIdx); 
             Y = animalEIindex(validIdx);
+            weights = options.weights(validIdx);
             if strcmpi(metric,'cosine')
                 metric_obs = dot(X, Y) / (norm(X) * norm(Y));
                 % Calculate p value
@@ -143,10 +150,10 @@ for i = 1:size(trialIdx,2)
                 boot_cosSim = bootstrp(options.nboot, cosSimFun, 1:length(Y));
                 metric_pval = sum(abs(boot_cosSim) >= abs(metric_obs))/options.nboot;
             elseif strcmpi(metric,'slope')
-                fit_obs = polyfit(X, Y, 1); metric_obs = fit_obs(1);
-                % Calculate p value
-                fit_boot = bootstrp(options.nboot, @(i) polyfit(X, Y(i), 1), 1:length(Y));
-                metric_pval = sum(abs(fit_boot(:,1)) >= abs(metric_obs))/options.nboot;
+                [obs_model,metric_pval,~] = fitScatter(X,Y,nboot=options.nboot,...
+                                                    type=options.type,...
+                                                    weights=weights);
+                metric_obs = obs_model(1);
             end
             DAvsEImap.(fields{f}).smoothed(i,j) = metric_obs;
             DAvsEImap.(fields{f}).pval_smoothed(i,j) = metric_pval;

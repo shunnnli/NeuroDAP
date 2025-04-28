@@ -244,6 +244,15 @@ if isempty(dir(fullfile(resultspath,'animals*.mat'))) || groupSessions
     animals = getAnimalsStruct(summary);
 end
 
+%% (Optional) Add stageAmp
+
+for i = 1:size(animals,2)
+    stageMax = animals(i).stageMax.data;
+    stageMin = animals(i).stageMin.data;
+    
+    animals(i).stageAmp = struct('data', getAmplitude(stageMax, stageMin));
+end
+
 %% Save animals struct
 
 prompt = 'Enter database notes (animals_20230326_notes.mat):';
@@ -257,92 +266,6 @@ if ~isempty(answer)
     disp(['Ongoing: saving animals.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
     save(strcat(resultspath,filesep,filename),'animals','trialTables','sessionList','-v7.3');
     disp(['Finished: saved animals.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
-end
-
-%% (Optional) Calculate periMax and periMin response
-
-finalTrialsWindow = 25; % use last 50 trials to average
-stageEndWindow = 120; % in ms, include these in previous stages
-peakWindowWidth = 25; % in ms
-
-for i = 1:size(animals,2)
-    % Get traces for each animal and for each signal and event
-    traces = animals(i).data;
-    finalFs = animals(i).options.finalFs;
-    eventSample = find(animals(i).timestamp==0);
-    
-    % Find the final session and plot the average trace for each animal
-    fianlWindowStart = max(size(traces,1)-finalTrialsWindow-1,1);
-    finalTrialsAvg = mean(traces(fianlWindowStart:end,:),1);
-    
-    % Find stage windows
-    if ~isfield(animals(i).options,'stageTime')
-        if strcmpi(animals(i).task,'random'); stageTime = [-2,0;0,2];
-        else; stageTime = [-2,0;0,0.5;0.5,5]; end
-    else
-        stageTime = animals(i).options.stageTime;
-    end
-    stageWindow = stageTime * finalFs + eventSample;
-    stageWindow(:,2) = round(stageWindow(:,2) + stageEndWindow/1000 * finalFs);
-    periDelta = nan(size(traces,1),size(stageWindow,1));
-    
-    % Loop for each stage
-    for stageIdx = 1:size(stageWindow,1)
-        % Get current stage window
-        curStageWindow = stageWindow(stageIdx,1):stageWindow(stageIdx,2);
-        stageTraces = traces(:,curStageWindow);
-
-        % Find the max and min window (+- 50ms)
-        peakWindowWidthSamples = max(round(peakWindowWidth/1000 * finalFs),1);
-        [~,maxIdx] = max(finalTrialsAvg(curStageWindow)); 
-        maxWindowStart = max(1,maxIdx-peakWindowWidthSamples);
-        maxWindowEnd = min(maxIdx+peakWindowWidthSamples,size(stageTraces,2));
-        [~,minIdx] = min(finalTrialsAvg(curStageWindow));
-        minWindowStart = max(1,minIdx-peakWindowWidthSamples);
-        minWindowEnd = min(minIdx+peakWindowWidthSamples,size(stageTraces,2));
-        
-        % Create periMax and perMin calculation for each trace
-        periMax = mean(stageTraces(:,maxWindowStart:maxWindowEnd),2);
-        periMin = mean(stageTraces(:,minWindowStart:minWindowEnd),2);
-        
-        absDelta = abs(periMax)-abs(periMin);
-        pickMaxIdx = absDelta > 0;
-        pickMinIdx = absDelta < 0;
-        pickAvgIdx = absDelta == 0;
-        periDelta(pickMaxIdx,stageIdx) = periMax(pickMaxIdx);
-        periDelta(pickMinIdx,stageIdx) = periMin(pickMinIdx);
-        periDelta(pickAvgIdx,stageIdx) = periMax(pickAvgIdx) + periMin(pickAvgIdx);
-        % periDelta(:,stageIdx) = periMax + periMin;
-
-        % Test plotting
-        % if stageIdx == 2 && any(strcmpi(animals(i).event,{'Stim','Pair'}))
-        %     initializeFig(0.3,0.7); tiledlayout(4,1);
-        %     nexttile; 
-        %     plot(finalTrialsAvg); hold on;
-        %     xline(curStageWindow(1),'Color','r'); hold on;
-        %     xline(curStageWindow(end),'Color','r'); hold on;
-        %     nexttile; 
-        %     plot(finalTrialsAvg(curStageWindow)); hold on;
-        %     xline(maxWindowStart,'Color','magenta'); hold on; 
-        %     xline(maxWindowEnd,'Color','magenta'); hold on;
-        %     xline(minWindowStart,'Color','k'); hold on;
-        %     xline(minWindowEnd,'Color','k'); hold on;
-        %     nexttile; 
-        %     plot(periMax,'Color','magenta'); hold on
-        %     plot(periMin,'Color','k'); hold on
-        %     % plot(periDelta(:,2),'Color','r');
-        %     nexttile;
-        %     plot(periDelta(:,2),s'Color','r');
-        %     disp(animals(i).name);
-        %     disp(animals(i).event);
-        %     disp('-------');
-        %    close all;
-        % end
-    end
-
-    % Save to animals
-    animals(i).stageDelta.data = periDelta;
-    animals(i).options.statsType{end+1} = 'stageDelta';
 end
 
 %% Test: Plot traces from summary/animals struct
@@ -486,25 +409,25 @@ end
 %% Plot grouped CS DA response (grouped across animal and 10 trials)
 
 % First part
-% taskRange = {'Reward1 (paAIP2)','Punish1 (paAIP2)'};
+taskRange = {'Reward1 (paAIP2)','Punish1 (paAIP2)'};
 % taskRange = {'Reward2 (Ctrl)','Punish2 (paAIP2)'};
 % statsTypes = {'stageMax','stageMin'}; ylabelList = {'Max DA response during cue','Max DA response during cue'};
-% statsTypes = {'stageAvg','stageAvg'}; ylabelList = {'Avg DA response during cue','Avg DA response during cue'};
-% ylim = [0,3];
+statsTypes = {'stageAmp','stageAmp'}; ylabelList = {'Amp DA response during cue','Amp DA response during cue'};
+ylim = [-0.5,2; -0.5,3];
 
 % Second part
-taskRange = {'Punish (paAIP2)','Punish (paAIP2)'};
-statsTypes = {'stageAvg','stageAvg'}; ylabelList = {'Avg DA response during cue','Avg DA response during cue'};
-ylim = [-0.5,1.5; -1.5,2.5];
+% taskRange = {'Punish (paAIP2)'};
+% statsTypes = {'stageAmp','stageAmp'}; ylabelList = {'Amp DA response during cue','Amp DA response during cue'};
+% ylim = [-1,2.1; -1.5,2.5];
 
 animalRange = 'All';
 conditionRange = 'All';
 signalRange = 'dLight';
 
-eventRange = {'Baseline','Pair','Tone','Stim'};
-colorList = {[0.8,0.8,0.8],bluePurpleRed(300,:),bluePurpleRed(100,:),bluePurpleRed(500,:)};
-% eventRange = {'Baseline','Stim','Pair'};
-% colorList = {[0.8,0.8,0.8],bluePurpleRed(500,:),bluePurpleRed(300,:)};
+% eventRange = {'Baseline','Pair','Tone','Stim'};
+% colorList = {[0.8,0.8,0.8],bluePurpleRed(300,:),bluePurpleRed(100,:),bluePurpleRed(500,:)};
+eventRange = {'Baseline','Stim','Pair'};
+colorList = {[0.8,0.8,0.8],bluePurpleRed(500,:),bluePurpleRed(300,:)};
 
 stage = 2; % Plot CS only
 groupSize = 10; % numbers of trials to calculate average
@@ -512,13 +435,13 @@ combinedStats = getGroupedTrialStats(animals,statsTypes,...
                             eventRange=eventRange,...
                             animalRange=animalRange,...
                             taskRange=taskRange,...
-                            totalTrialRange=conditionRange,...
                             signalRange=signalRange);
 
 initializeFig(.7,.7); tiledlayout('flow');
-results = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,color=colorList,xlimIdx=4,ylim=ylim);
-% 
-% saveFigures(gcf,'Summary_CSvsTrialsGrouped_Punish_Avg',...
+results = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,color=colorList,ylim=ylim,...
+                                xlimIdx=2,plotIndividual=false);
+
+% saveFigures(gcf,'Summary_CSvsTrialsGrouped_Pairing1_Amp',...
 %         strcat(resultspath),...
 %         saveFIG=true,savePDF=true);
 
@@ -530,7 +453,7 @@ for task = 1:length(results.stats)
     for event = 1:length(eventRange)
         slopes = cur_stats{event}(:,1);
         plotScatterBar(event,slopes,color=colorList{event},...
-                       style='box',dotSize=200,LineWidth=2);
+                       style='bar',dotSize=200,LineWidth=2);
 
         % Calculate significance
         if event < length(eventRange)
@@ -541,16 +464,19 @@ for task = 1:length(results.stats)
     end
 
     xticks(1:length(eventRange)); xticklabels(eventRange);
-    ylabel('Slope');
+    ylabel('Slope of DA amplitude during CS');
 end
 
-% saveFigures(gcf,'Summary_CSvsTrialsGrouped_slope',...
+% saveFigures(gcf,'Summary_CSvsTrialsGrouped_Pairing1_slopeBox',...
 %         strcat(resultspath),...
 %         saveFIG=true,savePDF=true);
 
-%% Plot bar plot of DA final values
+%% Plot bar plot of DA final-first values for each event
+% calculate the difference between the avg(final 30 trial) and avg(first 30
+% trial) for each animal
+% both mean and d' seems to yield same result (mean is more obvious)
 
-finalWindow = 30; 
+trialWindow = 30; 
 
 initializeFig(.7,.7); tiledlayout('flow');
 for task = 1:length(results.stats)
@@ -558,15 +484,57 @@ for task = 1:length(results.stats)
     task_stats = combinedStats.stats{task};
     for event = 1:length(eventRange)  
         eventData = task_stats(:,event);
-        finalData = cell2mat(cellfun(@(m) m(end-finalWindow+1:end,2)', eventData, UniformOutput=false));
+        startData = cell2mat(cellfun(@(m) m(1:trialWindow,2)', eventData, UniformOutput=false));
+        finalData = cell2mat(cellfun(@(m) m(end-trialWindow+1:end,2)', eventData, UniformOutput=false));
+
+        % Option 1: mean
+        diffData = mean(finalData,2) - mean(startData,2);
+        % Option 2: d-prime
+        % meanDiff = mean(finalData,2) - mean(startData,2);
+        % varSum = var(finalData,0,2).^2 + var(startData,0,2).^2;
+        % diffData = meanDiff ./ sqrt(varSum ./ 2);
+
+        plotScatterBar(event,diffData(:),color=colorList{event},...
+                       style='box',dotSize=200,LineWidth=2);
+
+        % Calculate significance
+        if event < length(eventRange)
+            for i = event+1:length(eventRange)
+                otherStartData = cell2mat(cellfun(@(m) m(1:trialWindow,2)', task_stats(:,i), UniformOutput=false));
+                otherFinalData = cell2mat(cellfun(@(m) m(end-trialWindow+1:end,2)', task_stats(:,i), UniformOutput=false));
+                otherDiffData = mean(otherFinalData,2) - mean(otherStartData,2);
+                plotStats(diffData(:),otherDiffData(:),[event i],testType='kstest');
+            end
+        end
+    end
+    xticks(1:length(eventRange)); xticklabels(eventRange);
+    ylabel('Final - first');
+end
+
+saveFigures(gcf,'Summary_CSvsTrialsGrouped_Pairing1_final-first_box',...
+        strcat(resultspath),...
+        saveFIG=true,savePDF=true);
+
+%% Plot bar plot of DA final values
+% not as obvious but significant
+
+trialWindow = 30; 
+
+initializeFig(.7,.7); tiledlayout('flow');
+for task = 1:length(results.stats)
+    nexttile;
+    task_stats = combinedStats.stats{task};
+    for event = 1:length(eventRange)  
+        eventData = task_stats(:,event);
+        finalData = cell2mat(cellfun(@(m) m(end-trialWindow+1:end,2)', eventData, UniformOutput=false));
         plotScatterBar(event,finalData(:),color=colorList{event},...
                        style='box',dotSize=200,LineWidth=2);
 
         % Calculate significance
         if event < length(eventRange)
             for i = event+1:length(eventRange)
-                otherConditionData = cell2mat(cellfun(@(m) m(end-finalWindow+1:end,2)', task_stats(:,i), UniformOutput=false));
-                plotStats(finalData(:),otherConditionData(:),[event i],testType='kstest');
+                otherFinalData = cell2mat(cellfun(@(m) m(end-trialWindow+1:end,2)', task_stats(:,i), UniformOutput=false));
+                plotStats(finalData(:),otherFinalData(:),[event i],testType='kstest');
             end
         end
     end
@@ -574,9 +542,51 @@ for task = 1:length(results.stats)
     ylabel('Learned CS response for DA');
 end
 
+% saveFigures(gcf,'Summary_CSvsTrialsGrouped_finalValBox',...
+%         strcat(resultspath),...
+%         saveFIG=true,savePDF=true);
+
+%% Plot bar plot of comparing final pair-stim for each animal
+% all not obvious
+
+% trialWindow = 30; 
+% 
+% initializeFig(.7,.7); tiledlayout('flow');
+% for task = 1:length(results.stats)
+%     nexttile;
+%     task_stats = combinedStats.stats{task};
+%     finalData = struct();
+%     for event = 1:length(eventRange)  
+%         eventName = eventRange{event};
+%         eventData = task_stats(:,event);
+%         finalData.(eventName) = cell2mat(cellfun(@(m) m(end-trialWindow+1:end,2)', eventData, UniformOutput=false));
+%     end
+% 
+%     % Calculate difference between stim vs pair
+%     % Option 1: mean (2 is stim, 3 is pair)
+%     diffData = mean(finalData.Stim,2) - mean(finalData.Pair,2);
+%     % Option 2: d-prime
+%     % meanDiff = mean(finalData.Stim,2) - mean(finalData.Pair,2);
+%     % varSum = var(finalData.Stim,0,2).^2 + var(finalData.Pair,0,2).^2;
+%     % diffData = meanDiff ./ sqrt(varSum ./ 2);
+% 
+%     plotScatterBar(1,diffData,style='bar');
+% end
+
 % saveFigures(gcf,'Summary_CSvsTrialsGrouped_finalVal',...
 %         strcat(resultspath),...
 %         saveFIG=true,savePDF=true);
+
+%%
+
+
+
+
+
+
+
+
+
 
 %% Plot grouped anticipatory lick changes
 
@@ -702,3 +712,90 @@ for task = 1:length(taskRange)
     %     saveFIG=true,savePDF=true);
 end
 % autoArrangeFigures
+
+
+%% (Optional) Calculate periMax and periMin response
+
+finalTrialsWindow = 25; % use last 50 trials to average
+stageEndWindow = 120; % in ms, include these in previous stages
+peakWindowWidth = 25; % in ms
+
+for i = 1:size(animals,2)
+    % Get traces for each animal and for each signal and event
+    traces = animals(i).data;
+    finalFs = animals(i).options.finalFs;
+    eventSample = find(animals(i).timestamp==0);
+    
+    % Find the final session and plot the average trace for each animal
+    fianlWindowStart = max(size(traces,1)-finalTrialsWindow-1,1);
+    finalTrialsAvg = mean(traces(fianlWindowStart:end,:),1);
+    
+    % Find stage windows
+    if ~isfield(animals(i).options,'stageTime')
+        if strcmpi(animals(i).task,'random'); stageTime = [-2,0;0,2];
+        else; stageTime = [-2,0;0,0.5;0.5,5]; end
+    else
+        stageTime = animals(i).options.stageTime;
+    end
+    stageWindow = stageTime * finalFs + eventSample;
+    stageWindow(:,2) = round(stageWindow(:,2) + stageEndWindow/1000 * finalFs);
+    periDelta = nan(size(traces,1),size(stageWindow,1));
+    
+    % Loop for each stage
+    for stageIdx = 1:size(stageWindow,1)
+        % Get current stage window
+        curStageWindow = stageWindow(stageIdx,1):stageWindow(stageIdx,2);
+        stageTraces = traces(:,curStageWindow);
+
+        % Find the max and min window (+- 50ms)
+        peakWindowWidthSamples = max(round(peakWindowWidth/1000 * finalFs),1);
+        [~,maxIdx] = max(finalTrialsAvg(curStageWindow)); 
+        maxWindowStart = max(1,maxIdx-peakWindowWidthSamples);
+        maxWindowEnd = min(maxIdx+peakWindowWidthSamples,size(stageTraces,2));
+        [~,minIdx] = min(finalTrialsAvg(curStageWindow));
+        minWindowStart = max(1,minIdx-peakWindowWidthSamples);
+        minWindowEnd = min(minIdx+peakWindowWidthSamples,size(stageTraces,2));
+        
+        % Create periMax and perMin calculation for each trace
+        periMax = mean(stageTraces(:,maxWindowStart:maxWindowEnd),2);
+        periMin = mean(stageTraces(:,minWindowStart:minWindowEnd),2);
+        
+        absDelta = abs(periMax)-abs(periMin);
+        pickMaxIdx = absDelta > 0;
+        pickMinIdx = absDelta < 0;
+        pickAvgIdx = absDelta == 0;
+        periDelta(pickMaxIdx,stageIdx) = periMax(pickMaxIdx);
+        periDelta(pickMinIdx,stageIdx) = periMin(pickMinIdx);
+        periDelta(pickAvgIdx,stageIdx) = periMax(pickAvgIdx) + periMin(pickAvgIdx);
+        % periDelta(:,stageIdx) = periMax + periMin;
+
+        % Test plotting
+        % if stageIdx == 2 && any(strcmpi(animals(i).event,{'Stim','Pair'}))
+        %     initializeFig(0.3,0.7); tiledlayout(4,1);
+        %     nexttile; 
+        %     plot(finalTrialsAvg); hold on;
+        %     xline(curStageWindow(1),'Color','r'); hold on;
+        %     xline(curStageWindow(end),'Color','r'); hold on;
+        %     nexttile; 
+        %     plot(finalTrialsAvg(curStageWindow)); hold on;
+        %     xline(maxWindowStart,'Color','magenta'); hold on; 
+        %     xline(maxWindowEnd,'Color','magenta'); hold on;
+        %     xline(minWindowStart,'Color','k'); hold on;
+        %     xline(minWindowEnd,'Color','k'); hold on;
+        %     nexttile; 
+        %     plot(periMax,'Color','magenta'); hold on
+        %     plot(periMin,'Color','k'); hold on
+        %     % plot(periDelta(:,2),'Color','r');
+        %     nexttile;
+        %     plot(periDelta(:,2),s'Color','r');
+        %     disp(animals(i).name);
+        %     disp(animals(i).event);
+        %     disp('-------');
+        %    close all;
+        % end
+    end
+
+    % Save to animals
+    animals(i).stageDelta.data = periDelta;
+    animals(i).options.statsType{end+1} = 'stageDelta';
+end

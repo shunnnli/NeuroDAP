@@ -7,7 +7,7 @@ arguments
     options.color 
     options.dotSize double = 70;
 
-    options.style string = 'box' % can also be bar, which uses a bar
+    options.style string = 'bar' % can also be bar, which uses a bar
     options.BarFaceOpacity double = 0.2 % 1 is not transparent, 0 is fully transparent
     options.orientation string = 'vertical';
     
@@ -27,10 +27,11 @@ if isvector(data)
         if ~isfield(options,'color'); options.color = [.2 .2 .2]; end
     else
         if ~isfield(options,'color')
-            options.color = cell(numel(data),1);
-            for c = 1:numel(data)
-                options.color{c} = rand(1,3);
-            end
+            % options.color = cell(numel(data),1);
+            % for c = 1:numel(data)
+            %     options.color{c} = rand(1,3);
+            % end
+            options.color = [.5 .5 .5];
         end
     end
 elseif size(data,2) == 2

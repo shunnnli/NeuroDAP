@@ -208,8 +208,8 @@ for i = 1:length(summary)
 end
 
 % Remove some rows if needed
-% rowIdx = cellfun(@(x) contains(x,'Blue stim',IgnoreCase=true), {summary.event});
-% summary(rowIdx) = [];
+rowIdx = cellfun(@(x) contains(x,'Blue stim',IgnoreCase=true), {summary.event});
+summary(rowIdx) = [];
 
 %% Create animals struct
 
@@ -260,12 +260,12 @@ disp(['Finished: saved combined_animals.mat (',char(datetime('now','Format','HH:
 
 %% Calculate DA trend for each animal
 
-eventRange = 'Pair';
+eventRange = 'Stim';
 animalRange = unique({combined_animals.animal});
 DAtrend = struct([]);
 trialConditions = 'trials.performing';
 
-for a = 20:length(animalRange)
+for a = 1:length(animalRange)
     cur_animal = animalRange{a}; disp(['Ongoing: analyzing ',cur_animal]);
     cur_task = unique({combined_animals(strcmp({combined_animals.animal}, cur_animal)).task});
     DA_Max = getGroupedTrialStats(combined_animals,'stageMax',...
@@ -341,10 +341,17 @@ longWindowLength  = 40;
 shortWindowColor = [128, 179, 255]./255;
 longWindowColor = [143, 88, 219]./255;
 
-for a = length(animalRange)
-    
-    % Calculate p-value during plasticity window
+DAtrend_summary = dir(fullfile(resultspath,'DA trend summary','*.png'));
+plottedAnimals = {DAtrend_summary.name};
+plottedAnimals = cellfun(@(x) x(1:end-4), plottedAnimals, UniformOutput=false);
+
+for a = 1:length(animalRange)
+ 
     cur_animal = animalRange{a}; 
+    % Skip if plotted
+    if sum(strcmpi(cur_animal,plottedAnimals)) > 0; continue; end
+
+    % Calculate p-value during plasticity window
     nTrials = DAtrend(a).nTrials;
     shortWindow = max([1 nTrials-shortWindowLength+1]);
     longWindow  = max([1 nTrials-longWindowLength+1]);
@@ -556,3 +563,90 @@ legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,.
 
 plotEvent('Stim',0.5,color=bluePurpleRed(500,:))
 xlabel('Time (s)'); ylabel('z-score');
+
+%% Plot sample DA stat vs trials
+
+rowIdx = 21;
+trace = DAtrend(rowIdx).amp.raw;
+dotColor = [243 186 0]/255;
+
+close all; initializeFig(0.5,0.2);
+scatter(1:length(trace),trace,200,dotColor,'filled'); hold on
+xlim([1,length(trace)]);
+
+x1 = 1:20;
+y1 = trace(x1);
+p1 = polyfit(x1, y1, 1);
+yfit1 = polyval(p1, x1);
+plot(x1, yfit1, 'b-', 'LineWidth', 2);  % Blue line
+
+% Fit and plot best fit line for the last 20 dots
+x2 = (length(trace)-19):length(trace);
+y2 = trace(x2);
+p2 = polyfit(x2, y2, 1);
+yfit2 = polyval(p2, x2);
+plot(x2, yfit2, 'r-', 'LineWidth', 2);  % Red line
+
+%% What does last 15-40 trials means in time
+
+% Find all the trialtables of stim only
+statsTypes = 'CueTime';
+reward_stats = getGroupedTrialStats(combined_animals,statsTypes,...
+                            eventRange='Stim',...
+                            animalRange='all',...
+                            taskRange='Reward',...
+                            signalRange='dLight');
+
+punish_stats = getGroupedTrialStats(combined_animals,statsTypes,...
+                            eventRange='Stim',...
+                            animalRange='all',...
+                            taskRange='Punish',...
+                            signalRange='dLight');
+
+% Collect the cue time
+% Each row is last nth trial 
+% (if trialWindow is 15:40, first row will be last 15 trial time, 
+% last row will be last 40 trial time)
+trialWindow = 15:40;
+behaviorFs = 10000;
+
+T = reward_stats.stats{1};
+nAnimals = numel(T);
+nTrials   = trialWindow(end) - trialWindow(1) + 1;
+reward_cueTimes  = nan(nAnimals,nTrials);
+for i = 1:nAnimals
+    cueTime = T{i};
+    if isempty(cueTime); continue; end
+    cueTime = cueTime(end) - cueTime;  % cueTime from the last trial
+    if numel(cueTime) >= trialWindow(end)
+        % grab trials [N-39] through [N-14], i.e. 40th-last → 15th-last
+        chunk = cueTime(end-trialWindow(end)+1 : end-trialWindow(1)+1);
+        reward_cueTimes(i,:) = flip(chunk)/behaviorFs;
+    else
+        chunk = cueTime(1 : end-trialWindow(1)+1);
+        reward_cueTimes(i,1:length(chunk)) = flip(chunk)/behaviorFs;
+    end
+end
+T = punish_stats.stats{1};
+nAnimals = numel(T);
+nTrials   = trialWindow(end) - trialWindow(1) + 1;
+punish_cueTimes  = nan(nAnimals,nTrials);
+for i = 1:nAnimals
+    cueTime = T{i};
+    if isempty(cueTime); continue; end
+    cueTime = cueTime(end) - cueTime;  % cueTime from the last trial
+    if numel(cueTime) >= trialWindow(end)
+        % grab trials [N-39] through [N-14], i.e. 40th-last → 15th-last
+        chunk = cueTime(end-trialWindow(end)+1 : end-trialWindow(1)+1);
+        punish_cueTimes(i,:) = flip(chunk)/behaviorFs;
+    else
+        chunk = cueTime(1 : end-trialWindow(1)+1);
+        punish_cueTimes(i,1:length(chunk)) = flip(chunk)/behaviorFs;
+    end
+end
+
+cueTimes = [reward_cueTimes;punish_cueTimes]/60;
+
+% Plot time
+plotSEM(trialWindow,cueTimes,[.343 .33 .66]);
+xlabel('last n trial'); ylabel('time to end (min)');

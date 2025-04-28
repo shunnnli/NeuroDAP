@@ -52,7 +52,7 @@ if ~exist('labjack','var')
         labjack.mod = ones(1,labjack.nSignals) * freqMod;
     end
 
-    if any(labjack.mod); labjack.modFreq = [171,223,0];
+    if any(labjack.mod); labjack.modFreq = [171,228,0];
     else; labjack.modFreq = [nan,nan,nan]; end
 end
 
@@ -72,7 +72,7 @@ if sum(labjack.record == options.record) ~= 3
         labjack.nSignals = sum(labjack.record);
         labjack.mod(find(~labjack.record)) = [];
         labjack.modFreq(find(~labjack.record)) = [];
-        warning("labjack.record does not agree with recordLJ, reload using provided recordLJ"); 
+        warning("labjack.record does not agree with recordLJ, reload using recordLJ"); 
     end
 end
 % Replace space in name with underscore
@@ -82,20 +82,6 @@ for i = 1:labjack.nSignals
 end
 
 %% Load all data
-
-% Check whether there's old concatenated files
-dirsplit = strsplit(sessionpath,filesep); 
-sessionName = dirsplit{end}; clear dirsplit
-old_photometry_path = strcat(sessionpath,filesep,'Photometry_raw.mat');
-old_sync_path = strcat(sessionpath,filesep,'Old analysis',filesep,['sync_',sessionName,'.mat']);
-if exist(old_photometry_path,'file') && exist(old_sync_path,'file')
-    load(old_photometry_path);
-    load(old_sync_path);
-
-    labjack.raw = rawgreen;
-    % sync_labjack = 
-end
-
 numChannels = length(temp)/labjack.samplerate;
 output = zeros(1,(length(D)*length(temp)));
 for i = 1:length(D)

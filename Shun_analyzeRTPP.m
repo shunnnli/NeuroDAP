@@ -14,12 +14,14 @@ filename = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/S
                         'Prompt','Select an animal');
 
 sessionList = dir(filename{1});
+
 sessionList = sessionList(~ismember({sessionList.name},{'.','..'}));
 nSessions = length(sessionList);
 
 %% Process data
 
-session_cutoffs = [0, 0, 0]; % in min;
+box = 'small'; stim_side = 'right';
+session_cutoffs = [0, 0, 0, 0]; % in min;
 Fs = 20; % frame rate
 
 sessions = struct([]);
@@ -34,6 +36,8 @@ for s = 1:nSessions
     sessions(s).path = tablePath;
     sessions(s).data = cur_data;
     sessions(s).cutoff = session_cutoffs(s);
+    sessions(s).stimSide = stim_side;
+    sessions(s).box = box;
 
     % Add time column
     sessions(s).data.Item1 = datetime(sessions(s).data.Item1, ...
@@ -51,69 +55,101 @@ disp('Finished: animal data loaded');
 
 %% Plot summary figure
 
-initializeFig(0.5,1); tiledlayout(1,nSessions+1);
-stim_side = 'left';
+% Initialize recording params
+removeStatic = true; 
 noMovementThreshold = 20;
+if strcmpi(box,'large')
+    Y_midpoint = 350;
+    xlimit = [300,650]; ylimit = [0,700];
+else
+    Y_midpoint = 140; 
+    xlimit = [420,520]; ylimit = [15,280];
+end
 
+% Define color
 leftColor = [156, 219, 17]./255;
 rightColor = [144, 126, 171]./255;
 stimColor = [7, 162, 222]./255;
 ctrlColor = [.3 .3 .3];
 
+% Initialize matrix
+stim_pct = zeros(nSessions,1);
+side_dist = zeros(nSessions,2);
+
+% Plot figure
+initializeFig(0.5,1); tiledlayout(2,nSessions+1);
 for s = 1:nSessions
     cur_data = sessions(s).data(sessions(s).data.time >= 0,:);
     cur_name = sessions(s).name;
+    cur_stim_side = sessions(s).stimSide;
 
     X_raw = cur_data.Item2_X;
     Y_raw = cur_data.Item2_Y;
-    Y_midpoint = 350; %(min(Y_raw)+max(Y_raw))/2;
+    % Y_midpoint = (min(Y_raw)+max(Y_raw))/2;
 
     % Drop potential sleep time
-    staticWindow = getStaticPeriod(X_raw, Y_raw,noMovementThreshold=3,windowDuration=30);
-    cur_data_clean = cur_data(~staticWindow,:);
-    X = X_raw(~staticWindow);
-    Y = Y_raw(~staticWindow);
-    % X = X_raw; Y = Y_raw;
+    if removeStatic
+        staticWindow = getStaticPeriod(X_raw, Y_raw,noMovementThreshold=3,windowDuration=30);
+        cur_data_clean = cur_data(~staticWindow,:);
+        X = X_raw(~staticWindow);
+        Y = Y_raw(~staticWindow);
+    else
+        X = X_raw; Y = Y_raw;
+    end
     
     % Plot the trajectory
-    nexttile;
+    nexttile([2 1]);
     if ~contains(cur_name,'RTPP')
         plot(X(Y>=Y_midpoint), Y(Y>=Y_midpoint), Color=rightColor, LineWidth=2); hold on;
         plot(X(Y<Y_midpoint), Y(Y<Y_midpoint), Color=leftColor, LineWidth=2);
         legend({'Right', 'Left'}, 'Location', 'northeast');
-    elseif strcmpi(stim_side,'right')
+    elseif strcmpi(cur_stim_side,'right')
         plot(X(Y>=Y_midpoint), Y(Y>=Y_midpoint), Color=stimColor, LineWidth=2); hold on;
         plot(X(Y<Y_midpoint), Y(Y<Y_midpoint), Color=ctrlColor, LineWidth=2);
         legend({'Stim OFF', 'Stim ON'}, 'Location', 'northeast');
-    elseif strcmpi(stim_side,'left')
+    elseif strcmpi(cur_stim_side,'left')
         plot(X(Y>=Y_midpoint), Y(Y>=Y_midpoint), Color=ctrlColor, LineWidth=2); hold on;
         plot(X(Y<Y_midpoint), Y(Y<Y_midpoint), Color=stimColor, LineWidth=2);
         legend({'Stim OFF', 'Stim ON'}, 'Location', 'northeast');
     end
     
-    xlim([300,650]); xlabel('X Position');
-    ylim([0,700]);ylabel('Y Position');
+    xlim(xlimit); xlabel('X Position');
+    ylim(ylimit);ylabel('Y Position');
     title(cur_name);
 
-    % Plot time in each chamber
+    % Calculate time & distance traveled in each chamber
     % stim = sum(strcmp(cur_data.Item3,'True'));
-    if strcmpi(stim_side,'right')
+    if strcmpi(cur_stim_side,'right')
         stim = find(Y>=Y_midpoint);
-    elseif strcmpi(stim_side,'left')
+        side_dist(s,1) = getTrajectoryDistance(X,Y,filter=stim);
+        side_dist(s,2) = getTrajectoryDistance(X,Y,filter=find(Y<=Y_midpoint));
+    elseif strcmpi(cur_stim_side,'left')
         stim = find(Y<=Y_midpoint);
+        side_dist(s,1) = getTrajectoryDistance(X,Y,filter=stim);
+        side_dist(s,2) = getTrajectoryDistance(X,Y,filter=find(Y>=Y_midpoint));
     end
     stim_pct(s) = length(stim)/length(Y) * 100;
 end
 
-% Plot bar plot
+% Plot bar plot of duration in stim chamber
 nexttile;
 for s = 1:nSessions
     if ~contains(sessions(s).name,'RTPP'); color = ctrlColor;
     else; color = stimColor; end
-    plotScatterBar(s,stim_pct(s),Color=color,style='bar'); hold on
+    plotScatterBar(s,stim_pct(s),Color=color,style='bar');
 end
 xticks(1:nSessions); xticklabels({sessions.name});
 ylabel('Time spent in stimulated side (%)');
+
+% Plot bar plot of distance traveled in each chamber
+nexttile;
+for s = 1:nSessions
+    plotScatterBar(2*s-0.5,side_dist(s,1),Color=stimColor,style='bar');
+    plotScatterBar(2*s+0.5,side_dist(s,2),Color=ctrlColor,style='bar');
+end
+xticks((1:nSessions)*2); xticklabels({sessions.name});
+legend({'Stim side','Ctrl side'});
+ylabel('Distance traveled in stimulated side (pixel)');
 
 %% Heatmap (ongoing)
 
