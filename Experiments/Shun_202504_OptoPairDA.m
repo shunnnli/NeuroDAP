@@ -612,8 +612,10 @@ end
 %     'SL107'	'SL108'	'SL109'	'SL110'	'SL112'	'SL113'	'SL114'	'SL115'...
 %     'SL316'	'SL317'	'SL318'	'SL319'	'SL320'	'SL321'	'SL322'	'SL323'};
 
-eventRange = 'water';
-animalRange = 'SL062';
+% weird ones: SL319, 110, 113 108 109
+
+eventRange = 'stim';
+animalRange = 'SL320';
 
 timeRange = [-0.5,3];
 taskRange = 'Random';
@@ -642,7 +644,7 @@ legend(legendList,'Location','northeast');
 
 %% (Baseline) Remove some learning trials
 
-targetIdx = 948:953;
+targetIdx = 174:953;
 for i = targetIdx
     combined_random(i).trialInfo.trialTable.performing(397:455) = 1; 
 end
@@ -700,7 +702,7 @@ randomStats = getGroupedTrialStats(combined_random,'stageMax',...
 randomResults = plotGroupedTrialStats(randomStats,'',groupSize=1,plot=false);
 waterData = randomResults.traces{1}{1};
 
-randomStats = getGroupedTrialStats(combined_random,'stageAvg',...
+randomStats = getGroupedTrialStats(combined_random,'stageAmp',...
                             eventRange='stim',...
                             animalRange='All',...
                             taskRange='Random',...
@@ -710,7 +712,7 @@ randomResults = plotGroupedTrialStats(randomStats,'',groupSize=1,plot=false);
 stimData = randomResults.traces{1}{1};
 
 randomStats = getGroupedTrialStats(combined_random,'stageMin',...
-                            eventRange='water',...
+                            eventRange='airpuff',...
                             animalRange='All',...
                             taskRange='Random',...
                             signalRange='dLight', ...
@@ -791,7 +793,7 @@ for a = 1:length(animalRange)
                                 signalRange=signalRange,...
                                 trialConditions='trials.performing');
 
-    plotTraces(combined.data{1},combined.timestamp,color=colorList(a,:));
+    plotTraces(combined.data{1},combined.timestamp,color=colorList(a,:),plotPatch=false);
     legendList{a} = [animalRange{a},' (n=',num2str(size(combined.data{1},1)),')'];
 end
 xlabel('Time (s)'); ylabel([signalRange,' z-score']); ylim([-1,3]);

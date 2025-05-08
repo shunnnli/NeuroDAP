@@ -564,29 +564,6 @@ legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,.
 plotEvent('Stim',0.5,color=bluePurpleRed(500,:))
 xlabel('Time (s)'); ylabel('z-score');
 
-%% Plot sample DA stat vs trials
-
-rowIdx = 21;
-trace = DAtrend(rowIdx).amp.raw;
-dotColor = [243 186 0]/255;
-
-close all; initializeFig(0.5,0.2);
-scatter(1:length(trace),trace,200,dotColor,'filled'); hold on
-xlim([1,length(trace)]);
-
-x1 = 1:20;
-y1 = trace(x1);
-p1 = polyfit(x1, y1, 1);
-yfit1 = polyval(p1, x1);
-plot(x1, yfit1, 'b-', 'LineWidth', 2);  % Blue line
-
-% Fit and plot best fit line for the last 20 dots
-x2 = (length(trace)-19):length(trace);
-y2 = trace(x2);
-p2 = polyfit(x2, y2, 1);
-yfit2 = polyval(p2, x2);
-plot(x2, yfit2, 'r-', 'LineWidth', 2);  % Red line
-
 %% What does last 15-40 trials means in time
 
 % Find all the trialtables of stim only

@@ -537,8 +537,6 @@ signalRange = 'dLight';
 trialRange = 'All';
 trialConditions = 'trials.performing == 1';
 
-% eventRange = {'Baseline','Pair','Tone','Stim','WiChR'};
-% colorList = {[0.8,0.8,0.8],bluePurpleRed(300,:),bluePurpleRed(100,:),bluePurpleRed(500,:),[.213 .543 .324]};
 eventRange = {'WiChR','Baseline','Stim','Pair'};
 colorList = {[.213 .543 .324],[0.8,0.8,0.8],bluePurpleRed(500,:),bluePurpleRed(300,:)};
 
@@ -552,7 +550,8 @@ combinedStats = getGroupedTrialStats(animals,statsTypes,...
                             trialConditions=trialConditions);
 
 initializeFig(.7,.7); tiledlayout('flow');
-results = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,color=colorList,xlimIdx=3,xlim=[0,170],ylim=ylimit);
+results = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,plotCommonTrials=false,...
+        color=colorList,xlimIdx=3,xlim=[0,150],ylim=ylimit);
 
 % saveFigures(gcf,'Summary_CSvsTrialsGrouped_dLight',...
 %         strcat(resultspath),...

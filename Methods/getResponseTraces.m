@@ -7,7 +7,10 @@ arguments
     options.plotIndividual logical = true
     options.color
     options.ylim double
-    options.newFig logical = true
+    options.newFig logical = true % initialize a new figure or not
+    options.overlay logical = false % plot all cells overlaying in same panel or not
+    options.plotLegend logical = true
+    options.plotNormalized logical = false
     
     options.timeRange double = [-10,50]
     options.Fs double = 10000;
@@ -86,9 +89,9 @@ for c = 1:length(cellList)
 
     if options.plot
         if ~isfield(options,'color')
-            [~,~,~,~,~,~,bluePurpleRed] = loadColors;
-            EPSCcolor = bluePurpleRed(end,:);
-            IPSCcolor = bluePurpleRed(1,:);
+            % [~,~,~,~,~,~,bluePurpleRed] = loadColors;
+            EPSCcolor = [255 157 33]/255;
+            IPSCcolor = [71 144 253]/255;
         else
             if ~iscell(options.color)
                 EPSCcolor = options.color;
@@ -101,11 +104,21 @@ for c = 1:length(cellList)
                 IPSCcolor = options.color{2};
             end
         end
-        nexttile;
+
+        if ~options.overlay; nexttile; end
+        if options.plotNormalized
+            curEPSC_peaks = curCell.Stats{1}.summary.EPSC.peakAvg;
+            curIPSC_peaks = curCell.Stats{1}.summary.IPSC.peakAvg;
+            totalCurrents = abs(curEPSC_peaks)+abs(curIPSC_peaks);
+            curTrace_EPSC = curTrace_EPSC / totalCurrents;
+            curTrace_IPSC = curTrace_IPSC / totalCurrents;
+        end
         plotSEM(timeRangeInms,curTrace_EPSC,EPSCcolor,plotIndividual=options.plotIndividual,label='EPSC');
         plotSEM(timeRangeInms,curTrace_IPSC,IPSCcolor,plotIndividual=options.plotIndividual,label='IPSC');
-        xlabel('Time (ms)'); ylabel('Current (pA)'); legend; 
+         
+        if options.plotLegend; legend; end
         if isfield(options,'ylim'); ylim(options.ylim); end
+        xlabel('Time (ms)'); ylabel('Current (pA)');
         title(strcat(curCell.Task,": Cell ",num2str(curCell.Cell)," (",curCell.Animal,")"));
     end
 end

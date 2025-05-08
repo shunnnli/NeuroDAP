@@ -201,6 +201,18 @@ if isempty(dir(fullfile(resultspath,'animals*.mat'))) || groupSessions
     animals = getAnimalsStruct(summary);
 end
 
+% Add stageAmp
+for i = 1:size(animals,2)
+    stageMax = animals(i).stageMax.data;
+    stageMin = animals(i).stageMin.data;
+    
+    animals(i).stageAmp = struct('data', getAmplitude(stageMax, stageMin));
+
+    % if strcmpi(animals(i).name,'NAc')
+    %     animals(i).name = 'dLight';
+    % end
+end
+
 %% Save animals struct
 
 prompt = 'Enter database notes (animals_20230326_notes.mat):';
@@ -246,41 +258,6 @@ legend(['Baseline licks (n=',num2str(size(combined.data{1},1)),')'],'Location','
 saveFigures(gcf,'Summary_NAc_baselineLicking',...
             strcat(resultspath),...
             saveFIG=true,savePDF=true);
-
-%% Baseline dLight: plot water, airpuff, stim, tone
-
-timeRange = [-0.5,3];
-eventRange = {'Rewarded Licks','Airpuff','Stim','Tone'};
-animalRange = 'All';
-taskRange = 'Random';
-trialRange = 'All'; % range of trials in each session
-totalTrialRange = 'All';
-signalRange = {'dLight'};
-
-colorList = {bluePurpleRed(1,:),[.2,.2,.2],bluePurpleRed(500,:),bluePurpleRed(100,:)};
-eventDuration = [0,.1,.5,.5];
-
-for s = 1:length(signalRange)
-    initializeFig(.5,.5); tiledlayout(2,2);
-    for i = 1:length(eventRange)
-        nexttile;
-        combined = combineTraces(animals,timeRange=timeRange,...
-                                    eventRange=eventRange{i},...
-                                    animalRange=animalRange,...
-                                    taskRange=taskRange,...
-                                    totalTrialRange=totalTrialRange,...
-                                    trialRange=trialRange,...
-                                    signalRange=signalRange{s});
-        plotTraces(combined.data{1},combined.timestamp,color=colorList{i},plotShuffled=false);
-        xlabel('Time (s)'); ylabel([signalRange{s},' z-score']); ylim([-1.5,4]);
-        plotEvent(eventRange{i},eventDuration(i),color=colorList{i});
-        legend({[eventRange{i},' (n=',num2str(size(combined.data{1},1)),')']},...
-                'Location','northeast');
-    end
-    % saveFigures(gcf,'Summary_random_NAc',...
-    %         strcat(resultspath),...
-    %         saveFIG=true,savePDF=true);
-end
 
 %% Plot overall to show animal learned
 
@@ -367,15 +344,14 @@ taskRange = {'Reward1','Punish1'};
 conditionRange = 'All';
 signalRange = 'dLight';
 
-eventRange = {'Stim','Pair','Tone'};
-colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),bluePurpleRed(100,:),[0.75,0.75,0.75]};
+% eventRange = {'Stim','Pair','Tone'};
+% colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),bluePurpleRed(100,:),[0.75,0.75,0.75]};
 
-% eventRange = {'Baseline','Stim','Pair'};
-% colorList = {[0.75,0.75,0.75],bluePurpleRed(500,:),bluePurpleRed(300,:)};
+eventRange = {'Baseline','Stim','Pair'};
+colorList = {[0.75,0.75,0.75],bluePurpleRed(500,:),bluePurpleRed(300,:)};
 stage = 2; % Plot CS only
-statsTypes = {'stageMax','stageMax'};
-% statsTypes = {'stageArea','stageArea'};
-ylabelList = {'Max DA response during cue','Max DA response during cue'};
+statsTypes = {'stageAmp','stageAmp'};
+ylabelList = {'Amp DA response during cue','Amp DA response during cue'};
 
 groupSize = 10; % numbers of trials to calculate average
 
@@ -387,11 +363,11 @@ combinedStats = getGroupedTrialStats(animals,statsTypes,...
                             signalRange=signalRange);
 
 initializeFig(.7,.7); tiledlayout('flow');
-results = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,color=colorList,xlimIdx=1);
+results = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,xlimIdx=2,color=colorList);
 
-% saveFigures(gcf,'Summary_CSvsTrialsGrouped',...
-%         strcat(resultspath),...
-%         saveFIG=true,savePDF=true);
+saveFigures(gcf,'Summary_CSvsTrialsGrouped',...
+        strcat(resultspath),...
+        saveFIG=true,savePDF=true);
 
 %% Plot bar plot of DA slopes
 initializeFig(.7,.7); tiledlayout('flow');
@@ -400,12 +376,8 @@ for task = 1:length(results.stats)
     cur_stats = results.stats{task};
     for event = 1:length(eventRange)
         slopes = cur_stats{event}(:,1);
-
-        % plot bar plots
-        scatter(event,slopes,200,colorList{event},'filled'); hold on
-        bar(event,mean(slopes),EdgeColor=colorList{event},FaceColor=colorList{event},...
-            FaceAlpha=0.5,LineWidth=3);
-        errorbar(event,mean(slopes),getSEM(slopes),Color=colorList{event},LineWidth=2);
+        plotScatterBar(event,slopes,color=colorList{event},...
+                       style='bar',dotSize=200,LineWidth=2);
 
         % Calculate significance
         if event < length(eventRange)
@@ -416,10 +388,10 @@ for task = 1:length(results.stats)
     end
 
     xticks(1:length(eventRange)); xticklabels(eventRange);
-    ylabel('Slope');
+    ylabel('Slope of DA amplitude during CS');
 end
 
-saveFigures(gcf,'Summary_CSvsTrialsGrouped_slope',...
+saveFigures(gcf,'Summary_CSvsTrialsGrouped_slopeBar',...
         strcat(resultspath),...
         saveFIG=true,savePDF=true);
 
@@ -526,56 +498,112 @@ for task = 1:length(taskRange)
 end
 % autoArrangeFigures
 
-%% Plot CS DA response vs trials
-eventRange = {'Stim','Pair'};
+%% Baseline dLight: plot water, airpuff, stim, tone
+
+timeRange = [-0.5,3];
+eventRange = {'Water','Airpuff','Stim'};
 animalRange = 'All';
-taskRange = {'Reward1','Punish1'};
-conditionRange = [1,150];
-signalRange = 'NAc';
-conditionColors = {bluePurpleRed(1,:),[.213 .543 .324]};
 
-stage = 2; % Plot CS only
-statsType = 'stageAvg';
+taskRange = 'Random';
+trialRange = 'All'; % range of trials in each session
+totalTrialRange = 'All';
+signalRange = {'dLight'};
+trialConditions = '';
 
-% Get subtrial stats
-combinedStats = getGroupedTrialStats(animals,statsType,...
-                            eventRange=eventRange,...
-                            animalRange=animalRange,...
-                            taskRange=taskRange,...
-                            totalTrialRange=conditionRange,...
-                            signalRange=signalRange,...
-                            concatSessions=false);
+colorList = {bluePurpleRed(1,:),[.2,.2,.2],bluePurpleRed(500,:)};
+eventDuration = [0,.1,.5,.5];
 
-for task = 1:length(taskRange)
-    % Plot scatter plot and best fit line
-    stats_combined = combinedStats.stats{task};
-    initializeFig(.7,.7); tiledlayout('flow');
-    for event = 1:length(eventRange)
-        for animal = 1:length(animalList)
-            nexttile;
-            data = stats_combined{animal,event};
-            lastTrial = 0;
-            for row = 1:size(data,1)
-                for col = 1:size(data,2)
-                    plotData = data{row,col};
-                    x = (1:size(plotData,1))+lastTrial;
-                    y = plotData(:,stage);
-                    scatter(x,y,100,conditionColors{col},"filled",'MarkerFaceAlpha',0.5,HandleVisibility='off'); hold on
-                    lastTrial = size(plotData,1)+lastTrial;
-    
-                    % Calc best fit line of trial vs CS response
-                    p = polyfit(x,y',1);
-                    plot(x,polyval(p,x),Color=conditionColors{col},lineWidth=5);
-                end
-            end
-            xlabel('Trials'); ylabel([signalRange,' CS response']);
-            title([taskRange{task}, ': ',animalList{animal},' -> ',eventRange{event}]);
-        end
+for s = 1:length(signalRange)
+    close all; initializeFig(.5,.5);
+    for i = 1:length(eventRange)
+        combined = combineTraces(animals,timeRange=timeRange,...
+                                    eventRange=eventRange{i},...
+                                    animalRange=animalRange,...
+                                    taskRange=taskRange,...
+                                    totalTrialRange=totalTrialRange,...
+                                    trialRange=trialRange,...
+                                    signalRange=signalRange{s},...
+                                    trialConditions=trialConditions);
+        plotTraces(combined.data{1},combined.timestamp,color=colorList{i});
+        xlabel('Time (s)'); ylabel([signalRange{s},' z-score']); 
+        ylim([-1,2.6]);
+        plotEvent(eventRange{i},eventDuration(i),color=colorList{i});
+        legend({[eventRange{i},' (n=',num2str(size(combined.data{1},1)),')']},...
+                'Location','northeast');
     end
-    % saveFigures(gcf,['Summary_CSvsTrials_',taskRange{task},'-',eventRange{event},'_',signalRange],...
-    %     strcat(resultspath),...
-    %     saveFIG=true,savePDF=true);
+    saveFigures(gcf,'Summary_random_dLight',...
+            strcat(resultspath),...
+            saveFIG=true,savePDF=true);
 end
-% autoArrangeFigures
 
-%% 
+%% (Baseline) Plot bar plot of DA final values
+
+
+trialConditions = '';
+
+randomStats = getGroupedTrialStats(animals,'stageMax',...
+                            eventRange='water',...
+                            animalRange='All',...
+                            taskRange='Random',...
+                            signalRange='dLight', ...
+                            trialConditions=trialConditions);
+randomResults = plotGroupedTrialStats(randomStats,'',groupSize=1,plot=false);
+waterData = randomResults.traces{1}{1};
+
+randomStats = getGroupedTrialStats(animals,'stageMin',...
+                            eventRange='stim',...
+                            animalRange='All',...
+                            taskRange='Random',...
+                            signalRange='dLight', ...
+                            trialConditions=trialConditions);
+randomResults = plotGroupedTrialStats(randomStats,'',groupSize=1,plot=false);
+stimData = randomResults.traces{1}{1};
+
+randomStats = getGroupedTrialStats(animals,'stageMin',...
+                            eventRange='airpuff',...
+                            animalRange='All',...
+                            taskRange='Random',...
+                            signalRange='dLight', ...
+                            trialConditions=trialConditions);
+randomResults = plotGroupedTrialStats(randomStats,'',groupSize=1,plot=false);
+airpuffData = randomResults.traces{1}{1};
+
+initializeFig(0.3,0.5); tiledlayout('flow');
+
+nexttile;
+waterData_animal = mean(waterData,2,'omitnan');
+stimData_animal = mean(stimData,2,'omitnan');
+airpuffData_animal = mean(airpuffData,2,'omitnan');
+plotScatterBar(1,waterData_animal,LineWidth=5,dotSize=200,color=bluePurpleRed(1,:),style='bar');
+plotScatterBar(2,stimData_animal,LineWidth=5,dotSize=200,color=bluePurpleRed(500,:),style='bar');
+plotScatterBar(3,airpuffData_animal,LineWidth=5,dotSize=200,color=[.2 .2 .2],style='bar');
+% plotScatterBar([1 2],[waterData_animal,stimData_animal],connectPairs=true,...
+%                 LineWidth=5,dotSize=400,color=colorList,style='bar');
+% plotScatterBar([2 3],[stimData_animal,airpuffData_animal],connectPairs=true,...
+%                 LineWidth=5,dotSize=400,color=colorList,style='bar');
+plotStats(waterData_animal,stimData_animal,[1,2],testType='kstest');
+plotStats(stimData_animal,airpuffData_animal,[2,3],testType='kstest');
+xticks(1:3); 
+xticklabels({['Water (n=',num2str(length(waterData_animal)),')'],...
+    ['Stim (n=',num2str(length(stimData_animal)),')'],...
+    ['Airpuff (',num2str(length(airpuffData_animal)),')']});
+ylabel('Amp DA response during cue');
+
+% nexttile;
+% waterData_vec = rmmissing(reshape(waterData,[],1));
+% stimData_vec = rmmissing(reshape(stimData,[],1));
+% airpuffData_vec = rmmissing(reshape(airpuffData,[],1));
+% plotScatterBar(1,waterData_vec,LineWidth=5,dotSize=200,color=bluePurpleRed(1,:),style='bar');
+% plotScatterBar(2,stimData_vec,LineWidth=5,dotSize=200,color=bluePurpleRed(500,:),style='bar');
+% plotScatterBar(3,airpuffData_vec,LineWidth=5,dotSize=200,color=[.2 .2 .2],style='bar');
+% plotStats(waterData_vec,stimData_vec,[1,2],testType='kstest');
+% plotStats(stimData_vec,airpuffData_vec,[2,3],testType='kstest');
+% xticks(1:3); 
+% xticklabels({['Water (n=',num2str(length(waterData_vec)),')'],...
+%     ['Stim (n=',num2str(length(stimData_vec)),')'],...
+%     ['Airpuff (',num2str(length(airpuffData_vec)),')']});
+% ylabel('Amp DA response during cue');
+
+saveFigures(gcf,'Summary_DA_randomVal',...
+        strcat(resultspath),...
+        saveFIG=true,savePDF=true);

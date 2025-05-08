@@ -71,11 +71,15 @@ end
 
 %% Extract EI information
 
-EPSC_peaks = cellfun(@(x) x.summary.EPSC.peakAvg, combined_cells.Stats);
-IPSC_peaks = cellfun(@(x) x.summary.IPSC.peakAvg, combined_cells.Stats);
+EPSC_stats = getCellStats(combined_cells,'exci',type='min',average=true);
+IPSC_stats = getCellStats(combined_cells,'inhi',type='max',average=true);
+EPSC_peaks = vertcat(EPSC_stats.response);
+IPSC_peaks = vertcat(IPSC_stats.response);
 
-EPSC_aucs = cellfun(@(x) x.summary.EPSC.aucAvg, combined_cells.Stats);
-IPSC_aucs = cellfun(@(x) x.summary.IPSC.aucAvg, combined_cells.Stats);
+EPSC_stats = getCellStats(combined_cells,'exci',type='auc',average=true);
+IPSC_stats = getCellStats(combined_cells,'inhi',type='auc',average=true);
+EPSC_aucs = vertcat(EPSC_stats.response);
+IPSC_aucs = vertcat(IPSC_stats.response);
 
 % Calculate EI statistics
 % 1. EPSC + IPSC
