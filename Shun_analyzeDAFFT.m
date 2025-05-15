@@ -6,15 +6,15 @@
 clear; close all;
 % addpath(genpath('/Users/graceknipe/Desktop/HMS Sabatini Lab/NeuroDAP'));
 addpath(genpath(osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
-today = char(datetime('today','Format','yyyyMMdd'));
 
-sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Recordings'))';
+% sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Recordings'))';
 
 [~,~,~,~,~,~,bluePurpleRed] = loadColors;
 
 %% Extract FFT for all sessions
 
 fftSummary = struct([]);
+fftFreq = linspace(0,25,2500);
 
 for s = 1:length(sessionList)
     sessionpath = sessionList{s};  
@@ -40,16 +40,34 @@ for s = 1:length(sessionList)
     Fs = timeSeries(row).finalFs;
 
     % Calculate FFT on the whole DA recording
-    [fftFreq,fftPower] = plotFFT(dLight,plot=false,print=false,...
-                                 Fs=Fs);
-
-    % (Unfinished) check whether fftFreq is the same
+    [fftFreq_raw,fftPower_raw] = plotFFT(dLight,Fs=Fs,timeToEstimateCarrier=100,...
+                                         plot=false,print=false);
+    fftPower = interp1(fftFreq_raw,fftPower_raw,fftFreq,'pchip',NaN);
 
     fftSummary(s).animal = animalName;
     fftSummary(s).experiment = experiment;
     fftSummary(s).session = sessionName;
     fftSummary(s).power = fftPower;
     fftSummary(s).freq = fftFreq;
+
+    % Autoregression model
+    data = dLight(2:end)';           % ensure column
+    T    = numel(data);
+    orders = 1:2;             % model orders to compare
+    
+    for p = orders
+        [a,e]   = aryule(data, p);        % a = [1, -φ₁, …, -φₚ], e = noise var
+        phi{p}  = -a(2:end);              % extract φ₁…φₚ
+        ll      = -T/2*(log(2*pi*e) + 1); % Gaussian log-likelihood
+        AIC(p)  = -2*ll + 2*p;
+        BIC(p)  = -2*ll + p*log(T);
+    end
+
+    ar1.phi = phi{1}; ar1.aic = AIC(1); ar1.bic = BIC(1);
+    ar2.phi = phi{2}; ar2.aic = AIC(2); ar2.bic = BIC(2);
+
+    fftSummary(s).AR1 = ar1;
+    fftSummary(s).AR2 = ar2;
 
     disp(['Finished (',num2str(s),'/',num2str(length(sessionList)),'): ',sessionName,' analyzed']);
 end
@@ -61,43 +79,51 @@ fftSummary(toRemove) = [];
 
 disp('Saving fftSummary...');
 rootPath = osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Results/Summary-FFT');
+today = char(datetime('today','Format','yyyyMMdd'));
 resultPath = strcat(rootPath,filesep,today);
 if ~isfolder(resultPath); mkdir(resultPath); end
 save(fullfile(resultPath,strcat('fftSummary_',today,'.mat')),"fftSummary","-v7.3");
 disp("Finished: fftSummary saved");
 
-%% Plot fft power plot
-
-exps = unique({fftSummary.experiment});
-powers = cellfun(@(e) vertcat(fftSummary(strcmp({fftSummary.experiment},e)).power), exps, 'UniformOutput',false);
-fftFreq = fftSummary(1).freq;
-colorIdx = round(linspace(1,500,length(exps)));
-
-initializeFig(0.5,1); tiledlayout(1,2);
-
-nexttile;
-for exp = 1:length(exps)
-    plotSEM(fftFreq, powers{exp}, bluePurpleRed(colorIdx(exp),:),label=exps{exp});
-end
-xlabel('Frequency'); ylabel('Power'); legend('show');
-
-nexttile;
-for exp = 1:length(exps)
-    plotSEM(fftFreq, powers{exp}, bluePurpleRed(colorIdx(exp),:),label=exps{exp});
-end
-xlabel('Frequency'); ylabel('Power'); legend('show');
-xlim([0,3]);
-
 %% Check whether there's any frequency differences
 
-% number of experiments and freq‐bins
-nFreq = size(powers{1},2);
-colorIdx = round(linspace(1,500,length(exps)));
+% Extract data
+exps = unique({fftSummary.experiment});
+fftFreq = linspace(0,25,2500);
+powers = cellfun(@(e) vertcat(fftSummary(strcmp({fftSummary.experiment},e)).power), exps, 'UniformOutput',false);
+colorIdx = flip(round(linspace(1,500,length(exps))));
 
-close all; initializeFig(0.5,1); tiledlayout(1,3);
-
+% Plot settings
+logscale = true;
+xlimit = [5,25];
+smoothing = false;
+normalize = true;
 multiCompTest = 'BH-FDR';
 % multiCompTest = 'Bonferroni'; (similar results)
+
+% Process powers
+if normalize
+    powers_norm = cell(size(powers));
+    for e = 1:numel(powers)
+        P = powers{e};                 % M×F
+        normFactor = sum(P,2);         % M×1 vector of totals
+        powers_norm{e} = P ./ normFactor;   % broadcasts so each row sums to 1
+    end
+else
+    powers_norm = powers;
+end
+if smoothing
+    windowSize = 1;
+    powers_smoothed = cellfun(@(P) movmean(P, windowSize, 2), ...
+                          powers_norm, 'UniformOutput', false);
+else
+    powers_smoothed = powers_norm;
+end
+
+
+% Plot
+nFreq = size(powers_smoothed{1},2);
+close all; initializeFig(0.5,1); tiledlayout(1,3);
 
 for exp1 = 1:length(exps)
     for exp2 = exp1+1:length(exps)
@@ -105,8 +131,8 @@ for exp1 = 1:length(exps)
         expToCompare = [exp1, exp2];
         pvals = nan(1,nFreq);
         for f = 1:nFreq
-            x1 = powers{exp1}(:,f);
-            x2 = powers{exp2}(:,f);
+            x1 = powers_smoothed{exp1}(:,f);
+            x2 = powers_smoothed{exp2}(:,f);
             [~,pvals(f)] = kstest2(x1,x2);
         end
         
@@ -136,124 +162,273 @@ for exp1 = 1:length(exps)
         end
         
         nexttile;
-        yyaxis right
-        diff_power = mean(powers{expToCompare(1)},1) - mean(powers{expToCompare(2)},1);
-        label = sprintf('%s - %s', exps{expToCompare(1)}, exps{expToCompare(2)});
-        plot(fftFreq, diff_power,color=[.32 .78 .53],DisplayName=label);
-        ax = gca; ax.YColor = [.32 .78 .53];
-        ylabel('Power difference');
+        % yyaxis right
+        % diff_power = mean(powers_smoothed{expToCompare(1)},1) - mean(powers_smoothed{expToCompare(2)},1);
+        % label = sprintf('%s - %s', exps{expToCompare(1)}, exps{expToCompare(2)});
+        % plot(fftFreq, diff_power,color=[.32 .78 .53],DisplayName=label); hold on
+        % % scatter(fftFreq(sigIdx), diff_power(sigIdx)*1.1, 50, 'k','filled',...
+        % %         MarkerFaceAlpha=0.5, DisplayName='significant');
+        % ax = gca; ax.YColor = [.32 .78 .53]; 
+        % ylabel('Power difference');
+        % yyaxis left
 
-        yyaxis left
         for e = expToCompare
             % plot mean spectra for each exp
-            plotSEM(fftFreq, powers{e}, bluePurpleRed(colorIdx(e),:),label=exps{e});
+            plotSEM(fftFreq, powers_smoothed{e}, bluePurpleRed(colorIdx(e),:),label=exps{e});
         end
         % mark significant freqs
-        meanCells = cellfun(@(P) mean(P(:,sigIdx),1), powers, 'UniformOutput',false);
+        meanCells = cellfun(@(P) mean(P(:,sigIdx),1), powers_smoothed, 'UniformOutput',false);
         meanMat = vertcat(meanCells{:}); % stack into an nExp×Nsig matrix
         maxVals = max(meanMat,[],1); % find the max across experiments, for each freq
-        stem(fftFreq(sigIdx), maxVals*1.1, 'k','filled','DisplayName','significant');
-        xlabel('Frequency (Hz)'), ylabel('Power')
+        scatter(fftFreq(sigIdx), maxVals*1.2, 50, 'k','filled',...
+                MarkerFaceAlpha=0.5, DisplayName='significant');
+        xlabel('Frequency (Hz)'); ylabel('Power');
+        ax = gca; ax.YColor = [0 0 0];
         legend('Location','best')
+        
+        xlim(xlimit);
+        if logscale; set(gca, 'YScale', 'log'); end
     end
 end
 
 saveFigures(gcf,'FFT-summary',resultPath,savePNG=false,savePDF=false);
 
-%% --- ASSUMPTION CHECK FOR T-TEST --- 
-% powers{1} and powers{2} are M1×F and M2×F matrices
-alpha   = 0.05;                               % significance level
-nFreq   = size(powers{1},2);
+%% Autoregression model: compare second-lag coeff
 
-% preallocate
-isNormal1 = false(1,nFreq);
-isNormal2 = false(1,nFreq);
-equalVar  = false(1,nFreq);
+exps = unique({fftSummary.experiment});
+ar_results = struct([]);
 
-for j = 1:nFreq
-    x1 = powers{1}(:,j);
-    x2 = powers{2}(:,j);
+for i = 1:numel(exps)
+    mask              = strcmp({fftSummary.experiment}, exps{i});
+    S                 = fftSummary(mask);
+    ar1               = [S.AR1];        % 1×n struct array
+    ar2               = [S.AR2];        % 1×n struct array
+
+    ar_results(i).experiment = exps{i};
+    ar_results(i).phi1  = cell2mat({ar1.phi})';         % [φ1 φ1 …] (1×n)
+    ar_results(i).aic1  = cell2mat({ar1.aic})';
+    ar_results(i).bic1  = cell2mat({ar1.bic})';
+
+    % each ar2.phi is a 1×2 vector, so we reshape into n×2
+    phi2_mat  = reshape([ar2.phi], numel(ar2(1).phi), [])';
+    ar_results(i).phi2 = phi2_mat;         % n×2
+
+    ar_results(i).aic2 = cell2mat({ar2.aic})';
+    ar_results(i).bic2 = cell2mat({ar2.bic})';
+end
+
+initializeFig(0.5,1); tiledlayout(1,3);
+
+% Compare phi2
+nexttile;
+taCasp3 = ar_results(1).phi2(:,2);
+paAIP2 = ar_results(2).phi2(:,2);
+iGluSnFR = ar_results(3).phi2(:,2);
+plotScatterBar(1,taCasp3,color=bluePurpleRed(colorIdx(1),:));
+plotScatterBar(2,iGluSnFR,color=bluePurpleRed(colorIdx(3),:));
+plotScatterBar(3,paAIP2,color=bluePurpleRed(colorIdx(2),:));
+plotStats(taCasp3,iGluSnFR,[1 2],testType='kstest');
+plotStats(iGluSnFR,paAIP2,[2 3],testType='kstest');
+plotStats(taCasp3,paAIP2,[1 3],testType='kstest');
+xticks([1 2 3]); xticklabels({'taCasp3','iGluSnFR','paAIP2'});
+ylabel('Second lag coefficient');
+
+% Compare aic2
+nexttile;
+taCasp3 = ar_results(1).aic2 - ar_results(1).aic1;
+paAIP2 = ar_results(2).aic2 - ar_results(2).aic1;
+iGluSnFR = ar_results(3).aic2 - ar_results(3).aic1;
+plotScatterBar(1,taCasp3,color=bluePurpleRed(colorIdx(1),:));
+plotScatterBar(2,iGluSnFR,color=bluePurpleRed(colorIdx(3),:));
+plotScatterBar(3,paAIP2,color=bluePurpleRed(colorIdx(2),:));
+plotStats(taCasp3,iGluSnFR,[1 2],testType='kstest');
+plotStats(iGluSnFR,paAIP2,[2 3],testType='kstest');
+plotStats(taCasp3,paAIP2,[1 3],testType='kstest');
+xticks([1 2 3]); xticklabels({'taCasp3','iGluSnFR','paAIP2'});
+ylabel('AIC2 - AIC1');
+
+% Compare BIC
+nexttile;
+taCasp3 = ar_results(1).bic2 - ar_results(1).bic1;
+paAIP2 = ar_results(2).bic2 - ar_results(2).bic1;
+iGluSnFR = ar_results(3).bic2 - ar_results(3).bic1;
+plotScatterBar(1,taCasp3,color=bluePurpleRed(colorIdx(1),:));
+plotScatterBar(2,iGluSnFR,color=bluePurpleRed(colorIdx(3),:));
+plotScatterBar(3,paAIP2,color=bluePurpleRed(colorIdx(2),:));
+plotStats(taCasp3,iGluSnFR,[1 2],testType='kstest');
+plotStats(iGluSnFR,paAIP2,[2 3],testType='kstest');
+plotStats(taCasp3,paAIP2,[1 3],testType='kstest');
+xticks([1 2 3]); xticklabels({'taCasp3','iGluSnFR','paAIP2'});
+ylabel('BIC2 - BIC1');
+
+%% 
+
+TD = [353.12 193.33 363.6 329.55 347.55 227.64 409.2 281.17 602.36 338.43];
+PD = [229.27 219.9 298.58 377.30 355.2 206.07 321.79 437.2 474.97 354.12];
+
+plotScatterBar(1,TD);
+plotScatterBar(2,PD);
+plotStats(TD,PD,[1 2]);
+
+
+%% Load event align traces
+
+% keep = ismember({animals.name}, {'iGluSnFR','dLight'});
+% animalsFFT = animals(keep);
+% combined_FFT = [combined_FFT, animalsFFT];
+
+% [combined_FFT.experiment] = deal([]);
+% [combined_FFT(1:215).experiment] = deal('iGluSnFR');
+% [combined_FFT(216:338).experiment] = deal('taCasp3');
+% [combined_FFT(339:end).experiment] = deal('paAIP2');
+% 
+% animals_iGluSnFR = combined_FFT(1:215);
+% animals_taCasp3 = combined_FFT(216:338);
+% animals_paAIP2 = combined_FFT(339:end);
+
+% Save animals struct
+% prompt = 'Enter database notes (animals_20230326_notes.mat):';
+% dlgtitle = 'Save animals struct'; fieldsize = [1 45]; definput = {''};
+% answer = inputdlg(prompt,dlgtitle,fieldsize,definput);
+% today = char(datetime('today','Format','yyyyMMdd'));
+% filename = strcat('animals_fft_',today,'_',answer{1});
+% resultspath = strcat('/Volumes/MICROSCOPE/Shun/Project valence/Results/Summary-FFT');
+% 
+% % Save animals.mat
+% if ~isempty(answer)
+%     disp(['Ongoing: saving animals.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
+%     save(strcat(resultspath,filesep,filename),'animals_iGluSnFR','animals_taCasp3','animals_paAIP2','-v7.3');
+%     disp(['Finished: saved animals.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
+% end
+
+% Load files
+filepath = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Results/Summary-FFT'))';
+load(filepath{1});
+
+% Set color
+[~,~,~,~,~,~,bluePurpleRed] = loadColors;
+iGluSnFRColor = bluePurpleRed(1,:);
+taCasp3Color = bluePurpleRed(250,:);
+paAIP2Color = bluePurpleRed(500,:);
+
+%% Compare event align traces across experiments
+
+% Water
+initializeFig(0.3,0.5); 
+event = 'reward';
+task = 'All';
+signal = 'dLight';
+totalTrialRange = [1,10];
+
+close all; initializeFig(0.5,0.5); tiledlayout('flow');
+combinedTraces_iGluSnFR = combineTraces(animals_iGluSnFR,timeRange=[-0.5,3],...
+                            eventRange=event,taskRange=task,signalRange=signal,...
+                            totalTrialRange=totalTrialRange,combineStats=false);
+if contains(signal,'dLight')
+    combinedTraces_taCasp3 = combineTraces(animals_taCasp3,timeRange=[-0.5,3],...
+                                eventRange=event,taskRange=task,signalRange=signal,...
+                                totalTrialRange=totalTrialRange,combineStats=false);
+    combinedTraces_paAIP2 = combineTraces(animals_paAIP2,timeRange=[-0.5,3],...
+                                eventRange=event,taskRange=task,signalRange=signal,...
+                                totalTrialRange=totalTrialRange,combineStats=false);
+end
+
+timestamp = combinedTraces_iGluSnFR.timestamp;
+data_iGluSnFR = combinedTraces_iGluSnFR.data{1};
+if contains(signal,'dLight')
+    data_taCasp3 = combinedTraces_taCasp3.data{1};
+    data_paAIP2 = combinedTraces_paAIP2.data{1};
+end
+
+nexttile;
+plotTraces(data_iGluSnFR,timestamp,color=iGluSnFRColor);
+if contains(signal,'dLight')
+    plotTraces(data_taCasp3,timestamp,color=taCasp3Color);
+    plotTraces(data_paAIP2,timestamp,color=paAIP2Color);
+end
+plotEvent('Water',0,color=bluePurpleRed(1,:))
+xlabel('Time (s)'); ylabel('z-score');
+
+% FFT on event aligned trace
+nexttile;
+[fftFreq,fft_iGluSnFR] = plotFFT(data_iGluSnFR,color=iGluSnFRColor,Fs=50,print=false);
+if contains(signal,'dLight')
+    [~,fft_taCasp3] = plotFFT(data_taCasp3,color=taCasp3Color,Fs=50,print=false);
+    [~,fft_paAIP2] = plotFFT(data_paAIP2,color=paAIP2Color,Fs=50,print=false);
+end
+xlabel('Frequency (Hz)'); ylabel('Power'); xlim([5,25]);
+
+%% ACF analysis (sensor too slow to see anything)
+
+exps    = {'iGluSnFR','taCasp3','paAIP2'};
+allData  = {data_iGluSnFR, data_taCasp3, data_paAIP2};
+colors = {iGluSnFRColor; taCasp3Color; paAIP2Color};
+maxLag   = 200;   % how many lags to show (in samples)
+Fs = 50;
+
+% Preallocate
+nCond  = numel(exps);
+allACF = cell(nCond,1);
+lags   = (0:maxLag)/Fs;
+
+% Compute trial‐wise ACFs and then average
+for c = 1:nCond
+    X      = allData{c};           % nTrials × T
+    [nTrials,T] = size(X);
+    acfs   = zeros(nTrials, maxLag+1);
     
-    % 1) Normality test (Lilliefors)
-    isNormal1(j) = ~lillietest(x1,'Alpha',alpha);
-    isNormal2(j) = ~lillietest(x2,'Alpha',alpha);
+    for i = 1:nTrials
+        % full autocorr from -maxLag..+maxLag, normalized
+        r = xcorr(X(i,:), maxLag, 'coeff');
+        % keep only non-negative lags (center is at maxLag+1)
+        acfs(i,:) = r(maxLag+1 : end);
+    end
     
-    % 2) Variance equality test (two‐sample F test)
-    equalVar(j)  = ~vartest2(x1, x2, 'Alpha',alpha);
+    allACF{c} = acfs;
 end
 
-% Summarize
-pctNorm1 = mean(isNormal1)*100;
-pctNorm2 = mean(isNormal2)*100;
-pctEqVar = mean(equalVar)*100;
-
-fprintf('Group1 normal in %.1f%% of bins\n', pctNorm1);
-fprintf('Group2 normal in %.1f%% of bins\n', pctNorm2);
-fprintf('Equal variances in %.1f%% of bins\n', pctEqVar);
-
-if pctNorm1 > 80 && pctNorm2 > 80
-    disp('—> Data are approximately normal in most bins; t-test is reasonable.');
-else
-    disp('—> Consider a nonparametric test (e.g. ranksum or kstest2) for some bins.');
+% --- Plotting ---
+initializeFig(.5,.5);
+for c = 1:nCond
+    plotSEM(lags,allACF{c},colors{c});
 end
-
-if pctEqVar > 80
-    disp('—> Variances are equal in most bins; use ttest2(...,''Vartype'',''equal'').');
-else
-    disp('—> Variances differ often; use Welch''s t-test: ttest2(...,''Vartype'',''unequal'').');
-end
-
-% (Optional) Inspect a specific bin with a QQ‐plot
-binToInspect = round(nFreq/2);
-figure;
-subplot(1,2,1), qqplot(powers{1}(:,binToInspect)), title('Group1 QQ');
-subplot(1,2,2), qqplot(powers{2}(:,binToInspect)), title('Group2 QQ');
-
-[p1,~] = lillietest(powers{1}(:,binToInspect));
-[p2,~] = lillietest(powers{2}(:,binToInspect));
-
-fprintf('Group1 normality p = %.3f\nGroup2 normality p = %.3f\n', p1, p2);
+xlabel('Lag (s)');
+ylabel('Autocorrelation');
+legend(exps,'Location','northeast');
 
 
-%% Test whether plotFFT is correct
+%% Cross correlation (not useful)
 
-% === Sample‐data FFT test script ===
+close all; initializeFig(0.7,0.5); tiledlayout('flow');
+LineWidth = 4; 
+% rng(0, 'twister');
 
-% 1) Parameters
-fs   = 1000;         % sampling rate (Hz)
-T    = 2;            % duration (seconds)
-t    = (0:1/fs:T-1/fs)';   % time vector (column)
+nexttile;
+c = crossCorr2D(data_iGluSnFR,data_taCasp3,average=true);
+imagesc(timestamp, timestamp, c); colorbar;
+xline(0,LineWidth=LineWidth,Color='w',LineStyle='--'); hold on;
+yline(0,LineWidth=LineWidth,Color='w',LineStyle='--'); hold on;
+plot(timestamp, timestamp,LineWidth=LineWidth,Color='w',LineStyle='--'); hold on;
+xlabel('taCasp3: time (s)');
+ylabel('iGluSnFR: time (s)');
+title('iGluSnFR vs taCasp3');
 
-% 2) Create a test signal:  
-%    - 50 Hz sine at amplitude 1  
-%    - 120 Hz sine at amplitude 0.5  
-%    - added low‐level white noise
-x = 1.0*sin(2*pi*50*t) + 0.5*sin(2*pi*120*t) + 0.1*randn(size(t));
+nexttile;
+c = crossCorr2D(data_iGluSnFR,data_paAIP2,average=true);
+imagesc(timestamp, timestamp, c); colorbar;
+xline(0,LineWidth=LineWidth,Color='w',LineStyle='--'); hold on;
+yline(0,LineWidth=LineWidth,Color='w',LineStyle='--'); hold on;
+plot(timestamp, timestamp,LineWidth=LineWidth,Color='w',LineStyle='--'); hold on;
+xlabel('paAIP2: time (s)');
+ylabel('iGluSnFR: time (s)');
+title('iGluSnFR vs paAIP2');
 
-% 3) Run your FFT function  
-%    (replace `myFFT` with the name of your function)
-%    Assume it returns two vectors: freq (Hz) and Pxx (power)
-[ freq, Pxx ] = plotFFT(x, Fs=fs, xlogScale=false);
-
-% 4) Plot the spectrum
-figure;
-plot(freq, Pxx, 'LineWidth',1.5)
-xlim([0 200])               % zoom in on 0–200 Hz
-xlabel('Frequency (Hz)')
-ylabel('Power')
-title('FFT of test signal')
-grid on
-
-% 5) Check that you see clear peaks at 50 Hz and 120 Hz:
-%    - Peak at 50 Hz should be ~1^2/2 = 0.5 (if you’re doing a one‐sided PSD)
-%    - Peak at 120 Hz should be ~(0.5)^2/2 = 0.125
-
-% 6) (Optional) Repeat with different signals, e.g.:
-%    a) Single pure tone:
-%       x1 = sin(2*pi*75*t);
-%    b) Two very close frequencies:
-%       x2 = sin(2*pi*60*t) + 0.8*sin(2*pi*63*t);
-%    c) A square wave (rich harmonics):
-%       x3 = square(2*pi*30*t);
-
-% You can wrap steps 2–4 in a loop over these variants to fully validate your FFT.
+nexttile;
+c = crossCorr2D(data_taCasp3,data_paAIP2,average=true);
+imagesc(timestamp, timestamp, c); colorbar;
+xline(0,LineWidth=LineWidth,Color='w',LineStyle='--'); hold on;
+yline(0,LineWidth=LineWidth,Color='w',LineStyle='--'); hold on;
+plot(timestamp, timestamp,LineWidth=LineWidth,Color='w',LineStyle='--'); hold on;
+xlabel('paAIP2: time (s)');
+ylabel('taCasp3: time (s)');
+title('taCasp3 vs paAIP2');

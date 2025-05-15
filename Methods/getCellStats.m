@@ -23,6 +23,7 @@ if ~isfield(options,'cellList')
 else
     cellList = options.cellList;
 end
+combined_cells = changeIncluded(combined_cells);
 
 
 for c = 1:length(cellList)

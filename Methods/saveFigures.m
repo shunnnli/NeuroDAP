@@ -11,6 +11,10 @@ arguments
     options.saveFIG logical = false
 end
 
+if ~any([options.savePNG,options.savePDF,options.saveFIG])
+    return
+end
+
 makeFigureFolder = false;
 
 if isempty(dir(fullfile(path))); mkdir(path); end

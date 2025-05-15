@@ -114,7 +114,8 @@ elseif ~isfield(options,'redStimPattern') && ~isfield(params,'stim')
     params.stim.pulseInterval_red = (1000/params.stim.pulseFreq_red) - params.stim.pulseDuration_red;
 end
 
-if isfield(options,'blueStimPattern') && (options.redo || ~isfield(params,'stim'))
+fn = fieldnames(params.stim); hasBlue = any(contains(fn, 'blue')); 
+if isfield(options,'blueStimPattern') && (options.redo || ~hasBlue)
     params.stim.pulseFreq_blue = str2double(options.blueStimPattern{1}); 
     params.stim.pulseDuration_blue = str2double(options.blueStimPattern{2}); 
     params.stim.stimDuration_blue = str2double(options.blueStimPattern{3});
@@ -546,7 +547,7 @@ else
     % Save idx to behavior.mat
     save(strcat(sessionpath,filesep,'behavior_',options.outputName),'allTrials',...
         'waterIdx','waterLickIdx','airpuffIdx','toneIdx','stimIdx','pairIdx',...
-        'baselineIdx',...
+        'baselineIdx','stimTrials','pairTrials','toneTrials',...
         '-append');
 end
 
@@ -1084,7 +1085,8 @@ end
 if options.plotBehavior && contains(options.task,'pairing')     
     %% Plot session overview for licking
     timeRange = options.longTimeRange; cameraTimeRange = options.shortTimeRange;
-    markerSize = 20;
+    markerSize = 30;
+    timeRange = [-3,5];
 
     % Get event time and number by trial type
     stimTrials(:,3) = stimTrials(:,3)./params.sync.behaviorFs;
@@ -1105,15 +1107,15 @@ if options.plotBehavior && contains(options.task,'pairing')
     nexttile([3,1]);
     for i = 1:size(stimLicks,1)
         scatter(stimLicks{i},stimTrials(i,1),markerSize,'filled','MarkerFaceColor',bluePurpleRed(end,:)); hold on
-        scatter(stimTrials(i,3),stimTrials(i,1),markerSize+10,bluePurpleRed(1,:),'pentagram','filled'); hold on
+        scatter(stimTrials(i,3),stimTrials(i,1),markerSize+20,bluePurpleRed(1,:),'pentagram','filled'); hold on
     end
     for i = 1:size(toneLicks,1)
         scatter(toneLicks{i},toneTrials(i,1),markerSize,'filled','MarkerFaceColor',bluePurpleRed(350,:)); hold on
-        scatter(toneTrials(i,3),toneTrials(i,1),markerSize+10,bluePurpleRed(1,:),'pentagram','filled'); hold on
+        scatter(toneTrials(i,3),toneTrials(i,1),markerSize+20,bluePurpleRed(1,:),'pentagram','filled'); hold on
     end
     for i = 1:size(pairLicks,1)
         scatter(pairLicks{i},pairTrials(i,1),markerSize,'filled','MarkerFaceColor',bluePurpleRed(150,:)); hold on
-        scatter(pairTrials(i,3),pairTrials(i,1),markerSize+10,bluePurpleRed(1,:),'pentagram','filled'); hold on
+        scatter(pairTrials(i,3),pairTrials(i,1),markerSize+20,bluePurpleRed(1,:),'pentagram','filled'); hold on
     end
     xlabel('Time (s)'); xlim([timeRange(1),timeRange(2)]);
     ylabel('Trial'); ylim([0,size(trials,1)]);
@@ -1142,8 +1144,7 @@ if options.plotBehavior && contains(options.task,'pairing')
         xlabel('Time (s)'); ylabel('Licks/s');
         legend(legendList);
     end
-    saveas(gcf,strcat(sessionpath,filesep,'Behavior_LickOverview.png'));
-
+    saveFigures(gcf,'Behavior_LickOverview',sessionpath,savePNG=true,savePDF=false);
     
     %% Plot session overview for eye
     if params.session.withCamera && params.session.withEyeTracking

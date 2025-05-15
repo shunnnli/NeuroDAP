@@ -44,7 +44,7 @@ disp('Finished: epochs added to combined_epochs.mat');
 %% (Optional) Extract response trace
 
 close all;
-animalRange = 'SL317';
+animalRange = 'SL063';
 [~,~] = getResponseTraces(combined_cells,animalRange=animalRange,plot=true);
 
 %% (Optional) Get cell table
@@ -57,6 +57,8 @@ notLearnedAnimals = {'SL044','SL232','SL212','SL254','SL271'};
 notLearnedIdx = find(ismember(combined_cells.Animal,notLearnedAnimals));
 combined_cells.Analyze = logical(combined_cells.Learned);
 combined_cells.Analyze(notLearnedIdx) = 0;
+
+% combined_cells = changeIncluded(combined_cells);
 
 disp('Saving combined_cells and combined_epochs...');
 rootPath = osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Patch/Combined');
@@ -141,20 +143,20 @@ plotCellEI(combined_cells,groupIdx,nboot=10000,centerEI=false,...
 
 %% (Analysis) Calculate animal avg EI charge & amplitude index
 
-% EPSC_peaks = cellfun(@(x) x.summary.EPSC.peakAvg, combined_cells.Stats);
-% IPSC_peaks = cellfun(@(x) x.summary.IPSC.peakAvg, combined_cells.Stats);
-% EPSC_aucs = cellfun(@(x) x.summary.EPSC.aucAvg, combined_cells.Stats);
-% IPSC_aucs = cellfun(@(x) x.summary.IPSC.aucAvg, combined_cells.Stats);
+EPSC_peaks = cellfun(@(x) x.summary.EPSC.peakAvg, combined_cells.Stats);
+IPSC_peaks = cellfun(@(x) x.summary.IPSC.peakAvg, combined_cells.Stats);
+EPSC_aucs = cellfun(@(x) x.summary.EPSC.aucAvg, combined_cells.Stats);
+IPSC_aucs = cellfun(@(x) x.summary.IPSC.aucAvg, combined_cells.Stats);
 
-EPSC_stats = getCellStats(combined_cells,'exci',type='min',average=true);
-IPSC_stats = getCellStats(combined_cells,'inhi',type='max',average=true);
-EPSC_peaks = vertcat(EPSC_stats.response);
-IPSC_peaks = vertcat(IPSC_stats.response);
-
-EPSC_stats = getCellStats(combined_cells,'exci',type='auc',average=true);
-IPSC_stats = getCellStats(combined_cells,'inhi',type='auc',average=true);
-EPSC_aucs = vertcat(EPSC_stats.response);
-IPSC_aucs = vertcat(IPSC_stats.response);
+% EPSC_stats = getCellStats(combined_cells,'exci',type='min',average=true);
+% IPSC_stats = getCellStats(combined_cells,'inhi',type='max',average=true);
+% EPSC_peaks = vertcat(EPSC_stats.response);
+% IPSC_peaks = vertcat(IPSC_stats.response);
+% 
+% EPSC_stats = getCellStats(combined_cells,'exci',type='auc',average=true);
+% IPSC_stats = getCellStats(combined_cells,'inhi',type='auc',average=true);
+% EPSC_aucs = vertcat(EPSC_stats.response);
+% IPSC_aucs = vertcat(IPSC_stats.response);
 
 % EI statistics
 % 1. EPSC + IPSC
@@ -809,29 +811,39 @@ exciColor = [255 157 33]/255; %[122, 201, 67]/255;
 inhiColor = [71 144 253]/255; %[84, 137, 45]/255; 
 ctrlColor = [.7 .7 .7];
 
-nexttile;
-plotScatterBar(1,epscRespAmp,color=exciColor);
-plotScatterBar(2,epscBaseAmp,color=ctrlColor);
-xticks([1,2]); xticklabels({'EPSC amp','Baseline amp'});
-ylim([-50,50]); ylabel('Current (pA)');
-
-nexttile;
-plotScatterBar(1,ipscRespAmp,color=inhiColor);
-plotScatterBar(2,ipscBaseAmp,color=ctrlColor);
-xticks([1,2]); xticklabels({'IPSC amp','Baseline amp'});
-ylim([-50,50]); ylabel('Current (pA)');
+% nexttile;
+% plotScatterBar(1,epscRespAmp,color=exciColor);
+% plotScatterBar(2,epscBaseAmp,color=ctrlColor);
+% xticks([1,2]); xticklabels({'EPSC amp','Baseline amp'});
+% ylim([-50,50]); ylabel('Current (pA)');
+% 
+% nexttile;
+% plotScatterBar(1,ipscRespAmp,color=inhiColor);
+% plotScatterBar(2,ipscBaseAmp,color=ctrlColor);
+% xticks([1,2]); xticklabels({'IPSC amp','Baseline amp'});
+% ylim([-50,50]); ylabel('Current (pA)');
 
 nexttile;
 plotScatterBar(1,epscRespCharge,color=exciColor);
 plotScatterBar(2,epscBaseCharge,color=ctrlColor);
 xticks([1,2]); xticklabels({'EPSC charge','Baseline charge'});
-ylim([-0.5,0.5]); ylabel('Current (pA)');
+ylim([-0.5,0.5]); ylabel('Charge (pC)');
 
 nexttile;
 plotScatterBar(1,ipscRespCharge,color=inhiColor);
 plotScatterBar(2,ipscBaseCharge,color=ctrlColor);
-xticks([1,2]); xticklabels({'EPSC charge','Baseline charge'});
-ylim([-0.5,0.5]); ylabel('Current (pA)');
+xticks([1,2]); xticklabels({'IPSC charge','Baseline charge'});
+ylim([-0.5,0.5]); ylabel('Charge (pC)');
+
+nexttile;
+histogram(epscBaseCharge,20,EdgeColor=ctrlColor,FaceColor=ctrlColor); hold on
+histogram(epscRespCharge,20,EdgeColor=exciColor,FaceColor=exciColor); hold on
+xlabel('Charge (pC)'); ylabel('Count');
+
+nexttile;
+histogram(ipscBaseCharge,20,EdgeColor=ctrlColor,FaceColor=ctrlColor); hold on
+histogram(ipscRespCharge,20,EdgeColor=inhiColor,FaceColor=inhiColor); hold on
+xlabel('Charge (pC)'); ylabel('Count');
 
 %% (Fig 3 Supp) Day of patching summary
 
@@ -911,25 +923,43 @@ yFitE = slopeE*xFit + lmE.Coefficients.Estimate(1);
 yFitI = slopeI*xFit + lmI.Coefficients.Estimate(1);
 plot(xFit, yFitE, 'Color', EPSCcolor, 'LineWidth', 5);
 plot(xFit, yFitI, 'Color', IPSCcolor, 'LineWidth', 5);
-xlabel('Rs'), ylabel('Amplitude');
+xlabel('Rs'), ylabel('Amplitude'); xlim([0 35]);
 title('Rs vs amplitude');
 
+% nexttile;
+% lmE   = fitlm(Rs, abs(EPSC_aucs));
+% slopeE = lmE.Coefficients.Estimate(2);
+% pvalE  = lmE.Coefficients.pValue(2);
+% lmI   = fitlm(Rs, abs(IPSC_aucs));
+% slopeI = lmI.Coefficients.Estimate(2);
+% pvalI  = lmI.Coefficients.pValue(2);
+% scatter(Rs,abs(EPSC_aucs),dotSize,EPSCcolor,"filled",MarkerFaceAlpha=0.5); hold on;
+% scatter(Rs,abs(IPSC_aucs),dotSize,IPSCcolor,"filled",MarkerFaceAlpha=0.5); hold on;
+% xFit = linspace(min(Rs), max(Rs), 100)';
+% yFitE = slopeE*xFit + lmE.Coefficients.Estimate(1);
+% yFitI = slopeI*xFit + lmI.Coefficients.Estimate(1);
+% plot(xFit, yFitE, 'Color', EPSCcolor, 'LineWidth', 5);
+% plot(xFit, yFitI, 'Color', IPSCcolor, 'LineWidth', 5);
+% xlabel('Rs'), ylabel('Charge'); %xlim([0 40]);
+% title('Rs vs charge');
+
 nexttile;
-lmE   = fitlm(Rs, abs(EPSC_aucs));
+peakColor = [157 106 110]/255;
+aucColor = [224 186 125]/255;
+lmE   = fitlm(Rs, abs(EIindex_peaks));
 slopeE = lmE.Coefficients.Estimate(2);
 pvalE  = lmE.Coefficients.pValue(2);
-lmI   = fitlm(Rs, abs(IPSC_aucs));
+lmI   = fitlm(Rs, abs(EIindex_aucs));
 slopeI = lmI.Coefficients.Estimate(2);
 pvalI  = lmI.Coefficients.pValue(2);
-scatter(Rs,abs(EPSC_aucs),dotSize,EPSCcolor,"filled",MarkerFaceAlpha=0.5); hold on;
-scatter(Rs,abs(IPSC_aucs),dotSize,IPSCcolor,"filled",MarkerFaceAlpha=0.5); hold on;
+scatter(Rs,abs(EIindex_peaks),dotSize,peakColor,"filled",MarkerFaceAlpha=0.5); hold on;
+scatter(Rs,abs(EIindex_aucs),dotSize,aucColor,"filled",MarkerFaceAlpha=0.5); hold on;
 xFit = linspace(min(Rs), max(Rs), 100)';
 yFitE = slopeE*xFit + lmE.Coefficients.Estimate(1);
 yFitI = slopeI*xFit + lmI.Coefficients.Estimate(1);
-plot(xFit, yFitE, 'Color', EPSCcolor, 'LineWidth', 5);
-plot(xFit, yFitI, 'Color', IPSCcolor, 'LineWidth', 5);
-xlabel('Rs'), ylabel('Charge');
-title('Rs vs charge');
+plot(xFit, yFitE, 'Color', peakColor, 'LineWidth', 5);
+plot(xFit, yFitI, 'Color', aucColor, 'LineWidth', 5);
+xlabel('Rs'), ylabel('EI index'); xlim([0 35]);
 
 % nexttile;
 % scatter(Rm,abs(EPSC_peaks),dotSize,EPSCcolor,"filled"); hold on; lsline;
@@ -962,18 +992,6 @@ title('Rs vs charge');
 % % diagonal = refline; diagonal.Color=[.8 .8 .8]; diagonal.LineWidth=4; diagonal.LineStyle='--'; hold on;
 % xlabel('Cm'), ylabel('Charge');
 % title('Cm vs charge');
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 %% (Analysis) Calculate relationship between DA slope and patch data

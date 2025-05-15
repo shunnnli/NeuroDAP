@@ -858,3 +858,117 @@ ylabel('Amp iGluSnFR response during cue');
 saveFigures(gcf,'Summary_iGluSnFR_randomVal',...
         strcat(resultspath),...
         saveFIG=true,savePDF=true);
+
+
+%%
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+%% (Supp) Reward/punish iGluSnFR/DA: plot water, airpuff, stim, tone
+
+timeRange = [-0.5,3];
+eventRange = {'Water'};
+animalRange = 'All';
+taskRange = 'Reward';
+trialRange = 'All'; % range of trials in each session
+totalTrialRange = 'All';
+signalRange = {'iGluSnFR'};
+
+colorList = {bluePurpleRed(1,:),[.2,.2,.2],bluePurpleRed(500,:),bluePurpleRed(100,:)};
+eventDuration = [.1,.5,.5];
+
+for s = 1:length(signalRange)
+    initializeFig(.5,.5);
+    legendEntries = {};
+    for i = 1:length(eventRange)
+        combined = combineTraces(animals,timeRange=timeRange,...
+                                    eventRange=eventRange{i},...
+                                    animalRange=animalRange,...
+                                    taskRange=taskRange,...
+                                    totalTrialRange=totalTrialRange,...
+                                    trialRange=trialRange,...
+                                    signalRange=signalRange{s});
+        plotTraces(combined.data{1},combined.timestamp,color=colorList{i},plotShuffled=false);
+        xlabel('Time (s)'); ylabel([signalRange{s},' z-score']); ylim([-1,4]);
+        plotEvent(eventRange{i},eventDuration(i),color=colorList{i});
+        legendEntries{end+1} = [eventRange{i},' (n=',num2str(size(combined.data{1},1)),')'];
+    end
+    legend(legendEntries, 'Location', 'northeast');
+    % saveFigures(gcf,'Summary_random_iGluSnFR',...
+    %         strcat(resultspath),...
+    %         saveFIG=true,savePDF=true);
+end
+
+%% Plot grouped anticipatory lick (grouped across animal and 10 trials)
+
+taskRange = {'Reward','Punish'};
+statsTypes = {'stageAmp','stageAmp'}; ylabelList = {'anticipatory lick','anticipatory lick'};
+
+animalRange = 'All';
+conditionRange = 'All';
+signalRange = 'Lick';
+
+% eventRange = {'Baseline','Pair','Tone','Stim'};
+% colorList = {[0.8,0.8,0.8],bluePurpleRed(300,:),bluePurpleRed(100,:),bluePurpleRed(500,:)};
+eventRange = {'Baseline','Stim','Pair'};
+colorList = {[0.8,0.8,0.8],bluePurpleRed(500,:),bluePurpleRed(300,:)};
+
+stage = 2; % Plot CS only
+groupSize = 10; % numbers of trials to calculate average
+pairingStats_nAL = getGroupedTrialStats(animals,'nAnticipatoryLicks',...
+                            eventRange=eventRange,...
+                            animalRange=animalRange,...
+                            taskRange=taskRange,...
+                            totalTrialRange=conditionRange,...
+                            signalRange=signalRange);
+
+initializeFig(.5,.5); tiledlayout('flow');
+results_nAL = plotGroupedTrialStats(pairingStats_nAL,ylabelList,groupSize=10,color=colorList,xlimIdx=2);
+
+% saveFigures(gcf,'Summary_CSvsTrialsGrouped_iGluSnFR',...
+%         strcat(resultspath),...
+%         saveFIG=true,savePDF=true);
+
+%% Plot bar plot of DA slopes
+
+initializeFig(.4,.5); tiledlayout('flow');
+for task = 1:length(results_nAL.stats)
+    nexttile;
+    cur_stats = results_nAL.stats{task};
+    for event = 1:length(eventRange)
+        slopes = cur_stats{event}(:,1);
+        plotScatterBar(event,slopes,color=colorList{event},...
+                       style='bar',dotSize=200,LineWidth=2,connectPairs=true);
+        ylim([-0.5,1]);
+
+        % Calculate significance
+        if event < length(eventRange)
+            for i = event+1:length(eventRange)
+                plotStats(slopes,cur_stats{i}(:,1),[event i],testType='kstest');
+            end
+        end
+    end
+
+    xticks(1:length(eventRange)); xticklabels(eventRange);
+    ylabel('DA slope');
+end
+
+% saveFigures(gcf,'Summary_CSvsTrialsGrouped_slopeBar',...
+%         strcat(resultspath),...
+%         saveFIG=true,savePDF=true);

@@ -25,6 +25,8 @@ arguments
     % if options.trialRange = [20,53]; get 0 trials
     % if options.trialRange = [0/-1,3]; get trials [13,15,29,32] (ie get [1,3-0/3-(-1)])
 
+    options.combineStats logical = true
+
     options.statsType string = 'All'
     options.withStageArea logical = true
     options.empty logical = false
@@ -284,9 +286,11 @@ for signal = 1:length(options.signalRange)
         options.system = row.system;
 
         % Combine stats
-        for type = 1:length(options.statsType)
-            statsData = row.(options.statsType{type}).data;
-            stats.(options.statsType{type}){signal} = [stats.(options.statsType{type}){signal}; statsData(trialRange,:)];
+        if options.combineStats
+            for type = 1:length(options.statsType)
+                statsData = row.(options.statsType{type}).data;
+                stats.(options.statsType{type}){signal} = [stats.(options.statsType{type}){signal}; statsData(trialRange,:)];
+            end
         end
 
         % Combine getTrialNum

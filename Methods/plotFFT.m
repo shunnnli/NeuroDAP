@@ -1,50 +1,58 @@
 function varargout = plotFFT(signal,options)
 
 arguments
-    signal double
-    options.plot logical = true
-    options.print logical = true
+    signal double                   % can be 1×T or n×T
 
-    options.Fs double = 2000 % sampling frequency of the signal
-    options.timeToEstimateCarrier double = 100 % in seconds
-    options.xlim double = [0,inf]
-    options.xlogScale logical = true
-    options.fillmissing logical = true
-    options.color double = [0.5 0.5 0.5]
+    options.plot            logical = true
+    options.print           logical = true
+    
+    options.Fs               double = 2000  % sampling frequency
+    options.timeToEstimateCarrier double = inf
+    options.fillMaxFreq     logical = true % make the max frequency have the power as the bin before
+    
+    options.xlim             double = [0,inf]
+    options.logScale        logical = true
+    options.fillmissing     logical = true
+    options.color            double = [0.5 0.5 0.5]
+    options.plotIndividual  logical = false
 end
 
+% compute how many points we'll use for the FFT
 options.pointsToEstimateCarrier = options.timeToEstimateCarrier * options.Fs;
-endPoint = min(options.pointsToEstimateCarrier, length(signal));
+L = min(options.pointsToEstimateCarrier, size(signal,2));
 
 if options.fillmissing
     signal = fillmissing(signal,'next');
 end
 
-sData_fft = fft(normalize(signal(1:endPoint)));
-P2 = abs(sData_fft/endPoint);
-P1 = P2(1:endPoint/2+1);
-P1(2:end-1) = 2*P1(2:end-1);
+% single‐trial FFT
+data_fft = fft(normalize(signal),L,2);
+P2 = abs(data_fft/L);
+P1 = P2(:,1:L/2+1);
+P1(:,2:end-1) = 2*P1(:,2:end-1);
+P1(:,end) = P1(:,end-1);
 
-% make the frequency bins
-fftFreq = options.Fs * (0:(endPoint/2))/endPoint;
+% frequency axis
+fftFreq = options.Fs * (0:(L/2))/L;
 
+% plot if asked
 if options.plot
-    plot(fftFreq,P1,Color=options.color); box off; hold on;
+    plotSEM(fftFreq,P1,options.color,plotIndividual=options.plotIndividual);
     title('FFT'); xlabel('Frequency (Hz)'); ylabel('Power');
     xlim(options.xlim);
-    if options.xlogScale
-        set(gca, 'YScale', 'log', 'XScale', 'log');
+    if options.logScale
+        set(gca, 'YScale', 'log');
     end
+    box off;
 end
 
+% print peak
 [~, maxFindex] = max(P1);
-
 if options.print
     disp(['Discovered modulation frequency is ' num2str(fftFreq(maxFindex)),' Hz']);
 end
 
-
-% Optional output
+% return varargout
 varargout{1} = fftFreq;
 varargout{2} = P1;
 
