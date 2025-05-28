@@ -19,17 +19,20 @@
 #include <math.h>
 // Define opto stim parameters
 int PatternNum = 3; //Total number of different frequencies
-int RepeatPerPattern = 30; //Total number of repeats per pattern
-unsigned long StimDurationRange[PatternNum] = {5,15,25};
-unsigned long PulseFreq = 50; // in Hz
-unsigned long PulseDuration = 5; //Total duration of each pulse
+unsigned long StimDurationRange[3] = {5,15,25}; // in seconds
+unsigned long BluePulseFreq = 50; // in Hz
+unsigned long BluePulseDuration = 5; //Total duration of each pulse
 // Initialize opto stim params
-unsigned long PulseFreq = 0; //Current pulse frequency in the current sweep
-unsigned long PulseInterval = 0;
-int PulseNum = 0; //number of laser trials
-int LaserColor = 22; // ShutterRed(24); ShutterBlue(22)
+unsigned long BlueStimDuration = 0; //Current pulse frequency in the current sweep
+unsigned long BluePulseInterval = 0;
+unsigned long BlueTotalPulseNum = 0;
+// Blue Opto stim parameters
+int BluePulseNum = 0;
+unsigned long BlueTimerPulse = 0;
+int BlueOptoNow = 0;
+unsigned long BlueOptoInterval = 0;
 // Initialize pattern counting
-unsigned long PatternCount[PatternNum] = {0,0,0};
+unsigned long PatternCount[3] = {0,0,0};
 
 
 // Set up parameters for the behavior
@@ -129,8 +132,8 @@ void setup() { //Setup function called when sketch starts. The setup function is
   state = 0; //Sync parameters are defined above beginning at L62
   SyncNow = 0;
   // Initialize opto params
-  TimerPulse = 0;
-  OptoNow = 0;
+  BlueTimerPulse = 0;
+  BlueOptoNow = 0;
 
   digitalWrite(Sync, LOW); //Set pins off
   digitalWrite(WaterSpout, LOW);
@@ -140,9 +143,8 @@ void setup() { //Setup function called when sketch starts. The setup function is
   digitalWrite(WaterSpout2_copy, LOW);
   digitalWrite(Airpuff_copy, LOW);
   noTone(Speaker);
-  digitalWrite(ShutterBlue, LOW);
-  digitalWrite(ShutterRed, LOW);
-  randomSeed(analogRead(3));
+  digitalWrite(ShutterBlue, HIGH);
+  digitalWrite(ShutterRed, HIGH);
 
   Serial.println("-----------------------------------------------------------------");
   Serial.println("Manual check: 1 -> reward; 2 -> punishment; 3 -> blue; 4 -> red");
@@ -174,7 +176,8 @@ void loop() {
         digitalWrite(Airpuff_copy, LOW);
         noTone(Speaker);
         digitalWrite(ShutterBlue, HIGH);
-        state = 1;
+        state = 2;
+        ITI_start = -3000;
       }
       break;
 
@@ -198,16 +201,16 @@ void loop() {
       if (millis()-ITI_start > ITI){
         // Randomly choose the stim duration
         int randChoice = random(0,3);
-        StimDuration = StimDurationRange[randChoice];
+        BlueStimDuration = StimDurationRange[randChoice] * 1000;
         PatternCount[randChoice] += 1; 
 
         // Deliver stim
-        giveOpto();
-        Serial.print("Finished: # ");
+        giveBlueOpto();
+        Serial.print("Finished: #");
         Serial.print(PatternCount[randChoice]);
         Serial.print(" opto sweep at ");
-        Serial.print(StimDuration);
-        Serial.println("Hz");
+        Serial.print(BlueStimDuration/1000.0);
+        Serial.println(" s");
         state = 1;
       }
       
@@ -351,36 +354,54 @@ void sync() { // Void function governing sync pulses?
 }
 
 //********************************************************************************************//
-// Assigned upcoming opto delivery
-void giveOpto(){
-  PulseNum = (StimDuration/1000.0) * PulseFreq;
-  PulseInterval = (1000.0/PulseFreq) - PulseDuration;
-
-  if (PulseInterval <= 0 && PulseNum > 1){
-    PulseInterval = 5;
-    Serial.println("Negative PulseInterval: reset PulseInterval to 5ms");
+// Assigned upcoming blue opto delivery
+void giveBlueOpto(){
+  if (BlueTotalPulseNum != 1){
+    BluePulseNum = (BlueStimDuration/1000.0) * BluePulseFreq;
+    BluePulseInterval = (1000.0/BluePulseFreq) - BluePulseDuration;
+  } else {
+    BluePulseNum = BlueTotalPulseNum;
+    BluePulseInterval = 5;
+  }
+  
+  if (BluePulseInterval <= 0 && BluePulseNum > 1){
+    BluePulseInterval = 5;
+    Serial.println("Negative BluePulseInterval: reset to 5ms");
   }
 }
 
 //********************************************************************************************//
 // Execute opto delivery 
 void opto(){
-  if (PulseNum > 0 && millis() - TimerPulse >= OptoInterval){
-    OptoDelivering = true;
-    if (OptoNow == 1){
-      TimerPulse = millis();
-      digitalWrite(LaserColor, LOW);
-      OptoNow = 0;
-      PulseNum -= 1;
-      OptoInterval = PulseInterval;
+//  if (RedPulseNum > 0 && millis() - RedTimerPulse >= RedOptoInterval){
+//    if (RedOptoNow == 1){
+//      RedTimerPulse = millis();
+//      digitalWrite(ShutterRed, HIGH);
+//      RedOptoNow = 0;
+//      RedPulseNum -= 1;
+//      RedOptoInterval = RedPulseInterval;
+//    } else {
+//      RedTimerPulse = millis();
+//      digitalWrite(ShutterRed, LOW);
+//      RedOptoNow = 1;
+//      RedOptoInterval = RedPulseDuration;
+//    }
+//  }
+
+  if (BluePulseNum > 0 && millis() - BlueTimerPulse >= BlueOptoInterval){
+    if (BlueOptoNow == 1){
+      BlueTimerPulse = millis();
+      digitalWrite(ShutterBlue, HIGH);
+      BlueOptoNow = 0;
+      BluePulseNum -= 1;
+      BlueOptoInterval = BluePulseInterval;
     } else {
-      TimerPulse = millis();
-      digitalWrite(LaserColor, HIGH);
-      OptoNow = 1;
-      OptoInterval = PulseDuration;
+      BlueTimerPulse = millis();
+      digitalWrite(ShutterBlue, LOW);
+      BlueOptoNow = 1;
+      BlueOptoInterval = BluePulseDuration;
     }
   }
-  OptoDelivering = false;
 }
 
 //********************************************************************************************//
