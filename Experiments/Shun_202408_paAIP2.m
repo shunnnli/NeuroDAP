@@ -331,11 +331,11 @@ colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),bluePurpleRed(100,:)};
 groupSizeList = [50;50;10];
 nGroupsList = [15;15;15];
 
-% taskRange = {'Reward1 (paAIP2)','Punish1 (paAIP2)','Reward2 (Ctrl)','Punish2 (paAIP2)'}; % first part
-% ylimList = [-0.75,2.5; -0.75,1.5; -1,2.5; -1.25,1.75]; % first part
+taskRange = {'Reward1 (paAIP2)','Punish1 (paAIP2)'}; % first part
+ylimList = [-0.75,2.5; -0.75,1.5; -1,2.5; -1.25,1.75]; % first part
 
-taskRange = {'Reward2 (Ctrl)'}; % second part
-ylimList = [-1.5,1; -1.5,1; -1.5,1; -1.25,1.75]; % Second part
+% taskRange = {'Reward2 (Ctrl)'}; % second part
+% ylimList = [-1.5,1; -1.5,1; -1.5,1; -1.25,1.75]; % Second part
 
 for task = 1:length(taskRange)
     initializeFig(1,0.5); tiledlayout('flow');
@@ -429,8 +429,6 @@ signalRange = 'dLight';
 eventRange = {'Baseline','Stim','Pair'};
 colorList = {[0.8,0.8,0.8],bluePurpleRed(500,:),bluePurpleRed(300,:)};
 
-stage = 2; % Plot CS only
-groupSize = 10; % numbers of trials to calculate average
 combinedStats = getGroupedTrialStats(animals,statsTypes,...
                             eventRange=eventRange,...
                             animalRange=animalRange,...
@@ -439,7 +437,7 @@ combinedStats = getGroupedTrialStats(animals,statsTypes,...
 
 initializeFig(.7,.7); tiledlayout('flow');
 results = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,color=colorList,ylim=ylim,...
-                                xlimIdx=2,plotIndividual=false);
+                                xlimIdx=2,xlim=[1,150],plotIndividual=false);
 
 % saveFigures(gcf,'Summary_CSvsTrialsGrouped_Pairing1_Amp',...
 %         strcat(resultspath),...

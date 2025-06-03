@@ -247,6 +247,17 @@ disp('Finished');
 
 %% (Optional) Change baseline to baseline of stim trials
 
+%% (Optional) Calculate the number of operant licks
+
+for i = 1:size(animals,2)
+    trials = animals(i).trialInfo.trialTable;
+    trialLicks = trials.TrialLicks;
+    nOperantLicks = zeros(numel(trialLicks),1);
+    valid = ~cellfun(@isempty, trialLicks);
+    nOperantLicks(valid) = cellfun(@(x) nnz(x(:,1) < 20000), trialLicks(valid));
+    animals(i).trialInfo.trialTable.nOperantLicks = nOperantLicks;
+end
+disp('Finished');
 
 %% (Optional) Isolate random sessions
 % Load combined_random.mat
@@ -560,10 +571,10 @@ signalRange = 'Lick';
 trialConditions = 'trials.performing';
 
 eventRange = {'Baseline','Stim'};
-colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:)};
+colorList = {[.7 .7 .7],bluePurpleRed(500,:)};
 
 groupSize = 10; % numbers of trials to calculate average
-combinedStats = getGroupedTrialStats(animals,'nAnticipatoryLicks',...
+combinedStats = getGroupedTrialStats(animals,'nOperantLicks',...
                             eventRange=eventRange,...
                             animalRange=animalRange,...
                             taskRange=taskRange,...
@@ -572,8 +583,8 @@ combinedStats = getGroupedTrialStats(animals,'nAnticipatoryLicks',...
                             trialConditions=trialConditions);
 
 initializeFig(.7,.7); tiledlayout('flow');
-results = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,color=colorList,ylim=ylimList,...
-                                xlimIdx=1,xlim=[1,150],plotIndividual=false);
+results = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,color=colorList,...
+                                xlim=[1,150],plotIndividual=false);
 
 % saveFigures(gcf,'Summary_CSvsTrialsGrouped_Lick',...
 %         strcat(resultspath),...

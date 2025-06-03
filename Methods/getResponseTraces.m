@@ -89,7 +89,6 @@ for c = 1:length(cellList)
 
     if options.plot
         if ~isfield(options,'color')
-            % [~,~,~,~,~,~,bluePurpleRed] = loadColors;
             EPSCcolor = [255 157 33]/255;
             IPSCcolor = [71 144 253]/255;
         else
@@ -115,7 +114,6 @@ for c = 1:length(cellList)
         end
         plotSEM(timeRangeInms,curTrace_EPSC,EPSCcolor,plotIndividual=options.plotIndividual,label='EPSC');
         plotSEM(timeRangeInms,curTrace_IPSC,IPSCcolor,plotIndividual=options.plotIndividual,label='IPSC');
-         
         if options.plotLegend; legend; end
         if isfield(options,'ylim'); ylim(options.ylim); end
         xlabel('Time (ms)'); ylabel('Current (pA)');

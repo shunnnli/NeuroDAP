@@ -1,4 +1,4 @@
-function trials = getTrialTable_shijia(events,options)
+function trials = getTrialTable_shijiaCatch(events,options)
 
 arguments
     events cell
@@ -49,6 +49,7 @@ for i=1:length(allTrials)
     rewardTimeUse = 0; reactionTimeUse = 0; firstBoutLastLickTimeUse = 0; trialLastLickTimeUse = 0;
 
     choiceLicks = []; outcomeLicks = []; spontaneousLicks = []; rewardTime = []; rewardLickTime = 0;
+    boutStartIdx = [];
 
     % Trial outcome
     rewardTime = rightSolenoidON(rightSolenoidON>=cur_cue & rightSolenoidON<next_cue) - cur_cue;
@@ -198,38 +199,38 @@ for i=1:length(allTrials)
         num2cell(boutStartIdx,[1 2])};
 
 
-%     % For every trial, plot the licks and reward onset to see if they are good
-%     exampleTrialIdx = floor(linspace(1,length(allTrials)-1,20));
-% 
-%     if ismember(i,exampleTrialIdx)
-%         nexttile;
-%         if ~isempty(trialLicks_all)
-%             data = zeros(size(trialLicks_all));
-%             data(trialLicks_all)=1;
-%             scatter(1:length(data),data,'b');
-%             hold on;
-%         end
-% 
-%         if strcmp(trialType,'Rewarded')
-%             data2 = zeros(size(rewardTime));
-%             data2(rewardTime)=1;
-%             scatter(1:length(data2),data2,'r');
-%             hold on;
-% 
-%             data3 = zeros(size(rewardTimeInTrial));
-%             data3(rewardTimeInTrial)=1;
-%             scatter(1:length(data3),data3,'.y');
-%         end
-% 
-%         legend({'original licks','water reward','rewardtimeintrial'});
-%         xlim([0 options.behaviorFs*2]);
-%         if ~isempty(closestLickToReward)
-%             % if exist("closestLickToReward","var")
-%             title(['Trial' num2str(i) '_' num2str(closestLickToReward)]);
-%         else
-%             title(['Trial' num2str(i)]);
-%         end
-%     end
+    % For every trial, plot the licks and reward onset to see if they are good
+    exampleTrialIdx = floor(linspace(1,length(allTrials)-1,20));
+
+    if ismember(i,exampleTrialIdx)
+        nexttile;
+        if ~isempty(trialLicks_all)
+            data = zeros(size(trialLicks_all));
+            data(trialLicks_all)=1;
+            scatter(1:length(data),data,'b');
+            hold on;
+        end
+
+        if strcmp(trialType,'Rewarded')
+            data2 = zeros(size(rewardTime));
+            data2(rewardTime)=1;
+            scatter(1:length(data2),data2,'r');
+            hold on;
+
+            data3 = zeros(size(rewardTimeInTrial));
+            data3(rewardTimeInTrial)=1;
+            scatter(1:length(data3),data3,'.y');
+        end
+
+        legend({'original licks','water reward','rewardtimeintrial'});
+        xlim([0 options.behaviorFs*2]);
+        if ~isempty(closestLickToReward)
+            % if exist("closestLickToReward","var")
+            title(['Trial' num2str(i) '_' num2str(closestLickToReward)]);
+        else
+            title(['Trial' num2str(i)]);
+        end
+    end
 
     % Add a row for outside events
     trials(i+1,:) = {0,0,0,0,0,...

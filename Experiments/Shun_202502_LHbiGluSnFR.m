@@ -381,7 +381,7 @@ end
 
 timeRange = [-0.5,3];
 eventRange = {'Stim','Pair','Tone'};
-animalRange = 'All';
+animalRange = old_group;
 totalTrialRange = 'All';
 trialRange = [1,150];
 signalRange = 'dLight';
@@ -452,9 +452,9 @@ for task = 1:length(taskRange)
         xlabel('Time (s)'); ylabel([signalRange,' z-score']);
         legend(legendList,'Location','northeast');
     end
-    saveFigures(gcf,['Summary_iGluSnFR_',taskRange{task}],...
-        strcat(resultspath),...
-        saveFIG=true,savePDF=true);
+    % saveFigures(gcf,['Summary_iGluSnFR_',taskRange{task}],...
+    %     strcat(resultspath),...
+    %     saveFIG=true,savePDF=true);
 end
 
 %% Plot lick trace
@@ -507,6 +507,7 @@ ylimit = [-1,5; -1,5];
 animalRange = 'All';
 conditionRange = 'All';
 signalRange = 'dLight';
+trialRange = [1,250];
 
 % eventRange = {'Baseline','Pair','Tone','Stim'};
 % colorList = {[0.8,0.8,0.8],bluePurpleRed(300,:),bluePurpleRed(100,:),bluePurpleRed(500,:)};
@@ -520,10 +521,12 @@ pairingStats_DA = getGroupedTrialStats(animals,statsTypes,...
                             animalRange=animalRange,...
                             taskRange=taskRange,...
                             totalTrialRange=conditionRange,...
+                            trialRange=trialRange,...
                             signalRange=signalRange);
 
 initializeFig(.5,.5); tiledlayout('flow');
-results_dLight = plotGroupedTrialStats(pairingStats_DA,ylabelList,groupSize=10,color=colorList,xlimIdx=2,xlim=[0,170],ylim=ylimit);
+results_dLight = plotGroupedTrialStats(pairingStats_DA,ylabelList,groupSize=10,color=colorList,...
+                                       xlimIdx=2,xlim=[0,250],ylim=ylimit);
 
 % saveFigures(gcf,'Summary_CSvsTrialsGrouped_dLight_Amp',...
 %         strcat(resultspath),...
@@ -538,6 +541,7 @@ ylimit = [-1,5; -1,5];
 animalRange = 'All';
 conditionRange = 'All';
 signalRange = 'iGluSnFR';
+trialRange = [1,150];
 
 % eventRange = {'Baseline','Pair','Tone','Stim'};
 % colorList = {[0.8,0.8,0.8],bluePurpleRed(300,:),bluePurpleRed(100,:),bluePurpleRed(500,:)};
@@ -551,14 +555,16 @@ pairingStats_Glu = getGroupedTrialStats(animals,statsTypes,...
                             animalRange=animalRange,...
                             taskRange=taskRange,...
                             totalTrialRange=conditionRange,...
+                            trialRange=trialRange,...
                             signalRange=signalRange);
 
 initializeFig(.5,.5); tiledlayout('flow');
-randomResults_Glu = plotGroupedTrialStats(pairingStats_Glu,ylabelList,groupSize=10,color=colorList,xlimIdx=2,xlim=[0,170],ylim=ylimit);
+randomResults_Glu = plotGroupedTrialStats(pairingStats_Glu,ylabelList,groupSize=10,color=colorList,...
+                                          xlimIdx=2,xlim=[0,150],ylim=ylimit);
 
-saveFigures(gcf,'Summary_CSvsTrialsGrouped_iGluSnFR',...
-        strcat(resultspath),...
-        saveFIG=true,savePDF=true);
+% saveFigures(gcf,'Summary_CSvsTrialsGrouped_iGluSnFR',...
+%         strcat(resultspath),...
+%         saveFIG=true,savePDF=true);
 
 %% Plot bar plot of DA slopes
 
@@ -616,9 +622,9 @@ for task = 1:length(randomResults_Glu.stats)
     ylabel('iGluSnFR slope');
 end
 
-saveFigures(gcf,'Summary_CSvsTrialsGrouped_slopeBar',...
-        strcat(resultspath),...
-        saveFIG=true,savePDF=true);
+% saveFigures(gcf,'Summary_CSvsTrialsGrouped_slopeBar',...
+%         strcat(resultspath),...
+%         saveFIG=true,savePDF=true);
 
 %% Plot bar plot of iGluSnFR final values
 
@@ -665,62 +671,13 @@ end
 %         strcat(resultspath),...
 %         saveFIG=true,savePDF=true);
 
-%% Plot DA vs iGluSnFR
-
-% eventRange = {'Pair','Tone','Stim'};
-% taskRange = {'Reward','Punish'};
-% statsTypes = {'stageMax','stageMax'};
-% conditionRange = 'All';
-% 
-% pairingStats_Glu = getGroupedTrialStats(animals,statsTypes,...
-%                             eventRange=eventRange,...
-%                             animalRange={'SL320','SL321','SL322','SL323'},...
-%                             taskRange={'Reward','Punish'},...
-%                             totalTrialRange=conditionRange,...
-%                             signalRange='iGluSnFR');
-% pairingResults_Glu = plotGroupedTrialStats(pairingStats_Glu,{},groupSize=1,plot=false);
-% pairingStats_DA = getGroupedTrialStats(animals,statsTypes,...
-%                             eventRange=eventRange,...
-%                             animalRange={'SL320','SL321','SL322','SL323'},...
-%                             taskRange={'Reward','Punish'},...
-%                             totalTrialRange=conditionRange,...
-%                             signalRange='dLight');
-% pairingResults_DA = plotGroupedTrialStats(pairingStats_DA,{},groupSize=1,plot=false);
-
-
-% initializeFig(.5,.5); 
-% tiledlayout(length(taskRange),length(eventRange));
-% colorList = {bluePurpleRed(100,:),bluePurpleRed(500,:)};
-% 
-% for task = 1:length(taskRange)
-%     cur_DATraces = pairingResults_DA.traces{task};
-%     cur_GluTraces = pairingResults_Glu.traces{task};
-%     for event = 1:length(eventRange)
-%         nexttile;
-%         trial_DA = cur_DATraces{event}(:);
-%         trial_Glu = cur_GluTraces{event}(:);
-% 
-%         % Fit a line
-%         % CODE HERE %
-% 
-%         % Calculate z value for the slope
-%         % CODE HERE %
-% 
-%         scatter(trial_DA,trial_Glu);
-%         % Plot fit line
-%         % CODE HERE %
-% 
-%         title([taskRange{task},': ', eventRange{event}]);
-%         xlabel('Max dLight response during cue');
-%         ylabel('Max iGluSnFR response during cue');
-%     end
-% end
 
 %% Plot stim DA and iGluSnFR together
 
-taskRange = {'Reward','Punish'};
+new_group = {'SL359','SL360','SL361','SL362','SL363'};
+old_group = {'RCL','SL174','SL175','SL319','SL320','SL321','SL322','SL323'};
 statsTypes = {'stageAmp','stageAmp'};
-ylimit = [-1,5; -1,5];
+ylimit = [-0.5,3; -0.5,3];
 
 animalRange = 'All';
 conditionRange = 'All';
@@ -758,11 +715,11 @@ initializeFig(.5,.5); tiledlayout('flow');
 rewardColor = {[0,158,115]./255,[0.7,0.7,0.7]};
 punishColor = {[135,104,247]./255,[0.7,0.7,0.7]};
 
-punishResults_dLight = plotGroupedTrialStats(punishStats_DA,'DA amplitude',groupSize=10,color=punishColor,xlim=[0,130],ylim=ylimit,plotNextTile=true);
-rewardResults_dLight = plotGroupedTrialStats(rewardStats_DA,'DA amplitude',groupSize=10,color=rewardColor,xlim=[0,170],ylim=ylimit,plotNextTile=false);
+punishResults_dLight = plotGroupedTrialStats(punishStats_DA,'DA amplitude',groupSize=10,color=punishColor,xlim=[0,150],ylim=ylimit,plotNextTile=true);
+rewardResults_dLight = plotGroupedTrialStats(rewardStats_DA,'DA amplitude',groupSize=10,color=rewardColor,xlim=[0,200],ylim=ylimit,plotNextTile=false);
 
-punishResults_Glu = plotGroupedTrialStats(punishStats_Glu,'Glu amplitude',groupSize=10,color=punishColor,xlim=[0,170],ylim=ylimit,plotNextTile=true);
-rewardResults_Glu = plotGroupedTrialStats(rewardStats_Glu,'Glu amplitude',groupSize=10,color=rewardColor,xlim=[0,170],ylim=ylimit,plotNextTile=false);
+punishResults_Glu = plotGroupedTrialStats(punishStats_Glu,'Glu amplitude',groupSize=10,color=punishColor,xlim=[0,150],ylim=ylimit,plotNextTile=true);
+rewardResults_Glu = plotGroupedTrialStats(rewardStats_Glu,'Glu amplitude',groupSize=10,color=rewardColor,xlim=[0,200],ylim=ylimit,plotNextTile=false);
 
 % saveFigures(gcf,'Summary_CSvsTrialsGrouped_stimOnlyCombined',...
 %         strcat(resultspath),...
@@ -780,9 +737,48 @@ punishSlopes_DA = punishResults_dLight.stats{1}{1}(:,1);
 punishSlopes_Glu = punishResults_Glu.stats{1}{1}(:,1);
 ctrlSlopes_DA = punishResults_dLight.stats{1}{2}(:,1);
 ctrlSlopes_Glu = punishResults_Glu.stats{1}{2}(:,1);
-colorList = {[.7,.7,.7],[45, 175, 240]./255,[29, 174, 39]./255};
+% colorList = {[.7,.7,.7],[45, 175, 240]./255,[29, 174, 39]./255};
+rewardColor = [0,158,115]./255;
+punishColor = [135,104,247]./255;
+colorList = {[.7 .7 .7],rewardColor, punishColor};
+
+% Plot DA
+nexttile;
+plotScatterBar(1,ctrlSlopes_DA,color=colorList{1},...
+                   style='bar',dotSize=400,LineWidth=5,connectPairs=true);
+plotScatterBar(2,rewardSlopes_DA,color=colorList{2},...
+               style='bar',dotSize=400,LineWidth=5,connectPairs=true);
+plotScatterBar(3,punishSlopes_DA,color=colorList{3},...
+               style='bar',dotSize=400,LineWidth=5,connectPairs=true);
+ylim([-0.5,1]);
+
+plotStats(ctrlSlopes_DA,rewardSlopes_DA,[1 2],testType='kstest');
+plotStats(ctrlSlopes_DA,punishSlopes_DA,[1 3],testType='kstest');
+plotStats(rewardSlopes_DA,punishSlopes_DA,[2 3],testType='kstest');
+
+xticks(1:3); xticklabels({'Ctrl','Glu','DA'});
+ylabel('Slope');
+
 
 % Plot reward DA vs Glu
+nexttile;
+plotScatterBar(1,ctrlSlopes_Glu,color=colorList{1},...
+                   style='bar',dotSize=400,LineWidth=5,connectPairs=true);
+plotScatterBar(2,rewardSlopes_Glu,color=colorList{2},...
+               style='bar',dotSize=400,LineWidth=5,connectPairs=true);
+plotScatterBar(3,punishSlopes_Glu,color=colorList{3},...
+               style='bar',dotSize=400,LineWidth=5,connectPairs=true);
+
+ylim([-0.5,1]);
+
+plotStats(ctrlSlopes_Glu,rewardSlopes_Glu,[1 2],testType='kstest');
+plotStats(ctrlSlopes_Glu,punishSlopes_Glu,[1 3],testType='kstest');
+plotStats(rewardSlopes_Glu,punishSlopes_Glu,[2 3],testType='kstest');
+
+xticks(1:3); xticklabels({'Ctrl','Reward','Punish'});
+ylabel('Slope');
+
+%% Plot reward DA vs Glu
 nexttile;
 plotScatterBar(1,ctrlSlopes_DA,color=colorList{1},...
                    style='bar',dotSize=400,LineWidth=5,connectPairs=true);
