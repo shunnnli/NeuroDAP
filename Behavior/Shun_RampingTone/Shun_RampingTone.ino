@@ -39,9 +39,9 @@ unsigned long SmallPunishSize = 50;
 unsigned long BigPunishSize = 200;
 
 // Outcome probability params
-int RampingToneProbRange[2] = {1, 70};
-int JumpingToneProbRange[2] = {71, 100};
-int DippingToneProbRange[2] = {101,102};
+int RampingToneProbRange[2] = {1, 50};
+int JumpingToneProbRange[2] = {51, 70};
+int FluctToneProbRange[2] = {71,100};
 
 int OmitToneOnly = false;
 int OmitStimOnly = false;
@@ -93,8 +93,8 @@ int minLicks_pav = 2; // min amount of licks to get big reward for pavlovian tas
 
 
 // Time params
-unsigned long DelayTime = 2000; // delay period between cue and outcome
-unsigned long ReactionTime = 2000; // maximum reaction period (after cue) in ms
+unsigned long DelayTime = 1000; // delay period between cue and outcome
+unsigned long ReactionTime = 1000; // maximum reaction period (after cue) in ms
 unsigned long TimeOutDuration = 10000; // time out duration in ms
 unsigned long ITI1 = 2000;
 unsigned long ITI2 = 4000;
@@ -390,21 +390,12 @@ void loop() {
         updateTrials();
         LickCount = 0;
         if (giveTest) {
-          trialRandomProb = random(1, 101);
-          if (OmitStimOnly) {
-            trialOmissionProb = -100; // no outcome
-          } else {
-            trialOmissionProb = random(1, 101);
-          }
-          trialFreeRewardProb = random(1, 101);
-
-          if (RedStim){giveRedOpto();}
-          else{giveBlueOpto();}
-          
+          trialRandomProb = 1;
           ToneDuration = ShortToneDuration;
+          ToneType = 1;
           Cue_start = millis();
           getFreeReward = 0;
-          JumpingToneNum += 1;
+          RampingToneNum += 1;
 
           printTrials(state, trialReward, trialPunish);
           state = 3;
@@ -426,7 +417,7 @@ void loop() {
             if (OmitStimOnly) {
               trialOmissionProb = -100; // no outcome for tone only trials
             }
-          } else if (trialRandomProb >= DippingToneProbRange[0] && trialRandomProb <= DippingToneProbRange[1]) {
+          } else if (trialRandomProb >= FluctToneProbRange[0] && trialRandomProb <= FluctToneProbRange[1]) {
             DippingToneNum += 1;
             ToneType = 3;
             if (OmitToneOnly) {
@@ -450,12 +441,12 @@ void loop() {
     case SecondCueOn:
       if (trialSecondCue && millis() - Cue_start >= ToneDelayTime) {
         Cue_start = millis();
-        if (ToneType == 1){
+        if ToneType == 1{
           playRampTone(ToneDuration,StartCueFreq,EndCueFreq);
         } else if (ToneType == 2){
           playJumpTone(ToneDuration,StartCueFreq,EndCueFreq);
         } else if (ToneType == 3){
-          playJumpTone(ToneDuration,EndCueFreq,StartCueFreq);
+          playFluctTone();
         }
         
         digitalWrite(SpeakerLeft_copy, HIGH);
@@ -805,6 +796,38 @@ void playJumpTone(unsigned long duration, int baseFreq, int jumpFreq) {
   noTone(Speaker);
 }
 
+
+//********************************************************************************************//
+/**
+ * Play a tone with random frequency fluctuations for a random duration.
+ * Duration is between 3000 and 10000 ms, frequencies fluctuate between 3000 and 11000 Hz,
+ * then jump to 12000 Hz at the end.
+ */
+void playFluctTone() {
+  // Random total duration: 3–10 seconds
+  unsigned long duration = random(3000, 10001);
+
+  // Define ramp-up duration (last part in which we ramp to 12000 Hz)
+  unsigned long rampDuration = 500;  // ms
+  if (duration <= rampDuration) {
+    rampDuration = duration / 2;
+  }
+  unsigned long fluctDuration = duration - rampDuration;
+  unsigned long startTime = millis();
+  int lastFreq = 3000;
+
+  // Random fluctuations every 50 ms
+  while (millis() - startTime < fluctDuration) {
+    lastFreq = random(3000, 11001);
+    tone(Speaker, lastFreq);
+    delay(50);
+  }
+
+  // Ramp from last random frequency to 12 kHz over rampDuration
+  playRampingTone(rampDuration, lastFreq, 12000);
+}
+
+
 //********************************************************************************************//
 // Assigned upcoming red opto delivery
 void giveRedOpto() {
@@ -992,18 +1015,18 @@ void printTrials(int state, int trialReward, int trialPunish) {
       Serial.print(")");
       Serial.print("\t");
     } else {
-      if (trialRandomProb >= RampingToneProbRange[0] && trialRandomProb <= RampingToneProbRange[1]) {
-        Serial.print("Cue start (Ramping #");
+      if (trialRandomProb >= PairProbRange[0] && trialRandomProb <= PairProbRange[1]) {
+        Serial.print("Cue start (Pair #");
         Serial.print(RampingToneNum);
         Serial.print(")");
         Serial.print("\t");
-      } else if (trialRandomProb >= JumpingToneProbRange[0] && trialRandomProb <= JumpingToneProbRange[1]) {
-        Serial.print("Cue start (Jumping only #");
+      } else if (trialRandomProb >= StimOnlyProbRange[0] && trialRandomProb <= StimOnlyProbRange[1]) {
+        Serial.print("Cue start (Stim only #");
         Serial.print(JumpingToneNum);
         Serial.print(")");
         Serial.print("\t");
-      } else if (trialRandomProb >= DippingToneProbRange[0] && trialRandomProb <= DippingToneProbRange[1]) {
-        Serial.print("Cue start (Dipping only #");
+      } else if (trialRandomProb >= ToneOnlyProbRange[0] && trialRandomProb <= ToneOnlyProbRange[1]) {
+        Serial.print("Cue start (Tone only #");
         Serial.print(DippingToneNum);
         Serial.print(")");
         Serial.print("\t");
