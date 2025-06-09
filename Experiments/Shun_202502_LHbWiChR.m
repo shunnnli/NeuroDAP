@@ -359,6 +359,42 @@ for i = 1:size(animals,2)
     animals(i).options.statsType{end+1} = 'stageDelta';
 end
 
+%% Kept first 45 stim trials (15 for each session)
+
+for i = 1:length(animals)
+    if strcmpi(animals(i).event,'WiChR')
+        if strcmpi(animals(i).name,'Lick')
+            continue
+        else
+            trials = animals(i).trialInfo.trialTable;
+
+            for row = 1:height(trials)
+                if trials(row,:).CueTime == 0; trials.performing(row) = 0; end
+            end
+
+            performingIdx = find(trials.performing == 1);
+            if length(performingIdx) > 45
+                removeIdx = performingIdx(46:end);
+                trials.performing(removeIdx) = 0;
+            end
+
+            animals(i).trialInfo.trialTable = trials;
+            
+            % %% UNFINISHED: remove corresponding sessions
+            % stimTrace = animals(i).data;
+            % stats = analyzeStages(stimTrace,[-2,0;0:1],finalFs=50);
+            % 
+            % % Store results
+            % animals(i).stageAvg.data = stats.stageAvg.data;
+            % animals(i).stageMax.data = stats.stageMax.data;
+            % animals(i).stageMin.data = stats.stageMin.data;
+            % animals(i).stageArea.data = stats.stageArea.data;
+            % animals(i).stageAmp.data = stats.stageMax.data - stats.stageMin.data;
+        end
+    end
+end
+disp('Finished');
+
 %% Save animals struct
 
 prompt = 'Enter database notes (animals_20230326_notes.mat):';
