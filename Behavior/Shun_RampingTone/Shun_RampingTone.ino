@@ -450,7 +450,7 @@ void loop() {
     case SecondCueOn:
       if (trialSecondCue && millis() - Cue_start >= ToneDelayTime) {
         Cue_start = millis();
-        if ToneType == 1{
+        if (ToneType == 1){
           playRampTone(ToneDuration,StartCueFreq,EndCueFreq);
         } else if (ToneType == 2){
           playJumpTone(ToneDuration,StartCueFreq,EndCueFreq);
@@ -992,18 +992,18 @@ void printTrials(int state, int trialReward, int trialPunish) {
       Serial.print(")");
       Serial.print("\t");
     } else {
-      if (trialRandomProb >= PairProbRange[0] && trialRandomProb <= PairProbRange[1]) {
-        Serial.print("Cue start (Pair #");
+      if (trialRandomProb >= RampingToneProbRange[0] && trialRandomProb <= RampingToneProbRange[1]) {
+        Serial.print("Cue start (Ramping #");
         Serial.print(RampingToneNum);
         Serial.print(")");
         Serial.print("\t");
-      } else if (trialRandomProb >= StimOnlyProbRange[0] && trialRandomProb <= StimOnlyProbRange[1]) {
-        Serial.print("Cue start (Stim only #");
+      } else if (trialRandomProb >= JumpingToneProbRange[0] && trialRandomProb <= JumpingToneProbRange[1]) {
+        Serial.print("Cue start (Jumping only #");
         Serial.print(JumpingToneNum);
         Serial.print(")");
         Serial.print("\t");
-      } else if (trialRandomProb >= ToneOnlyProbRange[0] && trialRandomProb <= ToneOnlyProbRange[1]) {
-        Serial.print("Cue start (Tone only #");
+      } else if (trialRandomProb >= DippingToneProbRange[0] && trialRandomProb <= DippingToneProbRange[1]) {
+        Serial.print("Cue start (Dipping only #");
         Serial.print(DippingToneNum);
         Serial.print(")");
         Serial.print("\t");
