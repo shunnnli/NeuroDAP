@@ -355,9 +355,17 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
         end
 
         % Update old recording's frequency modulation parameters
+        if length(labjack.modFreq) == 3
         if sum(labjack.modFreq == [167,223,0]) == length(labjack.modFreq)
             labjack.modFreq = [171,228,0];
             save(strcat(session.path,filesep,'data_labjack.mat'));
+        end
+        elseif length(labjack.modFreq) == 2
+            if sum(labjack.modFreq == [167,223]) == length(labjack.modFreq)
+                labjack.modFreq = [171,228];
+                save(strcat(session.path,filesep,'data_labjack.mat'));
+            end
+
         end
         disp('Finished: concatenate and saved raw photometry data in data_labjack.mat');
         disp(labjack);
