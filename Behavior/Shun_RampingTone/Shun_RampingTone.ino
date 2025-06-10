@@ -33,15 +33,15 @@
 // Set up parameters for the behavior
 boolean ENL = true; // whether ITI is ENL
 unsigned long UnitRewardSize = 20; // reward size of 1ul
-unsigned long SmallRewardSize = 2 * UnitRewardSize;
-unsigned long BigRewardSize = 10 * UnitRewardSize;
+unsigned long SmallRewardSize = 1 * UnitRewardSize;
+unsigned long BigRewardSize = 5 * UnitRewardSize;
 unsigned long SmallPunishSize = 50;
 unsigned long BigPunishSize = 200;
 
 // Outcome probability params
-int RampingToneProbRange[2] = {1, 50};
-int JumpingToneProbRange[2] = {51, 70};
-int FluctToneProbRange[2] = {71,100};
+int RampingToneProbRange[2] = {1, 100};
+int JumpingToneProbRange[2] = {51, 75};
+int FluctToneProbRange[2] = {76,100};
 
 int OmitToneOnly = false;
 int OmitStimOnly = false;
@@ -441,15 +441,31 @@ void loop() {
     case SecondCueOn:
       if (trialSecondCue && millis() - Cue_start >= ToneDelayTime) {
         Cue_start = millis();
-        if ToneType == 1{
+        
+        if (ToneType == 1){
+          tone(Speaker, StartCueFreq);
+          delay(500);
+          digitalWrite(SpeakerLeft_copy, HIGH);
+          digitalWrite(SpeakerRight_copy, LOW);
+          //ToneDuration = random(3000, 10001);
+          ToneDuration = random(2) == 0 ? 4000 : 8000;
           playRampTone(ToneDuration,StartCueFreq,EndCueFreq);
         } else if (ToneType == 2){
-          playJumpTone(ToneDuration,StartCueFreq,EndCueFreq);
+          tone(Speaker, StartCueFreq);
+          delay(500);
+          digitalWrite(SpeakerLeft_copy, LOW);
+          digitalWrite(SpeakerRight_copy, HIGH);
+          //ToneDuration = random(3000, 10001);
+          ToneDuration = random(2) == 0 ? 4000 : 8000;
+          playJumpTone(ToneDuration,StartCueFreq,EndCueFreq-2000,EndCueFreq);
         } else if (ToneType == 3){
-          playFluctTone();
+          tone(Speaker, StartCueFreq);
+          delay(500);
+          digitalWrite(SpeakerLeft_copy, HIGH);
+          digitalWrite(SpeakerRight_copy, HIGH);
+          ToneDuration = 4000;
+          playSineWave(ToneDuration, 6000, 3000, 0.5);
         }
-        
-        digitalWrite(SpeakerLeft_copy, HIGH);
         state = 4;
       } else if (!trialSecondCue && millis() - Cue_start >= ToneDelayTime) {
         Cue_start = millis();
@@ -460,15 +476,18 @@ void loop() {
     //state 4: Turn off cue
     case FirstCueOff:
       Cue_off = millis();
-      if ((Cue_off - Cue_start) > ToneDuration) {
-        noTone(Speaker);
-        digitalWrite(SpeakerLeft_copy, LOW);
-        digitalWrite(SpeakerRight_copy, LOW);
-        if (millis() - Cue_start > ToneDuration) {
-          state = 5;
-          //LickCount = 0;
-        }
-      }
+      state = 5;
+      digitalWrite(SpeakerLeft_copy, LOW);
+      digitalWrite(SpeakerRight_copy, LOW);
+//      if ((Cue_off - Cue_start) > ToneDuration) {
+//        noTone(Speaker);
+//        digitalWrite(SpeakerLeft_copy, LOW);
+//        digitalWrite(SpeakerRight_copy, LOW);
+//        if (millis() - Cue_start > ToneDuration) {
+//          state = 5;
+//          //LickCount = 0;
+//        }
+//      }
       break;
 
     //state 5: Turn on solenoid after delay period (1 sec)
@@ -485,7 +504,7 @@ void loop() {
           getPunish = 0;
           state = 6;
         }
-      } else if (millis() - Cue_start > ReactionTime) {
+      } else if (millis() - Cue_off > ReactionTime) {
         if (pavlovian) {
           if (LickCount >= minLicks_pav) {
             if (trialOmissionProb > OmissionProb) {
@@ -586,7 +605,7 @@ void loop() {
     //state 9: time out -> return to ITI
     case TimeOut:
       Timeout_start = millis();
-      if ((Timeout_start - Cue_off - DelayTime) > TimeOutDuration) {
+      if ((Timeout_start - Cue_off) > TimeOutDuration) {
         printTrials(state, trialReward, trialPunish); // print after time out ends
         state = 1;
       }
@@ -767,10 +786,14 @@ void sync() {
  * Play a tone that linearly ramps from startFreq to endFreq over duration ms.
  */
 void playRampTone(unsigned long duration, int startFreq, int endFreq) {
-  const int steps = 500;  // more steps = smoother ramp
+  const int steps = 1000;
   unsigned long stepDelay = duration / steps;
+  float durSec = duration / 1000.0;
+  // solve a so that at t=durSec: F = endFreq
+  float a = (endFreq - startFreq) / (durSec * durSec);
   for (int i = 0; i <= steps; i++) {
-    int freq = startFreq + (long)(endFreq - startFreq) * i / steps;
+    float t = (stepDelay * i) / 1000.0;
+    int freq = startFreq + (int)(a * t * t);
     tone(Speaker, freq);
     delay(stepDelay);
   }
@@ -782,20 +805,49 @@ void playRampTone(unsigned long duration, int startFreq, int endFreq) {
  * Play a tone for duration ms: baseFreq for 40% of time,
  * jumpFreq for 20% of time, then back to baseFreq for the rest.
  */
-void playJumpTone(unsigned long duration, int baseFreq, int jumpFreq) {
-  unsigned long firstSegment = duration * 2 / 5;   // 40%
-  unsigned long jumpSegment  = duration / 5;       // 20%
-  unsigned long lastSegment  = duration - firstSegment - jumpSegment;
+void playJumpTone(unsigned long duration, int baseFreq, int jumpFreq, int endFreq) {
+  const int steps = 500;
+  float widthSec = 0.5;
+  duration = duration - 1000;
+  int bumpAmp = jumpFreq - baseFreq;
+  unsigned long stepDelay = duration/steps;
+  float durSec = duration/1000.0;
+  float center = durSec/2.0;
+  float halfW = widthSec/2.0;
 
-  tone(Speaker, baseFreq);
-  delay(firstSegment);
-  tone(Speaker, jumpFreq);
-  delay(jumpSegment);
-  tone(Speaker, baseFreq);
-  delay(lastSegment);
+  for(int i=0; i<=steps; i++){
+    float t = (stepDelay*i)/1000.0;
+    float x = (t - center) / halfW;
+    float env = (fabs(x) <= 1.0)
+                ? 0.5*(1 + cos(PI*x))   // cosine bump from 1 → 0 → 1
+                : 0.0;
+    int freq = baseFreq + (int)(bumpAmp * env);
+    tone(Speaker, freq);
+    delay(stepDelay);
+  }
+  playRampTone(1000, baseFreq, endFreq);
   noTone(Speaker);
 }
 
+//********************************************************************************************//
+/**
+ * Sinusoidal modulation around centerFreq for duration.
+ * freq(t) = centerFreq + amp * sin(2π * modHz * t).
+ */
+void playSineWave(unsigned long duration, int centerFreq, int amp, float modHz) {
+  const int steps = 500;
+  unsigned long stepDelay = duration / steps;
+  for (int i = 0; i <= steps; i++) {
+    float t = (stepDelay * i) / 1000.0;
+    //float phase = 2.0 * PI * modHz * t;
+    float phase = 2.0 * PI * modHz * t - PI / 2.0;  // shifted to start at -1
+    int freq = centerFreq + (int)(amp * sin(phase));
+    tone(Speaker, freq);
+    delay(stepDelay);
+  }
+  playRampTone(1000,3000,12000);
+  noTone(Speaker);
+}
 
 //********************************************************************************************//
 /**
@@ -815,16 +867,18 @@ void playFluctTone() {
   unsigned long fluctDuration = duration - rampDuration;
   unsigned long startTime = millis();
   int lastFreq = 3000;
+  int currentFreq;
+  playRampTone(500, lastFreq, 5000);
 
   // Random fluctuations every 50 ms
   while (millis() - startTime < fluctDuration) {
-    lastFreq = random(3000, 11001);
-    tone(Speaker, lastFreq);
-    delay(50);
+    currentFreq = random(3000, 11001);
+    playRampTone(500, lastFreq, currentFreq);
+    lastFreq = currentFreq;
   }
 
   // Ramp from last random frequency to 12 kHz over rampDuration
-  playRampingTone(rampDuration, lastFreq, 12000);
+  playRampTone(rampDuration, lastFreq, 12000);
 }
 
 
@@ -1010,23 +1064,23 @@ void printTrials(int state, int trialReward, int trialPunish) {
     Serial.print("\t");
 
     if (giveTest) {
-      Serial.print("Cue start (Stim only #");
+      Serial.print("Cue start (Nothing #");
       Serial.print(JumpingToneNum);
       Serial.print(")");
       Serial.print("\t");
     } else {
-      if (trialRandomProb >= PairProbRange[0] && trialRandomProb <= PairProbRange[1]) {
-        Serial.print("Cue start (Pair #");
+      if (trialRandomProb >= RampingToneProbRange[0] && trialRandomProb <= RampingToneProbRange[1]) {
+        Serial.print("Cue start (Ramp #");
         Serial.print(RampingToneNum);
         Serial.print(")");
         Serial.print("\t");
-      } else if (trialRandomProb >= StimOnlyProbRange[0] && trialRandomProb <= StimOnlyProbRange[1]) {
-        Serial.print("Cue start (Stim only #");
+      } else if (trialRandomProb >= JumpingToneProbRange[0] && trialRandomProb <= JumpingToneProbRange[1]) {
+        Serial.print("Cue start (Jump #");
         Serial.print(JumpingToneNum);
         Serial.print(")");
         Serial.print("\t");
-      } else if (trialRandomProb >= ToneOnlyProbRange[0] && trialRandomProb <= ToneOnlyProbRange[1]) {
-        Serial.print("Cue start (Tone only #");
+      } else if (trialRandomProb >= FluctToneProbRange[0] && trialRandomProb <= FluctToneProbRange[1]) {
+        Serial.print("Cue start (Fluc #");
         Serial.print(DippingToneNum);
         Serial.print(")");
         Serial.print("\t");
