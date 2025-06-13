@@ -6,6 +6,7 @@ arguments
 
     options.nboot {mustBeNumeric} = 5000
 
+    options.figureSize double = [0.7,0.8]
     options.plotGroup double
     options.groupColors cell
     options.groupNames cell
@@ -137,7 +138,8 @@ bs_EIindex_peaks = arrayfun(@(x) EIindex_peaks(x), pooledIdx_shuffled);
 
 %% Plot figure
 
-fig = initializeFig(1,1); master = tiledlayout(2,4);
+fig = initializeFig(options.figureSize(1),options.figureSize(2)); 
+master = tiledlayout(2,4);
 master.TileSpacing = 'compact'; master.Padding = 'compact';
 
 % Plot AUC EPSC vs IPSC
@@ -271,6 +273,7 @@ for group = 1:length(plotGroup)
         end
     end
 end
+xlim([-1,1]);
 xlabel('EI charge index'); ylabel('CDF'); box off; grid off;
 
 % Plot EI amplitude index
@@ -331,6 +334,7 @@ for group = 1:length(plotGroup)
         end
     end
 end
+xlim([-1,1]);
 xlabel('EI amplitude index'); ylabel('CDF'); box off; grid off;
 
 if options.save

@@ -23,6 +23,8 @@ elseif strcmpi(options.testType,'ranksum')
     pvalue = ranksum(data1,data2);
 elseif strcmpi(options.testType,'signrank')
     pvalue = signrank(data1,data2);
+elseif contains(options.testType,'ttest')
+    [~,pvalue] = ttest2(data1,data2);
 end
 
 %% Plot significance bar

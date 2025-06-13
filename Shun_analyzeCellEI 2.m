@@ -44,7 +44,7 @@ disp('Finished: epochs added to combined_epochs.mat');
 %% (Optional) Extract response trace
 
 close all;
-animalRange = 'SL206';
+animalRange = 'SL063';
 [~,~] = getResponseTraces(combined_cells,animalRange=animalRange,plot=true);
 
 %% (Optional) Get cell table
@@ -203,7 +203,6 @@ nCells = groupcounts(cellsWithDA.Animal);
 %% Fig 4: compare last 30 trial, first 30 trial, value
 
 trialWindow = 20;
-sweepWindow = 20;
 endingSlope = zeros(length(DAtrend),1); 
 startingSlope = zeros(length(DAtrend),1);
 sessionValue = zeros(length(DAtrend),1);
@@ -386,24 +385,24 @@ for i = 1:length(trialWindowLength)
 end
 
 % Plot slope vs window
-% nexttile(master,5);
-% plot(trialWindowLength,ending_slopes,LineWidth=LineWidth,color=endingColor); hold on;
-% plot(trialWindowLength,starting_slopes,LineWidth=LineWidth,color=startingColor); hold on;
-% % plot(trialWindowLength,ending_vals,LineWidth=LineWidth,color=[.5 .5 .5]); hold on;
-% % plot(trialWindowLength,starting_vals,LineWidth=LineWidth,color=valueColor); hold on;
-% xlabel('trial window length');
-% ylabel('fitted slope');
-% box off
+nexttile(master,5);
+plot(trialWindowLength,ending_slopes,LineWidth=LineWidth,color=endingColor); hold on;
+plot(trialWindowLength,starting_slopes,LineWidth=LineWidth,color=startingColor); hold on;
+% plot(trialWindowLength,ending_vals,LineWidth=LineWidth,color=[.5 .5 .5]); hold on;
+% plot(trialWindowLength,starting_vals,LineWidth=LineWidth,color=valueColor); hold on;
+xlabel('trial window length');
+ylabel('fitted slope');
+box off
 
-% nexttile(master,6);
-% plot(trialWindowLength,ending_pvals,LineWidth=LineWidth,color=endingColor); hold on;
-% plot(trialWindowLength,starting_pvals,LineWidth=LineWidth,color=startingColor); hold on;
-% plot(trialWindowLength,ending_vals_pvals,LineWidth=LineWidth,color=[.5 .5 .5]); hold on;
-% plot(trialWindowLength,starting_vals_pvals,LineWidth=LineWidth,color=valueColor); hold on;
-% yline(0.05,'--',color=[0.7 0.7 0.7],LineWidth=LineWidth);
-% xlabel('trial window length');
-% ylabel('p value');
-% box off
+nexttile(master,6);
+plot(trialWindowLength,ending_pvals,LineWidth=LineWidth,color=endingColor); hold on;
+plot(trialWindowLength,starting_pvals,LineWidth=LineWidth,color=startingColor); hold on;
+plot(trialWindowLength,ending_vals_pvals,LineWidth=LineWidth,color=[.5 .5 .5]); hold on;
+plot(trialWindowLength,starting_vals_pvals,LineWidth=LineWidth,color=valueColor); hold on;
+yline(0.05,'--',color=[0.7 0.7 0.7],LineWidth=LineWidth);
+xlabel('trial window length');
+ylabel('p value');
+box off
 
 % Plot correlation vs window
 nexttile(master,7);
@@ -425,7 +424,8 @@ xlabel('trial window length');
 ylabel('p value');
 box off
 
-% Plot moving 20 trial window (aligned to start)
+% Plot moving 20 trial window
+sweepWindow = 20;
 nWindows  = 80;                                % # of windows you want
 nAnimals  = numel(DAtrend);
 movSlopes = nan(nAnimals, nWindows);
@@ -467,20 +467,20 @@ for w = 1:nWindows
     [sweeping_vals_spearman(w),sweeping_vals_spearman_p(w)] = corr(X_clean(:), Y_clean(:), 'Type', 'Spearman');
 end
 
-% nexttile(master,9);
-% plot(1:nWindows,sweeping_slopes,LineWidth=LineWidth,color=sweepColor); hold on;
-% plot(1:nWindows,sweeping_vals,LineWidth=LineWidth,color=valueColor); hold on;
-% xlabel('trials');
-% ylabel('fitted slopes');
-% box off
-% 
-% nexttile(master,10);
-% plot(1:nWindows,sweeping_pvals,LineWidth=LineWidth,color=sweepColor); hold on;
-% plot(1:nWindows,sweeping_vals_p,LineWidth=LineWidth,color=valueColor); hold on;
-% yline(0.05,'--',color=[0.7 0.7 0.7],LineWidth=LineWidth);
-% xlabel('trials');
-% ylabel('p value');
-% box off
+nexttile(master,9);
+plot(1:nWindows,sweeping_slopes,LineWidth=LineWidth,color=sweepColor); hold on;
+plot(1:nWindows,sweeping_vals,LineWidth=LineWidth,color=valueColor); hold on;
+xlabel('trials');
+ylabel('fitted slopes');
+box off
+
+nexttile(master,10);
+plot(1:nWindows,sweeping_pvals,LineWidth=LineWidth,color=sweepColor); hold on;
+plot(1:nWindows,sweeping_vals_p,LineWidth=LineWidth,color=valueColor); hold on;
+yline(0.05,'--',color=[0.7 0.7 0.7],LineWidth=LineWidth);
+xlabel('trials');
+ylabel('p value');
+box off
 
 nexttile(master,11);
 plot(1:nWindows,sweeping_spearman,LineWidth=LineWidth,color=sweepColor); hold on;
@@ -497,86 +497,6 @@ xlabel('trials');
 ylabel('p value');
 box off
 
-
-% Plot moving 20 trial window (aligned to end)
-nWindows  = 80;                                % # of windows you want
-nAnimals  = numel(DAtrend);
-movSlopes = nan(nAnimals, nWindows);
-movAvgs   = nan(nAnimals, nWindows);
-% precompute your slope‐kernel once
-xc = (1:sweepWindow)' - mean(1:sweepWindow);
-b  = flipud(xc)/sum(xc.^2);
-for a = 1:nAnimals
-    raw = DAtrend(a).amp.smoothed(:);
-    L   = min(numel(raw), nWindows);
-    data = [zeros(nWindows-L,1);raw(1:L)];
-    
-    % flip the vector end-for-start
-    rev = data(end:-1:1);
-    
-    % compute on the flipped data
-    revSlopes = filter(b, 1, rev);
-    revMeans  = movmean(rev, sweepWindow);
-    
-    % flip the results back
-    movSlopes(a,:) = -revSlopes;
-    movAvgs(a,:)   = revMeans;
-end
-
-
-sweeping_slopes = zeros(length(nWindows),1);
-sweeping_pvals = zeros(length(nWindows),1);
-sweeping_spearman = zeros(length(nWindows),1);
-sweeping_spearman_p = zeros(length(nWindows),1);
-sweeping_vals = zeros(length(nWindows),1);
-sweeping_vals_p = zeros(length(nWindows),1);
-sweeping_vals_spearman = zeros(length(nWindows),1);
-sweeping_vals_spearman_p = zeros(length(nWindows),1);
-
-for w = 1:nWindows
-    % Calculate fitted slopes with animal EI
-    Y = movSlopes(:,w);
-    [model,sweeping_pvals(w),~] = fitScatter(X,Y,weights=nCells);
-    sweeping_slopes(w) = model(1);
-    [X_clean,Y_clean] = removeNaNs(X,Y);
-    [sweeping_spearman(w),sweeping_spearman_p(w)] = corr(X_clean(:), Y_clean(:), 'Type', 'Spearman');
-    % Calculate average val with animal EI
-    Y = movAvgs(:,w);
-    [model,sweeping_vals_p(w),~] = fitScatter(X,Y,weights=nCells);
-    sweeping_vals(w) = model(1);
-    [X_clean,Y_clean] = removeNaNs(X,Y);
-    [sweeping_vals_spearman(w),sweeping_vals_spearman_p(w)] = corr(X_clean(:), Y_clean(:), 'Type', 'Spearman');
-end
-
-% nexttile(master,13);
-% plot(1:nWindows,sweeping_slopes,LineWidth=LineWidth,color=sweepColor); hold on;
-% plot(1:nWindows,sweeping_vals,LineWidth=LineWidth,color=valueColor); hold on;
-% xlabel('trials to end');
-% ylabel('fitted slopes');
-% box off
-% 
-% nexttile(master,14);
-% plot(1:nWindows,sweeping_pvals,LineWidth=LineWidth,color=sweepColor); hold on;
-% plot(1:nWindows,sweeping_vals_p,LineWidth=LineWidth,color=valueColor); hold on;
-% yline(0.05,'--',color=[0.7 0.7 0.7],LineWidth=LineWidth);
-% xlabel('trials to end');
-% ylabel('p value');
-% box off
-
-nexttile(master,15);
-plot(1:nWindows,sweeping_spearman,LineWidth=LineWidth,color=sweepColor); hold on;
-plot(1:nWindows,sweeping_vals_spearman,LineWidth=LineWidth,color=valueColor); hold on;
-xlabel('trials to end');
-ylabel('correlation coefficient');
-box off
-
-nexttile(master,16);
-plot(1:nWindows,sweeping_spearman_p,LineWidth=LineWidth,color=sweepColor); hold on;
-plot(1:nWindows,sweeping_vals_spearman_p,LineWidth=LineWidth,color=valueColor); hold on;
-yline(0.05,'--',color=[0.7 0.7 0.7],LineWidth=LineWidth);
-xlabel('trials to end');
-ylabel('p value');
-box off
 % saveFigures(gcf,'Fig4-all',resultPath,saveFIG=true,savePDF=true,savePNG=true);
 
 %% (Fig 4) Calculate slopes of last n trials
@@ -805,7 +725,6 @@ for i = 1:length(rowIdx)
     nexttile(i*3-2,[1 2]);
     scatter(1:length(trace),trace,150,dotColor,'filled',MarkerFaceAlpha=0.8); hold on
     plot(trace_smoothed,color=[dotColor,0.3],LineWidth=4);
-    yline(0,'--',LineWidth=2,color=[.6 .6 .6]);
     xlim([1,length(trace)]);
     xticks([1, 20, length(trace)-19, length(trace)]);
     xticklabels({'1','20','n-19','n'}); yticks([]);
@@ -955,28 +874,28 @@ IPSC_qc = getCellStats(combined_cells,'inhi',type='qc',average=true);
 % Plot Rs, Cm, Rm for each cell
 EPSC_Rs = cellfun(@(x) x.Rs, {EPSC_qc.QC})'; 
 EPSC_Rs_header = cellfun(@(x) x.Rs_headerString, {EPSC_qc.QC})'; 
-% EPSC_Rs(90) = EPSC_Rs_header(90); EPSC_Rs_header(60) = EPSC_Rs(60);
+EPSC_Rs(90) = EPSC_Rs_header(90);
 EPSC_Rs_final = min(EPSC_Rs,EPSC_Rs_header);
 IPSC_Rs = cellfun(@(x) x.Rs, {IPSC_qc.QC})';
 IPSC_Rs_header = cellfun(@(x) x.Rs_headerString, {IPSC_qc.QC})';
 IPSC_Rs_final = min(IPSC_Rs,IPSC_Rs_header);
-Rs = min(EPSC_Rs_final,IPSC_Rs_final); 
+Rs = min(EPSC_Rs_final,IPSC_Rs_final); Rs(60) = EPSC_Rs(60);
 
-% EPSC_Cm = cellfun(@(x) x.Cm, {EPSC_qc.QC})';
-% EPSC_Cm_header = cellfun(@(x) x.Cm_headerString, {EPSC_qc.QC})'; 
-% EPSC_Cm_final = min(EPSC_Cm,EPSC_Cm_header);
-% IPSC_Cm = cellfun(@(x) x.Cm, {IPSC_qc.QC})';
-% IPSC_Cm_header = cellfun(@(x) x.Cm_headerString, {IPSC_qc.QC})';
-% IPSC_Cm_final = min(IPSC_Cm,IPSC_Cm_header);
-% Cm = min(EPSC_Cm_final,IPSC_Cm_final);
-% 
-% EPSC_Rm = cellfun(@(x) x.Rm, {EPSC_qc.QC})';
-% EPSC_Rm_header = cellfun(@(x) x.Rm_headerString, {EPSC_qc.QC})'; 
-% EPSC_Rm_final = min(EPSC_Rm,EPSC_Rm_header);
-% IPSC_Rm = cellfun(@(x) x.Rm, {IPSC_qc.QC})';
-% IPSC_Rm_header = cellfun(@(x) x.Rm_headerString, {IPSC_qc.QC})';
-% IPSC_Rm_final = min(IPSC_Rm,IPSC_Rm_header);
-% Rm = min(EPSC_Rm_final,IPSC_Rm_final);
+EPSC_Cm = cellfun(@(x) x.Cm, {EPSC_qc.QC})';
+EPSC_Cm_header = cellfun(@(x) x.Cm_headerString, {EPSC_qc.QC})'; 
+EPSC_Cm_final = min(EPSC_Cm,EPSC_Cm_header);
+IPSC_Cm = cellfun(@(x) x.Cm, {IPSC_qc.QC})';
+IPSC_Cm_header = cellfun(@(x) x.Cm_headerString, {IPSC_qc.QC})';
+IPSC_Cm_final = min(IPSC_Cm,IPSC_Cm_header);
+Cm = min(EPSC_Cm_final,IPSC_Cm_final);
+
+EPSC_Rm = cellfun(@(x) x.Rm, {EPSC_qc.QC})';
+EPSC_Rm_header = cellfun(@(x) x.Rm_headerString, {EPSC_qc.QC})'; 
+EPSC_Rm_final = min(EPSC_Rm,EPSC_Rm_header);
+IPSC_Rm = cellfun(@(x) x.Rm, {IPSC_qc.QC})';
+IPSC_Rm_header = cellfun(@(x) x.Rm_headerString, {IPSC_qc.QC})';
+IPSC_Rm_final = min(IPSC_Rm,IPSC_Rm_header);
+Rm = min(EPSC_Rm_final,IPSC_Rm_final);
 
 % Plot QC verus response
 EPSCcolor = [255 157 33]/255; %[122, 201, 67]/255;
@@ -984,11 +903,11 @@ IPSCcolor = [71 144 253]/255; %[84, 137, 45]/255;
 ctrlColor = [.7 .7 .7];
 dotSize = 200;
 
-initializeFig(0.4,0.3); tiledlayout('flow');
+initializeFig(0.4,1); tiledlayout('flow');
 
 Rs = Rs;
-% Rm = EPSC_Rm;
-% Cm = EPSC_Cm_final;
+Rm = EPSC_Rm;
+Cm = EPSC_Cm_final;
 
 nexttile;
 lmE   = fitlm(Rs, abs(EPSC_peaks));
@@ -1004,25 +923,25 @@ yFitE = slopeE*xFit + lmE.Coefficients.Estimate(1);
 yFitI = slopeI*xFit + lmI.Coefficients.Estimate(1);
 plot(xFit, yFitE, 'Color', EPSCcolor, 'LineWidth', 5);
 plot(xFit, yFitI, 'Color', IPSCcolor, 'LineWidth', 5);
-xlabel('Rs'), ylabel('Amplitude'); %xlim([0 35]);
+xlabel('Rs'), ylabel('Amplitude'); xlim([0 35]);
 title('Rs vs amplitude');
 
-nexttile;
-lmE   = fitlm(Rs, abs(EPSC_aucs));
-slopeE = lmE.Coefficients.Estimate(2);
-pvalE  = lmE.Coefficients.pValue(2);
-lmI   = fitlm(Rs, abs(IPSC_aucs));
-slopeI = lmI.Coefficients.Estimate(2);
-pvalI  = lmI.Coefficients.pValue(2);
-scatter(Rs,abs(EPSC_aucs),dotSize,EPSCcolor,"filled",MarkerFaceAlpha=0.5); hold on;
-scatter(Rs,abs(IPSC_aucs),dotSize,IPSCcolor,"filled",MarkerFaceAlpha=0.5); hold on;
-xFit = linspace(min(Rs), max(Rs), 100)';
-yFitE = slopeE*xFit + lmE.Coefficients.Estimate(1);
-yFitI = slopeI*xFit + lmI.Coefficients.Estimate(1);
-plot(xFit, yFitE, 'Color', EPSCcolor, 'LineWidth', 5);
-plot(xFit, yFitI, 'Color', IPSCcolor, 'LineWidth', 5);
-xlabel('Rs'), ylabel('Charge'); %xlim([0 40]);
-title('Rs vs charge');
+% nexttile;
+% lmE   = fitlm(Rs, abs(EPSC_aucs));
+% slopeE = lmE.Coefficients.Estimate(2);
+% pvalE  = lmE.Coefficients.pValue(2);
+% lmI   = fitlm(Rs, abs(IPSC_aucs));
+% slopeI = lmI.Coefficients.Estimate(2);
+% pvalI  = lmI.Coefficients.pValue(2);
+% scatter(Rs,abs(EPSC_aucs),dotSize,EPSCcolor,"filled",MarkerFaceAlpha=0.5); hold on;
+% scatter(Rs,abs(IPSC_aucs),dotSize,IPSCcolor,"filled",MarkerFaceAlpha=0.5); hold on;
+% xFit = linspace(min(Rs), max(Rs), 100)';
+% yFitE = slopeE*xFit + lmE.Coefficients.Estimate(1);
+% yFitI = slopeI*xFit + lmI.Coefficients.Estimate(1);
+% plot(xFit, yFitE, 'Color', EPSCcolor, 'LineWidth', 5);
+% plot(xFit, yFitI, 'Color', IPSCcolor, 'LineWidth', 5);
+% xlabel('Rs'), ylabel('Charge'); %xlim([0 40]);
+% title('Rs vs charge');
 
 nexttile;
 peakColor = [157 106 110]/255;
@@ -1040,8 +959,7 @@ yFitE = slopeE*xFit + lmE.Coefficients.Estimate(1);
 yFitI = slopeI*xFit + lmI.Coefficients.Estimate(1);
 plot(xFit, yFitE, 'Color', peakColor, 'LineWidth', 5);
 plot(xFit, yFitI, 'Color', aucColor, 'LineWidth', 5);
-xlabel('Rs'), ylabel('EI index'); %xlim([0 35]);
-title('Rs vs EI index');
+xlabel('Rs'), ylabel('EI index'); xlim([0 35]);
 
 % nexttile;
 % scatter(Rm,abs(EPSC_peaks),dotSize,EPSCcolor,"filled"); hold on; lsline;

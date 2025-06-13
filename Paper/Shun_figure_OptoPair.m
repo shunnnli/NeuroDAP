@@ -155,54 +155,86 @@ results = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,color=colo
 %         saveFIG=true,savePDF=true);
 
 
-%% Plot grouped anticipatory lick changes
+%% Plot bar plot of DA first vs values for each event
+
+trialWindow = 40; 
+statsType = 'stageAmp'; signalRange = 'dLight';
 
 taskRange = {'Reward','Punish'};
-ylabelList = {'Anticipatory licks','Anticipatory licks'};
-
 animalRange = 'all';
 conditionRange = 'All';
-signalRange = 'Lick';
-trialConditions = 'trials.performing';
+trialConditions = 'trials.performing == 1';
+eventRange = {'Stim','Pair','Baseline'};
+colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),[.7 .7 .7]};
 
-eventRange = {'Baseline','Pair','Stim'};
-colorList = {[.7 .7 .7],bluePurpleRed(300,:),bluePurpleRed(500,:)};
-
-groupSize = 10; % numbers of trials to calculate average
-combinedStats = getGroupedTrialStats(animals,'OutcomeTime',...
+combinedStats = getGroupedTrialStats(combined_animals,statsType,...
                             eventRange=eventRange,...
                             animalRange=animalRange,...
                             taskRange=taskRange,...
                             totalTrialRange=conditionRange,...
                             signalRange=signalRange, ...
                             trialConditions=trialConditions);
+results = plotGroupedTrialStats(combinedStats,ylabelList,plot=false);
 
-initializeFig(.5,.8); tiledlayout('flow');
-results = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,color=colorList,...
-                                xlim=[1,150]);
-
-
+initializeFig(.45,.7); tiledlayout('flow');
 for task = 1:length(results.stats)
-    nexttile;
-    cur_stats = results.stats{task};
+    task_stats = combinedStats.stats{task};
     for event = 1:length(eventRange)
-        slopes = cur_stats{event}(:,1);
-        plotScatterBar(event,slopes,color=colorList{event},...
-                       style='bar',dotSize=200,LineWidth=2);
+        nexttile;
+        eventData = task_stats(:,event);
+        filteredData = eventData(~cellfun(@isempty, eventData));
+        startData = cell2mat(cellfun(@(m) m(1:trialWindow,2)', filteredData, UniformOutput=false));
+        finalData = cell2mat(cellfun(@(m) m(end-trialWindow+1:end,2)', filteredData, UniformOutput=false));
 
-        % Calculate significance
-        if event < length(eventRange)
-            for i = event+1:length(eventRange)
-                plotStats(slopes,cur_stats{i}(:,1),[event i],testType='kstest');
-            end
-        end
+        startData = mean(startData,2); color1 = addOpacity(colorList{event},0.5);
+        finalData = mean(finalData,2); color2 = colorList{event};
+        plotScatterBar([1 2],[startData,finalData],color=[color1;color2],connectPairs=true,dotSize=200,LineWidth=2);
+        plotStats(startData(:),finalData(:),[1 2],testType='signrank');
+
+        xticks([1 2]); xticklabels({'Early trials','Late trials'});
+        ylabel(statsType);
     end
-
-    xticks(1:length(eventRange)); xticklabels(eventRange);
-    ylabel('Slope');
 end
-% saveFigures(gcf,'Summary_CSvsTrialsGrouped_Lick',...
-%         strcat(resultspath),...
-%         saveFIG=true,savePDF=true);
 
 
+%% Plot bar plot of lick first vs values for each event
+
+trialWindow = 40; 
+statsType = 'nAnticipatoryLicks'; signalRange = 'Lick';
+
+taskRange = {'Reward','Punish'};
+animalRange = 'all';
+conditionRange = 'All';
+trialConditions = 'trials.performing == 1';
+eventRange = {'Stim','Pair','Baseline'};
+colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),[.7 .7 .7]};
+
+groupSize = 10; % numbers of trials to calculate average
+combinedStats = getGroupedTrialStats(combined_animals,statsType,...
+                            eventRange=eventRange,...
+                            animalRange=animalRange,...
+                            taskRange=taskRange,...
+                            totalTrialRange=conditionRange,...
+                            signalRange=signalRange, ...
+                            trialConditions=trialConditions);
+results = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,color=colorList,plot=false);
+
+initializeFig(.45,.7); tiledlayout('flow');
+for task = 1:length(results.stats)
+    task_stats = combinedStats.stats{task};
+    for event = 1:length(eventRange)
+        nexttile;
+        eventData = task_stats(:,event);
+        filteredData = eventData(~cellfun(@isempty, eventData));
+        startData = cell2mat(cellfun(@(m) m(1:trialWindow)', filteredData, UniformOutput=false));
+        finalData = cell2mat(cellfun(@(m) m(end-trialWindow+1:end)', filteredData, UniformOutput=false));
+
+        startData = mean(startData,2); color1 = addOpacity(colorList{event},0.5);
+        finalData = mean(finalData,2); color2 = colorList{event};
+        plotScatterBar([1 2],[startData,finalData],color=[color1;color2],connectPairs=true,dotSize=200,LineWidth=2);
+        plotStats(startData(:),finalData(:),[1 2],testType='signrank');
+
+        xticks([1 2]); xticklabels({'Early trials','Late trials'});
+        ylabel(statsType);
+    end
+end
