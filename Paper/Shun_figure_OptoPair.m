@@ -22,6 +22,9 @@ for file = 1:length(fileList)
     disp(['Finished: loaded ',dirsplit{end}]);
 end
 
+%% LP filter
+lpFilt = designfilt('lowpassiir','FilterOrder',8, 'PassbandFrequency',params.photometry.filtCut,...
+            'PassbandRipple',0.01, 'Samplerate',params.sync.labjackFs/params.photometry.nSampPerDemodBin);
 
 %% Plot overall to show animal learned
 

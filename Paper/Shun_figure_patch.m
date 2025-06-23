@@ -539,9 +539,9 @@ plotCellEI(combined_cells,groupIdx,nboot=10000,centerEI=true,...
 randomIdx = find(strcmpi('Random',combined_cells.Task));
 rewardIdx = find(contains(combined_cells.Task, 'reward pairing',IgnoreCase=true));
 punishIdx = find(contains(combined_cells.Task, 'punish pairing',IgnoreCase=true));
-rewardCtrlIdx = [find(strcmpi('Reward control',combined_cells.Task))];
+rewardCtrlIdx = [find(strcmpi('Reward control',combined_cells.Task) & combined_cells.Analyze);...
+                 find(strcmpi('Reward pairing',combined_cells.Task) & ~combined_cells.Analyze)];
 punishCtrlIdx = [find(strcmpi('Punish control',combined_cells.Task))];
-baselineIdx = [randomIdx; rewardCtrlIdx; punishCtrlIdx];
 
 
 % Plot cell EI based on tasks

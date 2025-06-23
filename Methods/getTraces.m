@@ -41,8 +41,10 @@ params = options.params;
 %% Initialize event and signal system time
 if ~options.sameSystem
     % 0. Define event system
-    if ~isfield(params.session,'baselineSystem'); options.eventSystem = 'ni';
-    else; options.eventSystem = params.session.baselineSystem; end
+    if ~isfield(options,'eventSystem')
+        if ~isfield(params.session,'baselineSystem'); options.eventSystem = 'ni';
+        else; options.eventSystem = params.session.baselineSystem; end
+    end
     
     % 1. Initialize event and signal system time
     % 1.1 Define event system time

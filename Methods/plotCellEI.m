@@ -244,7 +244,7 @@ for group = 1:length(plotGroup)
             xline(diffArea_observed,'-',['p=',num2str(p_cdf)],Color=groupColor,LineWidth=3);
             box off; c = gca; c.YAxis(1).Visible = 'off';
         elseif contains(options.statsType,'mean')
-            meanEIauc_observed = mean(EIindex_aucs(idx));
+            meanEIauc_observed = mean(EIindex_aucs(idx),'omitmissing');
             meanEIauc_bs = mean(bs_EIindex_aucs(fakeIdx,:));
             p_cdf = min([sum(meanEIauc_bs <= meanEIauc_observed)/options.nboot,...
                         sum(meanEIauc_bs >= meanEIauc_observed)/options.nboot]);
@@ -303,7 +303,7 @@ for group = 1:length(plotGroup)
             xline(diffArea_observed,'-',['p=',num2str(p_cdf)],Color=groupColor,LineWidth=3);
             box off; c = gca; c.YAxis(1).Visible = 'off';
         elseif contains(options.statsType,'mean')
-            meanEIpeaks_observed = mean(EIindex_peaks(idx));
+            meanEIpeaks_observed = mean(EIindex_peaks(idx),'omitmissing');
             meanEIpeaks_bs = mean(bs_EIindex_peaks(fakeIdx,:));
             p_cdf = min([sum(meanEIpeaks_bs <= meanEIpeaks_observed)/options.nboot,...
                         sum(meanEIpeaks_bs >= meanEIpeaks_observed)/options.nboot]);

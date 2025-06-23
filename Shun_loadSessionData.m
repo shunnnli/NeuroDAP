@@ -140,6 +140,116 @@ end
 sessionList = sessionList(errorSessionIdx);
 close all;
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+%% Tone ramp
+
+%% Single session analysis
+
+clear; close all;
+addpath(genpath(osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
+
+% Select sessions via uipickfiles
+sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Recordings'))';
+errorSessionIdx = [];
+
+% Select anlaysis params
+[analysisParams,canceled] = inputAnalysisParams(sessionList,...
+                                reloadAll=false,...
+                                recordLJ='[1 1 0]',...
+                                plotPhotometry=true,...
+                                plotBehavior=true,...
+                                withPhotometryNI=false);
+if canceled; return; end
+for s = 1:length(sessionList)
+    analysisParams(s).rollingWindowTime = str2double(analysisParams(s).rollingWindowTime);
+    analysisParams(s).recordLJ = eval(analysisParams(s).recordLJ);
+end 
+% Select session params
+[sessionParams,canceled] = inputSessionParams(sessionList,...
+                                paradigm=2,...
+                                redStim=true,...
+                                reactionTime=2,...
+                                redPulseFreq=50,redPulseDuration=5,redStimDuration=500,...
+                                bluePulseFreq=2,bluePulseDuration=500,blueStimDuration=500,...
+                                includeOtherStim=true);
+if canceled; return; end
+taskList = cell(size(sessionList));
+taskOptions = {'random','reward pairing','punish pairing'};
+redStimPatternList = cell(size(sessionList));
+blueStimPatternList = cell(size(sessionList));
+for s = 1:length(sessionList)
+    taskList{s} = taskOptions{sessionParams(s).Paradigm};
+    redStimPatternList{s} = {sessionParams(s).RedPulseFreq,sessionParams(s).RedPulseDuration,sessionParams(s).RedStimDuration};
+    blueStimPatternList{s} = {sessionParams(s).BluePulseFreq,sessionParams(s).BluePulseDuration,sessionParams(s).BlueStimDuration};
+    sessionParams(s).ReactionTime = str2double(sessionParams(s).ReactionTime);
+    sessionParams(s).minLicks = str2double(sessionParams(s).minLicks);
+end
+
+
+% Run each session
+for s = 1:length(sessionList)
+    close all;
+    clearvars -except s sessionList errorSessionIdx analysisParams sessionParams taskList redStimPatternList blueStimPatternList withPhotometryNI plotPhotometry reloadAll
+    
+    idx = s; % if loop through all
+    % idx = errorSessionIdx(s); % if loop through error sessions
+
+    dirsplit = strsplit(sessionList{idx},filesep); 
+    sessionName = dirsplit{end}; clear dirsplit
+    try
+        loadSessions(sessionList{idx},reloadAll=analysisParams(idx).reloadAll,...
+            invertStim=sessionParams(idx).OptoInverted,...
+            withPhotometryNI=analysisParams(idx).withPhotometryNI,photometryNI_mod=false,...
+            recordLJ=analysisParams(idx).recordLJ,...
+            rollingWindowTime=analysisParams(idx).rollingWindowTime,...
+            followOriginal=false);
+        analyzeSessions_toneRamp(sessionList{idx},...
+            task=taskList{idx},...
+            redStimPattern=redStimPatternList{idx},...
+            blueStimPattern=blueStimPatternList{idx},...
+            redStim=sessionParams(idx).redStim,...
+            redo=true,round=false,performing=false,...
+            analyzeTraces=true,...
+            plotPhotometry=false,...
+            plotBehavior=analysisParams(idx).plotBehavior,...
+            pavlovian=sessionParams(idx).Pavlovian,...
+            reactionTime=sessionParams(idx).ReactionTime,...
+            combineOmission=true,...
+            includeOtherStim=sessionParams(idx).IncludeOtherStim);
+    catch ME
+        errorSessionIdx = [errorSessionIdx;idx];
+        disp(getReport(ME));
+        warning(['Session ', sessionName, ' have an error, skipped for now!!!!']);
+        continue
+    end 
+end
+close all
+return
+
+
+
+
+
+
+
+
+
+
+
+
+
 %% EP LHb pair
 
 %% Single session analysis
