@@ -23,8 +23,19 @@ for file = 1:length(fileList)
 end
 
 %% LP filter
-lpFilt = designfilt('lowpassiir','FilterOrder',8, 'PassbandFrequency',params.photometry.filtCut,...
-            'PassbandRipple',0.01, 'Samplerate',params.sync.labjackFs/params.photometry.nSampPerDemodBin);
+
+lpFilt = designfilt('lowpassiir','FilterOrder',8, 'PassbandFrequency',8,...
+        'PassbandRipple',0.01, 'Samplerate',50);
+
+for row = 1:length(combined_animals)
+    if strcmpi(combined_animals(row).name, 'dLight')
+        data = combined_animals(row).data;
+        dmData = filtfilt(lpFilt,data'); 
+        dmData = dmData';
+        combined_animals(row).data = dmData;
+    end
+end
+disp('Finished');
 
 %% Plot overall to show animal learned
 
@@ -45,7 +56,7 @@ ylimList = [-1.5,3; -2,1.5];
 initializeFig(0.5,0.5); tiledlayout('flow');
 for task = 1:length(taskRange)
     nexttile;
-    combined = combineTraces(animals,timeRange=timeRange,...
+    combined = combineTraces(combined_animals,timeRange=timeRange,...
                                 eventRange=eventRange,...
                                 animalRange=animalRange,...
                                 taskRange=taskRange{task},...
