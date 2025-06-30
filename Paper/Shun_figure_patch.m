@@ -138,7 +138,7 @@ t.Padding = 'none';
 rewardAnimals = {'SL206','SL343','SL344','SL345','SL353','SL354','SL355'};
 punishAnimals = {'SL207','SL213','SL253','SL342','SL044'};
 
-randomIdx = find(strcmpi('Random',combined_cells.Task) & combined_cells.Analyze);
+randomIdx = find(strcmpi('Random',combined_cells.Task));
 rewardIdx = find(ismember(combined_cells.Animal, rewardAnimals) & ...
                contains(combined_cells.Task, 'pairing'));
 punishIdx = find(ismember(combined_cells.Animal, punishAnimals) & ...
@@ -240,51 +240,131 @@ for i = 1:length(rowIdx)
 end
 % saveFigures(gcf,'Fig4-schematic',resultPath,saveFIG=true,savePDF=true,savePNG=true);
 
+%% (Fig 4) Calculate correlation
+
+trialWindow = 20;
+sweepWindow = 20;
+endingSlope = zeros(length(DAtrend),1); 
+startingSlope = zeros(length(DAtrend),1);
+sessionValue = zeros(length(DAtrend),1);
+
+for a = 1:length(DAtrend)
+    % Get last n trial slope
+    startTrial = max(1,DAtrend(a).nTrials-trialWindow);
+    endingSlope(a) = DAtrend(a).amp.slopeMap.smoothed.map(startTrial,end);
+
+    % Get first n trial slope
+    endingTrial = min(DAtrend(a).nTrials,trialWindow);
+    startingSlope(a) = DAtrend(a).amp.slopeMap.smoothed.map(1,endingTrial);
+
+    % Get session average DA value
+    sessionValue(a) = mean(DAtrend(a).amp.raw,'omitnan');
+end
+
+
+% Plot figure
+close all;
+initializeFig(0.5,1); 
+master = tiledlayout(1,4);
+endingColor = [0, 153, 153] / 255; %[128, 179, 255]./255;
+startingColor = [102, 204, 204] / 255; %[152, 201, 163]./255;
+valueColor = [.7 .7 .7];
+sweepColor = [184 140 1]/255;
+LineWidth = 5;
+nboot = 1000;
+
+% Plot first trial slope vs animal EI
+X = animalEIindex_peaks; Y = startingSlope; color = startingColor;
+[model,p_value,fit_boot] = fitScatter(X,Y,type='weighted',weights=nCells); slope = model(1);
+[r_spearman_starting, p_spearman_starting] = corr(X(:), Y(:), 'Type', 'Spearman');
+
+nexttile(master,1); 
+children = tiledlayout(master,4,1);
+children.Layout.Tile = 1; children.Layout.TileSpan = [1 1];
+children.TileSpacing = 'compact'; children.Padding = 'tight'; axis off;
+
+nexttile(children,1,[1 1]);
+histogram(fit_boot(:,1),200,EdgeColor=addOpacity(color,0.5),FaceColor=addOpacity(color,0.5)); hold on; 
+xline(slope,'-',['p=',num2str(p_value)],Color=color,LineWidth=3);
+box off; c = gca; c.YAxis(1).Visible = 'off';
+
+nexttile(children,2,[3 1]);
+scatter(X,Y,200,color,"filled"); hold on;
+xFit = linspace(min(X), max(X), 100);
+yFit = polyval(model, xFit);
+plot(xFit, yFit, color=color, LineWidth=LineWidth);
+xlabel('Animal EI index');
+ylabel('Distant DA slope');
+
+
+
+% Plot last trial slope vs animal EI
+X = animalEIindex_peaks; Y = endingSlope; color = endingColor;
+[model,p_value,fit_boot] = fitScatter(X,Y,type='weighted',weights=nCells); slope = model(1);
+[r_spearman_ending, p_spearman_ending] = corr(X(:), Y(:), 'Type', 'Spearman');
+
+nexttile(master,2); 
+children = tiledlayout(master,4,1);
+children.Layout.Tile = 2; children.Layout.TileSpan = [1 1];
+children.TileSpacing = 'compact'; children.Padding = 'tight'; axis off;
+
+nexttile(children,1,[1 1]);
+histogram(fit_boot(:,1),200,EdgeColor=addOpacity(color,0.5),FaceColor=addOpacity(color,0.5)); hold on; 
+xline(slope,'-',['p=',num2str(p_value)],Color=color,LineWidth=3);
+box off; c = gca; c.YAxis(1).Visible = 'off';
+
+nexttile(children,2,[3 1]);
+scatter(X,Y,200,color,"filled"); hold on;
+xFit = linspace(min(X), max(X), 100);
+yFit = polyval(model, xFit);
+plot(xFit, yFit, color=color, LineWidth=LineWidth);
+xlabel('Animal EI index');
+ylabel('Recent DA slope');
+
+
+
+% Plot average trial value vs animal EI
+X = animalEIindex_peaks; Y = sessionValue; color = valueColor;
+[model,p_value,fit_boot] = fitScatter(X,Y,type='weighted',weights=nCells); slope = model(1);
+[r_spearman_value, p_spearman_value] = corr(X(:), Y(:), 'Type', 'Spearman');
+
+nexttile(master,3); 
+children = tiledlayout(master,4,1);
+children.Layout.Tile = 3; children.Layout.TileSpan = [1 1];
+children.TileSpacing = 'compact'; children.Padding = 'tight'; axis off;
+
+nexttile(children,1,[1 1]);
+histogram(fit_boot(:,1),200,EdgeColor=addOpacity(color,0.5),FaceColor=addOpacity(color,0.5)); hold on; 
+xline(slope,'-',['p=',num2str(p_value)],Color=color,LineWidth=3);
+box off; c = gca; c.YAxis(1).Visible = 'off';
+
+nexttile(children,2,[3 1]);
+scatter(X,Y,200,color,"filled"); hold on;
+xFit = linspace(min(X), max(X), 100);
+yFit = polyval(model, xFit);
+plot(xFit, yFit, color=color, LineWidth=LineWidth);
+xlabel('Animal EI index');
+ylabel('Average DA amplitude');
+
+
+nexttile(master,4);
+plotScatterBar(1,r_spearman_starting,style='bar',color=startingColor,LineWidth=LineWidth);
+text(2,r_spearman_starting,['p = ',num2str(p_spearman_starting)]);
+plotScatterBar(2,r_spearman_ending,style='bar',color=endingColor,LineWidth=LineWidth);
+text(1,r_spearman_ending,['p = ',num2str(p_spearman_ending)]);
+plotScatterBar(3,r_spearman_value,style='bar',color=valueColor,LineWidth=LineWidth);
+text(3,r_spearman_value,['p = ',num2str(p_spearman_value)]);
+xticks([1 2 3]);
+xticklabels({'Distant DA slope','Recent DA slope','Average DA amplitude'});
+ylabel('Spearman correlation coefficient');
+
 
 %% (Fig 4) Calculate slopes of last n trials
 
 trialWindow = 15:40;
-
-recentSlope_max = zeros(length(DAtrend),1);
-recentSlope_min = zeros(length(DAtrend),1);
-recentSlope_avg = zeros(length(DAtrend),1);
 recentSlope_amp = zeros(length(DAtrend),1);
-
-distantSlope_max = zeros(length(DAtrend),1);
-distantSlope_min = zeros(length(DAtrend),1);
-distantSlope_avg = zeros(length(DAtrend),1);
 distantSlope_amp = zeros(length(DAtrend),1);
-
-sessionValue_max = zeros(length(DAtrend),1);
-sessionValue_min = zeros(length(DAtrend),1);
-sessionValue_avg = zeros(length(DAtrend),1);
 sessionValue_amp = zeros(length(DAtrend),1);
-
-% Calculate average slopes in trialWindow
-for a = 1:length(DAtrend)
-    % Get last n trial slope
-    startTrial = max(1,DAtrend(a).nTrials-trialWindow);
-    recentSlope_max(a) = mean(DAtrend(a).max.slopeMap.smoothed.map(startTrial,end));
-    recentSlope_min(a) = mean(DAtrend(a).min.slopeMap.smoothed.map(startTrial,end));
-    recentSlope_avg(a) = mean(DAtrend(a).avg.slopeMap.smoothed.map(startTrial,end));
-    recentSlope_amp(a) = mean(DAtrend(a).amp.slopeMap.smoothed.map(startTrial,end));
-
-    % Get first n trial slope
-    endingTrial = min(DAtrend(a).nTrials,trialWindow);
-    distantSlope_max(a) = mean(DAtrend(a).max.slopeMap.smoothed.map(1,endingTrial));
-    distantSlope_min(a) = mean(DAtrend(a).min.slopeMap.smoothed.map(1,endingTrial));
-    distantSlope_avg(a) = mean(DAtrend(a).avg.slopeMap.smoothed.map(1,endingTrial));
-    distantSlope_amp(a) = mean(DAtrend(a).amp.slopeMap.smoothed.map(1,endingTrial));
-
-    sessionValue_max(a) = mean(DAtrend(a).max.raw,'omitnan');
-    sessionValue_min(a) = mean(DAtrend(a).min.raw,'omitnan');
-    sessionValue_avg(a) = mean(DAtrend(a).avg.raw,'omitnan');
-    sessionValue_amp(a) = mean(DAtrend(a).amp.raw,'omitnan');
-end
-
-% Define the eight slope vectors in a cell array and label them
-slopeVectors = {recentSlope_max, recentSlope_min, recentSlope_avg, recentSlope_amp};
-slopeNames = {'CueMax Slope (Short)', 'CueMin Slope (Short)', 'CueAvg Slope (Short)', 'CueAmp Slope (Short)'};
 
 % Set color
 upColor = [0, 158, 115]/255; %[122, 201, 67]/255;
@@ -292,100 +372,55 @@ downColor = [135, 104, 247]/255; %[84, 137, 45]/255;
 stableColor = [198, 156, 109]/255;
 
 % Set group names
-% numGroups = 2;
-% groupNames = {'Down DA','Up DA'};
-% groupColors = {downColor,upColor};
-
 numGroups = 3;
 groupNames = {'Down DA','Stable DA','Up DA'};
 groupColors = {downColor,stableColor,upColor};
 
-
-% (Analysis) kmeans clustering to define up/down/stable animals
-% Preallocate cell arrays to save grouping results for each slope vector
-downAnimals_kmeans = cell(numel(slopeVectors),1);
-stableAnimals_kmeans = cell(numel(slopeVectors),1);
-upAnimals_kmeans = cell(numel(slopeVectors),1);
-
-initializeFig(0.5,1); tiledlayout(2,2);
-
-for i = 1:numel(slopeVectors)
-    nexttile;
-    data = slopeVectors{i};
-    
-    % Perform k-means clustering with replicates for stability
-    [groupIdx, groupCenters] = kmeans(data, numGroups, Replicates=100);
-    
-    % Sort group centers so that:
-    %   Group 1: obvious negative (lowest center)
-    %   Group 2: ambiguous (middle center)
-    %   Group 3: obvious positive (highest center)
-    [~, sortOrder] = sort(groupCenters);
-    mapping = zeros(numGroups,1);
-    mapping(sortOrder) = 1:numGroups;
-    groupLabels = mapping(groupIdx);
-    
-    % Save grouping results
-    if numGroups == 2
-        downAnimals_kmeans{i} = find(groupLabels == 1);
-        upAnimals_kmeans{i} = find(groupLabels == 2);
-    elseif numGroups == 3
-        downAnimals_kmeans{i} = find(groupLabels == 1);
-        stableAnimals_kmeans{i} = find(groupLabels == 2);
-        upAnimals_kmeans{i} = find(groupLabels == 3);
-    end
-    
-    hold on;
-    for j = 1:numGroups
-        idx = groupLabels == j;
-        scatter(find(idx), data(idx), 200, groupColors{j}, 'filled', DisplayName=groupNames{j});
-    end
-    hold off;
-    
-    title(slopeNames{i});
-    xlabel('Animal');
-    ylabel('Slope');
-    legend('Location','southeast');
-end
-sgtitle('K-means classification');
-% saveFigures(gcf,'K-means',resultPath,saveFIG=true,savePDF=true,savePNG=true);
-
-% (Analysis) Plot cell EI clustered by kmeans
-% Set up getCellIndices function
-getCellIndices = @(indices) cell2mat(arrayfun(@(idx) find(strcmpi(combined_cells.Animal, animalList{idx})), indices, 'UniformOutput', false));
-
-for i = 4:4%numel(slopeNames)
-
-    % Get the animal indices from quant
-    animalIdxDown = downAnimals_kmeans{i}; 
-    cellIdxDown   = getCellIndices(animalIdxDown);
-    animalIdxUp = upAnimals_kmeans{i};
-    cellIdxUp     = getCellIndices(animalIdxUp);
-    if numGroups == 3
-        animalIdxStable = stableAnimals_kmeans{i}; 
-        cellIdxStable = getCellIndices(animalIdxStable);
-    end
-    
-    if numGroups == 2
-        groupIdx = {cellIdxDown,cellIdxUp};
-        plotGroup = [1, 1];
-    elseif numGroups == 3
-        groupIdx = {cellIdxStable,cellIdxDown,cellIdxUp};
-        plotGroup = [1, 1, 1];
-        groupNames = {'Stable DA','Down DA','Up DA'};
-        groupColors = {stableColor,downColor,upColor};
-    end
-    
-    % Create a figure name based on the current criterion (e.g., "CellEI-CueMaxSlopeShort")
-    % Removing spaces and parentheses for a clean filename.
-    figureName = ['CellEI-' regexprep(slopeNames{i}, '[ ()]', ''),'-kmeans'];
-    close all;
-    plotCellEI(combined_cells,groupIdx,centerEI=false,...
-           plotGroup=plotGroup,groupColors=groupColors,groupNames=groupNames,...
-           save=false,figureName=figureName,resultPath=resultPath,print=true);
+% Calculate average slopes in trialWindow
+for a = 1:length(DAtrend)
+    % Get last n trial slope
+    startTrial = max(1,DAtrend(a).nTrials-trialWindow);
+    recentSlope_amp(a) = mean(DAtrend(a).amp.slopeMap.smoothed.map(startTrial,end));
+    % Get first n trial slope
+    endingTrial = min(DAtrend(a).nTrials,trialWindow);
+    distantSlope_amp(a) = mean(DAtrend(a).amp.slopeMap.smoothed.map(1,endingTrial));
+    % Get session avg value
+    sessionValue_amp(a) = mean(DAtrend(a).amp.raw,'omitnan');
 end
 
+% Get group cells by DA
+data = recentSlope_amp;
+slopeNames = 'CueAmp';
+grouped_all = groupEIbyDA(data,combined_cells.Animal,animalList);
 
+% Plot DA groups
+initializeFig(0.1,0.5); hold on;
+for j = 1:numGroups
+    idx = grouped_all.groupLabels == j;
+    scatter(find(idx), data(idx), 200, groupColors{j}, 'filled', DisplayName=groupNames{j});
+end
+xlabel('Animal');
+ylabel('DA slope');
+legend('Location','southeast');
+
+% Plot cell EI
+if numGroups == 2
+    groupIdx = {grouped_all.down.cells,grouped_all.up.cells};
+    plotGroup = [1, 1];
+elseif numGroups == 3
+    groupIdx = {grouped_all.stable.cells,grouped_all.down.cells,grouped_all.up.cells};
+    plotGroup = [1, 1, 1];
+    groupNames = {'Stable DA','Down DA','Up DA'};
+    groupColors = {stableColor,downColor,upColor};
+end
+
+% Create a figure name based on the current criterion (e.g., "CellEI-CueMaxSlopeShort")
+% Removing spaces and parentheses for a clean filename.
+figureName = ['CellEI-' regexprep(slopeNames, '[ ()]', ''),'-kmeans'];
+close all;
+plotCellEI(combined_cells,groupIdx,centerEI=false,...
+       plotGroup=plotGroup,groupColors=groupColors,groupNames=groupNames,...
+       save=false,figureName=figureName,resultPath=resultPath,print=true);
 
 
 
@@ -528,7 +563,7 @@ groupColors = {[.7 .7 .7],rewardColor,punishColor,...
 
 % Plot figure
 close all;
-plotCellEI(combined_cells,groupIdx,nboot=10000,centerEI=true,...
+plotCellEI(combined_cells,groupIdx,nboot=10000,centerEI=false,...
            plotGroup=plotGroup,groupColors=groupColors,groupNames=groupNames,...
            save=false,figureName=figureName,resultPath=resultPath,print=true);
 
@@ -625,7 +660,8 @@ close all;
 figureName = 'CellEI-DAslope-ReversalExcluded';
 plotCellEI(combined_cells,groupIdx,centerEI=false,...
        plotGroup=plotGroup,groupColors=groupColors,groupNames=groupNames,...
-       save=true,figureName=figureName,resultPath=resultPath,print=true);
+       save=false,figureName=figureName,resultPath=resultPath,print=true);
+
 
 %% Fig 4 supp: compare last 30 trial, first 30 trial, value
 
@@ -634,6 +670,7 @@ sweepWindow = 20;
 endingSlope = zeros(length(DAtrend),1); 
 startingSlope = zeros(length(DAtrend),1);
 sessionValue = zeros(length(DAtrend),1);
+X = animalEIindex_peaks;
 
 for a = 1:length(DAtrend)
     % Get last n trial slope
@@ -659,91 +696,6 @@ valueColor = [.7 .7 .7];
 sweepColor = [184 140 1]/255;
 LineWidth = 5;
 nboot = 1000;
-
-% Plot first trial slope vs animal EI
-X = animalEIindex_peaks; Y = startingSlope; color = startingColor;
-[model,p_value,fit_boot] = fitScatter(X,Y,type='weighted',weights=nCells); slope = model(1);
-[r_spearman_starting, p_spearman_starting] = corr(X(:), Y(:), 'Type', 'Spearman');
-
-nexttile(master,1); 
-children = tiledlayout(master,4,1);
-children.Layout.Tile = 1; children.Layout.TileSpan = [1 1];
-children.TileSpacing = 'compact'; children.Padding = 'tight'; axis off;
-
-nexttile(children,1,[1 1]);
-histogram(fit_boot(:,1),200,EdgeColor=addOpacity(color,0.5),FaceColor=addOpacity(color,0.5)); hold on; 
-xline(slope,'-',['p=',num2str(p_value)],Color=color,LineWidth=3);
-box off; c = gca; c.YAxis(1).Visible = 'off';
-
-nexttile(children,2,[3 1]);
-scatter(X,Y,200,color,"filled"); hold on;
-xFit = linspace(min(X), max(X), 100);
-yFit = polyval(model, xFit);
-plot(xFit, yFit, color=color, LineWidth=LineWidth);
-xlabel('Animal EI index');
-ylabel('Distant DA slope');
-
-
-
-% Plot last trial slope vs animal EI
-X = animalEIindex_peaks; Y = endingSlope; color = endingColor;
-[model,p_value,fit_boot] = fitScatter(X,Y,type='weighted',weights=nCells); slope = model(1);
-[r_spearman_ending, p_spearman_ending] = corr(X(:), Y(:), 'Type', 'Spearman');
-
-nexttile(master,2); 
-children = tiledlayout(master,4,1);
-children.Layout.Tile = 2; children.Layout.TileSpan = [1 1];
-children.TileSpacing = 'compact'; children.Padding = 'tight'; axis off;
-
-nexttile(children,1,[1 1]);
-histogram(fit_boot(:,1),200,EdgeColor=addOpacity(color,0.5),FaceColor=addOpacity(color,0.5)); hold on; 
-xline(slope,'-',['p=',num2str(p_value)],Color=color,LineWidth=3);
-box off; c = gca; c.YAxis(1).Visible = 'off';
-
-nexttile(children,2,[3 1]);
-scatter(X,Y,200,color,"filled"); hold on;
-xFit = linspace(min(X), max(X), 100);
-yFit = polyval(model, xFit);
-plot(xFit, yFit, color=color, LineWidth=LineWidth);
-xlabel('Animal EI index');
-ylabel('Recent DA slope');
-
-
-
-% Plot average trial value vs animal EI
-X = animalEIindex_peaks; Y = sessionValue; color = valueColor;
-[model,p_value,fit_boot] = fitScatter(X,Y,type='weighted',weights=nCells); slope = model(1);
-[r_spearman_value, p_spearman_value] = corr(X(:), Y(:), 'Type', 'Spearman');
-
-nexttile(master,3); 
-children = tiledlayout(master,4,1);
-children.Layout.Tile = 3; children.Layout.TileSpan = [1 1];
-children.TileSpacing = 'compact'; children.Padding = 'tight'; axis off;
-
-nexttile(children,1,[1 1]);
-histogram(fit_boot(:,1),200,EdgeColor=addOpacity(color,0.5),FaceColor=addOpacity(color,0.5)); hold on; 
-xline(slope,'-',['p=',num2str(p_value)],Color=color,LineWidth=3);
-box off; c = gca; c.YAxis(1).Visible = 'off';
-
-nexttile(children,2,[3 1]);
-scatter(X,Y,200,color,"filled"); hold on;
-xFit = linspace(min(X), max(X), 100);
-yFit = polyval(model, xFit);
-plot(xFit, yFit, color=color, LineWidth=LineWidth);
-xlabel('Animal EI index');
-ylabel('Average DA amplitude');
-
-
-nexttile(master,4);
-plotScatterBar(1,r_spearman_starting,style='bar',color=startingColor,LineWidth=LineWidth);
-text(2,r_spearman_starting,['p = ',num2str(p_spearman_starting)]);
-plotScatterBar(2,r_spearman_ending,style='bar',color=endingColor,LineWidth=LineWidth);
-text(1,r_spearman_ending,['p = ',num2str(p_spearman_ending)]);
-plotScatterBar(3,r_spearman_value,style='bar',color=valueColor,LineWidth=LineWidth);
-text(3,r_spearman_value,['p = ',num2str(p_spearman_value)]);
-xticks([1 2 3]);
-xticklabels({'Distant DA slope','Recent DA slope','Average DA amplitude'});
-ylabel('Spearman correlation coefficient');
 
 
 % See trial window effects
@@ -967,12 +919,180 @@ ylabel('p value');
 box off
 % saveFigures(gcf,'Fig4-all',resultPath,saveFIG=true,savePDF=true,savePNG=true);
 
+%% (Fig 4 supp) Correlation of test set
+
+avgLastCorr = zeros(10000,1);
+avgLastCorrP = zeros(10000,1);
+avgUp = zeros(10000,1);
+avgDown = zeros(10000,1);
+avgStable = zeros(10000,1);
+
+for seed = 9062
+
+    % Settings
+    train_ratio = 0.8;
+    nAnimals = length(DAtrend);
+    trialWindowLength = 10:80;
+    animalEI = animalEIindex_peaks;
+    rng(seed);
+    
+    nRepeats = 100;
+    ending = zeros(nRepeats,1); 
+    ending_pvals = zeros(nRepeats,1); 
+    starting = zeros(nRepeats,1); 
+    starting_pvals = zeros(nRepeats,1); 
+    ending_val = zeros(nRepeats,1); 
+    ending_val_pvals = zeros(nRepeats,1); 
+    starting_val = zeros(nRepeats,1); 
+    starting_val_pvals = zeros(nRepeats,1); 
+    
+    avgCellEI_up = zeros(nRepeats,1);
+    avgCellEI_down = zeros(nRepeats,1);
+    avgCellEI_stable = zeros(nRepeats,1);
+    
+    x_common = linspace(-1, 1, 100);
+    upCDF = zeros(nRepeats,length(x_common));
+    stableCDF = zeros(nRepeats,length(x_common));
+    downCDF = zeros(nRepeats,length(x_common));
+    
+    % Repeat
+    for i = 1:nRepeats
+        % Split data into train and test set
+        randomIdx = randperm(nAnimals);
+        nTrain = round(train_ratio * nAnimals);
+        trainIdx = randomIdx(1 : nTrain);
+        testIdx = randomIdx(nTrain+1 : end);
+        
+        % Calculate best window (max correlation coefficient)
+        train_results = getEIDAwindow(animalEI,DAtrend,nCells,index=trainIdx,trialWindowLength=trialWindowLength);
+        
+        % Calculate ending slopes using maxCorrWindowLength
+        DAtrend_test = DAtrend(testIdx);
+        endingSlope = zeros(length(DAtrend_test),1);
+        startingSlope = zeros(length(DAtrend_test),1);
+        endingVals = zeros(length(DAtrend_test),1);
+        startingVals = zeros(length(DAtrend_test),1);
+    
+        for a = 1:length(DAtrend_test)
+            % Get last n trial slope
+            trialWindow = train_results.ending_slopes_maxWindow;
+            startTrial = max(1,DAtrend_test(a).nTrials-trialWindow);
+            endingSlope(a) = mean(DAtrend_test(a).amp.slopeMap.raw.map(startTrial,end));
+    
+            % Get first n trial slope
+            trialWindow = train_results.starting_slopes_maxWindow;
+            endingTrial = min(DAtrend_test(a).nTrials,trialWindow);
+            startingSlope(a) = mean(DAtrend_test(a).amp.slopeMap.raw.map(1,endingTrial));
+    
+            % Get last n trial slope
+            trialWindow = train_results.ending_vals_maxWindow;
+            startTrial = max(1,DAtrend_test(a).nTrials-trialWindow);
+            endingVals(a) = mean(DAtrend_test(a).amp.raw(startTrial:end));
+    
+            % Get first n trial slope
+            trialWindow = train_results.starting_vals_maxWindow;
+            endingTrial = min(DAtrend_test(a).nTrials,trialWindow);
+            startingVals(a) = mean(DAtrend_test(a).amp.raw(1:endingTrial));
+        end
+        
+        % Find the correlation in test set
+        X = animalEI(testIdx); Y = endingSlope;
+        [ending(i),ending_pvals(i)] = corr(X(:), Y(:), 'Type', 'Spearman');
+        X = animalEI(testIdx); Y = startingSlope;
+        [starting(i),starting_pvals(i)] = corr(X(:), Y(:), 'Type', 'Spearman');
+        X = animalEI(testIdx); Y = endingVals;
+        [ending_val(i),ending_val_pvals(i)] = corr(X(:), Y(:), 'Type', 'Spearman');
+        X = animalEI(testIdx); Y = startingVals;
+        [starting_val(i),starting_val_pvals(i)] = corr(X(:), Y(:), 'Type', 'Spearman');
+    
+        % Get cell EI diff
+        data = endingSlope; cellEI = EIindex_peaks;
+        grouped_test = groupEIbyDA(data,combined_cells.Animal,animalList(testIdx));
+        avgCellEI_up(i)     = mean(cellEI(grouped_test.up.cells));
+        avgCellEI_stable(i) = mean(cellEI(grouped_test.stable.cells));
+        avgCellEI_down(i)   = mean(cellEI(grouped_test.down.cells));
+    
+        % Get cdf trace
+        [f, x] = ecdf(cellEI(grouped_test.up.cells));
+        [x_unique, ia] = unique(x, 'stable'); f_unique = f(ia);
+        if length(x_unique) < 2; upCDF(i,:) = double(x_common >= x_unique);
+        else; upCDF(i, :) = interp1(x_unique, f_unique, x_common, 'previous', 'extrap'); 
+        end
+        [f, x] = ecdf(cellEI(grouped_test.stable.cells));
+        [x_unique, ia] = unique(x, 'stable'); f_unique = f(ia);
+        if length(x_unique) < 2; stableCDF(i,:) = double(x_common >= x_unique);
+        else; stableCDF(i, :) = interp1(x_unique, f_unique, x_common, 'previous', 'extrap'); 
+        end
+        [f, x] = ecdf(cellEI(grouped_test.down.cells));
+        [x_unique, ia] = unique(x, 'stable'); f_unique = f(ia);
+        if length(x_unique) < 2; downCDF(i,:) = double(x_common >= x_unique);
+        else; downCDF(i, :) = interp1(x_unique, f_unique, x_common, 'previous', 'extrap'); 
+        end
+    end
+
+
+    % Seed related testing
+    avgLastCorr(seed) = mean(ending);
+    avgLastCorrP(seed) = mean(ending_pvals);
+    avgUp(seed) = mean(avgCellEI_up,'all');
+    avgDown(seed) = mean(avgCellEI_down,'all');
+    avgStable(seed) = mean(avgCellEI_stable,'all');
+
+    disp(['Finished: ', num2str(seed)]);
+end
+
+%% Plot results
+endingColor = [0, 153, 153] / 255; %[128, 179, 255]./255;
+startingColor = [102, 204, 204] / 255; %[152, 201, 163]./255;
+endingValueColor = [.5 .5 .5];
+startinValueColor = [.7 .7 .7];
+upColor = [0, 158, 115]/255; %[122, 201, 67]/255;
+downColor = [135, 104, 247]/255; %[84, 137, 45]/255; 
+stableColor = [198, 156, 109]/255;
+
+initializeFig(0.7,0.5); tiledlayout(1,4);
+
+nexttile;
+plotScatterBar(1,ending,color=endingColor);
+plotScatterBar(2,starting,color=startingColor);
+plotScatterBar(3,ending_val,color=endingValueColor);
+plotScatterBar(4,starting_val,color=startinValueColor);
+ylabel('correlation coefficient');
+
+nexttile;
+plotScatterBar(1,ending_pvals,color=endingColor);
+plotScatterBar(2,starting_pvals,color=startingColor);
+plotScatterBar(3,ending_val_pvals,color=endingValueColor);
+plotScatterBar(4,starting_val_pvals,color=startinValueColor);
+ylabel('p value');
+
+nexttile; 
+histogram(avgCellEI_stable,30,faceColor=stableColor,edgeColor=stableColor); hold on;
+histogram(avgCellEI_down,30,faceColor=downColor,edgeColor=downColor); hold on;
+histogram(avgCellEI_up,30,faceColor=upColor,edgeColor=upColor);
+xlabel('EI index'); box off;
+
+nexttile;
+% Fill NaN
+upCDF = fillCDF(upCDF);
+stableCDF = fillCDF(stableCDF);
+downCDF = fillCDF(downCDF);
+plotSEM(x_common,stableCDF,stableColor);
+plotSEM(x_common,downCDF,downColor);
+plotSEM(x_common,upCDF,upColor);
+xlabel('EI index');
+ylabel('cumulative probability');
+
+
 
 %% (Fig 1 supp) For TRN patching
 
+% Load data
+load('/Volumes/MICROSCOPE/Shun/Project valence/Patch/TRN-LHb/combined_cells_20241003.mat');
+
 % Plot example cell
 close all;
-initializeFig(0.5,1); tiledlayout('flow');
+initializeFig(0.5,1); tiledlayout(1,3);
 [~,~] = getResponseTraces(combined_cells,cellList=18,...
                           plot=true,overlay=false,newFig=false,ylim=[-20,20],...
                           plotLegend=false,plotNormalized=false,plotIndividual=false);
@@ -1035,12 +1155,13 @@ plotScatterBar(2,ipscBaseCharge,color=ctrlColor);
 xticks([1,2]); xticklabels({'IPSC charge','Baseline charge'});
 ylim([-0.5,0.5]); ylabel('Charge (pC)');
 
-nexttile;
-histogram(epscBaseCharge,20,EdgeColor=ctrlColor,FaceColor=ctrlColor); hold on
-histogram(epscRespCharge,20,EdgeColor=exciColor,FaceColor=exciColor); hold on
-xlabel('Charge (pC)'); ylabel('Count');
+% nexttile;
+% histogram(epscBaseCharge,20,EdgeColor=ctrlColor,FaceColor=ctrlColor); hold on
+% histogram(epscRespCharge,20,EdgeColor=exciColor,FaceColor=exciColor); hold on
+% xlabel('Charge (pC)'); ylabel('Count');
+% 
+% nexttile;
+% histogram(ipscBaseCharge,20,EdgeColor=ctrlColor,FaceColor=ctrlColor); hold on
+% histogram(ipscRespCharge,20,EdgeColor=inhiColor,FaceColor=inhiColor); hold on
+% xlabel('Charge (pC)'); ylabel('Count');
 
-nexttile;
-histogram(ipscBaseCharge,20,EdgeColor=ctrlColor,FaceColor=ctrlColor); hold on
-histogram(ipscRespCharge,20,EdgeColor=inhiColor,FaceColor=inhiColor); hold on
-xlabel('Charge (pC)'); ylabel('Count');

@@ -146,19 +146,81 @@ for photometry = 1:nSignals
         nexttile;
         color = bluePurpleRed(colorListIdx(d),:);
         cur_duration = durationList(d);
-        blueStimIdx_duration = blueStimIdx(blueStimDuration == cur_duration);
-        [~,~] = plotTraces(blueStimIdx_duration,[-2,40],...
+        cur_blueStimIdx = blueStimIdx(blueStimDuration == cur_duration);
+        [~,~] = plotTraces(cur_blueStimIdx,[-2,40],...
                             signal,color,params,eventSystem='ni',...
                             signalFs=finalFs,signalSystem=system,...
                             plotIndividual=true);
         plotEvent(['Opto stim (', num2str(cur_duration),' sec)'],cur_duration,color=color);
         xlim([-2,40]);
-        legend(['Opto stim (n=',num2str(length(blueStimIdx_duration)),')']);
+        legend(['Opto stim (n=',num2str(length(cur_blueStimIdx)),')']);
     end
 end
 
 %% Scatter plot of grooming events aligned to start of opto-stim
 
+timeRange = [-2,40]; % in sec
+colorListIdx = round(linspace(1,500,numel(behaviors))); % color for each label
+initializeFig(1,1); tiledlayout('flow');
 
+% Sweep across all opto stim duration, creating a plot for each
+for d = 1:numel(durationList)
+    
+    % get all stim‐onset camera‐frames for this duration
+    cur_duration            = durationList(d);
+    theseNItimes            = blueStimIdx(blueStimDuration == cur_duration);
+    theseCamFrames          = findCorrespondingTime(theseNItimes, params.sync.timeNI, params.sync.timeCamera);
+    nTrials                 = numel(theseCamFrames);
+    stimTimes               = params.sync.timeCamera(theseCamFrames);
+    
+    nexttile; hold on;
+    
+    % plot each trial on its own horizontal stripe
+    for t = 1:nTrials
+        stimT = stimTimes(t);
+        
+        % for each behavior event...
+        for j = 1:height(labeledData)
+            % absolute times of the event
+            tStart = params.sync.timeCamera(labeledData.StartFrame(j));
+            tEnd   = params.sync.timeCamera(labeledData.EndFrame(j));
+            
+            % relative to this trial's stim onset
+            relStart = tStart - stimT;
+            relEnd   = tEnd   - stimT;
+            
+            % skip if completely outside the window
+            if relEnd < timeRange(1) || relStart > timeRange(2)
+                continue
+            end
+            
+            % optionally clamp to edges
+            x0 = max(relStart, timeRange(1));
+            w  = min(relEnd, timeRange(2)) - x0;
+            
+            % find which color for this behavior label
+            lblIdx = strcmp(behaviors, labeledData.Label{j});
+            col    = bluePurpleRed(colorListIdx(lblIdx),:);
+            
+            % draw a little horizontal bar at y = t
+            rectangle('Position', [x0, t-0.4, w, 0.8], 'FaceColor', col, 'EdgeColor', 'none', 'FaceAlpha',0.8);
+        end
+    end
+    
+    % cosmetics
+    xlim(timeRange);
+    ylim([0.5, nTrials+0.5]);
+    plotEvent(['Opto stim (', num2str(cur_duration),' sec)'],cur_duration,color=bluePurpleRed(1,:))
+    xlabel('Time from stim (s)');
+    ylabel('Trials');
+    title(sprintf('Opto duration = %.1f s', cur_duration));
+    
+    % add a legend (once per tile)
+    h = gobjects(numel(behaviors),1);
+    for k = 1:numel(behaviors)
+        h(k) = patch(NaN, NaN, bluePurpleRed(colorListIdx(k),:));
+    end
+    legend(h, behaviors, 'Location', 'eastoutside');
+end
 
 end
