@@ -45,6 +45,13 @@ if ~options.sameSystem
         if ~isfield(params.session,'baselineSystem'); options.eventSystem = 'ni';
         else; options.eventSystem = params.session.baselineSystem; end
     end
+
+    % added by Emily Ferenczi 7/29/25 to make compatible with news rig
+    if isfield(options,'eventSystem')
+        if ~strcmp(params.session.baselineSystem,options.eventSystem)
+            options.eventSystem = params.session.baselineSystem; 
+        end
+    end
     
     % 1. Initialize event and signal system time
     % 1.1 Define event system time

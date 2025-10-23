@@ -21,11 +21,14 @@ purpleWhiteGreen = getColormap(darkPurple,green,500,'midCol',[255 255 255]);
 blackDarkgrayLightgray = getColormap(black,darkGray,500,'midCol',lightGray);
 
 % Color palettes
-fourColors = string([ ...
+mainColors = string([ ...
     '#4B5CCC'; % blue, rewarded
     '#FF6198'; % pink, omission
     '#C967ED'; % purple, light in ACC
     '#82ED82'; % green, light in OFC
+    '#CC1A99'; % red-purple, light in PL
+    '#008B8B'; % teal, light in SC
+    '#8C564B'; % brown, light in IRt
     ]); 
 
 colors = string([ ...
@@ -39,7 +42,7 @@ colors = string([ ...
     '#999DA0'; % gray
     '#d12156']); % red
 
-varargout{1} = fourColors;
+varargout{1} = mainColors;
 varargout{2} = colors;
 varargout{3} = blackDarkgrayLightgray;
 varargout{4} = purpleWhiteOrange;
@@ -57,7 +60,7 @@ end
 %     '#ac56c3'; '#cf55b7'; '#ea57a8'; '#ff6098'; ...
 %     '#ff7d7b'; '#ffa564'; '#ffcf5c'; '#f9f871']);
 
-% this is how i get the purple and green colors in fourColors palette
+% this is how i get the purple and green colors in mainColors palette
     % % Define colors
     % lighterGray = [0.75, 0.75, 0.75]; % Lightened gray for no light condition
     % darkGray = [0.5, 0.5, 0.5]; % Slightly darker gray for contrast

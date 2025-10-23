@@ -88,13 +88,6 @@ allTrials_ds = sortrows([[goCue_ds;nogoCue_ds], [ones(length(goCue_ds),1); zeros
 
 %% 1/4/24 - EF edit 
 
-% Clean trials table up (remove last row with no data)
-for i = 1:height(trials)
-    if trials.TrialNumber(i) == 0
-        trials(i,:) = []; 
-    end 
-end 
-
 % For edge case when commonStartTime is after the first trial or the time 
 % of the last cue is after the end of NIWindow (meaning that the number of original trials 
 % (in "trials" table)is greater than the the number of downsampled trials (allTrials_ds))
@@ -106,9 +99,17 @@ if height(trials) > height(allTrials_ds)
     trials = trials(newFirstTrial:newLastTrial,:);
 end
 
+% Clean trials table up (remove last row with no data)
+for i = 1:height(trials)
+    if trials.TrialNumber(i) == 0
+        trials(i,:) = []; 
+    end 
+end 
+
 %% Fill in trial outcomes for GLM table
 
 for i = 1:height(trials)
+    
     cur_cue = allTrials_ds(i);
 
     if i == 1; glm_ds.outcome(1:cur_cue) = 'NA'; end

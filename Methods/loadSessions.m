@@ -4,7 +4,7 @@ arguments
    sessionpath string
 
    % Record params
-   options.NISetup string = 'Shun'
+   options.NISetup string = 'clamp'
    options.withPhotometryNI logical = false
    options.photometryNI_mod logical = false
    options.photometryNI_modFreq double = 0
@@ -228,6 +228,25 @@ if withNI
                 savedDigitalNI = [];
             end
 
+        elseif strcmpi(options.NISetup,'clamp')
+            leftLick = channels{1}; rightLick = channels{2};
+            blueClamp = channels{3}; redClamp = channels{4}; photometry_raw = channels{5};
+
+            airpuff = channels{6}; allTones = channels{13};
+            leftSolenoid = channels{7}; rightSolenoid = channels{8};
+            leftTone = channels{9}; rightTone = channels{10};
+            redLaser = channels{11}; blueLaser = channels{12};
+            syncNI = channels{14};
+            
+            if options.saveDigitalNI
+                if ~isfield(options,'saveDigitalNIChannelIdx')
+                    options.saveDigitalNIChannelIdx = 1:size(digitalNI,1);
+                end
+                savedDigitalNI = digitalNI(options.saveDigitalNIChannelIdx,:);
+            else
+                savedDigitalNI = [];
+            end
+
         elseif strcmpi(options.NISetup,'Kevin')
             syncNI = channels{1}; leftLick = channels{2};
             rightLick_analog = channels{3}; leftNose = channels{4};
@@ -257,6 +276,18 @@ if withNI
                 save(dataOutputName,...
                     'airpuff','leftLick','rightLick','leftTone','rightTone',....
                     'leftSolenoid','rightSolenoid','allTones','blink','gyro',...
+                    'blueLaser','redLaser','savedDigitalNI','-append');
+            end
+        elseif strcmpi(options.NISetup,'clamp')
+            if options.withPhotometryNI || options.noSyncPulse
+                save(dataOutputName,...
+                    'airpuff','leftLick','rightLick','leftTone','rightTone',....
+                    'leftSolenoid','rightSolenoid','allTones','blueClamp','redClamp',...
+                    'photometry_raw','blueLaser','redLaser','savedDigitalNI','-append');
+            else
+                save(dataOutputName,...
+                    'airpuff','leftLick','rightLick','leftTone','rightTone',....
+                    'leftSolenoid','rightSolenoid','allTones','blueClamp','redClamp',...
                     'blueLaser','redLaser','savedDigitalNI','-append');
             end
         elseif strcmpi(options.NISetup,'Kevin')
@@ -342,22 +373,24 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
             labjack.nSignals = sum(labjack.record);
             % Remove non-recorded channels
             labjack.raw(find(~labjack.record),:) = [];
-            labjack.modulation(find(~labjack.record),:) = [];
+            labjack.modulation(find(~labjack.record),:) = [];s
             labjack.name(find(~labjack.record)) = [];
             updateLabjack = true;
         end
         %if sum(labjack.record == options.recordLJ)~=length(labjack.record) 
         %edited by Emily 6/28/24 to work with new rig
-        if size(labjack.record) ~= size(options.recordLJ)
-        disp(['labjack.record: ',labjack.record]);
+        if size(labjack.record,2) ~= size(options.recordLJ,2)
+            disp(['labjack.record: ',labjack.record]);
             disp(['options.recordLJ: ',options.recordLJ]);
             warning(['labjack.record does not agree with recordLJ, use labjack.record = ',num2str(labjack.record)]); 
         end
 
         % Update old recording's frequency modulation parameters
-        if sum(labjack.modFreq == [167,223,0]) == length(labjack.modFreq)
-            labjack.modFreq = [171,228,0];
-            save(strcat(session.path,filesep,'data_labjack.mat'));
+        if size(labjack.modFreq,2) == 3 %added by Emily to work with Emily new rig
+            if sum(labjack.modFreq == [167,223,0]) == length(labjack.modFreq)
+                labjack.modFreq = [171,228,0];
+                save(strcat(session.path,filesep,'data_labjack.mat'));
+            end
         end
         disp('Finished: concatenate and saved raw photometry data in data_labjack.mat');
         disp(labjack);

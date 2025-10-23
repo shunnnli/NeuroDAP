@@ -1,4 +1,4 @@
-% Shun_figure_paAIP2.m
+% Shun_figure_noOpsin.m
 
 %% Setup
 
@@ -22,24 +22,55 @@ for file = 1:length(fileList)
     disp(['Finished: loaded ',dirsplit{end}]);
 end
 
+
+%% Baseline DA: plot water, airpuff, stim, tone
+
+timeRange = [-0.5,3];
+eventRange = {'Water','Airpuff','Stim','Tone'};
+animalRange = 'All';
+taskRange = 'Random';
+trialRange = 'All'; % range of trials in each session
+totalTrialRange = 'All';
+signalRange = {'NAc'};
+
+colorList = {bluePurpleRed(1,:),[.2,.2,.2],bluePurpleRed(500,:),bluePurpleRed(100,:)};
+eventDuration = [0,.1,.5,.5];
+
+for s = 1:length(signalRange)
+    initializeFig(.5,.5); tiledlayout(2,2);
+    for i = 1:length(eventRange)
+        nexttile;
+        combined = combineTraces(animals,timeRange=timeRange,...
+                                    eventRange=eventRange{i},...
+                                    animalRange=animalRange,...
+                                    taskRange=taskRange,...
+                                    totalTrialRange=totalTrialRange,...
+                                    trialRange=trialRange,...
+                                    signalRange=signalRange{s});
+        plotTraces(combined.data{1},combined.timestamp,color=colorList{i});
+        xlabel('Time (s)'); ylabel([signalRange{s},' z-score']); ylim([-1,4]);
+        plotEvent(eventRange{i},eventDuration(i),color=colorList{i});
+        legend([eventRange{i},' (n=',num2str(size(combined.data{1},1)),')'],...
+                'Location','northeast');
+    end
+    % saveFigures(gcf,'Summary_random_dLight',...
+    %         strcat(resultspath),...
+    %         saveFIG=true,savePDF=true);
+end
+
 %% Plot overall to show animal learned
 
 timeRange = [-0.5,3];
-eventRange = {'Stim','Pair','Tone'};
+eventRange = {'Stim','Pair'};
 animalRange = 'All';
 totalTrialRange = 'All';
 trialRange = 'All';
-signalRange = 'dLight';
+signalRange = 'NAc';
 
 colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),bluePurpleRed(100,:)};
 groupSizeList = [50;50;10];
 nGroupsList = [15;15;15];
-
-taskRange = {'Reward1 (paAIP2)','Punish1 (paAIP2)'}; % first part
-ylimList = [-0.75,2.5; -0.75,1.5; -1,2.5; -1.25,1.75]; % first part
-
-% taskRange = {'Reward2 (Ctrl)'}; % second part
-% ylimList = [-1.5,1; -1.5,1; -1.5,1; -1.25,1.75]; % Second part
+taskRange = {'Reward1','Punish1'};
 
 for task = 1:length(taskRange)
     initializeFig(1,0.5); tiledlayout('flow');
@@ -68,9 +99,9 @@ end
 %% Plot grouped CS DA response (grouped across animal and 10 trials)
 
 % First part
-taskRange = {'Reward1 (paAIP2)','Punish1 (paAIP2)'};
-statsTypes = {'stageAmp','stageAmp'}; ylabelList = {'Amp DA response during cue','Amp DA response during cue'};
-ylim = [-0.5,2; -0.5,3];
+taskRange = {'Reward1','Punish1'};
+statsTypes = {'stageMax','stageMin'}; ylabelList = {'DA amplitude','DA amplitude'};
+% ylim = [-1.5,3; -1.5,3];
 
 animalRange = 'All';
 
@@ -81,11 +112,11 @@ combinedStats = getGroupedTrialStats(animals,statsTypes,...
                             eventRange=eventRange,...
                             animalRange=animalRange,...
                             taskRange=taskRange,...
-                            signalRange='dLight');
+                            signalRange='NAc');
 
 initializeFig(.7,.7); tiledlayout('flow');
-results = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,color=colorList,ylim=ylim,...
-                                xlimIdx=2,xlim=[1,150]);
+results = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,color=colorList,...
+                                xlimIdx=2,xlim=[1,150],plotCommonTrials=true);
 
 % saveFigures(gcf,'Summary_CSvsTrialsGrouped_Pairing1_Amp',...
 %         strcat(resultspath),...
@@ -111,72 +142,9 @@ for task = 1:length(results.stats)
 
     xticks(1:length(eventRange)); xticklabels(eventRange);
     ylabel('Slope of DA amplitude during CS');
-    if task == 2; ylim([-0.3,0.2]); end
+    % ylim([-1,1]);
 end
 
 % saveFigures(gcf,'Summary_CSvsTrialsGrouped_Pairing1_slopeBox',...
-%         strcat(resultspath),...
-%         saveFIG=true,savePDF=true);
-
-%%
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-%% (Supp) Plot grouped CS DA response (grouped across animal and 10 trials)
-
-% First part
-taskRange = {'Reward1 (paAIP2)','Punish1 (paAIP2)'};
-% taskRange = {'Reward2 (Ctrl)','Punish2 (paAIP2)'};
-% statsTypes = {'stageMax','stageMin'}; ylabelList = {'Max DA response during cue','Max DA response during cue'};
-statsTypes = {'stageAmp','stageAmp'}; ylabelList = {'Amp DA response during cue','Amp DA response during cue'};
-ylimit = [-0.5,2; -0.5,3];
-
-% Second part
-% taskRange = {'Punish (paAIP2)'};
-% statsTypes = {'stageAmp','stageAmp'}; ylabelList = {'Amp DA response during cue','Amp DA response during cue'};
-% ylim = [-1,2.1; -1.5,2.5];
-
-animalRange = 'All';
-conditionRange = 'All';
-signalRange = 'dLight';
-
-% eventRange = {'Baseline','Pair','Tone','Stim'};
-% colorList = {[0.8,0.8,0.8],bluePurpleRed(300,:),bluePurpleRed(100,:),bluePurpleRed(500,:)};
-eventRange = {'Baseline','Stim','Pair'};
-colorList = {[0.8,0.8,0.8],bluePurpleRed(500,:),bluePurpleRed(300,:)};
-
-combinedStats = getGroupedTrialStats(animals,statsTypes,...
-                            eventRange=eventRange,...
-                            animalRange=animalRange,...
-                            taskRange=taskRange,...
-                            signalRange=signalRange);
-
-initializeFig(.7,.7); tiledlayout('flow');
-results = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,color=colorList,ylim=ylimit,...
-                                xlimIdx=2,xlim=[1,150],plotIndividual=false);
-
-% saveFigures(gcf,'Summary_CSvsTrialsGrouped_Pairing1_Amp',...
 %         strcat(resultspath),...
 %         saveFIG=true,savePDF=true);

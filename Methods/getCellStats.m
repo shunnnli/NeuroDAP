@@ -51,8 +51,10 @@ for c = 1:length(cellList)
             response_stats = response_stats(included == 1);
         end
         if options.average
-            baseline_stats = mean(baseline_stats);
-            response_stats = mean(response_stats);
+            baseline_finite = baseline_stats(isfinite(baseline_stats));
+            response_finite = response_stats(isfinite(response_stats));
+            baseline_stats = mean(baseline_finite);
+            response_stats = mean(response_finite);
         end
     else
         qc = mergeStructs(curCell.QC{1}(vholdRows));
@@ -69,7 +71,9 @@ for c = 1:length(cellList)
                     data = data(included == 1);
                 end
                 if options.average
-                    data = mean(data,'omitmissing');
+                    data_finite = data(isfinite(data));
+                    data_final = rmoutliers(data_finite,'quartiles');
+                    data = mean(data_final,'omitmissing');
                 end
                 
                 qc.(metrics{f}) = data;

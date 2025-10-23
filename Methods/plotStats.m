@@ -6,6 +6,7 @@ arguments
     xloc double = [0 1] % must be size [1,2]
     
     options.testType string = 'kstest'
+    options.textType string = '*'
     
     options.LineWidth double = 2 
     options.LineLengthProportion double = 0.75
@@ -48,8 +49,25 @@ else
 end
 
 plot([xlineStart xlineEnd],ones(1,2)*height,'Color','k','LineWidth',options.LineWidth); hold on
-text(xlineCenter,height,strcat("p = ",num2str(round(pvalue,4))),'FontSize',options.FontSize,...
-    'HorizontalAlignment','center',...
-    'VerticalAlignment','Bottom');
+if strcmpi(options.textType,'*')
+    if pvalue > 0.05
+        stars = 'n.s.';
+    elseif pvalue <= 1e-4
+        stars = '****';
+    elseif pvalue <= 1e-3
+        stars = '***';
+    elseif pvalue <= 1e-2
+        stars = '**';
+    else
+        stars = '*';
+    end
+    text(xlineCenter,height,stars,'FontSize',options.FontSize,...
+        'HorizontalAlignment','center',...
+        'VerticalAlignment','Bottom');
+else
+    text(xlineCenter,height,strcat("p = ",num2str(round(pvalue,4))),'FontSize',options.FontSize,...
+        'HorizontalAlignment','center',...
+        'VerticalAlignment','Bottom');
+end
 
 end

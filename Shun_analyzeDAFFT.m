@@ -1,10 +1,9 @@
 % Shun_analyzeDAFFT.m
 
-% By Shun Li and Grace Knipe, 2025
+% By Shun Li, 2025
 
 %% Load a list of sessions
 clear; close all;
-% addpath(genpath('/Users/graceknipe/Desktop/HMS Sabatini Lab/NeuroDAP'));
 addpath(genpath(osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
 
 % sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Recordings'))';
@@ -315,48 +314,73 @@ paAIP2Color = bluePurpleRed(500,:);
 
 % Water
 initializeFig(0.3,0.5); 
-event = 'reward';
-task = 'All';
+event = 'Stim';
+task = 'reward';
 signal = 'dLight';
 totalTrialRange = [1,10];
+timeRange = [10,15];
 
-close all; initializeFig(0.5,0.5); tiledlayout('flow');
-combinedTraces_iGluSnFR = combineTraces(animals_iGluSnFR,timeRange=[-0.5,3],...
+close all; initializeFig(0.7,0.5); master = tiledlayout('flow');
+combinedTraces_iGluSnFR = combineTraces(animals_iGluSnFR,timeRange=timeRange,...
+                            eventRange=event,taskRange=task,signalRange='iGluSnFR',...
+                            totalTrialRange=totalTrialRange,combineStats=false);
+combinedTraces_dLight = combineTraces(animals_iGluSnFR,timeRange=timeRange,...
+                            eventRange=event,taskRange=task,signalRange='dLight',...
+                            totalTrialRange=totalTrialRange,combineStats=false);
+combinedTraces_taCasp3 = combineTraces(animals_taCasp3,timeRange=timeRange,...
+                                eventRange=event,taskRange=task,signalRange=signal,...
+                                totalTrialRange=totalTrialRange,combineStats=false);
+combinedTraces_paAIP2 = combineTraces(animals_paAIP2,timeRange=timeRange,...
                             eventRange=event,taskRange=task,signalRange=signal,...
                             totalTrialRange=totalTrialRange,combineStats=false);
-if contains(signal,'dLight')
-    combinedTraces_taCasp3 = combineTraces(animals_taCasp3,timeRange=[-0.5,3],...
-                                eventRange=event,taskRange=task,signalRange=signal,...
-                                totalTrialRange=totalTrialRange,combineStats=false);
-    combinedTraces_paAIP2 = combineTraces(animals_paAIP2,timeRange=[-0.5,3],...
-                                eventRange=event,taskRange=task,signalRange=signal,...
-                                totalTrialRange=totalTrialRange,combineStats=false);
-end
+
 
 timestamp = combinedTraces_iGluSnFR.timestamp;
 data_iGluSnFR = combinedTraces_iGluSnFR.data{1};
-if contains(signal,'dLight')
-    data_taCasp3 = combinedTraces_taCasp3.data{1};
-    data_paAIP2 = combinedTraces_paAIP2.data{1};
-end
+data_dLight = combinedTraces_dLight.data{1};
+data_taCasp3 = combinedTraces_taCasp3.data{1};
+data_paAIP2 = combinedTraces_paAIP2.data{1};
 
+% Plot event aligned trace
 nexttile;
 plotTraces(data_iGluSnFR,timestamp,color=iGluSnFRColor);
-if contains(signal,'dLight')
-    plotTraces(data_taCasp3,timestamp,color=taCasp3Color);
-    plotTraces(data_paAIP2,timestamp,color=paAIP2Color);
-end
+plotTraces(data_dLight,timestamp,color=addOpacity(iGluSnFRColor,0.5));
+plotTraces(data_taCasp3,timestamp,color=taCasp3Color);
+plotTraces(data_paAIP2,timestamp,color=paAIP2Color);
 plotEvent('Water',0,color=bluePurpleRed(1,:))
 xlabel('Time (s)'); ylabel('z-score');
 
 % FFT on event aligned trace
 nexttile;
 [fftFreq,fft_iGluSnFR] = plotFFT(data_iGluSnFR,color=iGluSnFRColor,Fs=50,print=false);
-if contains(signal,'dLight')
-    [~,fft_taCasp3] = plotFFT(data_taCasp3,color=taCasp3Color,Fs=50,print=false);
-    [~,fft_paAIP2] = plotFFT(data_paAIP2,color=paAIP2Color,Fs=50,print=false);
-end
-xlabel('Frequency (Hz)'); ylabel('Power'); xlim([5,25]);
+[~,fft_dLight] = plotFFT(data_dLight,color=addOpacity(iGluSnFRColor,0.5),Fs=50,print=false);
+[~,fft_taCasp3] = plotFFT(data_taCasp3,color=taCasp3Color,Fs=50,print=false);
+[~,fft_paAIP2] = plotFFT(data_paAIP2,color=paAIP2Color,Fs=50,print=false);
+xlabel('Frequency (Hz)'); ylabel('Power'); xlim([0,25]);
+
+% Spectrogram on event aligned trace
+nexttile;
+children = tiledlayout(master,2,2); children.Layout.Tile = 3;
+children.TileSpacing = 'compact'; children.Padding = 'tight'; axis off;
+
+fs       = 50;
+window   = round(0.2 * fs);               
+noverlap = round(0.7 * window);
+nfft     = 2^nextpow2(window); % next power of 2 ≥ window
+
+% now call with fs and 'yaxis'
+nexttile(children,1);
+spectrogram(mean(data_iGluSnFR,1),window,noverlap,nfft,fs,'yaxis');
+title('iGluSnFR');
+nexttile(children,2); 
+spectrogram(mean(data_dLight,1),window,noverlap,nfft,fs,'yaxis');
+title('dLight');
+nexttile(children,3); 
+spectrogram(mean(data_taCasp3,1),window,noverlap,nfft,fs,'yaxis');
+title('taCasp3');
+nexttile(children,4); 
+spectrogram(mean(data_paAIP2,1),window,noverlap,nfft,fs,'yaxis');
+title('paAIP2');
 
 %% ACF analysis (sensor too slow to see anything)
 
@@ -403,16 +427,19 @@ close all; initializeFig(0.7,0.5); tiledlayout('flow');
 LineWidth = 4; 
 % rng(0, 'twister');
 
+data_taCasp3 = data_dLight;
+
 nexttile;
-c = crossCorr2D(data_iGluSnFR,data_taCasp3,average=true);
+c = crossCorr2D(data_iGluSnFR,data_dLight,average=true);
 imagesc(timestamp, timestamp, c); colorbar;
 xline(0,LineWidth=LineWidth,Color='w',LineStyle='--'); hold on;
 yline(0,LineWidth=LineWidth,Color='w',LineStyle='--'); hold on;
 plot(timestamp, timestamp,LineWidth=LineWidth,Color='w',LineStyle='--'); hold on;
-xlabel('taCasp3: time (s)');
+xlabel('dLight: time (s)');
 ylabel('iGluSnFR: time (s)');
-title('iGluSnFR vs taCasp3');
+title('iGluSnFR vs dLight');
 
+%%
 nexttile;
 c = crossCorr2D(data_iGluSnFR,data_paAIP2,average=true);
 imagesc(timestamp, timestamp, c); colorbar;

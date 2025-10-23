@@ -290,7 +290,7 @@ animalRange = {'SL155','SL156','SL157','SL158','SL159'};
 taskRange = 'Random';
 trialRange = 'All'; % range of trials in each session
 totalTrialRange = 'All';
-signalRange = {'NAc'};
+signalRange = {'dLight'};
 
 colorList = {bluePurpleRed(1,:),[.2,.2,.2],bluePurpleRed(500,:),bluePurpleRed(100,:)};
 eventDuration = [0,.1,.5,.5];
@@ -313,9 +313,9 @@ for s = 1:length(signalRange)
                 [eventRange{i},' (n=',num2str(size(combined.data{1},1)),')']},...
                 'Location','northeast');
     end
-    saveFigures(gcf,'Summary_random_dLight',...
-            strcat(resultspath),...
-            saveFIG=true,savePDF=true);
+    % saveFigures(gcf,'Summary_random_dLight',...
+    %         strcat(resultspath),...
+    %         saveFIG=true,savePDF=true);
 end
 
 %% Plot overall to show animal learned

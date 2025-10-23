@@ -45,8 +45,8 @@ epochs = loadSlices(expPath,reload=sessionParams.reload,...
                     saveDataPath=saveDataPath,...
                     plot=false);
 
-%% Process data for random search epoch
-% This will take the most amount of time and is the most important step
+% Process data for random search epoch
+% This will take the33 most amount of time and is the most important step
 
 % For each search depth, it separately save a file that stores all the
 % params and also responses, QC, and statistics of that search depth
@@ -55,7 +55,7 @@ close all;
 loadSlicesDMD(epochs,reload=false,reloadCells=true,reloadCellAnalysis=true);
 % loadSlicesDMD(epochs,reload=true);
 
-%% Plot DMD results
+% Plot DMD results
 % Plot results for all searches in this session
 close all;
 cells = analyzeSlice_DMD_Paolo(expPath,resultsPathDate='newest',...
@@ -64,6 +64,14 @@ cells = analyzeSlice_DMD_Paolo(expPath,resultsPathDate='newest',...
                         plotSearch=true,plotPairs=false,...
                         savePNG=false,savePDF=true,saveFIG=false);
 return
+
+% Plot search summary with features
+
+responseTypeBlue = 'excitatory';
+responseTypeRed = 'none';
+savePlots = 1;
+
+scriptPlotSearchSummaryMouse;
 
 %% Plot search summary
 % Just plot results for a specific search in a session

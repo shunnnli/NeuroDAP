@@ -83,7 +83,6 @@ taskRange = {'Reward','Punish'};
 statsTypes = {'stageAmp','stageAmp'}; ylabelList = {'Amp DA response during cue','Amp DA response during cue'};
 ylimList = [-0.5,2.5; -0.5,2];
 
-% animalRange = {'SL043','SL044','SL046','SL060','SL062','SL064','SL066','SL068'};%'All';
 animalRange = 'all';
 conditionRange = 'All';
 signalRange = 'dLight';
@@ -92,7 +91,6 @@ trialConditions = 'trials.performing';
 eventRange = {'Baseline','Stim','Pair'};
 colorList = {[0.8,0.8,0.8],bluePurpleRed(500,:),bluePurpleRed(300,:)};
 
-groupSize = 10; % numbers of trials to calculate average
 combinedStats = getGroupedTrialStats(animals,statsTypes,...
                             eventRange=eventRange,...
                             animalRange=animalRange,...
@@ -250,5 +248,87 @@ for task = 1:length(results.stats)
 
         xticks([1 2]); xticklabels({'Early trials','Late trials'});
         ylabel(statsType);
+    end
+end
+
+
+
+
+
+
+
+
+
+%% (Test reset) Plot first 10 trials of very session
+
+% Load combined data set
+% load('/Volumes/MICROSCOPE/Shun/Project valence/Results/Summary-OptoPairDA/combined_animals_withiGluSnFR.mat');
+
+% Extract amplitude response from database
+taskRange = {'Reward','Punish'};
+statsTypes = {'stageAmp','stageAmp'}; ylabelList = {'Amp DA response during cue','Amp DA response during cue'};
+ylimList = [-0.5,2.5; -0.5,2];
+
+animalRange = 'all';
+conditionRange = 'All';
+signalRange = 'dLight';
+trialConditions = 'trials.performing';
+
+eventRange = {'Stim','Pair'};
+colorList = {[0.8,0.8,0.8],bluePurpleRed(500,:),bluePurpleRed(300,:)};
+
+combinedStats = getGroupedTrialStats(combined_animals,statsTypes,...
+                            eventRange=eventRange,...
+                            animalRange=animalRange,...
+                            taskRange=taskRange,...
+                            totalTrialRange=conditionRange,...
+                            signalRange=signalRange,...
+                            trialConditions=trialConditions,concatSessions=false);
+
+
+% Extract out session transitions
+trialWindows = [-10,10]; xaxis = trialWindows(1):trialWindows(2);
+
+for t = 1:numel(taskRange)
+    
+    taskData = combinedStats.stats{t};
+    nAnimals = size(taskData,1);
+    allTransitions = cell(10,numel(eventRange));
+    transitions = nan(nAnimals,trialWindows(2)-trialWindows(1));
+
+    initializeFig(0.5,0.5); tiledlayout('flow');
+
+    % Extract transition data
+    for e = 1:numel(eventRange)
+        for a = 1:nAnimals
+            animalData = taskData{a,e};
+            if ~isempty(animalData)
+                for s = 2:numel(animalData)
+                    nTrials = min(size(animalData{s-1},1),(size(animalData{s},1)));
+                    if size(animalData{s-1},1) >= abs(trialWindows(1)) && size(animalData{s},1) >= abs(trialWindows(2))
+                        endData   = animalData{s-1}(end+trialWindows(1):end,2);
+                        startData = animalData{s}(1:trialWindows(2),2);
+                        transitionData = [endData;startData]';
+                        allTransitions{s-1,e} = [allTransitions{s-1};transitionData];
+                    end
+                end
+            end
+        end
+    end
+
+    % Plot something
+    for e = 1:numel(eventRange)
+        nexttile;
+        nonEmptyIdx = find(~cellfun(@isempty, allTransitions(:,e)));
+        colorList = round(linspace(1,500,length(nonEmptyIdx)));
+        for trans = 1:length(nonEmptyIdx)
+            transitionData = allTransitions{nonEmptyIdx(trans),e};
+            if ~isempty(transitionData)
+                plotSEM(xaxis,transitionData,bluePurpleRed(colorList(trans),:));
+            end
+        end
+        title(eventRange{e});
+        xlabel('Trials from session transition');
+        ylabel('DA amplitude');
     end
 end

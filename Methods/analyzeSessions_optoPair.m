@@ -6,6 +6,7 @@ arguments
     options.task
     options.outputName string %name of the output file in subfolder of the session
     
+    options.laserSource string = 'original'
     options.redStim logical = true
     options.redStimPattern cell
     options.blueStimPattern cell
@@ -240,54 +241,61 @@ end
 
 
 % Find start of opto cue
-blueStimIdx = find(blueLaser);
-redStimIdx = find(redLaser);
+if strcmpi(options.laserSource,'clamp')
+    blueLaser = blueClamp;
+    redLaser = redClamp;
 
-if strcmpi(params.stim.color,'red')
-    cueStimPulses = redStimIdx; 
-    nPulsesPerStim_cue = params.stim.nPulsesPerStim_red;
-    stimDuration_cue = params.stim.stimDuration_red;
-    otherStimPulses = blueStimIdx;
-    nPulsesPerStim_other = params.stim.nPulsesPerStim_blue;
-    stimDuration_other = params.stim.stimDuration_blue;
-elseif strcmpi(params.stim.color,'blue')
-    cueStimPulses = blueStimIdx; 
-    nPulsesPerStim_cue = params.stim.nPulsesPerStim_blue;
-    stimDuration_cue = params.stim.stimDuration_blue;
-    otherStimPulses = redStimIdx;
-    nPulsesPerStim_other = params.stim.nPulsesPerStim_red;
-    stimDuration_other = params.stim.stimDuration_red;
-end
     
-if ~exist('optoStim1','var') || options.redo
-    if  ~isempty(find(cueStimPulses, 1))
-        if nPulsesPerStim_cue > 1
-            % Save first pulse data for stim
-            intervalThreshold = 10000;
-            temp_interval = [100000,diff(cueStimPulses)];
-            optoStim1 = cueStimPulses(temp_interval > intervalThreshold);
-            save(strcat(sessionpath,filesep,'timeseries_',options.outputName),"optoStim1",'-append');
-        else
-            optoStim1 = cueStimPulses;
-        end
-    else
-        optoStim1 = [];
+else
+    blueStimIdx = find(blueLaser);
+    redStimIdx = find(redLaser);
+    
+    if strcmpi(params.stim.color,'red')
+        cueStimPulses = redStimIdx; 
+        nPulsesPerStim_cue = params.stim.nPulsesPerStim_red;
+        stimDuration_cue = params.stim.stimDuration_red;
+        otherStimPulses = blueStimIdx;
+        nPulsesPerStim_other = params.stim.nPulsesPerStim_blue;
+        stimDuration_other = params.stim.stimDuration_blue;
+    elseif strcmpi(params.stim.color,'blue')
+        cueStimPulses = blueStimIdx; 
+        nPulsesPerStim_cue = params.stim.nPulsesPerStim_blue;
+        stimDuration_cue = params.stim.stimDuration_blue;
+        otherStimPulses = redStimIdx;
+        nPulsesPerStim_other = params.stim.nPulsesPerStim_red;
+        stimDuration_other = params.stim.stimDuration_red;
     end
-
-    if  ~isempty(find(otherStimPulses, 1))
-        if nPulsesPerStim_other > 1
-            % Save first pulse data for other color stim
-            intervalThreshold = 10000;
-            temp_interval = [100000,diff(otherStimPulses)];
-            optoStim2 = otherStimPulses(temp_interval > intervalThreshold);
-            save(strcat(sessionpath,filesep,'timeseries_',options.outputName),"optoStim2",'-append');
+        
+    if ~exist('optoStim1','var') || options.redo
+        if  ~isempty(find(cueStimPulses, 1))
+            if nPulsesPerStim_cue > 1
+                % Save first pulse data for stim
+                intervalThreshold = 10000;
+                temp_interval = [100000,diff(cueStimPulses)];
+                optoStim1 = cueStimPulses(temp_interval > intervalThreshold);
+                save(strcat(sessionpath,filesep,'timeseries_',options.outputName),"optoStim1",'-append');
+            else
+                optoStim1 = cueStimPulses;
+            end
         else
-            optoStim2 = otherStimPulses;
+            optoStim1 = [];
         end
-    else
-        optoStim2 = [];
+    
+        if  ~isempty(find(otherStimPulses, 1))
+            if nPulsesPerStim_other > 1
+                % Save first pulse data for other color stim
+                intervalThreshold = 10000;
+                temp_interval = [100000,diff(otherStimPulses)];
+                optoStim2 = otherStimPulses(temp_interval > intervalThreshold);
+                save(strcat(sessionpath,filesep,'timeseries_',options.outputName),"optoStim2",'-append');
+            else
+                optoStim2 = otherStimPulses;
+            end
+        else
+            optoStim2 = [];
+        end
+        save(strcat(sessionpath,filesep,'timeseries_',options.outputName),"optoStim1","optoStim2",'-append');
     end
-    save(strcat(sessionpath,filesep,'timeseries_',options.outputName),"optoStim1","optoStim2",'-append');
 end
 
 

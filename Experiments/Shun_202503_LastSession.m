@@ -286,6 +286,12 @@ for a = 1:length(animalRange)
                                 taskRange=cur_task,...
                                 signalRange='dLight',...
                                 trialConditions=trialConditions);
+    lick   = getGroupedTrialStats(combined_animals,'nAnticipatoryLicks',...
+                                eventRange=eventRange,...
+                                animalRange=cur_animal,...
+                                taskRange=cur_task,...
+                                signalRange='dLight',...
+                                trialConditions=trialConditions);
 
     % Save to DAtrend
     DAtrend(a).animal = cur_animal;
@@ -299,9 +305,11 @@ for a = 1:length(animalRange)
     DAtrend(a).min.smoothed = smoothdata(DAtrend(a).min.raw,'movmean',5);
     DAtrend(a).avg.smoothed = smoothdata(DAtrend(a).avg.raw,'movmean',5);
     DAtrend(a).amp.smoothed = smoothdata(DAtrend(a).amp.raw,'movmean',5);
+    DAtrend(a).lick.raw = lick.stats{1}{1};
+    DAtrend(a).lick.smoothed = smoothdata(DAtrend(a).lick.raw,'movmean',5);
 
     % Calculate DA trending stats
-    fields = {'max', 'min', 'avg', 'amp'};
+    fields = {'max', 'min', 'avg', 'amp','lick'};
     
     for f = 1:numel(fields)
         data = DAtrend(a).(fields{f});

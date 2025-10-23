@@ -1,28 +1,33 @@
-function analyzeSessions_optoSweeps(sessionpath,task,stimPattern,options)
+function analyzeSessions_optoSweeps(sessionpath,options)
 
 arguments
     sessionpath string
-    task string
-    stimPattern cell
-    options.plot logical = true % Plot session figures
+    options.outputName string %name of the output file in subfolder of the session
+    
+    options.laserSource string = 'clamp'
+    options.durationList double = [0.1, 0.5, 1] % in sec
+    options.bluePower double = [20, 30, 40]
+    options.redPower double = [45, 55]
+
     options.redo logical = true % Recalculate trial table and all preprocessing
-    options.stay logical = true % do not exit the method so I can do further plotting
+    options.round logical = false % Round reward/airpuff/tone to get duration data
+    
+    options.plotPhotometry logical = true % Plot photometry summary plot
+
+    options.lick_binSize double = 0.1
+    options.shortTimeRange double = [-1,5]
+    options.longTimeRange double = [-5,10]
 end
 
 %% Notes
-% Shun_analyzeBehavior_optoSweeps
-% Shun Li, 2023/07/25
-% Rewrite from analyzeSessions_optoPair to plot traces for sweeps of opto
-% stimulation
-
-% Assume trial structure as follows:
-% 1. random/pair opto trials
-% 2. opto sweeps at different frequencies or power (same repetition)
-% PS: some reward happens in between each optosweep pattern
-
-% Variables to set:
-% 3. Opto sweep pattern
-% 4. Repetitions per opto sweep pattern
+% Shun_analyzeBehavior_optoPair
+% Shun Li, 11/8/2022
+% 02/14/2023: tidied up code, renamed to analyzeBehavior_optoPair
+% 2023/07/28: packaged trial table into a function
+% 2023/09/02: added camera plotting
+% 2023/09/05: changed baselineIdx to selecting baseline licks 
+% 2023/10/23: changed how to plot photometry signal, assume everything
+% recorded in labjack
 
 %% Load data
 
@@ -30,596 +35,288 @@ end
              
 % 1. Select session via uigetdir
 dirsplit = strsplit(sessionpath,filesep); 
-sessionName = dirsplit{end}; 
-if ispc; session.projectPath = strcat('\\',fullfile(dirsplit{2:end-1}));
-elseif isunix; session.projectPath = strcat('/',fullfile(dirsplit{2:end-1}));
+if ~isfield(options,'outputName'); options.outputName = dirsplit{end}; end
+if ispc; projectPath = strcat('\\',fullfile(dirsplit{2:end-1}));
+elseif isunix; projectPath = strcat('/',fullfile(dirsplit{2:end-1}));
 end
+
+% Get animal name and session date
+if ~contains(options.outputName,{'-','_'})
+    sessionName = dirsplit{end-1};
+    dirsplit = strsplit(sessionName,{'-','_'});
+else
+    sessionName = options.outputName;
+    dirsplit = strsplit(options.outputName,{'-','_'}); 
+end
+date = dirsplit{1}; animal = dirsplit{2}; sessionTask = dirsplit{3};
 clear dirsplit
 
-% Opto stim params
-sweepFreqList = str2num(stimPattern{1}); % str2double doesn't work
-repeatPerPattern = str2double(stimPattern{2});  
+disp(strcat('**********',options.outputName,'**********'));
+load(strcat(sessionpath,filesep,'timeseries_',options.outputName,'.mat'));
+load(strcat(sessionpath,filesep,'data_',options.outputName,'.mat'));
+load(strcat(sessionpath,filesep,'behavior_',options.outputName,'.mat'));
+load(strcat(sessionpath,filesep,'sync_',options.outputName,'.mat'));
 
-disp(strcat('********** ',sessionName,'**********'));
-load(strcat(sessionpath,filesep,'sync_',sessionName,'.mat'));
-if ~isfield(session,'name'); session.name = sessionName; end
-disp(['Session ',sessionName,' loaded']);
+if ~isfield(params.session,'name'); params.session.name = options.outputName; end
+if ~isfield(params.session,'date'); params.session.date = date; end
+if ~isfield(params.session,'animal'); params.session.animal = animal; end
+if ~isfield(params.session,'projectPath'); params.session.projectPath = projectPath; end
 
-% Set other trial related variables
-timeRange = [-0.5,3]; minLicks = 1; reactionTimeSamp = 2 * params.sync.behaviorFs;
-toneDuration = 0.5;
+% Create analysis.mat
+if ~isempty(dir(fullfile(sessionpath,"analysis_*.mat")))
+    load(strcat(sessionpath,filesep,'analysis_',options.outputName,'.mat'));
+else
+    save(strcat(sessionpath,filesep,'analysis_',options.outputName),'sessionName','-v7.3');
+    disp('Finished: analysis_.mat not found, created a new one');
+end
+disp(['Finished: Session ',options.outputName,' loaded']);
 
-lick_binSize = 0.2; blink_thresh = 2.5; % in turns of z score
+%% Load behaivor params
+
+% Define baselineSystem
+if ~isfield(params.session,'baselineSystem')
+    params.session.baselineSystem = 'NI';
+end
+
+% Load camera signal
+if params.session.withCamera
+    eyeAreaIdx = find(cellfun(@(x) strcmpi(x,'eyeArea'), {timeSeries.name}));
+    if ~isempty(eyeAreaIdx); eyeArea_detrend = timeSeries(eyeAreaIdx).data; end
+    pupilAreaIdx = find(cellfun(@(x) strcmpi(x,'pupilArea'), {timeSeries.name}));
+    if ~isempty(pupilAreaIdx); pupilArea_detrend = timeSeries(pupilAreaIdx).data; end
+end
+
+save(strcat(sessionpath,filesep,'sync_',options.outputName),'params','-append');
 
 %% Preprocess outcome and opto data
 
-% Reward/punishment params
-rewardUnit = 0.012; % 8ms opening to dispense 1ul water
-rewardList = [0 2 5]; % in ul
-punishList = [0 0.1];
-toneList = [0 0.5 1]; % in sec
-
 disp('Ongoing: preprocess outcome and opto data');
 
-if ~exist('rightSolenoid_rounded','var') || options.redo
-    rightSolenoid = rightSolenoid ./ rewardUnit;
-    
-    % Round reward and tone
-    leftTone_rounded = roundToTarget(leftTone, toneList); disp('Finished rounding: leftTone');
-    rightSolenoid_rounded = roundToTarget(rightSolenoid, rewardList); disp('Finished rounding: rightSolenoid');
-    airpuff_rounded = roundToTarget(airpuff,punishList); disp('Finished rounding: airpuff');
-    
-    % Save rounded data
-    save(strcat(sessionpath,filesep,'sync_',session.name),...
-        'leftTone_rounded','rightSolenoid_rounded','airpuff_rounded','-append');
-    disp('Finished: rounding cue/outcome data');
-end
-
-if ~exist('firstPulse','var') || options.redo
-    if ~isempty(find(redLaser, 1))
-        allPulses = find(redLaser);
-        intervalThreshold = 10000;
-        temp_interval = [100000,diff(allPulses)];
-        firstPulse = allPulses(temp_interval > intervalThreshold)';
-
-        % If repeatPerPattern is none (i.e. only one freq), determine based on number of
-        % laser pulses
-        if (repeatPerPattern==0 || isnan(repeatPerPattern)) && length(sweepFreqList) == 1
-            repeatPerPattern = length(firstPulse);
-        end
-
-        % Return error if total pulse mismatches
-        if length(sweepFreqList) * repeatPerPattern > length(firstPulse)
-            disp(['Supposed total pulse: ', num2str(length(sweepFreqList)), 'frequencies x ',...
-                num2str(repeatPerPattern), ' repeatPerPattern = ', ...
-                num2str(length(sweepFreqList) * repeatPerPattern)]);
-            disp(['Actual total pulse: ', num2str(length(firstPulse))]);
-            error('Error; mismatch between actual total pulse and supposed total pulse!');
-        end
-    
-        % Add extra column to first pulse indicate pulse pattern of that pulse
-        firstPulse(end-length(sweepFreqList)*repeatPerPattern+1:end,2) = repelem(sweepFreqList,repeatPerPattern);
-
-        % Save first pulse data
-        save(strcat(sessionpath,filesep,'sync_',session.name),"firstPulse",'-append');
-        disp('Finished: first pulse data');
-    else 
-        firstPulse = [];
+% Reward/punishment params
+rewardUnit = 0.012; % 8ms opening to dispense 1ul water
+rewardList = [0 3 10]; % in ul
+% punishList = [0 0.1];
+% toneList = [0 0.5 1]; % in sec
+if options.round
+    if ~exist('rightSolenoid_rounded','var') || options.redo
+        % Round reward and tone
+        rightSolenoid = rightSolenoid ./ rewardUnit;
+        rightSolenoid_rounded = roundToTarget(rightSolenoid, rewardList); disp('Finished rounding: rightSolenoid');
+        airpuff_rounded = roundToTarget(airpuff,punishList); disp('Finished rounding: airpuff');
+        
+        % Save rounded data
+        save(strcat(sessionpath,filesep,'timeseries_',options.outputName),'rightSolenoid_rounded','airpuff_rounded','-append');
+        disp('Finished: rounding cue/outcome data');
     end
-end
-
-%% Stop if dont want to plot figures
-
-if ~options.plot; return; end
-
-%% Plot pre-processing steps
-
-if session.ni_photometryON && session.withPhotometry
-    initializeFig(1,1);
-    
-    % Raw photometry
-    subplot(3,3,1);
-    plot(photometry_raw);
-    xlabel(['Time (',num2str(1000/nidq.Fs),' ms)']); ylabel('Signal (V)');
-    title('NIDAQ photometry: raw');
-    
-    % After detrend (1min)
-    subplot(3,3,4);
-    plot(photometry_detrended); hold on
-    xlabel(['Time (',num2str(1000/nidq.Fs),' ms)']); ylabel('z-score');
-    title('NIDAQ photometry: after detrend (60s window)');
-    
-    % After downsample to 50Hz
-    subplot(3,3,7);
-    plot(photometryNI);
-    xlabel(['Time (',num2str(1000/50),' ms)']); ylabel('z-score');
-    title('NIDAQ photometry: Downsampled 100Hz -> rolling -> Downsampled to 50Hz');
-    
-    subplot(3,3,2)
-    plot(modgreen);xlabel('Time'); ylabel('z-score');
-    title('Labjack photometry: green modulation');
-    
-    subplot(3,3,5)
-    plot(green);xlabel('Time'); ylabel('z-score');
-    title('Labjack photometry: detrend');
-    
-    subplot(3,3,8)
-    plot(rollingGreenLP);xlabel('Time'); ylabel('z-score');
-    title('Labjack photometry: detrend->(demod)->LP->rolling');
-    
-    % Create the uitable
-    subplot(3,3,[3 6 9])
-    histogram(normrnd(0,1,size(rollingGreenLP)),200); hold on
-    histogram(rollingGreenLP,200); hold on
-    histogram(photometryNI,200); hold on
-    skew_lj = skewness(rollingGreenLP); kur_lj = kurtosis(rollingGreenLP);
-    skew_ni = skewness(photometryNI); kur_ni = kurtosis(photometryNI);
-    xlabel('z-score'); ylabel('Count'); legend({'Normal distribution','LJ Photometry','NI Photometry'});
-    dim = [0.8205 0.58 0.55 0.27];
-    str = {strcat("NI Skewness: ",num2str(skew_ni)),strcat("NI Kurtosis: ",num2str(kur_ni)),...
-        strcat("LJ Skewness: ",num2str(skew_lj)),strcat("LJ Kurtosis: ",num2str(kur_lj))};
-    annotation('textbox',dim,'String',str,'FitBoxToText','on');
-    title('Histogram of photometry traces');
-
-elseif session.ni_photometryON && ~session.withPhotometry
-    initializeFig(1,1);
-
-    % Raw photometry
-    subplot(3,2,1);
-    plot(photometry_raw);
-    xlabel(['Time (',num2str(1000/nidq.Fs),' ms)']); ylabel('Signal (V)');
-    title('Raw photometry');
-    
-    % After detrend (1min)
-    subplot(3,2,3);
-    plot(photometry_detrended); hold on
-    xlabel(['Time (',num2str(1000/nidq.Fs),' ms)']); ylabel('z-score');
-    title('After detrend (60s window)');
-    
-    % After downsample to 50Hz
-    subplot(3,2,5);
-    plot(photometryNI);
-    xlabel(['Time (',num2str(1000/50),' ms)']); ylabel('z-score');
-    title('Downsampled to 50Hz');
-    
-    % Create the uitable
-    subplot(3,2,[2 4 6]);
-    histogram(normrnd(0,1,size(photometryNI)),200); hold on
-    histogram(photometryNI,200); hold on
-    xlabel('z-score'); ylabel('Count'); legend({'Normal distribution','Photometry'});
-    dim = [0.8205 0.001 0.25 0.27];
-    str = {strcat("Skewness: ",num2str(skewness(photometryNI))),strcat("Kurtosis: ",num2str(kurtosis(photometryNI)))};
-    annotation('textbox',dim,'String',str,'FitBoxToText','on');
-    title('Histogram of z-scored photometry');
-
 else
-    initializeFig(1,1);
-
-    subplot(3,2,1)
-    plot(demodGreen);xlabel('Time'); ylabel('z-score');
-    title('detrend->demod');
-    
-    subplot(3,2,3)
-    plot(rollingGreen);xlabel('Time'); ylabel('z-score');
-    title('detrend->demod->rolling');
-    
-    subplot(3,2,5)
-    plot(rollingGreenLP);xlabel('Time'); ylabel('z-score');
-    title('detrend->demod->LP->rolling');
-    
-    % Create the uitable
-    subplot(3,2,[2 4 6])
-    histogram(normrnd(0,1,size(rollingGreenLP)),200); hold on
-    histogram(rollingGreenLP,200); hold on
-    skew = skewness(rollingGreenLP); kur = kurtosis(rollingGreenLP);
-    xlabel('z-score'); ylabel('Count'); legend({'Normal distribution','Photometry'});
-    dim = [0.8205 0.6 0.55 0.27];
-    str = {strcat("Skewness: ",num2str(skew)),strcat("Kurtosis: ",num2str(kur))};
-    annotation('textbox',dim,'String',str,'FitBoxToText','on');
-    title(['Histogram of ',getVarName(rollingGreenLP)]);
+    rightSolenoid_rounded = rightSolenoid;
+    airpuff_rounded = airpuff;
 end
 
-% Save figure
-saveas(gcf,strcat(sessionpath,filesep,'signal_summary_',session.name,'.png'));
 
+% Find start of opto cue
+if strcmpi(options.laserSource,'clamp')
+    blueLaser = blueClamp;
+    redLaser = redClamp;
 
-%% Event params
-    
-% Select event idx
-waterIdx = find(rightSolenoid);  
+    % --- Extract PWM epochs (uses your single-channel extractPWMStim) ---
+    [bluePatterns, ~] = extractPWMStim(blueLaser, label="blue", ...
+                            duration=options.durationList, pwm=options.bluePower);
+    [redPatterns,  ~] = extractPWMStim(redLaser,  label="red", ...
+                            duration=options.durationList, pwm=options.redPower);
+
+    % Save
+    save(strcat(sessionpath,filesep,'timeseries_',options.outputName),"bluePatterns","redPatterns","-append");
+end
+
+% Find start of lick bout
+rightLickON = find(rightLick);
+if ~exist('lickBout','var') || options.redo
+    % Get lick bout start time (ILI < 0.5s)
+    lickBout = getLickBout(rightLickON);
+    save(strcat(sessionpath,filesep,'timeseries_',options.outputName),"lickBout",'-append');
+end
+
+% Combine stim&tone to form trial start
+waterIdx = find(rightSolenoid_rounded);  
 airpuffIdx = find(airpuff_rounded);
+
+% Find water lick (first lick in response to water)
+waterLickIdx = nan(size(waterIdx));
+for i = 1:length(waterIdx)
+    nextLick = rightLickON(find(rightLickON>=waterIdx(i),1));
+    if ~isempty(nextLick); waterLickIdx(i) = nextLick; end
+end
+waterLickIdx = rmmissing(waterLickIdx);
+
+disp('Finished: preprocess outcome and opto data');
+
+
+%% Task specific params
+    
+% Select event idxs
 toneIdx = find(leftTone);
-stimIdx = firstPulse;
 
-% Create task legend
-taskLegend = {['Water (n=',num2str(length(waterIdx)),')'],...
-        ['Airpuff (n=',num2str(length(airpuffIdx)),')'],...
-        ['Tone (n=',num2str(length(toneIdx)),')'],...
-        ['Avg stim (n=',num2str(length(stimIdx)),')']};
+% Select baseline idx (align to each baseline lick)
+% baselineLicks = cell2mat(trials{~cellfun(@isempty,trials{1:end-1,'BaselineLicks'}),'BaselineLicks'});
+% if isempty(baselineLicks); baselineIdx = [];
+% else; baselineIdx = baselineLicks(:,1); end
+randomMinSample = 15*params.sync.behaviorFs;
+randomMaxSample = length(params.sync.timeNI) - (15*params.sync.behaviorFs);
+baselineIdx = randi([randomMinSample,randomMaxSample],100,1); % changed to rightLickON if only baseline licks
 
-stimLegend = cell(length(sweepFreqList)+1,1);
-for i= 1:length(sweepFreqList)
-    stimLegend{i} = [num2str(sweepFreqList(i)),'Hz stim (n=',num2str(repeatPerPattern),')'];
-    if i==length(sweepFreqList)
-        stimLegend{i+1} = ['Airpuff (n=',num2str(length(airpuffIdx)),')'];
+
+%% Create / load analysis.mat
+analysisFile = fullfile(sessionpath, strcat('analysis_', options.outputName, '.mat'));
+
+if exist(analysisFile, 'file')
+    load(analysisFile); % loads sessionName and (optionally) analysis
+    if ~exist('analysis','var') || options.redo
+        analysis = struct('type',{},'pwm',{},'duration',{},'data',{},'timestamp',{});
     end
+else
+    analysis = struct('type',{},'pwm',{},'duration',{},'data',{},'timestamp',{});
+    save(analysisFile,'sessionName','analysis','-v7.3');
+    disp('Finished: analysis_.mat not found, created a new one');
 end
-% stimLegend = {[num2str(sweepFreqList(1)),'Hz stim (n=',num2str(repeatPerPattern),')'],...
-%     [num2str(sweepFreqList(2)),'Hz stim (n=',num2str(repeatPerPattern),')'],...
-%     [num2str(sweepFreqList(3)),'Hz stim (n=',num2str(repeatPerPattern),')'],...
-%     [num2str(sweepFreqList(4)),'Hz stim (n=',num2str(repeatPerPattern),')'],...
-%     [num2str(sweepFreqList(5)),'Hz stim (n=',num2str(repeatPerPattern),')'],...
-%     ['Airpuff (n=',num2str(length(airpuffIdx)),')']};
+disp(['Finished: Session ',options.outputName,' loaded']);
 
+%% Plot photometry summary plots
 
-%% (LJ) Plot combined photometry PSTHs
+if options.plotPhotometry && exist('timeSeries','var')
+    %% Find the number of photometry channels
+    photometryIdx = find(cellfun(@(x) contains(x,["NI","LJ"],"IgnoreCase",true), {timeSeries.system}));
+    photometryName = cellfun(@(x) unique(x,'rows'), {timeSeries(photometryIdx).name},'UniformOutput',false);
+    nSignals = length(photometryIdx);
+    disp(['Finished: found ', num2str(nSignals),' photometry signals']);
 
-if session.withPhotometry
-    timeRange = [-1,3]; lick_binSize = 0.2;
+    %% Plot pre-processing steps
+    initializeFig(.67,.67); tiledlayout('flow');
     
-    % 2. Plot traces
-    initializeFig(0.5,0.5);
+    for i = 1:nSignals
+        path = photometryIdx(i);
+        nexttile;
+        histogram(normrnd(0,1,size(timeSeries(path).data)),200); hold on
+        histogram(timeSeries(path).data,200); hold on
+        box off
 
-    % 2.1 Plot photometry traces
-    subplot(2,1,1)
-    [~,~] = plotTraces(waterIdx,timeRange,rollingGreenLP,bluePurpleRed(1,:),params);
-    [~,~] = plotTraces(airpuffIdx,timeRange,rollingGreenLP,[0.2, 0.2, 0.2],params);
-    [~,~] = plotTraces(toneIdx,timeRange,rollingGreenLP,bluePurpleRed(350,:),params);
-    [~,~] = plotTraces(stimIdx,timeRange,rollingGreenLP,bluePurpleRed(end,:),params);
-    plotEvent('',0,'r');
-    xlabel('Time (s)'); ylabel('z-score');
-    legend(taskLegend,'Location','northeast');
-
-    % 2.2 Plot different stim frequencies with airpuff
-    subplot(2,1,2)
-    palette = floor(linspace(1,500,length(sweepFreqList)));
-    for i = 1:length(sweepFreqList)
-        patternIdx = firstPulse(firstPulse(:,2)==sweepFreqList(i),1);
-        [~,~] = plotTraces(patternIdx,timeRange,rollingGreenLP,bluePurpleRed(palette(i),:),params);
-    end
-    [~,~] = plotTraces(airpuffIdx,timeRange,rollingGreenLP,[0.2, 0.2, 0.2],params);
-    plotEvent('',0,'r');
-    xlabel('Time (s)'); ylabel('z-score');
-    legend({stimLegend},'Location','northeast');
-    
-    % % 2.2 Plot lick traces
-    % subplot(2,1,2)
-    % plotLicks(waterIdx,timeRange,lick_binSize,bluePurpleRed(1,:),[],rightLick,params);
-    % plotLicks(airpuffIdx,timeRange,lick_binSize,[0.2, 0.2, 0.2],[],rightLick,params);
-    % plotLicks(toneIdx,timeRange,lick_binSize,bluePurpleRed(350,:),[],rightLick,params);
-    % plotLicks(stimIdx,timeRange,lick_binSize,bluePurpleRed(end,:),[],rightLick,params);
-    % plotEvent('',0,'r');
-    % xlabel('Time (s)'); ylabel('Licks/s');  %legend('Shutter','Water','Stim'); 
-    % legend(taskLegend,'Location','best');
-
-    saveas(gcf,strcat(sessionpath,filesep,'psth_lj_combined_',session.name,'.png'));
-end
-
-%% (LJ) Plot single stimulus PSTH
-
-if session.withPhotometry
-    eventIdxes = {stimIdx,waterIdx,toneIdx,airpuffIdx};
-    labels = {'Stim','Water','Tone','Airpuff'};
-    eventDurations = [0.5,0,0.5,0.01];
-    groupSizes = [10,30,10,30];
-    longTimeRange = [-5,10];
-    shortTimeRange = [-0.5,3]; 
-   
-    for event = 1:length(eventIdxes)
-        eventIdx = eventIdxes{event};
-        if isempty(eventIdx); continue; end
-        label = labels{event}; eventDuration = eventDurations(event); groupSize = groupSizes(event); % num of trials to plot in one line
+        skew_lj = skewness(timeSeries(path).data); 
+        kur_lj = kurtosis(timeSeries(path).data);
+        xlabel('z-score'); ylabel('Count'); legend({'Normal distribution',timeSeries(path).name});
         
-        initializeFig(0.5,1);
-        if strcmp(label,'Stim')
-            subplot(4,1,1)
-            palette = floor(linspace(1,500,length(sweepFreqList)));
-            for i = 1:length(sweepFreqList)
-                patternIdx = firstPulse(firstPulse(:,2)==sweepFreqList(i),1);
-                [traces,t] = plotTraces(patternIdx,longTimeRange,rollingGreenLP,bluePurpleRed(palette(i),:),params);
+        title(timeSeries(path).name);
+        subtitle(strcat("Skewness: ",num2str(skew_lj),", Kurtosis: ",num2str(kur_lj)));
+    end
+    
+    % Save figure
+    saveas(gcf,strcat(sessionpath,filesep,'Summary_photometry_distribution.png'));
+
+    %% Loop through timeSeries struct
+    for photometry = 1:nSignals
+
+        % Load signal of interest
+        path = photometryIdx(photometry);
+        signal = timeSeries(path).data;
+        finalFs = timeSeries(path).finalFs;
+        system = timeSeries(path).system;
+        name = timeSeries(path).name;
+        
+        %% Plot combined PSTH
+        timeRange = options.shortTimeRange;
+        durList = options.durationList;
+
+        % ---------- BLUE FIGURE (columns = durations; curves = PWM freqs) ----------
+        if ~isempty(bluePatterns)
+            initializeFig(0.8,0.6); tiledlayout(1,3);
+            for ci = 1:numel(durList)
+                d = durList(ci);
+                dur_mask = bluePatterns.duration_s == d;
+                S = bluePatterns(dur_mask,:);
+                bluePowerList = unique(S.duty);
+                nBluePowers = numel(bluePowerList);
+
+                nexttile; hold on
+                alphas = linspace(0.30,1.00,nBluePowers); % low→high Hz => more solid
+                for k = 1:nBluePowers
+                    cur_duty = bluePowerList(k);
+                    onsetTime = table2array(S(S.duty==cur_duty,'onset'));
+                    c = addOpacity(bluePurpleRed(1,:), alphas(k)); % blue tint
+                    [alignedMat, timestamp] = plotTraces(onsetTime, timeRange, signal, c, params, ...
+                                         signalFs=finalFs, signalSystem=system);
+                    analysis(end+1) = struct( ...
+                        'type',    'blue', ...
+                        'pwm',      cur_duty, ...
+                        'duration', d, ...
+                        'data',     alignedMat,...
+                        'timestamp',timestamp);
+                end
+               
+                % Black reference trace: airpuff
+                [airpuffTraces,~] = plotTraces(airpuffIdx, timeRange, signal, [0 0 0], params, ...
+                                   signalFs=finalFs, signalSystem=system);
+                plotEvent('',d,color=bluePurpleRed(1,:));
+                analysis(end+1) = struct( ...
+                        'type',    'airpuff', ...
+                        'pwm',      0, ...
+                        'duration', 0, ...
+                        'data',     airpuffTraces,...
+                        'timestamp',timestamp);
+                xlabel('Time (s)'); ylabel([name,' z-score']);
+                legend(makePWMlegend(S,"Blue"));
+                title(strcat('Blue (',num2str(d),' s)'));
             end
-            plotEvent('',0,'r');
-            xlabel('Time (s)'); ylabel('z-score');
-            legend(stimLegend,'Location','northeast');
-        else
-            subplot(4,1,1)
-            [traces,t] = plotTraces(eventIdx,longTimeRange,rollingGreenLP,bluePurpleRed(1,:),params);
-            % [~,~] = plotTraces(randShutterIdx,longTimeRange,rollingGreenLP,[.75 .75 .75],params);
-            plotEvent(label,eventDuration,bluePurpleRed(end,:));
-            xlabel('Time (s)'); ylabel('z-score');
-            legend({[label,' (n=',num2str(length(eventIdx)),')']},...
-                'Location','northeast'); 
+            saveas(gcf, fullfile(sessionpath, sprintf('Summary-blue-%s.png', name)));
         end
-        
-        subplot(4,1,3)
-        nLines = ceil(size(traces,1)/groupSize);
-        legendList = cell(nLines,1);
-        nColors = round(linspace(1,size(bluePurpleRed,1),nLines));
-        for i = 1:nLines
-            startTrial = (i-1)*groupSize+1; 
-            if i == nLines; endTrial = size(traces,1);
-            else; endTrial = i*groupSize; end
-            plotSEM(t,traces(startTrial:endTrial,:),bluePurpleRed(nColors(i),:));
-            legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial)];
-        end
-        plotEvent(label,eventDuration,bluePurpleRed(end,:));
-        legend(legendList);
-        
-        if strcmp(label,'Stim')
-            subplot(4,1,2)
-            palette = floor(linspace(1,500,length(sweepFreqList)));
-            for i = 1:length(sweepFreqList)
-                patternIdx = firstPulse(firstPulse(:,2)==sweepFreqList(i),1);
-                [traces,t] = plotTraces(patternIdx,shortTimeRange,rollingGreenLP,bluePurpleRed(palette(i),:),params);
+
+        % ---------- RED FIGURE (columns = durations; curves = PWM freqs) ----------
+        if ~isempty(redPatterns)
+            initializeFig(0.8,0.6); tiledlayout(1,3);
+            for ci = 1:numel(durList)
+                d = durList(ci);
+                dur_mask = redPatterns.duration_s == d;
+                S = redPatterns(dur_mask,:);
+                redPowerList = unique(S.duty);
+                nRedPowers = numel(redPowerList);
+
+                nexttile; hold on
+                alphas = linspace(0.30,1.00,nRedPowers); % low→high Hz => more solid
+                for k = 1:nRedPowers
+                    cur_duty = redPowerList(k);
+                    onsetTime = table2array(S(S.duty==cur_duty,'onset'));
+                    c = addOpacity(bluePurpleRed(end,:), alphas(k)); % red tint
+                    [alignedMat, timestamp] = plotTraces(onsetTime, timeRange, signal, c, params, ...
+                                         signalFs=finalFs, signalSystem=system);
+                    analysis(end+1) = struct( ...
+                        'type',    'red', ...
+                        'pwm',      cur_duty, ...
+                        'duration', d, ...
+                        'data',     alignedMat,...
+                        'timestamp',timestamp);
+                end
+                % Black reference trace: rewarded licks
+                [waterTraces,~] = plotTraces(waterLickIdx, timeRange, signal, [0 0 0], params, ...
+                                   signalFs=finalFs, signalSystem=system);
+                plotEvent('',d,color=bluePurpleRed(end,:));
+                analysis(end+1) = struct( ...
+                        'type',    'water', ...
+                        'pwm',      0, ...
+                        'duration', 0, ...
+                        'data',     waterTraces,...
+                        'timestamp',timestamp);
+                xlabel('Time (s)'); ylabel([name,' z-score']);
+                legend(makePWMlegend(S,"Red"));
+                title(strcat('Red (',num2str(d),' s)'));
             end
-            plotEvent('',0,'r');
-            xlabel('Time (s)'); ylabel('z-score');
-            legend(stimLegend,'Location','northeast');
-        else
-            subplot(4,1,2)
-            [traces,t] = plotTraces(eventIdx,shortTimeRange,rollingGreenLP,bluePurpleRed(1,:),params);
-            % [~,~] = plotTraces(randShutterIdx,shortTimeRange,rollingGreenLP,[.75 .75 .75],params);
-            plotEvent(label,eventDuration,bluePurpleRed(end,:)); 
-            xlabel('Time (s)'); ylabel('z-score'); % legend('Shutter',label);
-            legend({[label,' (n=',num2str(length(eventIdx)),')']},...
-                'Location','northeast'); 
+            saveas(gcf, fullfile(sessionpath, sprintf('Summary-red-%s.png', name)));
         end
-        
-        subplot(4,1,4)
-        nLines = ceil(size(traces,1)/groupSize);
-        legendList = cell(nLines,1);
-        nColors = round(linspace(1,size(bluePurpleRed,1),nLines));
-        for i = 1:nLines
-            startTrial = (i-1)*groupSize+1; 
-            if i == nLines; endTrial = size(traces,1);
-            else; endTrial = i*groupSize; end
-            plotSEM(t,traces(startTrial:endTrial,:),bluePurpleRed(nColors(i),:));
-            legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial)];
-        end
-        plotEvent(label,eventDuration,bluePurpleRed(end,:));
-        legend(legendList);
-        
-        saveas(gcf,strcat(sessionpath,filesep,'psth_lj_',label,'_',session.name,'.png'));
-    end
+    end  
 end
 
-%% (NI) Plot combined PSTH
+% Append-save analysis results
+analysisFile = fullfile(sessionpath, strcat('analysis_', options.outputName, '.mat'));
+save(analysisFile, 'analysis', '-append');
 
-if session.ni_photometryON
-    timeRange = [-1,3]; lick_binSize = 0.2;
-    
-    % 2. Plot traces
-    initializeFig(0.5,0.5);
-
-    % 2.1 Plot photometry traces
-    subplot(2,1,1)
-    [~,~] = plotTraces(waterIdx,timeRange,photometryNI,bluePurpleRed(1,:),params,photometrySystem='ni');
-    [~,~] = plotTraces(airpuffIdx,timeRange,photometryNI,[0.2, 0.2, 0.2],params,photometrySystem='ni');
-    [~,~] = plotTraces(toneIdx,timeRange,photometryNI,bluePurpleRed(350,:),params,photometrySystem='ni');
-    [~,~] = plotTraces(stimIdx,timeRange,photometryNI,bluePurpleRed(end,:),params,photometrySystem='ni');
-    plotEvent('',0,'r');
-    xlabel('Time (s)'); ylabel('z-score'); 
-    legend(taskLegend,'Location','best'); 
-
-    % 2.2 Plot different stim frequencies with airpuff
-    subplot(2,1,2)
-    palette = floor(linspace(1,500,length(sweepFreqList)));
-    for i = 1:length(sweepFreqList)
-        patternIdx = firstPulse(firstPulse(:,2)==sweepFreqList(i),1);
-        [~,~] = plotTraces(patternIdx,timeRange,photometryNI,bluePurpleRed(palette(i),:),params,photometrySystem='ni');
-    end
-    [~,~] = plotTraces(airpuffIdx,timeRange,photometryNI,[0.2, 0.2, 0.2],params,photometrySystem='ni');
-    plotEvent('',0,'r');
-    xlabel('Time (s)'); ylabel('z-score');
-    legend(stimLegend,'Location','northeast');
-    
-    % % 2.2 Plot lick traces
-    % subplot(2,1,2)
-    % plotLicks(waterIdx,timeRange,lick_binSize,bluePurpleRed(1,:),[],rightLick,params);
-    % plotLicks(airpuffIdx,timeRange,lick_binSize,[0.2, 0.2, 0.2],[],rightLick,params);
-    % plotLicks(toneIdx,timeRange,lick_binSize,bluePurpleRed(350,:),[],rightLick,params);
-    % plotLicks(stimIdx,timeRange,lick_binSize,bluePurpleRed(end,:),[],rightLick,params);
-    % plotLicks(randShutterIdx,timeRange,lick_binSize,[.75 .75 .75],[],rightLick,params);
-    % plotEvent('',0,'r');
-    % xlabel('Time (s)'); ylabel('Licks/s'); 
-    % legend(taskLegend,'Location','best');
-
-    saveas(gcf,strcat(sessionpath,filesep,'psth_ni_combined_',session.name,'.png'));
-end
-
-%% (NI) Plot single stimulus PSTH
-
-if session.ni_photometryON
-
-    eventIdxes = {stimIdx,waterIdx,toneIdx,airpuffIdx};
-    labels = {'Stim','Water','Tone','Airpuff'};
-    eventDurations = [0.5,0,0.5,0.01];
-    groupSizes = [10,30,10,30];
-    longTimeRange = [-5,10];
-    shortTimeRange = [-0.5,3]; 
-    
-    binSize = 1/50; %binSize = params.finalTimeStep; 
-    Fs = params.sync.behaviorFs;
-    timestamp = timeNI;
-    
-    for event = 1:length(eventIdxes)
-        eventIdx = eventIdxes{event};
-        if isempty(eventIdx); continue; end
-        label = labels{event}; eventDuration = eventDurations(event); groupSize = groupSizes(event); % num of trials to plot in one line
-        
-        initializeFig(0.5,1);
-
-        if strcmp(label,'Stim')
-            subplot(4,1,1)
-            palette = floor(linspace(1,500,length(sweepFreqList)));
-            for i = 1:length(sweepFreqList)
-                patternIdx = firstPulse(firstPulse(:,2)==sweepFreqList(i),1);
-                [traces,t] = plotTraces(patternIdx,longTimeRange,photometryNI,bluePurpleRed(palette(i),:),params,photometrySystem='ni');
-            end
-            plotEvent('',0,'r');
-            xlabel('Time (s)'); ylabel('z-score');
-            legend(stimLegend,'Location','northeast');
-        else
-            subplot(4,1,1)
-            [traces,t] = plotTraces(eventIdx,longTimeRange,photometryNI,bluePurpleRed(1,:),params,photometrySystem='ni');
-            plotEvent(label,eventDuration,bluePurpleRed(end,:));
-            xlabel('Time (s)'); ylabel('z-score');
-            legend({[label,' (n=',num2str(length(eventIdx)),')']},...
-                'Location','northeast'); 
-
-        end
-        
-        subplot(4,1,3)
-        nLines = ceil(size(traces,1)/groupSize);
-        legendList = cell(nLines,1);
-        nColors = round(linspace(1,size(bluePurpleRed,1),nLines));
-        for i = 1:nLines
-            startTrial = (i-1)*groupSize+1; 
-            if i == nLines; endTrial = size(traces,1);
-            else; endTrial = i*groupSize; end
-            plotSEM(t,traces(startTrial:endTrial,:),bluePurpleRed(nColors(i),:));
-            legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial)];
-        end
-        plotEvent(label,eventDuration,bluePurpleRed(end,:));
-        legend(legendList);
-        
-        if strcmp(label,'Stim')
-            subplot(4,1,2)
-            palette = floor(linspace(1,500,length(sweepFreqList)));
-            for i = 1:length(sweepFreqList)
-                patternIdx = firstPulse(firstPulse(:,2)==sweepFreqList(i),1);
-                [traces,t] = plotTraces(patternIdx,shortTimeRange,photometryNI,bluePurpleRed(palette(i),:),params,photometrySystem='ni');
-            end
-            plotEvent('',0,'r');
-            xlabel('Time (s)'); ylabel('z-score');
-            legend(stimLegend,'Location','northeast');
-        else
-            subplot(4,1,2)
-            [traces,t] = plotTraces(eventIdx,shortTimeRange,photometryNI,bluePurpleRed(1,:),params,photometrySystem='ni');
-            % [~,~] = plotTraces(randShutterIdx,shortTimeRange,photometryNI,[.75 .75 .75],params,photometrySystem='ni');
-            plotEvent(label,eventDuration,bluePurpleRed(end,:));
-            xlabel('Time (s)'); ylabel('z-score');
-            legend({[label,' (n=',num2str(length(eventIdx)),')']},...
-                'Location','northeast'); 
-        end
-        
-        subplot(4,1,4)
-        nLines = ceil(size(traces,1)/groupSize);
-        legendList = cell(nLines,1);
-        nColors = round(linspace(1,size(bluePurpleRed,1),nLines));
-        for i = 1:nLines
-            startTrial = (i-1)*groupSize+1; 
-            if i == nLines; endTrial = size(traces,1);
-            else; endTrial = i*groupSize; end
-            plotSEM(t,traces(startTrial:endTrial,:),bluePurpleRed(nColors(i),:));
-            legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial)];
-        end
-        plotEvent(label,eventDuration,bluePurpleRed(end,:));
-        legend(legendList);
-        
-        saveas(gcf,strcat(sessionpath,filesep,'psth_ni_',label,'_',session.name,'.png'));
-    end
-end
-
-return
-%% Plot lick raster plot
-
-timeRange = [-1,5]; markerSize = 20;
-
-if contains(task,'Optopair')
-    initializeFig(1,.67);
-    
-    % Get event time and number by trial type
-    stimIdx = trials{trials.isTone == 0 & trials.isStim == 1,["TrialNumber","CueTime","OutcomeTime"]};
-    toneIdx = trials{trials.isTone == 1 & trials.isStim == 0,["TrialNumber","CueTime","OutcomeTime"]};
-    pairIdx = trials{trials.isTone == 1 & trials.isStim == 1,["TrialNumber","CueTime","OutcomeTime"]};
-    stimIdx(:,3) = stimIdx(:,3)./params.sync.behaviorFs;
-    toneIdx(:,3) = toneIdx(:,3)./params.sync.behaviorFs;
-    pairIdx(:,3) = pairIdx(:,3)./params.sync.behaviorFs;
-
-    % getLicks by trial type
-    [stimLickRate,~,stimLicks] = getLicks(timeRange,stimIdx(:,2),lick_binSize,[],rightLick,...
-                                params.sync.behaviorFs,params.sync.timeNI);
-    [toneLickRate,~,toneLicks] = getLicks(timeRange,toneIdx(:,2),lick_binSize,[],rightLick,...
-                                params.sync.behaviorFs,params.sync.timeNI);
-    [pairLickRate,~,pairLicks] = getLicks(timeRange,pairIdx(:,2),lick_binSize,[],rightLick,...
-                                params.sync.behaviorFs,params.sync.timeNI);
-
-
-    % Plot overall raster plot (color coded by trial type)
-    tiledlayout(3,2); nexttile([3,1]);
-    for i = 1:size(stimLicks,1)
-        scatter(stimLicks{i},stimIdx(i,1),markerSize,'filled','MarkerFaceColor',bluePurpleRed(end,:)); hold on
-        scatter(stimIdx(i,3),stimIdx(i,1),markerSize+10,bluePurpleRed(1,:),'pentagram','filled'); hold on
-    end
-    for i = 1:size(toneLicks,1)
-        scatter(toneLicks{i},toneIdx(i,1),markerSize,'filled','MarkerFaceColor',bluePurpleRed(350,:)); hold on
-        scatter(toneIdx(i,3),toneIdx(i,1),markerSize+10,bluePurpleRed(1,:),'pentagram','filled'); hold on
-    end
-    for i = 1:size(pairLicks,1)
-        scatter(pairLicks{i},pairIdx(i,1),markerSize,'filled','MarkerFaceColor',bluePurpleRed(150,:)); hold on
-        scatter(pairIdx(i,3),pairIdx(i,1),markerSize+10,bluePurpleRed(1,:),'pentagram','filled'); hold on
-    end
-    xlabel('Time (s)'); xlim([timeRange(1),timeRange(2)]);
-    ylabel('Trial'); ylim([0,size(trials,1)]);
-    plotEvent("",0.5,'r');
-
-    
-    % Plot lick traces across session (stim only)
-    nexttile;
-    traces = stimLickRate; groupSize = 10;
-    t = linspace(timeRange(1),timeRange(2),size(traces,2));
-    nLines = ceil(size(traces,1)/groupSize); legendList = cell(nLines,1);
-    nColors = round(linspace(1,size(bluePurpleRed,1),nLines));
-    for i = 1:nLines
-        startTrial = (i-1)*groupSize+1; 
-        if i == nLines; endTrial = size(traces,1);
-        else; endTrial = i*groupSize; end
-        plotSEM(t,traces(startTrial:endTrial,:),bluePurpleRed(nColors(i),:));
-        legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial)];
-    end
-    plotEvent('Stim',0.5,bluePurpleRed(end,:));
-    xlabel('Time (s)'); ylabel('Licks/s');
-    legend(legendList);
-
-    % Plot lick traces across session (pair)
-    nexttile;
-    traces = pairLickRate; groupSize = 30;
-    t = linspace(timeRange(1),timeRange(2),size(traces,2));
-    nLines = ceil(size(traces,1)/groupSize); legendList = cell(nLines,1);
-    nColors = round(linspace(1,size(bluePurpleRed,1),nLines));
-    for i = 1:nLines
-        startTrial = (i-1)*groupSize+1; 
-        if i == nLines; endTrial = size(traces,1);
-        else; endTrial = i*groupSize; end
-        plotSEM(t,traces(startTrial:endTrial,:),bluePurpleRed(nColors(i),:));
-        legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial)];
-    end
-    plotEvent('Stim & tone',0.5,bluePurpleRed(end,:));
-    xlabel('Time (s)'); ylabel('Licks/s');
-    legend(legendList);
-
-    % Plot lick traces across session (stim only)
-    nexttile;
-    traces = toneLickRate; groupSize = 10;
-    t = linspace(timeRange(1),timeRange(2),size(traces,2));
-    nLines = ceil(size(traces,1)/groupSize); legendList = cell(nLines,1);
-    nColors = round(linspace(1,size(bluePurpleRed,1),nLines));
-    for i = 1:nLines
-        startTrial = (i-1)*groupSize+1; 
-        if i == nLines; endTrial = size(traces,1);
-        else; endTrial = i*groupSize; end
-        plotSEM(t,traces(startTrial:endTrial,:),bluePurpleRed(nColors(i),:));
-        legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial)];
-    end
-    plotEvent('Tone',0.5,bluePurpleRed(end,:));
-    xlabel('Time (s)'); ylabel('Licks/s');
-    legend(legendList);
-    
-    saveas(gcf,strcat(sessionpath,filesep,'lick_summary_',session.name,'.png'));
-    
-end
-
+disp('Finished: all plots and struct are plotted and saved!');
 return
 
 end

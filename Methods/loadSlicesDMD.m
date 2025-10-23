@@ -276,22 +276,21 @@ if options.reloadCells
                 stats.baseline.std = std(processed_trace(baselineWindow));
         
                 % Determine Vhold
-%                 if strcmpi(options.vholdChannel,'excel')
-%                     % Find in .xlsx file first, if can't find, use the heuristic that
-%                     % cells with negative leak current Vhold=-70, otherwise Vhold = 10;
-%                     acqsplit = split(sweepAcq{k},'_'); acqNum = str2double(acqsplit{end});
-%                     vhold = info{info.acq_ == acqNum,'holding'};
-%                 else
-%                     acqsplit = split(sweepAcq{k},'_'); acqNum = str2double(acqsplit{end});
-%                     curVholdChannel = strcat(['AD1','_',num2str(acqNum)]); %changed to AD1 by Paolo
-%                     load(fullfile(epochPath,strcat(curVholdChannel,'.mat')));
-%                     vhold = extractHoldingVoltage(eval([curVholdChannel])); %mean(eval([curVholdChannel,'.data']))*100;
-%                 end
-                %if isempty(vhold)
-                vhold = -70;
-%                     if stats.baseline.avg < 0; vhold = -70;
-%                     else; vhold = 0; end
-                %end
+                if strcmpi(options.vholdChannel,'excel')
+                    % Find in .xlsx file first, if can't find, use the heuristic that
+                    % cells with negative leak current Vhold=-70, otherwise Vhold = 10;
+                    acqsplit = split(sweepAcq{k},'_'); acqNum = str2double(acqsplit{end});
+                    vhold = info{info.acq_ == acqNum,'holding'};
+                else
+                    acqsplit = split(sweepAcq{k},'_'); acqNum = str2double(acqsplit{end});
+                    curVholdChannel = strcat(['AD1','_',num2str(acqNum)]); %changed to AD1 by Paolo
+                    load(fullfile(epochPath,strcat(curVholdChannel,'.mat')));
+                    vhold = extractHoldingVoltage(eval([curVholdChannel])); %mean(eval([curVholdChannel,'.data']))*100;
+                end
+                if isempty(vhold)
+                    if stats.baseline.avg < 0; vhold = -70;
+                    else; vhold = 0; end
+                end
         
                 % Initialize matrix for noise analysis later
                 baselineData = [baselineData, processed_trace(baselineWindow)];
