@@ -2,6 +2,11 @@ function legendStr = makePWMlegend(events, color)
 % events: table from extractPWMStim
 % color : "blue" or "red"
 
+if isempty(events)
+    legendStr = '';
+    return;
+end
+
 [grp, dutyVals] = findgroups(events.duty);
 counts = splitapply(@numel, events.onset, grp);
 

@@ -102,6 +102,7 @@ search_cmap = curCell.("Response map"){1}.currentMap{searchIdx};
 search_bmap = curCell.("Response map"){1}.baselineMap{searchIdx};
 search_vhold = curCell.Vhold{1}(searchIdx);
 search_hotspot = curCell.("Response map"){1}.hotspot{searchIdx};
+search_spotLocation = curCell.("Response map"){1}.spotLocation{searchIdx};
 nDepth = length(search_depths);
 
 % Load cell location (not necessary)
@@ -159,6 +160,15 @@ for d = 1:nDepth
     depthBaselineMap = search_bmap{d};
     spotSequence = repelem(1:height(search_hotspot{d}), cellfun(@numel, search_hotspot{d}))';
     depthHotspot = search_hotspot{d};
+
+    depthSpotLocation = search_spotLocation{d};
+    valid = ~isnan(depthSpotLocation(:,1));
+    depthSpotLocation = depthSpotLocation(valid,:);
+    colStarts = unique(depthSpotLocation(:,1));
+    rowStarts = unique(depthSpotLocation(:,3));
+    nCol = numel(colStarts);
+    nRow = numel(rowStarts);
+
 
     % Determine current plot line width
     if curDepth <= length(options.depthLineWidth); LineWidth = options.depthLineWidth(curDepth);
@@ -237,13 +247,13 @@ for d = 1:nDepth
 
     % Plot current trace map
     nexttile(masterLayout,1); axis off;
-    depthLayout = tiledlayout(masterLayout,2^curDepth,2^curDepth);
+    depthLayout = tiledlayout(masterLayout,nRow,nCol);
     depthLayout.Layout.Tile = 1;
     depthLayout.Layout.TileSpan = [4 2];
     depthLayout.TileSpacing = 'none'; depthLayout.Padding = 'tight'; 
     % title(['Depth ', num2str(curDepth),': current responses']);
 
-    for t = 1:4^curDepth
+    for t = 1:numel(depthCurrentMap)
         nexttile(depthLayout,t);
         if isempty(depthCurrentMap{t})
             trace = nan(1,plotWindowLength);
@@ -269,7 +279,8 @@ for d = 1:nDepth
         else; yline(Ithres,'--',color=blue,Alpha=0.5); yline(Ethres,'--',color=red,Alpha=0.5);
         end
         % Plot axis at the bottom-left tile
-        if t ~= 4^curDepth-2^curDepth+1; axis off
+        bottomLeft = (nRow-1)*nCol + 1;
+        if t ~= bottomLeft; axis off
         else
             xlabel('ms'); ylabel('pA'); box off; 
             xticks([0,50]); 

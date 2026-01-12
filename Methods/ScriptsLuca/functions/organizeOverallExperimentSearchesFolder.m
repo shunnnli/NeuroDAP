@@ -7,7 +7,7 @@ for iMouse = 1:nMouseExperiments
 
     mouseDirectory = [dataDirectory mouseNames{1,iMouse}];
     folders = dir(fullfile(mouseDirectory, '*Results*'));
-    folderPath = fullfile(mouseDirectory, folders(1).name); 
+    folderPath = fullfile(mouseDirectory, folders(1).name);
     searchTableFileName = ['SearchFeaturesTable.mat'];
     searchTablePath = fullfile(folderPath,searchTableFileName);
     

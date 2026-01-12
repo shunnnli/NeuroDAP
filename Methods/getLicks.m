@@ -87,7 +87,8 @@ elseif isempty(leftLick)
 
         % Find licks within timeRange
         rightLickTimesinRange = rightLickOnIdx(rightLickOnIdx>niFirstIdx & rightLickOnIdx<niLastIdx);
-        relativeRightLickTime = timeBaseline(rightLickTimesinRange)-timeBaseline(eventIdx(i)); % Can through out error is timeBaseline(0)
+        relativeRightLickTime = (rightLickTimesinRange - eventIdx(i)) / Fs;
+        % relativeRightLickTime = timeBaseline(rightLickTimesinRange)-timeBaseline(eventIdx(i)); % Can through out error is timeBaseline(0)
 
         if options.getRate
             % Calculate lick rate

@@ -387,8 +387,8 @@ if options.reloadCells
                     end
     
                     % Find E/I index
-                    stats.response.EIindex = abs(stats.response.max)-abs(stats.response.min) / abs(stats.response.max)+abs(stats.response.min);
-                    stats.baseline.EIindex = abs(stats.baseline.max)-abs(stats.baseline.min) / abs(stats.baseline.max)+abs(stats.baseline.min);
+                    stats.response.EIindex = (abs(stats.response.max)-abs(stats.response.min)) / (abs(stats.response.max)+abs(stats.response.min));
+                    stats.baseline.EIindex = (abs(stats.baseline.max)-abs(stats.baseline.min)) / (abs(stats.baseline.max)+abs(stats.baseline.min));
         
                     %% Store data for the current spot
                     curSpot = curSpot + 1;
@@ -543,14 +543,23 @@ if options.reloadCells
             searchProtocols{depthIdx} = spotsAtDepth{1,'Protocol'}{1};
             % Get search total spots
             totalSpots = totalSpots + size(spotsAtDepth,1);
+
+            % Get search grid
+            locCell = spotsAtDepth.Location;  % cell array, each is [cStart cEnd rStart rEnd]
+            colStarts = sort(unique(cellfun(@(L) L(1), locCell)));  % location(1) is col-start (1-indexed)
+            rowStarts = sort(unique(cellfun(@(L) L(3), locCell)));  % location(3) is row-start (1-indexed)
+            nCol = numel(colStarts);
+            nRow = numel(rowStarts);
+            nSpotGrid = nCol * nRow;
             
+            % Initialize map
             depthResponseMap = zeros(684,608);
             isResponseMap_depth = zeros(684,608);
             depthHotspotMap = zeros(684,608);
-            depthCurrentMap = cell(4^d,1);
-            depthBaselineMap = cell(4^d,1);
+            depthCurrentMap  = cell(nSpotGrid,1);
+            depthBaselineMap = cell(nSpotGrid,1);
             depthSpotSequence = zeros(size(spotsAtDepth,1),1);
-            depthSpotLocation = zeros(4^d,4);
+            depthSpotLocation = nan(nSpotGrid,4);
         
             % Build response map
             for s = 1:size(spotsAtDepth,1)
@@ -562,11 +571,20 @@ if options.reloadCells
                 location = spotsAtDepth{s,'Location'}{1};
                 yRange = location(1):location(2);
                 xRange = location(3):location(4);
-                square_width = location(2)-location(1)+1; 
-                square_height = location(4)-location(3)+1;
-                x_index = floor(location(1) / square_width);
-                y_index = floor(location(3) / square_height);
-                spotIdx = x_index + y_index * 2^d + 1;
+                
+                % Robust spot index based on matching starts (works with uneven box sizes)
+                colIdx = find(colStarts == location(1), 1);
+                rowIdx = find(rowStarts == location(3), 1);
+                
+                % Fallback (should rarely trigger, but avoids hard crash if something is off)
+                if isempty(colIdx)
+                    [~, colIdx] = min(abs(colStarts - location(1)));
+                end
+                if isempty(rowIdx)
+                    [~, rowIdx] = min(abs(rowStarts - location(3)));
+                end
+                
+                spotIdx = (colIdx - 1) + (rowIdx - 1) * nCol + 1;
                 depthSpotLocation(spotIdx,:) = location;
 
                 % Get response trace

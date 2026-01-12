@@ -62,9 +62,9 @@ if ~isfield(labjack,'record')
     labjack.nSignals = sum(labjack.record);
 end
 % If input is different from labjack.record
-if sum(labjack.record == options.record) ~= 3
-    disp(['labjack.record: ',num2str(labjack.record)]);
-    disp(['options.recordLJ: ',num2str(options.record)]);
+if sum(labjack.record == options.record) ~= 3 
+        disp(['labjack.record: ',num2str(labjack.record)]);
+        disp(['options.recordLJ: ',num2str(options.record)]);
     if options.followOriginal
         warning("labjack.record does not agree with recordLJ, reload using labjack.record"); 
     else

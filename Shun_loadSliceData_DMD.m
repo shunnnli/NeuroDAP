@@ -14,13 +14,13 @@ saveDataPath = 'default';
 
 % Set comman params
 [sessionParams,canceled] = inputSessionParams_singleSlice(expPath,...
-                                paradigm=2,redStim=true,...
+                                paradigm=1,redStim=true,...
                                 reload=false,calculateQC=true,...
                                 timeRange='[-10,50]',nArtifactSamples='0');
 taskOptions = {'random','reward pairing','punish pairing'};
 task = taskOptions{sessionParams.Paradigm};
-timeRange = eval(sessionParams.timeRange);
-nArtifactSamples = str2double(sessionParams.nArtifactSamples);
+timeRange = eval(sessionParams(1).timeRange);
+nArtifactSamples = str2double(sessionParams(1).nArtifactSamples);
 
 if ~isscalar(expPath); error('Multiple sessions were selected, for multi-session analysis see analyzeSlice pipeline!'); end
 expPath = expPath{1};
@@ -52,8 +52,8 @@ epochs = loadSlices(expPath,reload=sessionParams.reload,...
 % params and also responses, QC, and statistics of that search depth
 close all;
 
-loadSlicesDMD(epochs,reload=false,reloadCells=true,reloadCellAnalysis=true);
-% loadSlicesDMD(epochs,reload=true);
+% loadSlicesDMD(epochs,reload=false,reloadCells=true,reloadCellAnalysis=true);
+loadSlicesDMD(epochs,reload=true);
 
 %% Plot DMD results
 % Plot results for all searches in this session

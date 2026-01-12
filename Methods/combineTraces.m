@@ -265,7 +265,7 @@ for signal = 1:length(options.signalRange)
             if ~isfield(row.options,'sessionList')
                 row.options.sessionList = options.sessionList;
             end
-            options.sessionList = [options.sessionList,row.options.sessionList];
+            options.sessionList = unique([options.sessionList,row.options.sessionList]);
         end
 
         % Check trialConditions in trialTable
@@ -294,7 +294,7 @@ for signal = 1:length(options.signalRange)
         end
 
         % Combine getTrialNum
-        if ~isempty(row.trialInfo.trialNumber) && ~isempty(row.trialInfo.trialTable)
+        if isfield(row,'trialInfo') && ~isempty(row.trialInfo.trialNumber) && ~isempty(row.trialInfo.trialTable)
             cur_trialNumber = row.trialInfo.trialNumber(trialRange);
             trialNumData{signal} = [trialNumData{signal}; reshape(cur_trialNumber,[length(cur_trialNumber),1])];
             trialTableData{signal} = concatTables(trialTableData{signal}, row.trialInfo.trialTable(trialRange,:));
@@ -308,7 +308,7 @@ end
 
 %% Save
 combined.data = data;
-combined.stats = stats;
+if options.combineStats; combined.stats = stats; end
 combined.timestamp = t;
 
 combined.trialNumber = trialNumData;

@@ -9,8 +9,8 @@ clc;
 % user = getenv('USER'); 
 
 % Indicate main directory and add it to path
-matlabDirectory = ['P:\research.files.med.harvard.edu\neurobio\MICROSCOPE\Shun\Analysis\NeuroDAP\'];
-dataDirectory = ['P:\MICROSCOPE\Paolo\InVitro_Ephys\'];
+matlabDirectory = ['N:\research.files.med.harvard.edu\neurobio\MICROSCOPE\Shun\Analysis\NeuroDAP\'];
+dataDirectory = ['N:\MICROSCOPE\Paolo\InVitro_Ephys\'];
 mainDirectory = ['C:\Users\paolo\Desktop\EphysAnalysisMaps\']; % including all Matlab toolboxes and necessary paths
 addpath(genpath(matlabDirectory));
 
@@ -31,6 +31,7 @@ mouseNames{9} = 'DCN_SNr_Ephys_3_1';
 mouseNames{10} = 'DCN_SNr_Ephys_1_1';
 mouseNames{11} = 'DCN_ZI_Ephys_2_1';
 mouseNames{12} = 'DCN_ZI_Ephys_5_1';
+mouseNames{13} = 'DCN_ZI_Ephys_5_2';
 
 mouseCells = {};
 mouseCells{1} = [2,4];
@@ -45,6 +46,7 @@ mouseCells{9} = [7];
 mouseCells{10} = [1,5,7];
 mouseCells{11} = [6];
 mouseCells{12} = [4,5,7,8,9];
+mouseCells{13} = [2,3,4];
 
 mouseEpochs = {};
 mouseEpochs{1} = {[5],[5]};
@@ -59,6 +61,7 @@ mouseEpochs{9} = {[11]};
 mouseEpochs{10} = {[11],[11],[10]};
 mouseEpochs{11} = {[5]};
 mouseEpochs{12} = {[5],[6],[8],[5],[5]};
+mouseEpochs{13} = {[5],[8],[11]};
 
 selectedSearches = {};
 selectedSearches.mouseNames = mouseNames;

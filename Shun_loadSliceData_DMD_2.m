@@ -67,8 +67,8 @@ return
 
 % Plot search summary with features
 
-responseTypeBlue = 'excitatory';
-responseTypeRed = 'none';
+responseTypeBlue = 'inhibitory';
+responseTypeRed = 'excitatory';
 savePlots = 1;
 
 scriptPlotSearchSummaryMouse;

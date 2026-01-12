@@ -1,7 +1,8 @@
-function animals = getAnimalsStruct(summary)
+function animals = getAnimalsStruct(summary,options)
 
 arguments
     summary struct
+    options.timeRange = [-15,15]
 end
 
 animals = struct([]);
@@ -31,6 +32,7 @@ for a = 1:length(animalList)
                     ' -> ',signalList{signal}]);
 
                 combined = combineTraces(summary,animalRange=animalList{a},...
+                                timeRange=options.timeRange,...
                                 eventRange=eventList{event},...
                                 taskRange=taskList{task},...
                                 signalRange=signalList{signal},...

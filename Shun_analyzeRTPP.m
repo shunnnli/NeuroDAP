@@ -10,250 +10,287 @@ clear; close all;
 addpath(genpath(osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
 [twoColors,~,~,~,~,~,bluePurpleRed] = loadColors;
 
-filename = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project misc/Recordings'),...
-                        'Prompt','Select an animal');
+%% Pick one or more animal folders
+animalPaths = uipickfiles('FilterSpec', osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project misc/Recordings'), ...
+                          'Prompt', 'Select one or MORE animal folders (e.g., SL399, SL400, ...)');
+if isempty(animalPaths); return; end
+if ischar(animalPaths); animalPaths = {animalPaths}; end
+nAnimals = numel(animalPaths);
 
-sessionList = dir(filename{1});
+%% Params (edit as needed)
+box           = 'large';                 % 'large' or 'small'
+defaultStim   = 'right';                 % used for Baseline (so % = time on right)
+removeStatic  = false;
+noMoveThresh  = 20;                      % for getStaticPeriod
+Fs            = 20;                      % frame rate (not used below, kept for consistency)
 
-sessionList = sessionList(~ismember({sessionList.name},{'.','..'}));
-nSessions = length(sessionList);
-
-%% Process data
-
-box = 'small'; stim_side = 'right';
-session_cutoffs = [0, 0, 0, 0]; % in min;
-Fs = 20; % frame rate
-
-sessions = struct([]);
-for s = 1:nSessions
-    cur_session = dir(fullfile(sessionList(s).folder,sessionList(s).name));
-    tableName = cur_session(contains({cur_session.name},'times-')).name;
-    tablePath = cur_session(contains({cur_session.name},'times-')).folder;
-    cur_data = readtable(fullfile(tablePath,tableName));
-
-    dirsplit = split(tablePath,filesep);
-    sessions(s).name = dirsplit{end};
-    sessions(s).path = tablePath;
-    sessions(s).data = cur_data;
-    sessions(s).cutoff = session_cutoffs(s);
-    sessions(s).stimSide = stim_side;
-    sessions(s).box = box;
-
-    % Add time column
-    sessions(s).data.Item1 = datetime(sessions(s).data.Item1, ...
-        'InputFormat', 'yyyy-MM-dd''T''HH:mm:ss.SSSSSSSZ','TimeZone', 'UTC');
-    startTime = sessions(s).data.Item1(1);
-    minuteSinceStart = minutes(sessions(s).data.Item1 - startTime);
-
-    % Align to cutoff
-    if session_cutoffs(s) >= 0; offset = session_cutoffs(s);
-    else; offset = max(minuteSinceStart) + session_cutoffs(s);
-    end
-    sessions(s).data.time = minuteSinceStart - offset;
+% arena and binning
+switch lower(box)
+    case 'large'
+        Y_midpoint = 350;
+        xlimit = [300,650]; ylimit = [0,700];
+        nbx = 30; nby = 60;              % heatmap bins
+    otherwise
+        Y_midpoint = 140;
+        xlimit = [420,520]; ylimit = [15,280];
+        nbx = 16; nby = 20;
 end
-disp('Finished: animal data loaded');
+xedges = linspace(xlimit(1), xlimit(2), nbx+1);
+yedges = linspace(ylimit(1), ylimit(2), nby+1);
 
-%% Plot summary figure
-
-% Initialize recording params
-removeStatic = true; 
-noMovementThreshold = 20;
-if strcmpi(box,'large')
-    Y_midpoint = 350;
-    xlimit = [300,650]; ylimit = [0,700];
-else
-    Y_midpoint = 140; 
-    xlimit = [420,520]; ylimit = [15,280];
-end
-
-% Define color
+% colors
 leftColor = [156, 219, 17]./255;
 rightColor = [144, 126, 171]./255;
-stimColor = [7, 162, 222]./255;
-ctrlColor = [.3 .3 .3];
+stimColor  = [7, 162, 222]./255;
+ctrlColor  = [.3 .3 .3];
 
-% Initialize matrix
-stim_pct = zeros(nSessions,1);
-side_dist = zeros(nSessions,2);
+%% Group accumulators
+grpHeat.Baseline = zeros(nby, nbx);   % histcounts2 returns [ny, nx]
+grpHeat.Left     = zeros(nby, nbx);
+grpHeat.Right    = zeros(nby, nbx);
 
-% Plot figure
-initializeFig(0.5,1); tiledlayout(2,nSessions+1);
-for s = 1:nSessions
-    cur_data = sessions(s).data(sessions(s).data.time >= 0,:);
-    cur_name = sessions(s).name;
-    cur_stim_side = sessions(s).stimSide;
+% we’ll collect per-animal means (so each animal contributes one point per session-type)
+grpStimPct.Baseline = []; grpStimPct.Left = []; grpStimPct.Right = [];
+grpDistStim.Baseline = []; grpDistStim.Left = []; grpDistStim.Right = [];
+grpDistCtrl.Baseline = []; grpDistCtrl.Left = []; grpDistCtrl.Right = [];
 
-    X_raw = cur_data.Item2_X;
-    Y_raw = cur_data.Item2_Y;
-    % Y_midpoint = (min(Y_raw)+max(Y_raw))/2;
+%% ---------- PER-ANIMAL LOOP ----------
+for a = 1:nAnimals
+    animalDir = animalPaths{a};
+    [parentDir, animalName] = fileparts(animalDir);
 
-    % Drop potential sleep time
-    if removeStatic
-        staticWindow = getStaticPeriod(X_raw, Y_raw,noMovementThreshold=3,windowDuration=30);
-        cur_data_clean = cur_data(~staticWindow,:);
-        X = X_raw(~staticWindow);
-        Y = Y_raw(~staticWindow);
-    else
-        X = X_raw; Y = Y_raw;
+    % session folders in this animal folder
+    raw = dir(animalDir);
+    sessionList = raw([raw.isdir]);
+    sessionList = sessionList(~ismember({sessionList.name},{'.','..'}));
+    nSessions = numel(sessionList);
+
+    if nSessions==0
+        warning('No session subfolders for animal: %s', animalName);
+        continue;
     end
-    
-    % Plot the trajectory
-    nexttile([2 1]);
-    if ~contains(cur_name,'RTPP')
-        plot(X(Y>=Y_midpoint), Y(Y>=Y_midpoint), Color=rightColor, LineWidth=2); hold on;
-        plot(X(Y<Y_midpoint), Y(Y<Y_midpoint), Color=leftColor, LineWidth=2);
-        legend({'Right', 'Left'}, 'Location', 'northeast');
-    elseif strcmpi(cur_stim_side,'right')
-        plot(X(Y>=Y_midpoint), Y(Y>=Y_midpoint), Color=stimColor, LineWidth=2); hold on;
-        plot(X(Y<Y_midpoint), Y(Y<Y_midpoint), Color=ctrlColor, LineWidth=2);
-        legend({'Stim OFF', 'Stim ON'}, 'Location', 'northeast');
-    elseif strcmpi(cur_stim_side,'left')
-        plot(X(Y>=Y_midpoint), Y(Y>=Y_midpoint), Color=ctrlColor, LineWidth=2); hold on;
-        plot(X(Y<Y_midpoint), Y(Y<Y_midpoint), Color=stimColor, LineWidth=2);
-        legend({'Stim OFF', 'Stim ON'}, 'Location', 'northeast');
-    end
-    
-    xlim(xlimit); xlabel('X Position');
-    ylim(ylimit);ylabel('Y Position');
-    title(cur_name);
 
-    % Calculate time & distance traveled in each chamber
-    % stim = sum(strcmp(cur_data.Item3,'True'));
-    if strcmpi(cur_stim_side,'right')
-        stim = find(Y>=Y_midpoint);
-        side_dist(s,1) = getTrajectoryDistance(X,Y,filter=stim);
-        side_dist(s,2) = getTrajectoryDistance(X,Y,filter=find(Y<=Y_midpoint));
-    elseif strcmpi(cur_stim_side,'left')
-        stim = find(Y<=Y_midpoint);
-        side_dist(s,1) = getTrajectoryDistance(X,Y,filter=stim);
-        side_dist(s,2) = getTrajectoryDistance(X,Y,filter=find(Y>=Y_midpoint));
+    % holders
+    sessions = struct([]);
+    stim_pct = nan(nSessions,1);
+    side_dist = nan(nSessions,2); % [stim ctrl]
+    sessTypes = strings(nSessions,1); % 'Baseline'|'Left'|'Right'
+
+    % --------- load & preprocess each session ----------
+    for s = 1:nSessions
+        cur_session = dir(fullfile(sessionList(s).folder, sessionList(s).name));
+        % find CSV named like times-*.csv
+        hit = contains({cur_session.name}, 'times-') & endsWith({cur_session.name}, '.csv');
+        assert(any(hit), 'No times-*.csv in %s', fullfile(sessionList(s).folder, sessionList(s).name));
+        tableName = cur_session(hit).name;
+        tablePath = cur_session(hit).folder;
+
+        T = readtable(fullfile(tablePath, tableName));
+
+        % session meta
+        dirsplit = split(tablePath, filesep);
+        sessName = dirsplit{end};
+        sessions(s).name = sessName;
+        sessions(s).path = tablePath;
+
+        lowname = lower(sessName);
+        if contains(lowname, 'left')
+            sessTypes(s) = "Left";  sessions(s).stimSide = 'left';
+        elseif contains(lowname, 'right')
+            sessTypes(s) = "Right"; sessions(s).stimSide = 'right';
+        elseif contains(lowname, 'base')
+            sessTypes(s) = "Baseline"; sessions(s).stimSide = defaultStim; % use default
+        else
+            % fallback (treat as baseline-like)
+            sessTypes(s) = "Baseline"; sessions(s).stimSide = defaultStim;
+        end
+        sessions(s).box = box;
+
+        % add time column (align to first frame)
+        T.Item1 = datetime(T.Item1, 'InputFormat','yyyy-MM-dd''T''HH:mm:ss.SSSSSSSZ','TimeZone','UTC');
+        t0 = T.Item1(1);
+        minuteSinceStart = minutes(T.Item1 - t0);
+        T.time = minuteSinceStart; % no cutoffs across animals; edit if needed
+
+        % keep only t>=0 (safety) and drop static if needed
+        cur_data = T(T.time >= 0, :);
+        X_raw = cur_data.Item2_X; Y_raw = cur_data.Item2_Y;
+
+        if removeStatic
+            staticMask = getStaticPeriod(X_raw, Y_raw, noMovementThreshold=noMoveThresh, windowDuration=30);
+            keepMask = ~staticMask;
+        else
+            keepMask = true(size(X_raw));   % keep everything
+        end
+        
+        X = X_raw(keepMask);
+        Y = Y_raw(keepMask);
+
+
+        % --- metrics (time & distance per chamber) ---
+        stimSide = sessions(s).stimSide;
+        if strcmpi(stimSide,'right')
+            stimIdx = find(Y >= Y_midpoint);
+            ctrlIdx = find(Y <  Y_midpoint);
+        else % 'left'
+            stimIdx = find(Y <  Y_midpoint);
+            ctrlIdx = find(Y >= Y_midpoint);
+        end
+
+        side_dist(s,1) = getTrajectoryDistance(X, Y, filter=stimIdx);
+        side_dist(s,2) = getTrajectoryDistance(X, Y, filter=ctrlIdx);
+        stim_pct(s)    = numel(stimIdx) / max(1,numel(Y)) * 100;
+
+        % --- accumulate session heatmap into the right bucket ---
+        H = histcounts2(Y, X, yedges, xedges);  % note order (y,x)
+        switch sessTypes(s)
+            case "Baseline", grpHeat.Baseline = grpHeat.Baseline + H;
+            case "Left",     grpHeat.Left     = grpHeat.Left     + H;
+            case "Right",    grpHeat.Right    = grpHeat.Right    + H;
+        end
+
+        % stash the cleaned data for plotting the per-animal figure
+        sessions(s).dataClean = table(cur_data.time(keepMask), X, Y, ...
+                                      'VariableNames', {'time','X','Y'});
     end
-    stim_pct(s) = length(stim)/length(Y) * 100;
+
+    %% --------- PER-ANIMAL FIGURE (and save) ----------
+    initializeFig(0.7,1); tl = tiledlayout(2, nSessions+1, 'TileSpacing','compact', 'Padding','compact');
+
+    for s = 1:nSessions
+        X = sessions(s).dataClean.X; Y = sessions(s).dataClean.Y;
+        nexttile([2 1]); hold on;
+
+        % color by side
+        if sessTypes(s)=="Baseline"
+            plot(X(Y>=Y_midpoint), Y(Y>=Y_midpoint), 'Color', rightColor, 'LineWidth', 2);
+            plot(X(Y< Y_midpoint), Y(Y< Y_midpoint), 'Color', leftColor,  'LineWidth', 2);
+            legend({'Right','Left'}, 'Location','northeast');
+        else
+            if strcmpi(sessions(s).stimSide,'right')
+                plot(X(Y>=Y_midpoint), Y(Y>=Y_midpoint), 'Color', stimColor, 'LineWidth', 2);
+                plot(X(Y< Y_midpoint), Y(Y< Y_midpoint), 'Color', ctrlColor, 'LineWidth', 2);
+            else
+                plot(X(Y>=Y_midpoint), Y(Y>=Y_midpoint), 'Color', ctrlColor, 'LineWidth', 2);
+                plot(X(Y< Y_midpoint), Y(Y< Y_midpoint), 'Color', stimColor, 'LineWidth', 2);
+            end
+            legend({'Stim OFF','Stim ON'}, 'Location','northeast');
+        end
+        xlim(xlimit); ylim(ylimit);
+        xlabel('X Position'); ylabel('Y Position');
+        title(sprintf('%s', sessions(s).name), 'Interpreter','none');
+    end
+
+    % Right-top: time spent in stimulated side (%)
+    nexttile; hold on;
+    for s = 1:nSessions
+        thisColor = ctrlColor;               % default for baseline bar color
+        if sessTypes(s) ~= "Baseline", thisColor = stimColor; end
+        plotScatterBar(s, stim_pct(s), Color=thisColor, style='bar');
+    end
+    xticks(1:nSessions); xticklabels({sessions.name}); xtickangle(20);
+    ylabel('Time spent in stimulated side (%)');
+
+    % Right-bottom: distance traveled stim vs ctrl
+    nexttile; hold on;
+    for s = 1:nSessions
+        plotScatterBar(2*s-0.5, side_dist(s,1), Color=stimColor, style='bar');
+        plotScatterBar(2*s+0.5, side_dist(s,2), Color=ctrlColor, style='bar');
+    end
+    xticks((1:nSessions)*2); xticklabels({sessions.name}); xtickangle(20);
+    ylabel('Distance traveled (pixels)');
+
+    title(tl, sprintf('%s — Summary', animalName), 'Interpreter','none');
+
+    % save in the animal folder
+    outPNG = fullfile(animalDir, sprintf('%s_summary.png', animalName));
+    try
+        exportgraphics(gcf, outPNG, 'Resolution', 300);
+    catch
+        saveas(gcf, outPNG);
+    end
+    close(gcf);
+
+    %% --------- push this animal into GROUP arrays (per-type means) ----------
+    % Per animal mean across sessions of the same type
+    for typ = ["Baseline","Left","Right"]
+        mStim = mean(stim_pct(sessTypes==typ), 'omitnan');
+        mDstS = mean(side_dist(sessTypes==typ,1), 'omitnan');
+        mDstC = mean(side_dist(sessTypes==typ,2), 'omitnan');
+
+        if ~isnan(mStim), eval(sprintf('grpStimPct.%s(end+1) = mStim;', typ)); end
+        if ~isnan(mDstS),  eval(sprintf('grpDistStim.%s(end+1) = mDstS;', typ)); end
+        if ~isnan(mDstC),  eval(sprintf('grpDistCtrl.%s(end+1) = mDstC;', typ)); end
+    end
 end
 
-% Plot bar plot of duration in stim chamber
-nexttile;
-for s = 1:nSessions
-    if ~contains(sessions(s).name,'RTPP'); color = ctrlColor;
-    else; color = stimColor; end
-    plotScatterBar(s,stim_pct(s),Color=color,style='bar');
+%% ---------- GROUP SUMMARY FIGURE ----------
+% normalize heatmaps to probability (each type independently)
+normHeat = @(H) H ./ max(1, sum(H(:)));
+HB = normHeat(grpHeat.Baseline);
+HL = normHeat(grpHeat.Left);
+HR = normHeat(grpHeat.Right);
+
+% where to save
+[groupRoot, ~] = fileparts(animalPaths{1});
+groupOutDir = fullfile(groupRoot, 'GroupSummary');
+if ~exist(groupOutDir,'dir'), mkdir(groupOutDir); end
+
+initializeFig(0.7, 1);
+tl = tiledlayout(2,nSessions+1, 'TileSpacing','compact','Padding','compact');
+
+% three summary heatmaps (span both rows)
+nexttile([2 1]); imagesc(xedges, yedges, HB); axis xy; xlim(xlimit); ylim(ylimit);
+title('Baseline occupancy'); xlabel('X'); ylabel('Y'); colormap(sky); colorbar;
+
+nexttile([2 1]); imagesc(xedges, yedges, HL); axis xy; xlim(xlimit); ylim(ylimit);
+title('Left (stim on left) occupancy'); xlabel('X'); ylabel('Y'); colormap(sky); colorbar;
+
+nexttile([2 1]); imagesc(xedges, yedges, HR); axis xy; xlim(xlimit); ylim(ylimit);
+title('Right (stim on right) occupancy'); xlabel('X'); ylabel('Y'); colormap(sky); colorbar;
+
+% right-top: time spent in stimulated side (%) across animals
+types = ["Baseline","Left","Right"];
+typeX  = 1:numel(types);
+nexttile; hold on;
+for i = 1:numel(types)
+    vals = grpStimPct.(char(types(i)));
+    if isempty(vals), continue; end
+    baseColor = ctrlColor; 
+    if types(i)~="Baseline", baseColor = stimColor; end
+    plotScatterBar(2*typeX(i), vals, Color=baseColor, style='bar');
+
+    % Plot significance
+    for j = (i+1):numel(types)
+        plotStats(vals, grpStimPct.(char(types(j))), [2*typeX(i), 2*typeX(j)], testType='kstest');
+    end
 end
-xticks(1:nSessions); xticklabels({sessions.name});
+xticks((1:length(types))*2); xticklabels(types);
 ylabel('Time spent in stimulated side (%)');
+title('Across animals');
 
-% Plot bar plot of distance traveled in each chamber
-nexttile;
-for s = 1:nSessions
-    plotScatterBar(2*s-0.5,side_dist(s,1),Color=stimColor,style='bar');
-    plotScatterBar(2*s+0.5,side_dist(s,2),Color=ctrlColor,style='bar');
+% right-bottom: distance traveled — stim vs ctrl for each type (bars = mean; dots = animals)
+nexttile; hold on;
+gap = 0.3; % half-gap between stim and ctrl bars within each type
+for i = 1:numel(types)
+    vS = grpDistStim.(char(types(i)));
+    vC = grpDistCtrl.(char(types(i)));
+    if isempty(vS) || isempty(vC), continue; end
+    plotScatterBar(2*typeX(i)-gap, vC, Color=ctrlColor, style='bar');
+    plotScatterBar(2*typeX(i)+gap, vS, Color=stimColor, style='bar');
+    plotStats(vC, vS, [2*typeX(i)+gap, 2*typeX(i)+gap], testType='kstest');
 end
-xticks((1:nSessions)*2); xticklabels({sessions.name});
-legend({'Stim side','Ctrl side'});
-ylabel('Distance traveled in stimulated side (pixel)');
+xticks((1:length(types))*2); xticklabels(types);
+ylabel('Distance traveled (pixels)');
+title('Across animals');
 
-%% Heatmap (ongoing)
+title(tl, sprintf('RTPP Group Summary  (n=%d animals)', nAnimals));
 
-% Define heatmap grid
-squareSize = 5; % in pixels
-edgesX = linspace(300, 640, round(range(X)/squareSize));
-edgesY = linspace(0, 700, round(range(Y)/squareSize));
-
-% Count occurences of points in each grid bin
-[counts, edgesX, edgesY] = histcounts2(X, Y, edgesX, edgesY);
-timeInBins = counts * 1/Fs;
-% log_counts = log(counts);
-% log_times = log(timeInBins);
-gamma_counts = counts .^ 0.5;
-
-%4. plot
-figure;
-imagesc(edgesX(1:end-1), edgesY(1:end-1), gamma_counts');
-% % set(gca, 'YDir', 'normal'); 
-% set(gca,'ColorScale','log');
-colormap(sky); colorbar;
-xlim([300,640]); xlabel('X Position');
-ylim([0,700]);ylabel('Y Position');
-title ('Heatmap');
-
-%% Velocity
-
-% velocity calculations
-dx = diff(X);
-dy = diff(Y);
-dt = 1/Fs;
-velocity = sqrt(dx.^2 + dy.^2) ./ dt;
-
-% normalize velocity
-velocity_norm = (velocity - min(velocity)) / (max(velocity) - min(velocity));
-
-% colormap
-cmap = sky;
-colors = interp1(linspace(0, 1, size(cmap, 1)), cmap, velocity_norm);
-
-% make plot
-figure;
-hold on;
-
-% color gradient
-for i = 1:length(velocity)
-    plot(X(i:i+1), Y(i:i+1), 'Color', colors(i, :), 'LineWidth', 2)
+% save group figure
+groupPNG = fullfile(groupOutDir, 'AcrossAnimals_summary.png');
+try
+    exportgraphics(gcf, groupPNG, 'Resolution', 300);
+catch
+    saveas(gcf, groupPNG);
 end
-
-% 7. axis label and titles
-xlabel('X-Position')
-ylabel('Y-Position')
-title('RTPP Practice Analysis')
-clim([min(velocity) max(velocity)]); % Set the color axis based on velocity range
-colormap(sky);
-h = colorbar;  % Create a colorbar
-ylabel(h, 'Velocity (units per second)');
-
-hold off;
-
-%% (Test) Show removed static periods
-
-windowDuration = 30;
-noMovementThrehsold = 5;
-staticWindow = getStaticPeriod(X_raw, Y_raw,...
-    noMovementThreshold=noMovementThrehsold,windowDuration=windowDuration);
-
-figure; tiledlayout(1,2);
-nexttile;
-% Plot the full trajectory in blue
-plot(X_raw, Y_raw, 'b.-');  
-hold on;
-% Overlay the points marked for removal in red circles
-plot(X_raw(staticWindow), Y_raw(staticWindow), 'ro', 'MarkerSize', 8, 'LineWidth', 2);
-xlabel('X Position');
-ylabel('Y Position');
-legend('Recorded Trajectory','Removed Data');
-title('Animal Trajectory with Removed Data Highlighted');
-
-nexttile;
-movingWindowInSamples = windowDuration * 20;
-diffXinWindow = movsum(diff(X_raw),movingWindowInSamples);
-diffYinWindow = movsum(diff(Y_raw),movingWindowInSamples);
-distanceInWindow = diffXinWindow + diffYinWindow;
-time = (1:length(distanceInWindow))./20 / 60;
-plot(time, distanceInWindow); hold on;
-yline(50,'r',LineWidth=2); hold on 
-yline(-50,'r',LineWidth=2); hold on; 
-plot(time(staticWindow),distanceInWindow(staticWindow),'r');
-xlabel('Time (min)');
-ylabel('Distane travel in 30s moving window');
-
-
-%% (Test) Show static period criteria on result
-
-cur_data = sessions(2).data(sessions(2).data.time >= 0,:);
-for s = 1:100
-    % Drop potential sleep time
-    staticWindow = getStaticPeriod(X_raw,Y_raw,noMovementThreshold=s,windowDuration=30);
-
-    Y_raw = cur_data.Item2_Y;
-    Y = Y_raw(~staticWindow);
-    stim = find(Y<=Y_midpoint);
-    stim_pct(s) = length(stim)/length(Y) * 100;
-end
-
-plot(stim_pct)
+disp(['Saved group summary: ' groupPNG]);

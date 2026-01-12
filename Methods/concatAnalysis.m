@@ -1,7 +1,8 @@
- function summary = concatAnalysis(sessionList)
+function summary = concatAnalysis(sessionList, options)
 
 arguments
     sessionList cell
+    options.columnLabels = {'animal','date','session','task','event','name','system'}
 end
 
 summary = struct([]);
@@ -31,7 +32,7 @@ for s = 1:length(sessionList)
 end
 
 % Check summary format (should all be chars NOT strings)
-stringColumnsLabels = {'animal','date','session','task','event','name','system'};
+stringColumnsLabels = options.columnLabels;
 for i = 1:length(stringColumnsLabels)
     for row = 1:length(summary)
         if isstring(summary(row).(stringColumnsLabels{i})) 
