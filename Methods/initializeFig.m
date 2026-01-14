@@ -1,39 +1,43 @@
-function fig = initializeFig(horizontalPortion,verticalPortion,options)
-
-% Initialize figure of certain size
-% Orientation: vertical or horizontal
-% portion: portion of the screensize of the other direction
-% E.g.: vertical, 1/2 means the horizontal width is half of the screen, the
-% vertical height is the full size of the screen
+function fig = initializeFig(horizontalPortion, verticalPortion, options)
+%INITIALIZEFIG Create a figure sized as a portion of a (reference) screen.
+%
+%   fig = initializeFig(hPortion, vPortion) sizes the figure as a fraction of
+%   the *current* monitor's ScreenSize.
+%
+%   fig = initializeFig(..., 'ScreenSize', [left bottom width height]) sizes
+%   the figure as a fraction of a user-provided *reference* ScreenSize.
+%
+%   Example (use a fixed reference screen size):
+%       ref = [1 1 3440 1440];
+%       fig = initializeFig(0.6, 0.6, 'ScreenSize', ref);
 
 arguments
-    horizontalPortion double = 0.5
-    verticalPortion double = 0.5
-    
-    options.FontSize double = 20
-    options.AxesLineWidth double = 1.5
+    horizontalPortion (1,1) double {mustBeGreaterThan(horizontalPortion,0), mustBeLessThanOrEqual(horizontalPortion,1)} = 0.5
+    verticalPortion   (1,1) double {mustBeGreaterThan(verticalPortion,0),   mustBeLessThanOrEqual(verticalPortion,1)}   = 0.5
+
+    options.ScreenSize (1,4) double = [1 1 3440 1440]   % [left bottom width height] (pixels)
+    options.FontSize (1,1) double = 20
+    options.AxesLineWidth (1,1) double = 1.5
 end
 
-narginchk(0,2);
-if nargin < 1
-    horizontalPortion = 0.5;
-    verticalPortion = 0.5;
+% Choose base screen geometry
+if isempty(options.ScreenSize)
+    baseScreen = get(0, 'ScreenSize');
+else
+    baseScreen = options.ScreenSize;
 end
 
-screenSize = get(0,'Screensize');
+% Scale width/height by requested portions
+pos = baseScreen;
+pos(3) = pos(3) * horizontalPortion;
+pos(4) = pos(4) * verticalPortion;
 
-if horizontalPortion > 1 || horizontalPortion <= 0 || verticalPortion > 1 || verticalPortion <= 0
-    error('Portion should between 0 and 1!');
-end
+% Create figure
+fig = figure('Position', pos, 'Color', 'w');
 
-screenSize(3) = screenSize(3) * horizontalPortion;
-screenSize(4) = screenSize(4) * verticalPortion;
-
-fig = figure('Position',screenSize);
-set(gcf,'Color','w'); box off;
-% set(gca,'FontSize',options.FontSize);
-% set(gca,'LineWidth',options.AxesLineWidth);
-
-
+% Default axes styling (applies once axes exist)
 hold on
+set(gca, 'FontSize', options.FontSize, 'LineWidth', options.AxesLineWidth);
+box off
+
 end

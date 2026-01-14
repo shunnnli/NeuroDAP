@@ -161,13 +161,17 @@ for d = 1:nDepth
     spotSequence = repelem(1:height(search_hotspot{d}), cellfun(@numel, search_hotspot{d}))';
     depthHotspot = search_hotspot{d};
 
-    depthSpotLocation = search_spotLocation{d};
-    valid = ~isnan(depthSpotLocation(:,1));
-    depthSpotLocation = depthSpotLocation(valid,:);
-    colStarts = unique(depthSpotLocation(:,1));
-    rowStarts = unique(depthSpotLocation(:,3));
-    nCol = numel(colStarts);
-    nRow = numel(rowStarts);
+    % ========================= CHANGE (Full grid for analysis) =========================
+    % The saved maps (depthCurrentMap/depthBaselineMap/depthHotspot) may only include
+    % tiles that were actually sampled (e.g., 4x4 = 16). For analysis/plotting, we
+    % expand them to the full 2^curDepth x 2^curDepth grid (length 4^curDepth),
+    % leaving unsampled tiles empty.
+    [depthCurrentMapFull, depthBaselineMapFull, depthHotspotFull, depthSpotLocationFull] = ...
+        expandDepthToFullGrid(depthCurrentMap, depthBaselineMap, depthHotspot, search_spotLocation{d}, depthResponseMap, curDepth);
+
+    nCol = 2^curDepth;
+    nRow = 2^curDepth;
+    % ======================= END CHANGE (Full grid for analysis) =======================
 
 
     % Determine current plot line width
@@ -253,14 +257,15 @@ for d = 1:nDepth
     depthLayout.TileSpacing = 'none'; depthLayout.Padding = 'tight'; 
     % title(['Depth ', num2str(curDepth),': current responses']);
 
-    for t = 1:numel(depthCurrentMap)
+    % ========================= CHANGE (Full grid for analysis) =========================
+    for t = 1:(4^curDepth)
         nexttile(depthLayout,t);
-        if isempty(depthCurrentMap{t})
+        if isempty(depthCurrentMapFull{t})
             trace = nan(1,plotWindowLength);
             spotHotspot = false;
         else
-            trace = depthCurrentMap{t}(:,plotFirstSample:plotLastSample);
-            spotHotspot = sum(depthHotspot{t})>=1;
+            trace = depthCurrentMapFull{t}(:,plotFirstSample:plotLastSample);
+            spotHotspot = sum(depthHotspotFull{t})>=1;
         end
 
         if spotHotspot
@@ -287,18 +292,13 @@ for d = 1:nDepth
             yticks(sort(unique([round(optoMin)-eps,round(Ethres),round(Ithres),round(optoMax)+eps])));
         end
     end
+    % ======================= END CHANGE (Full grid for analysis) =======================
 
     % Plot response map
     ax_response = nexttile(masterLayout,3,[2 1]);
     imagesc(depthResponseMap); axis off; hold on;
     cb = colorbar; cb.Label.String = 'Total charge (pC)';
-    climit = max(abs(depthResponseMap),[],'all');
-    if climit == 0; climit = eps; end 
-    if search_vhold > 10; clim([0, climit]); 
-    elseif search_vhold < -50; clim([-climit, 0]); 
-    else; clim([-climit, climit]); 
-    end
-    colormap(ax_response,flip(options.colormap));
+    applyDMDColormap(ax_response, depthResponseMap, options.colormap, search_vhold);
     scatter(cellLoc(1),cellLoc(2),50,'o','filled','MarkerFaceColor','k','MarkerEdgeColor','none');
     title(['Depth ', num2str(curDepth),': ',curCell.Options{1}.feature]);
 
@@ -440,3 +440,93 @@ end
 disp(['Finished: analysis finished for search: ', curSearch]);
 close all;
 end
+
+%% ========================= CHANGE (Full grid for analysis) =========================
+function [curFull, baseFull, hotFull, locFull] = expandDepthToFullGrid(curMap, baseMap, hotMap, spotLoc, respMap, depth)
+% Expand per-depth maps to a full 2^depth x 2^depth grid (length 4^depth).
+% Unsampled tiles remain empty ([] for cell entries; NaN for locations).
+%
+% NOTE on coordinate convention in this codebase:
+%   location = [colStart colEnd rowStart rowEnd] in 1-based pixel indices, where:
+%     - colStart/colEnd index the 2nd dimension (columns) of respMap
+%     - rowStart/rowEnd index the 1st dimension (rows) of respMap
+%
+% This matches how loadSlicesDMD/analyzeDMDSearch index regions.
+
+    nRowsPix = size(respMap, 1);
+    nColsPix = size(respMap, 2);
+
+    colStartsFull = localSplitStarts(nColsPix, depth); % 1 x 2^depth
+    rowStartsFull = localSplitStarts(nRowsPix, depth); % 1 x 2^depth
+
+    nCol = 2^depth;
+    nRow = 2^depth;
+    nFull = 4^depth;
+
+    curFull  = cell(nFull, 1);
+    baseFull = cell(nFull, 1);
+    hotFull  = cell(nFull, 1);
+    locFull  = nan(nFull, 4);
+
+    % spotLoc may be stored either as Nx4 numeric or as a cell-wrapped numeric.
+    if iscell(spotLoc)
+        spotLoc = spotLoc{1};
+    end
+
+    nMap = numel(curMap);
+    % Ensure spotLoc has at least nMap rows
+    if size(spotLoc,1) < nMap
+        nMap = size(spotLoc,1);
+    end
+
+    for k = 1:nMap
+        location = spotLoc(k,:);
+        if any(isnan(location))
+            continue
+        end
+
+        colIdx = find(colStartsFull == location(1), 1);
+        rowIdx = find(rowStartsFull == location(3), 1);
+
+        % If an exact match is not found (should be rare), fall back to nearest start.
+        if isempty(colIdx)
+            [~, colIdx] = min(abs(colStartsFull - location(1)));
+        end
+        if isempty(rowIdx)
+            [~, rowIdx] = min(abs(rowStartsFull - location(3)));
+        end
+
+        t = (colIdx - 1) + (rowIdx - 1) * nCol + 1;
+        if t < 1 || t > nFull
+            continue
+        end
+
+        curFull{t}  = curMap{k};
+        baseFull{t} = baseMap{k};
+        if k <= numel(hotMap)
+            hotFull{t}  = hotMap{k};
+        end
+        locFull(t,:) = location;
+    end
+end
+
+%%
+function starts = localSplitStarts(totalLen, depth)
+% Returns 1-based start indices for the 2^depth segments produced by repeatedly splitting
+% each segment into floor(L/2) and (L-floor(L/2)). This matches the typical quadtree
+% splitting logic used in DMD search pattern generation.
+    lens = totalLen;
+    for i = 1:depth
+        newLens = zeros(1, numel(lens) * 2);
+        for j = 1:numel(lens)
+            L = lens(j);
+            left = floor(L/2);
+            right = L - left;
+            newLens(2*j-1) = left;
+            newLens(2*j)   = right;
+        end
+        lens = newLens;
+    end
+    starts = cumsum([1, lens(1:end-1)]);
+end
+% ======================= END CHANGE (Full grid for analysis) =======================

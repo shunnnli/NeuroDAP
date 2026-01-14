@@ -99,18 +99,29 @@ searchPair = curCell.('Difference map'){1}.pair{pairIdx};
 search1Idx = searchPair(1); search2Idx = searchPair(2);
 
 % Load search 1 info
-search1_cmap = curCell.("Response map"){1}.currentMap{search1Idx};
-search1_bmap = curCell.("Response map"){1}.baselineMap{search1Idx};
+search1_cmap = curCell.('Response map'){1}.currentMap{search1Idx};
+search1_bmap = curCell.('Response map'){1}.baselineMap{search1Idx};
 search1_vhold = curCell.Vhold{1}(search1Idx);
-search1_hotspot = curCell.("Response map"){1}.hotspot{search1Idx};
-search1_depths = curCell.("Response map"){1}.depths{search1Idx};
+search1_hotspot = curCell.('Response map'){1}.hotspot{search1Idx};
+search1_depths = curCell.('Response map'){1}.depths{search1Idx};
+
+    % ========================= CHANGE (Full grid for analysis) =========================
+    % Store per-depth spotLocation so we can expand sampled maps into a full 2^depth x 2^depth grid for plotting.
+    search1_spotLocation = curCell.('Response map'){1}.spotLocation{search1Idx};
+    % ======================= END CHANGE (Full grid for analysis) =======================
+
 
 % Load search 2 info
-search2_cmap = curCell.("Response map"){1}.currentMap{search2Idx};
-search2_bmap = curCell.("Response map"){1}.baselineMap{search2Idx};
+search2_cmap = curCell.('Response map'){1}.currentMap{search2Idx};
+search2_bmap = curCell.('Response map'){1}.baselineMap{search2Idx};
 search2_vhold = curCell.Vhold{1}(search2Idx);
-search2_hotspot = curCell.("Response map"){1}.hotspot{search2Idx};
-search2_depths = curCell.("Response map"){1}.depths{search2Idx};
+search2_hotspot = curCell.('Response map'){1}.hotspot{search2Idx};
+search2_depths = curCell.('Response map'){1}.depths{search2Idx};
+
+    % ========================= CHANGE (Full grid for analysis) =========================
+    search2_spotLocation = curCell.('Response map'){1}.spotLocation{search2Idx};
+    % ======================= END CHANGE (Full grid for analysis) =======================
+
 
 % Load cell location (not necessary)
 try cellLoc = curCell.Options{1}.cellLocation;
@@ -120,8 +131,8 @@ end
 
 % Load stim duration
 if strcmp('Protocol',curCell.Properties.VariableNames)
-    stimDuration1 = curCell.("Protocol"){1}(search1Idx).pulseWidth;
-    stimDuration2 = curCell.("Protocol"){1}(search2Idx).pulseWidth;
+    stimDuration1 = curCell.('Protocol'){1}(search1Idx).pulseWidth;
+    stimDuration2 = curCell.('Protocol'){1}(search2Idx).pulseWidth;
 else
     stimDuration1 = 5; stimDuration2 = 5;
 end
@@ -184,6 +195,18 @@ for d = 1:length(commonDepth)
     depthHotspot1 = search1_hotspot{depthIdx1};
     spotSequence2 = repelem(1:height(search2_hotspot{depthIdx2}), cellfun(@numel, search2_hotspot{depthIdx2}))';
     depthHotspot2 = search2_hotspot{depthIdx2};
+
+    % ========================= CHANGE (Full grid for analysis) =========================
+    % Expand per-depth maps to a full 2^curDepth x 2^curDepth grid (length 4^curDepth) for tile-by-tile plotting.
+    % Unsampled tiles remain empty ([]), so full-grid indexing/plotting never errors.
+    [depthCurrentMap1Full, depthBaselineMap1Full, depthHotspot1Full, ~] = ...
+        expandDepthToFullGrid(depthCurrentMap1, depthBaselineMap1, depthHotspot1, ...
+                              search1_spotLocation{depthIdx1}, depthResponseMap, curDepth);
+    [depthCurrentMap2Full, depthBaselineMap2Full, depthHotspot2Full, ~] = ...
+        expandDepthToFullGrid(depthCurrentMap2, depthBaselineMap2, depthHotspot2, ...
+                              search2_spotLocation{depthIdx2}, depthResponseMap, curDepth);
+    % ======================= END CHANGE (Full grid for analysis) =======================
+
 
     % Determine current plot line width
     if curDepth <= length(options.depthLineWidth); LineWidth = options.depthLineWidth(curDepth);
@@ -317,19 +340,19 @@ for d = 1:length(commonDepth)
 
     for t = 1:4^curDepth
         nexttile(depthLayout,t);
-        if isempty(depthCurrentMap1{t})
+        if isempty(depthCurrentMap1Full{t})
             trace1 = nan(1,plotWindowLength);
             spotHotspot1 = false;
         else
-            trace1 = depthCurrentMap1{t}(:,plotFirstSample:plotLastSample);
-            spotHotspot1 = sum(depthHotspot1{t})>=1;
+            trace1 = depthCurrentMap1Full{t}(:,plotFirstSample:plotLastSample);
+            spotHotspot1 = ~isempty(depthHotspot1Full{t}) && sum(depthHotspot1Full{t})>=1;
         end
-        if isempty(depthCurrentMap2{t})
+        if isempty(depthCurrentMap2Full{t})
             trace2 = nan(1,plotWindowLength);
             spotHotspot2 = false;
         else
-            trace2 = depthCurrentMap2{t}(:,plotFirstSample:plotLastSample);
-            spotHotspot2 = sum(depthHotspot2{t})>=1;
+            trace2 = depthCurrentMap2Full{t}(:,plotFirstSample:plotLastSample);
+            spotHotspot2 = ~isempty(depthHotspot2Full{t}) && sum(depthHotspot2Full{t})>=1;
         end
 
         if spotHotspot1
@@ -601,3 +624,98 @@ end
 disp(['Finished: analysis finished for searches : ', num2str(searchPair)]);
 close all;
 end
+% ========================= CHANGE (Full grid for analysis) =========================
+function [curFull, baseFull, hotFull, locFull] = expandDepthToFullGrid(curMap, baseMap, hotMap, spotLoc, respMap, depth)
+% Expand sampled (possibly partial) per-depth maps into a full 2^depth x 2^depth grid (length 4^depth).
+%
+% Inputs:
+%   curMap/baseMap/hotMap: cell arrays (may be shorter than 4^depth if not all tiles sampled)
+%   spotLoc: Nx4 numeric [colStart colEnd rowStart rowEnd] for each sampled tile (or a cell wrapper)
+%   respMap: depth response image (used only to get full image size)
+%   depth: integer depth
+%
+% Outputs:
+%   curFull/baseFull/hotFull: cell arrays of length 4^depth with unsampled tiles as []
+%   locFull: (4^depth)x4 numeric array with NaNs for unsampled tiles
+
+    if iscell(spotLoc) && numel(spotLoc)==1
+        spotLoc = spotLoc{1};
+    end
+
+    % Full grid dimensions
+    nCol = 2^depth;
+    nRow = 2^depth;
+    nFull = nCol * nRow;
+
+    curFull  = cell(nFull,1);
+    baseFull = cell(nFull,1);
+    hotFull  = cell(nFull,1);
+    locFull  = nan(nFull,4);
+
+    if isempty(respMap)
+        return
+    end
+
+    % Determine the canonical segment starts for the full grid.
+    % Note: location uses 1-based [colStart colEnd rowStart rowEnd].
+    imgH = size(respMap,1);  % rows
+    imgW = size(respMap,2);  % cols
+
+    colStartsFull = localSplitStarts(imgW, depth);
+    rowStartsFull = localSplitStarts(imgH, depth);
+
+    % If maps are shorter than spotLoc rows, only map what exists.
+    nMap = numel(curMap);
+    if isempty(spotLoc) || size(spotLoc,1)==0
+        return
+    end
+    nMap = min(nMap, size(spotLoc,1));
+
+    for k = 1:nMap
+        location = spotLoc(k,:);
+        if any(isnan(location))
+            continue
+        end
+
+        colIdx = find(colStartsFull == location(1), 1);
+        rowIdx = find(rowStartsFull == location(3), 1);
+
+        % If an exact match is not found (should be rare), fall back to nearest start.
+        if isempty(colIdx)
+            [~, colIdx] = min(abs(colStartsFull - location(1)));
+        end
+        if isempty(rowIdx)
+            [~, rowIdx] = min(abs(rowStartsFull - location(3)));
+        end
+
+        t = (colIdx - 1) + (rowIdx - 1) * nCol + 1;
+        if t < 1 || t > nFull
+            continue
+        end
+
+        if k <= numel(curMap);  curFull{t}  = curMap{k};  end
+        if k <= numel(baseMap); baseFull{t} = baseMap{k}; end
+        if k <= numel(hotMap);  hotFull{t}  = hotMap{k};  end
+        locFull(t,:) = location;
+    end
+end
+
+function starts = localSplitStarts(totalLen, depth)
+% Returns 1-based start indices for the 2^depth segments produced by repeatedly splitting
+% each segment into floor(L/2) and (L-floor(L/2)). This matches typical quadtree splitting.
+    lens = totalLen;
+    for i = 1:depth
+        newLens = zeros(1, numel(lens) * 2);
+        for j = 1:numel(lens)
+            L = lens(j);
+            left = floor(L/2);
+            right = L - left;
+            newLens(2*j-1) = left;
+            newLens(2*j)   = right;
+        end
+        lens = newLens;
+    end
+    starts = cumsum([1, lens(1:end-1)]);
+end
+% ======================= END CHANGE (Full grid for analysis) =======================
+

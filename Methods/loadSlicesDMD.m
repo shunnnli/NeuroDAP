@@ -76,8 +76,14 @@ end
 if strcmp(options.saveDataPath,'default')
     options.rawDataPath = epochs{1,"Session"};
     options.saveDataPath = strcat(options.rawDataPath,filesep,resultsFolderName);
+    if ~exist(options.saveDataPath, 'dir')
+        mkdir(options.saveDataPath);
+    end
 else
     options.rawDataPath = epochs{1,"Session"};
+    if ~exist(options.saveDataPath, 'dir')
+        mkdir(options.saveDataPath);
+    end
 end
 
 % Turn off some warnings
@@ -167,8 +173,18 @@ if options.reloadCells
                         'Response','Stats',...
                         'QC',...
                         'Options'};
-            spots = table('Size',[size(exp,1),length(varNames)],...
+            spots = table('Size',[height(fullSearchTable),length(varNames)],...
                 'VariableTypes',varTypes,'VariableNames',varNames);
+
+            % ========================= CHANGE (Option 1: handle hotspot/extra sweeps) =========================
+            % Some sweeps at the end of a randomSearch epoch (e.g., hotspot validation sweeps)
+            % are not represented in Epoch*_fullSearchTable.mat. We collect them separately
+            % using Epoch*_finalHotspots_Depth*.mat and later save them as separate "searches"
+            % so analyzeDMDSearch can plot them.
+            hotspotSpots = table('Size',[0,length(varNames)],...
+                'VariableTypes',varTypes,'VariableNames',varNames);
+            [finalHotspotsByDepth, finalHotspotDepths] = localLoadFinalHotspots(epochPath, epoch);
+            % ======================= END CHANGE (Option 1: handle hotspot/extra sweeps) =======================
         
             %% Load individual sweeps
             for k = 1:length(sweepAcq)
@@ -189,15 +205,49 @@ if options.reloadCells
                                            outputFs=options.outputFs,...
                                            rcCheckRecoveryWindow=options.rcCheckRecoveryWindow);
                 if k == 1; prevDepth = protocol.depth; end
-        
-                % Find corresponding spot from fullSearchTable
-                sweepSpots = fullSearchTable(curSpot+1 : curSpot+protocol.numPulses,:);
-                % curSpot = curSpot+protocol.numPulses;
-                % Check whether selected rows are of the right depth
-                if any(sweepSpots.("depth") ~= protocol.depth)
-                    error('Error: selected spot are of the wrong depth based on headerString!');
+                % Find corresponding spots for this sweep.
+                % For normal randomSearch sweeps, use fullSearchTable rows in order.
+                % For extra/hotspot sweeps (not represented in fullSearchTable), use Epoch*_finalHotspots_Depth*.mat.
+                startRow = curSpot + 1;
+                nFS = height(fullSearchTable);
+                isHotspotSweep = false;
+
+                if startRow > nFS
+                    % We've consumed all rows in fullSearchTable; treat remaining sweeps as hotspot/extra sweeps.
+                    isHotspotSweep = true;
+
+                    % Choose finalHotspots table (depth derived from filename; fallback to max depth file)
+                    [sweepSpots, hotspotDepth, stageName] = localGetHotspotSweepSpots(finalHotspotsByDepth, finalHotspotDepths, protocol.depth, sweepAcq{k});
+                    protocol.depth = hotspotDepth;
+                    
+                    % Store stage on protocol so we can split/label later
+                    protocol.isHotspotSweep = true;
+                    protocol.hotspotStage = stageName;
+
+                    % Hotspot sweeps don't have online 'response' labels; fill as false for compatibility.
+                    if ~ismember('response', sweepSpots.Properties.VariableNames)
+                        sweepSpots.response = false(height(sweepSpots),1);
+                    end
+
+                    nPulsesThisSweep = height(sweepSpots);
+                else
+                    % Normal sweep: pull the next N rows from fullSearchTable (clipped if truncated)
+                    nPulsesThisSweep = protocol.numPulses;
+                    if (curSpot + protocol.numPulses) > nFS
+                        nPulsesThisSweep = nFS - curSpot;
+                        warning(['fullSearchTable truncated/mismatch for Epoch ', num2str(epoch), ', sweep ', sweepAcq{k}, ...
+                                 ': header expects ', num2str(protocol.numPulses), ' pulses, but only ', num2str(nPulsesThisSweep), ...
+                                 ' rows remain. Processing first ', num2str(nPulsesThisSweep), ' pulses only.']);
+                    end
+
+                    sweepSpots = fullSearchTable(curSpot+1 : curSpot+nPulsesThisSweep,:);
+
+                    % Check whether selected rows are of the right depth
+                    if any(sweepSpots.("depth") ~= protocol.depth)
+                        error('Error: selected spot are of the wrong depth based on headerString!');
+                    end
                 end
-        
+
                 % Define baseline window: have two windows, one before pulse and one after pulse
                 rcCheckOnset = getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck',pulseVar='delay') * (options.outputFs/1000);
                 rcCheckPulseWidth = getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck',pulseVar='pulseWidth') * (options.outputFs/1000);
@@ -296,7 +346,7 @@ if options.reloadCells
                 baselineData = [baselineData, processed_trace(baselineWindow)];
         
                 %% Loop through all spots
-                for s = 1:protocol.numPulses
+                for s = 1:nPulsesThisSweep
                     %% Define timeWindow and extract response
                     % Define control window
                     plotWindow = timeRangeStartSample(s):timeRangeEndSample(s);
@@ -389,29 +439,47 @@ if options.reloadCells
                     % Find E/I index
                     stats.response.EIindex = (abs(stats.response.max)-abs(stats.response.min)) / (abs(stats.response.max)+abs(stats.response.min));
                     stats.baseline.EIindex = (abs(stats.baseline.max)-abs(stats.baseline.min)) / (abs(stats.baseline.max)+abs(stats.baseline.min));
-        
                     %% Store data for the current spot
-                    curSpot = curSpot + 1;
-                    spots{curSpot,'Session'} = cellResultsPath;
-                    spots{curSpot,'Animal'} = exp{row,'Animal'};
-                    spots{curSpot,'Task'} = exp{row,'Task'};
-                    spots{curSpot,'Epoch'} = exp{row,'Epoch'};
-                    spots{curSpot,'Cell'} = exp{row,'Cell'};
-                    spots{curSpot,'Vhold'} = vhold;
-                    spots{curSpot,'Depth'} = protocol.depth;
-                    spots{curSpot,'Repetition'} = protocol.repetition;
-                    spots{curSpot,'Sweep'} = string(sweepAcq{k});
-                    spots{curSpot,'Location'} = num2cell(location,[1 2]);
-                    spots{curSpot,'Protocol'} = {protocol};
-                    spots{curSpot,'Response'} = {responses};
-                    spots{curSpot,'Stats'} = {stats};
-                    spots{curSpot,'QC'} = {qc};
-                    spots{curSpot,'Options'} = {options};
+                    if isHotspotSweep
+                        hotIdx = height(hotspotSpots) + 1;
+                        hotspotSpots{hotIdx,'Session'} = cellResultsPath;
+                        hotspotSpots{hotIdx,'Animal'} = exp{row,'Animal'};
+                        hotspotSpots{hotIdx,'Task'} = exp{row,'Task'};
+                        hotspotSpots{hotIdx,'Epoch'} = exp{row,'Epoch'};
+                        hotspotSpots{hotIdx,'Cell'} = exp{row,'Cell'};
+                        hotspotSpots{hotIdx,'Vhold'} = vhold;
+                        hotspotSpots{hotIdx,'Depth'} = protocol.depth;
+                        hotspotSpots{hotIdx,'Repetition'} = protocol.repetition;
+                        hotspotSpots{hotIdx,'Sweep'} = string(sweepAcq{k});
+                        hotspotSpots{hotIdx,'Location'} = num2cell(location,[1 2]);
+                        hotspotSpots{hotIdx,'Protocol'} = {protocol};
+                        hotspotSpots{hotIdx,'Response'} = {responses};
+                        hotspotSpots{hotIdx,'Stats'} = {stats};
+                        hotspotSpots{hotIdx,'QC'} = {qc};
+                        hotspotSpots{hotIdx,'Options'} = {options};
+                    else
+                        curSpot = curSpot + 1;
+                        spots{curSpot,'Session'} = cellResultsPath;
+                        spots{curSpot,'Animal'} = exp{row,'Animal'};
+                        spots{curSpot,'Task'} = exp{row,'Task'};
+                        spots{curSpot,'Epoch'} = exp{row,'Epoch'};
+                        spots{curSpot,'Cell'} = exp{row,'Cell'};
+                        spots{curSpot,'Vhold'} = vhold;
+                        spots{curSpot,'Depth'} = protocol.depth;
+                        spots{curSpot,'Repetition'} = protocol.repetition;
+                        spots{curSpot,'Sweep'} = string(sweepAcq{k});
+                        spots{curSpot,'Location'} = num2cell(location,[1 2]);
+                        spots{curSpot,'Protocol'} = {protocol};
+                        spots{curSpot,'Response'} = {responses};
+                        spots{curSpot,'Stats'} = {stats};
+                        spots{curSpot,'QC'} = {qc};
+                        spots{curSpot,'Options'} = {options};
+                    end
                 end
     
                 % Save spots.mat for a specific depth
                 % If not, spots are too big and matlab can't load later
-                if k == length(sweepAcq) || prevDepth ~= protocol.depth
+                if ~isHotspotSweep && (k == length(sweepAcq) || prevDepth ~= protocol.depth)
                     if options.save
                         % Generate spotsAtDepth
                         if k == length(sweepAcq)
@@ -434,20 +502,28 @@ if options.reloadCells
                         prevDepth = protocol.depth; clearvars AD*
                     end
                 end
+
+                % Save hotspot sweeps
+                if options.save && ~isempty(hotspotSpots)
+                    localSaveHotspotSpots(hotspotSpots, cellResultsPath, exp{row,'Cell'}, exp{row,'Epoch'});
+                end
             end
         end
         
         %% Loop through all depth and add search results to cells.mat
-    
+
         disp('Ongoing: adding current search to cells_DMD.mat'); clearvars AD*
-    
-        % Get a list of spots.mat file of a given cell and epoch
-        filename = strcat('spots_cell',num2str(exp{row,'Cell'}),'_epoch',num2str(exp{row,'Epoch'}));
-        depthfilename = strcat(filename,'_depth*.mat');
-        spotsList = dir(fullfile(cellResultsPath,depthfilename));
-        
-        % Skip if epoch file is not found
-        if isempty(spotsList)
+
+        % Get a list of spots.mat files of a given cell+epoch.
+        % We may have multiple "search keys" for the same epoch (e.g., hotspot sweeps saved as
+        % spots_cellX_epochY_hotspot_m70_depth*.mat). Each key is treated as a separate search
+        % entry in cells_DMD so analyzeDMDSearch can plot them.
+        basePrefix = strcat('spots_cell',num2str(exp{row,'Cell'}),'_epoch',num2str(exp{row,'Epoch'}));
+        spotsAll = dir(fullfile(cellResultsPath, strcat(basePrefix,'*_depth*.mat')));
+
+        % Skip if no spots files are found for this epoch
+        if isempty(spotsAll)
+            filename = basePrefix;
             disp(['Skipped: search epoch ', filename,' not found, skipped instead']);
             if row == size(exp,1)
                 responseMap.responseMap = cellResponseMap';
@@ -459,7 +535,7 @@ if options.reloadCells
                 responseMap.spotSequence = cellSpotSequence';
                 responseMap.hotspot = cellSpotResponse';
                 responseMap.spotLocation = cellSpotLocation';
-    
+
                 cellStats.max = cellMaxResponse';
                 cellStats.min = cellMinResponse';
                 cellStats.maxTime = cellMaxTime';
@@ -468,11 +544,11 @@ if options.reloadCells
                 cellStats.EIindex = cellEIindex';
                 cellStats.baseline.auc = cellBaselineAUC';
                 cellStats.baseline.std = cellBaselineSTD';
-    
+
                 options.searchTotalSpots = searchTotalSpots;
                 options.cellLocation = [spotsAtDepth{1,'Protocol'}{1}.cellX, spotsAtDepth{1,'Protocol'}{1}.cellY];
                 options.spotOptions = spotsAtDepth{1,'Options'}{1};
-        
+
                 cells{curCell,'Session'} = options.saveDataPath;
                 cells{curCell,'Animal'} = spotsAtDepth{1,'Animal'};
                 cells{curCell,'Task'} = spotsAtDepth{1,'Task'};
@@ -483,21 +559,21 @@ if options.reloadCells
                 cells{curCell,'Response map'} = {responseMap};
                 cells{curCell,'Stats'} = {cellStats};
                 cells{curCell,'Options'} = {options};
-        
+
                 % Save noise data for this cell
                 if options.reload
                     filename = strcat('noise_cell',num2str(curCell));
                     save(fullfile(epochs{1,"Session"},filename),'nullSpotData','preStimData','baselineData','-v7.3');
                     disp(strcat("Saved noise data for cell: ",num2str(curCell)));
                 end
-        
+
                 % Update prevCell and reset cellResponseMap
-                cellVhold = []; cellEpochs = {}; searchTotalSpots = {}; 
+                cellVhold = []; cellEpochs = {}; searchTotalSpots = {};
                 cellDepthList = {}; cellSpotSequence = {}; cellProtocols = {};
                 cellResponseMap = {}; isResponseMap_cell = {}; cellHotspotMap = {};
                 cellCurrentMap = {}; cellBaselineMap = {};
                 nullSpotData = []; preStimData = []; baselineData = [];
-                cellSpotResponse = {}; 
+                cellSpotResponse = {};
                 cellMaxResponse = {}; cellMinResponse = {};
                 cellMaxTime = {};cellMinTime = {};
                 cellAUC = {}; cellEIindex = {};
@@ -505,192 +581,213 @@ if options.reloadCells
                 cellSpotLocation = {};
             end
             continue;
-        else
+        end
+
+        % Derive unique search keys from filenames (strip trailing _depthN.mat)
+        names = {spotsAll.name};
+        keys = cellfun(@(n) regexprep(n,'_depth\d+\.mat$',''), names, 'UniformOutput', false);
+        searchKeys = unique(keys,'stable');
+
+        % Ensure the basePrefix (main search) is processed first if present
+        if any(strcmp(searchKeys, basePrefix))
+            searchKeys = [{basePrefix}; searchKeys(~strcmp(searchKeys, basePrefix))];
+        end
+
+        % Process each searchKey as a separate "search" entry in cells_DMD
+        for kSearch = 1:numel(searchKeys)
+            filename = searchKeys{kSearch};
+            spotsList = spotsAll(strcmp(keys, filename));
+
             disp(['Ongoing: adding search epoch ', filename,' to cells_DMD.mat']);
             totalSpots = 0; % total spot for this search
-        end
-    
-        % Initialize params
-        nDepth = length(spotsList);
-        searchResponseMap = zeros(684,608,nDepth);
-        isResponseMap_search = zeros(684,608,nDepth);
-        searchHotspotMap = zeros(684,608,nDepth);
-        searchCurrentMap = cell(nDepth,1);
-        searchBaselineMap = cell(nDepth,1);
-        searchDepthList = zeros(1,nDepth);
-        searchProtocols = cell(nDepth,1);
-        searchSpotSequence = cell(nDepth,1);
-        searchSpotLocation = cell(nDepth,1);
 
-        searchSpotResponse = cell(nDepth,1);
-        searchMaxResponse = cell(nDepth,1);
-        searchMinResponse = cell(nDepth,1);
-        searchMaxTime = cell(nDepth,1);
-        searchMinTime = cell(nDepth,1);
-        searchAUC = cell(nDepth,1);
-        searchEIindex = cell(nDepth,1);
-        searchBaselineAUC = cell(nDepth,1);
-        searchBaselineSTD = cell(nDepth,1);
-    
-        % Loop through depth
-        for depthIdx = 1:nDepth
-            % Initialization
-            depthFilePath = fullfile(spotsList(depthIdx).folder,spotsList(depthIdx).name);
-            load(depthFilePath,'spotsAtDepth');
-            % Get search depth
-            d = spotsAtDepth{1,'Depth'};
-            % Get search protocol
-            searchProtocols{depthIdx} = spotsAtDepth{1,'Protocol'}{1};
-            % Get search total spots
-            totalSpots = totalSpots + size(spotsAtDepth,1);
+            % Initialize params
+            nDepth = length(spotsList);
+            searchResponseMap = zeros(684,608,nDepth);
+            isResponseMap_search = zeros(684,608,nDepth);
+            searchHotspotMap = zeros(684,608,nDepth);
+            searchCurrentMap = cell(nDepth,1);
+            searchBaselineMap = cell(nDepth,1);
+            searchDepthList = zeros(1,nDepth);
+            searchProtocols = cell(nDepth,1);
+            searchSpotSequence = cell(nDepth,1);
+            searchSpotLocation = cell(nDepth,1);
 
-            % Get search grid
-            locCell = spotsAtDepth.Location;  % cell array, each is [cStart cEnd rStart rEnd]
-            colStarts = sort(unique(cellfun(@(L) L(1), locCell)));  % location(1) is col-start (1-indexed)
-            rowStarts = sort(unique(cellfun(@(L) L(3), locCell)));  % location(3) is row-start (1-indexed)
-            nCol = numel(colStarts);
-            nRow = numel(rowStarts);
-            nSpotGrid = nCol * nRow;
+            searchSpotResponse = cell(nDepth,1);
+            searchMaxResponse = cell(nDepth,1);
+            searchMinResponse = cell(nDepth,1);
+            searchMaxTime = cell(nDepth,1);
+            searchMinTime = cell(nDepth,1);
+            searchAUC = cell(nDepth,1);
+            searchEIindex = cell(nDepth,1);
+            searchBaselineAUC = cell(nDepth,1);
+            searchBaselineSTD = cell(nDepth,1);
+    
+            % Loop through depth
+            for depthIdx = 1:nDepth
+                % Initialization
+                depthFilePath = fullfile(spotsList(depthIdx).folder,spotsList(depthIdx).name);
+                load(depthFilePath,'spotsAtDepth');
+                % Get search depth
+                d = spotsAtDepth{1,'Depth'};
+                % Get search protocol
+                searchProtocols{depthIdx} = spotsAtDepth{1,'Protocol'}{1};
+                % Get search total spots
+                totalSpots = totalSpots + size(spotsAtDepth,1);
+
+                % Get search grid
+                locCell = spotsAtDepth.Location;  % cell array, each is [cStart cEnd rStart rEnd]
+                colStarts = sort(unique(cellfun(@(L) L(1), locCell)));  % location(1) is col-start (1-indexed)
+                rowStarts = sort(unique(cellfun(@(L) L(3), locCell)));  % location(3) is row-start (1-indexed)
+                nCol = numel(colStarts);
+                nRow = numel(rowStarts);
+                nSpotGrid = nCol * nRow;
             
-            % Initialize map
-            depthResponseMap = zeros(684,608);
-            isResponseMap_depth = zeros(684,608);
-            depthHotspotMap = zeros(684,608);
-            depthCurrentMap  = cell(nSpotGrid,1);
-            depthBaselineMap = cell(nSpotGrid,1);
-            depthSpotSequence = zeros(size(spotsAtDepth,1),1);
-            depthSpotLocation = nan(nSpotGrid,4);
+                % Initialize map
+                depthResponseMap = zeros(684,608);
+                isResponseMap_depth = zeros(684,608);
+                depthHotspotMap = zeros(684,608);
+                depthCurrentMap  = cell(nSpotGrid,1);
+                depthBaselineMap = cell(nSpotGrid,1);
+                depthSpotSequence = zeros(size(spotsAtDepth,1),1);
+                depthSpotLocation = nan(nSpotGrid,4);
         
-            % Build response map
-            for s = 1:size(spotsAtDepth,1)
-                % Build depthCurrentMap
-                % depthCurrentMap = cell{nSpotAtDepth,1}
-                % depthCurrentMap{spot1} = zeros(nRep,nSamples)
+                % Build response map
+                for s = 1:size(spotsAtDepth,1)
+                    % Build depthCurrentMap
+                    % depthCurrentMap = cell{nSpotAtDepth,1}
+                    % depthCurrentMap{spot1} = zeros(nRep,nSamples)
     
-                % Get spot index
-                location = spotsAtDepth{s,'Location'}{1};
-                yRange = location(1):location(2);
-                xRange = location(3):location(4);
-                
-                % Robust spot index based on matching starts (works with uneven box sizes)
-                colIdx = find(colStarts == location(1), 1);
-                rowIdx = find(rowStarts == location(3), 1);
-                
-                % Fallback (should rarely trigger, but avoids hard crash if something is off)
-                if isempty(colIdx)
-                    [~, colIdx] = min(abs(colStarts - location(1)));
-                end
-                if isempty(rowIdx)
-                    [~, rowIdx] = min(abs(rowStarts - location(3)));
-                end
-                
-                spotIdx = (colIdx - 1) + (rowIdx - 1) * nCol + 1;
-                depthSpotLocation(spotIdx,:) = location;
+                    % Get spot index
+                    location = spotsAtDepth{s,'Location'}{1};
+                    % Clip + integerize ranges to valid indices (handles fractional/out-of-bounds locations cleanly)
+                    [nX, nY] = size(depthResponseMap);  % xRange indexes rows, yRange indexes columns
+                    y1 = max(1, min(nY, floor(min(location(1),location(2)))));
+                    y2 = max(1, min(nY,  ceil(max(location(1),location(2)))));
+                    x1 = max(1, min(nX, floor(min(location(3),location(4)))));
+                    x2 = max(1, min(nX,  ceil(max(location(3),location(4)))));
+                    yRange = y1:y2;
+                    xRange = x1:x2;
 
-                % Get response trace
-                trace = spotsAtDepth{s,'Response'}{1}.processed;
-                baseline = spotsAtDepth{s,'Response'}{1}.control;
+                    % Robust spot index based on matching starts (works with uneven box sizes)
+                    colIdx = find(colStarts == location(1), 1);
+                    rowIdx = find(rowStarts == location(3), 1);
+                
+                    % Fallback (should rarely trigger, but avoids hard crash if something is off)
+                    if isempty(colIdx)
+                        [~, colIdx] = min(abs(colStarts - location(1)));
+                    end
+                    if isempty(rowIdx)
+                        [~, rowIdx] = min(abs(rowStarts - location(3)));
+                    end
+                
+                    spotIdx = (colIdx - 1) + (rowIdx - 1) * nCol + 1;
+                    depthSpotLocation(spotIdx,:) = location;
+
+                    % Get response trace
+                    trace = spotsAtDepth{s,'Response'}{1}.processed;
+                    baseline = spotsAtDepth{s,'Response'}{1}.control;
     
-                % Add to current map
-                depthCurrentMap{spotIdx} = [depthCurrentMap{spotIdx}; trace];
-                depthBaselineMap{spotIdx} = [depthBaselineMap{spotIdx}; baseline];
-                depthSpotSequence(s) = spotIdx;
+                    % Add to current map
+                    depthCurrentMap{spotIdx} = [depthCurrentMap{spotIdx}; trace];
+                    depthBaselineMap{spotIdx} = [depthBaselineMap{spotIdx}; baseline];
+                    depthSpotSequence(s) = spotIdx;
 
-                % Get response value
-                originalValue = mean(depthResponseMap(xRange,yRange),'all');
-                newValue = spotsAtDepth{s,'Stats'}{1}.response.(options.feature);
-                % Add to depthResponseMap
-                if originalValue==0; depthResponseMap(xRange,yRange) = newValue;
-                else; depthResponseMap(xRange,yRange) = mean([originalValue,newValue]);
-                end
+                    % Get response value
+                    originalValue = mean(depthResponseMap(xRange,yRange),'all','omitnan');
+                    newValue = spotsAtDepth{s,'Stats'}{1}.response.(options.feature);
+                    % Add to depthResponseMap
+                    if originalValue==0; depthResponseMap(xRange,yRange) = newValue;
+                    else; depthResponseMap(xRange,yRange) = mean([originalValue,newValue]);
+                    end
     
-                % Get isResponse value 
-                % value during online search
-                originalValue_isResponse = mode(isResponseMap_depth(xRange,yRange),'all');
-                newValue_isResponse = spotsAtDepth{s,'Response'}{1}.isResponse;
-                % Add to isResponseMap
-                if originalValue_isResponse==0; isResponseMap_depth(xRange,yRange) = newValue_isResponse;
-                else; isResponseMap_depth(xRange,yRange) = originalValue_isResponse || newValue_isResponse;
-                end
+                    % Get isResponse value 
+                    % value during online search
+                    originalValue_isResponse = mode(isResponseMap_depth(xRange,yRange),'all');
+                    newValue_isResponse = spotsAtDepth{s,'Response'}{1}.isResponse;
+                    % Add to isResponseMap
+                    if originalValue_isResponse==0; isResponseMap_depth(xRange,yRange) = newValue_isResponse;
+                    else; isResponseMap_depth(xRange,yRange) = originalValue_isResponse || newValue_isResponse;
+                    end
 
-                % Get hotspot value
-                originalValue_hotspot = mode(depthHotspotMap(xRange,yRange),'all');
-                newValue_hotspot = spotsAtDepth{s,'Response'}{1}.hotspot;
-                % Add to hotspot map
-                if originalValue_hotspot==0; depthHotspotMap(xRange,yRange) = newValue_hotspot;
-                else; depthHotspotMap(xRange,yRange) = originalValue_hotspot || newValue_hotspot;
-                end
-            end        
+                    % Get hotspot value
+                    originalValue_hotspot = mode(depthHotspotMap(xRange,yRange),'all');
+                    newValue_hotspot = spotsAtDepth{s,'Response'}{1}.hotspot;
+                    % Add to hotspot map
+                    if originalValue_hotspot==0; depthHotspotMap(xRange,yRange) = newValue_hotspot;
+                    else; depthHotspotMap(xRange,yRange) = originalValue_hotspot || newValue_hotspot;
+                    end
+                end        
 
-            % Extract statistics
-            hotspotIdx = cell2mat(arrayfun(@(x) spotsAtDepth{x,'Response'}{1}.hotspot,1:height(spotsAtDepth), UniformOutput=false)');
-            depthSpotResponse = accumarray(depthSpotSequence(:), hotspotIdx(:), [], @(x) {x});
-            maxResponse = cell2mat(arrayfun(@(x) spotsAtDepth{x,'Stats'}{1}.response.max,1:height(spotsAtDepth), UniformOutput=false)');
-            minResponse = cell2mat(arrayfun(@(x) spotsAtDepth{x,'Stats'}{1}.response.min,1:height(spotsAtDepth), UniformOutput=false)');
-            depthMaxResponse = accumarray(depthSpotSequence(:), maxResponse(:), [], @(x) {x});
-            depthMinResponse = accumarray(depthSpotSequence(:), minResponse(:), [], @(x) {x});
-            maxTime = cell2mat(arrayfun(@(x) spotsAtDepth{x,'Stats'}{1}.response.maxTime,1:height(spotsAtDepth), UniformOutput=false)');
-            minTime = cell2mat(arrayfun(@(x) spotsAtDepth{x,'Stats'}{1}.response.minTime,1:height(spotsAtDepth), UniformOutput=false)');
-            depthMaxTime = accumarray(depthSpotSequence(:), maxTime(:), [], @(x) {x});
-            depthMinTime = accumarray(depthSpotSequence(:), minTime(:), [], @(x) {x});
-            auc = cell2mat(arrayfun(@(x) spotsAtDepth{x,'Stats'}{1}.response.auc,1:height(spotsAtDepth), UniformOutput=false)');
-            EIindex = cell2mat(arrayfun(@(x) spotsAtDepth{x,'Stats'}{1}.response.EIindex,1:height(spotsAtDepth), UniformOutput=false)');
-            depthAUC = accumarray(depthSpotSequence(:), auc(:), [], @(x) {x});
-            depthEIindex = accumarray(depthSpotSequence(:), EIindex(:), [], @(x) {x});
-            baselineAUC = cell2mat(arrayfun(@(x) spotsAtDepth{x,'Stats'}{1}.baseline.auc,1:height(spotsAtDepth), UniformOutput=false)');
-            baselineSTD = cell2mat(arrayfun(@(x) spotsAtDepth{x,'Stats'}{1}.baseline.std,1:height(spotsAtDepth), UniformOutput=false)');
-            depthBaselineAUC = accumarray(depthSpotSequence(:), baselineAUC(:), [], @(x) {x});
-            depthBaselineSTD = accumarray(depthSpotSequence(:), baselineSTD(:), [], @(x) {x}); 
+                % Extract statistics
+                hotspotIdx = cell2mat(arrayfun(@(x) spotsAtDepth{x,'Response'}{1}.hotspot,1:height(spotsAtDepth), UniformOutput=false)');
+                depthSpotResponse = accumarray(depthSpotSequence(:), hotspotIdx(:), [], @(x) {x});
+                maxResponse = cell2mat(arrayfun(@(x) spotsAtDepth{x,'Stats'}{1}.response.max,1:height(spotsAtDepth), UniformOutput=false)');
+                minResponse = cell2mat(arrayfun(@(x) spotsAtDepth{x,'Stats'}{1}.response.min,1:height(spotsAtDepth), UniformOutput=false)');
+                depthMaxResponse = accumarray(depthSpotSequence(:), maxResponse(:), [], @(x) {x});
+                depthMinResponse = accumarray(depthSpotSequence(:), minResponse(:), [], @(x) {x});
+                maxTime = cell2mat(arrayfun(@(x) spotsAtDepth{x,'Stats'}{1}.response.maxTime,1:height(spotsAtDepth), UniformOutput=false)');
+                minTime = cell2mat(arrayfun(@(x) spotsAtDepth{x,'Stats'}{1}.response.minTime,1:height(spotsAtDepth), UniformOutput=false)');
+                depthMaxTime = accumarray(depthSpotSequence(:), maxTime(:), [], @(x) {x});
+                depthMinTime = accumarray(depthSpotSequence(:), minTime(:), [], @(x) {x});
+                auc = cell2mat(arrayfun(@(x) spotsAtDepth{x,'Stats'}{1}.response.auc,1:height(spotsAtDepth), UniformOutput=false)');
+                EIindex = cell2mat(arrayfun(@(x) spotsAtDepth{x,'Stats'}{1}.response.EIindex,1:height(spotsAtDepth), UniformOutput=false)');
+                depthAUC = accumarray(depthSpotSequence(:), auc(:), [], @(x) {x});
+                depthEIindex = accumarray(depthSpotSequence(:), EIindex(:), [], @(x) {x});
+                baselineAUC = cell2mat(arrayfun(@(x) spotsAtDepth{x,'Stats'}{1}.baseline.auc,1:height(spotsAtDepth), UniformOutput=false)');
+                baselineSTD = cell2mat(arrayfun(@(x) spotsAtDepth{x,'Stats'}{1}.baseline.std,1:height(spotsAtDepth), UniformOutput=false)');
+                depthBaselineAUC = accumarray(depthSpotSequence(:), baselineAUC(:), [], @(x) {x});
+                depthBaselineSTD = accumarray(depthSpotSequence(:), baselineSTD(:), [], @(x) {x}); 
 
-            % Save statistics
-            searchResponseMap(:,:,depthIdx) = depthResponseMap;
-            isResponseMap_search(:,:,depthIdx) = isResponseMap_depth;
-            searchHotspotMap(:,:,depthIdx) = depthHotspotMap;
-            searchCurrentMap{depthIdx} = depthCurrentMap;
-            searchBaselineMap{depthIdx} = depthBaselineMap;
-            searchDepthList(depthIdx) = d;
-            searchSpotSequence{depthIdx} = depthSpotSequence;
-            searchSpotLocation{depthIdx} = depthSpotLocation;
+                % Save statistics
+                searchResponseMap(:,:,depthIdx) = depthResponseMap;
+                isResponseMap_search(:,:,depthIdx) = isResponseMap_depth;
+                searchHotspotMap(:,:,depthIdx) = depthHotspotMap;
+                searchCurrentMap{depthIdx} = depthCurrentMap;
+                searchBaselineMap{depthIdx} = depthBaselineMap;
+                searchDepthList(depthIdx) = d;
+                searchSpotSequence{depthIdx} = depthSpotSequence;
+                searchSpotLocation{depthIdx} = depthSpotLocation;
 
-            searchSpotResponse{depthIdx} = depthSpotResponse;
-            searchMaxResponse{depthIdx} = depthMaxResponse;
-            searchMinResponse{depthIdx} = depthMinResponse;
-            searchMaxTime{depthIdx} = depthMaxTime;
-            searchMinTime{depthIdx} = depthMinTime;
-            searchAUC{depthIdx} = depthAUC;
-            searchEIindex{depthIdx} = depthEIindex;
-            searchBaselineAUC{depthIdx} = depthBaselineAUC;
-            searchBaselineSTD{depthIdx} = depthBaselineSTD;
+                searchSpotResponse{depthIdx} = depthSpotResponse;
+                searchMaxResponse{depthIdx} = depthMaxResponse;
+                searchMinResponse{depthIdx} = depthMinResponse;
+                searchMaxTime{depthIdx} = depthMaxTime;
+                searchMinTime{depthIdx} = depthMinTime;
+                searchAUC{depthIdx} = depthAUC;
+                searchEIindex{depthIdx} = depthEIindex;
+                searchBaselineAUC{depthIdx} = depthBaselineAUC;
+                searchBaselineSTD{depthIdx} = depthBaselineSTD;
+            end
+    
+            % Save response map
+            cellResponseMap{end+1} = searchResponseMap;
+            isResponseMap_cell{end+1} = isResponseMap_search;
+            cellHotspotMap{end+1} = searchHotspotMap;
+            cellCurrentMap{end+1} = searchCurrentMap;
+            cellBaselineMap{end+1} = searchBaselineMap;
+            cellDepthList{end+1} = searchDepthList;
+            cellSpotSequence{end+1} = searchSpotSequence;
+            cellSpotLocation{end+1} = searchSpotLocation;
+
+            cellSpotResponse{end+1} = searchSpotResponse;
+            cellMaxResponse{end+1} = searchMaxResponse;
+            cellMinResponse{end+1} = searchMinResponse;
+            cellMaxTime{end+1} = searchMaxTime;
+            cellMinTime{end+1} = searchMinTime;
+            cellAUC{end+1} = searchAUC;
+            cellEIindex{end+1} = searchEIindex;
+            cellBaselineAUC{end+1} = searchBaselineAUC;
+            cellBaselineSTD{end+1} = searchBaselineSTD;
+    
+            % Save to cell
+            curCell = spotsAtDepth{1,'Cell'};
+            cellVhold = [cellVhold; spotsAtDepth{1,'Vhold'}];
+            cellEpochs{end+1} = filename;
+            searchTotalSpots{end+1} = totalSpots;
+            cellProtocols{end+1} = searchProtocols;
         end
-    
-        % Save response map
-        cellResponseMap{end+1} = searchResponseMap;
-        isResponseMap_cell{end+1} = isResponseMap_search;
-        cellHotspotMap{end+1} = searchHotspotMap;
-        cellCurrentMap{end+1} = searchCurrentMap;
-        cellBaselineMap{end+1} = searchBaselineMap;
-        cellDepthList{end+1} = searchDepthList;
-        cellSpotSequence{end+1} = searchSpotSequence;
-        cellSpotLocation{end+1} = searchSpotLocation;
-
-        cellSpotResponse{end+1} = searchSpotResponse;
-        cellMaxResponse{end+1} = searchMaxResponse;
-        cellMinResponse{end+1} = searchMinResponse;
-        cellMaxTime{end+1} = searchMaxTime;
-        cellMinTime{end+1} = searchMinTime;
-        cellAUC{end+1} = searchAUC;
-        cellEIindex{end+1} = searchEIindex;
-        cellBaselineAUC{end+1} = searchBaselineAUC;
-        cellBaselineSTD{end+1} = searchBaselineSTD;
-    
-        % Save to cell
-        curCell = spotsAtDepth{1,'Cell'};
-        cellVhold = [cellVhold; spotsAtDepth{1,'Vhold'}];
-        cellEpochs{end+1} = filename;
-        searchTotalSpots{end+1} = totalSpots;
-        cellProtocols{end+1} = searchProtocols;
-        
-        if row == size(exp,1) || curCell ~= exp{row+1,'Cell'}
+if row == size(exp,1) || curCell ~= exp{row+1,'Cell'}
             responseMap.responseMap = cellResponseMap';
             responseMap.isResponseMap = isResponseMap_cell';
             responseMap.hotspotMap = cellHotspotMap';
@@ -901,3 +998,144 @@ end
 close all
 
 end
+
+% ========================= CHANGE (Option 1 helpers: hotspot sweeps) =========================
+function [finalHotspotsByDepth, depths] = localLoadFinalHotspots(epochPath, epochNumber)
+% Load all Epoch*_finalHotspots_Depth*.mat files for this epoch into a map keyed by depth.
+
+finalHotspotsByDepth = containers.Map('KeyType','double','ValueType','any');
+depths = [];
+
+pat = fullfile(epochPath, sprintf('Epoch%d_finalHotspots_Depth*.mat', epochNumber));
+files = dir(pat);
+
+for i = 1:numel(files)
+    fname = files(i).name;
+    tok = regexp(fname, 'Depth(\d+)\.mat$', 'tokens', 'once');
+    if isempty(tok); continue; end
+    d = str2double(tok{1});
+    S = load(fullfile(files(i).folder, files(i).name), 'finalHotspots');
+    if isfield(S,'finalHotspots') && ~isempty(S.finalHotspots)
+        finalHotspotsByDepth(d) = S.finalHotspots;
+        depths(end+1) = d; %#ok<AGROW>
+    end
+end
+
+depths = unique(depths);
+end
+
+function [sweepSpots, depthChosen, stageName] = localGetHotspotSweepSpots(finalHotspotsByDepth, depths, desiredDepth, sweepName)
+% Return a sweepSpots table compatible with fullSearchTable slicing:
+% requires vars: depth,xStart,yStart,xWidth,yHeight,response.
+%
+% Depth is determined from the finalHotspots filename set:
+% - If desiredDepth exists, use it.
+% - Else, use the maximum depth available (final depth).
+
+if isempty(depths)
+    error('No Epoch*_finalHotspots_Depth*.mat found, but extra sweeps were detected. Cannot map extra sweeps to spot locations.');
+end
+
+if ismember(desiredDepth, depths)
+    depthChosen = desiredDepth;
+else
+    depthChosen = max(depths);
+end
+
+pack = finalHotspotsByDepth(depthChosen);
+
+% Support both old map format (table) and new packed struct format
+if istable(pack)
+    finalHotspots = pack;
+    hotspotMeta = [];
+else
+    finalHotspots = pack.finalHotspots;
+    hotspotMeta = pack.hotspotMeta;
+end
+
+% Ensure expected columns exist
+needVars = {'depth','xStart','yStart','xWidth','yHeight'};
+missing = setdiff(needVars, finalHotspots.Properties.VariableNames);
+if ~isempty(missing)
+    error('finalHotspots is missing required variables: %s', strjoin(missing, ', '));
+end
+
+sweepSpots = finalHotspots(:, needVars);
+
+% Add response column for compatibility
+sweepSpots.response = false(height(sweepSpots),1);
+
+% ---- Determine stageName from hotspotMeta if available ----
+stageName = "hotspot_unknown";
+if ~isempty(hotspotMeta) && isfield(hotspotMeta,'stage') && ~isempty(hotspotMeta.stage)
+    tok = regexp(sweepName, 'AD0_(\d+)', 'tokens', 'once');
+    if ~isempty(tok)
+        acqNum = str2double(tok{1});
+        for ii = 1:numel(hotspotMeta.stage)
+            if isfield(hotspotMeta.stage(ii),'acqNums') && any(hotspotMeta.stage(ii).acqNums == acqNum)
+                stageName = string(hotspotMeta.stage(ii).name);
+                break
+            end
+        end
+    end
+end
+
+end
+
+function localSaveHotspotSpots(hotspotSpots, cellResultsPath, cellNum, epochNum)
+% Save hotspot/extra sweeps as separate search keys so analyzeDMDSearch can plot them.
+% Files are saved as:
+%   spots_cellX_epochY_hotspot_<tag>_depthD.mat
+% where tag is based on holding potential (m70 / p10 / other).
+
+if isempty(hotspotSpots); return; end
+if ~exist(cellResultsPath,'dir'); mkdir(cellResultsPath); end
+
+% Tag by holding potential
+% Prefer stage tag from protocol.hotspotStage if present, otherwise fall back to Vhold
+tag = strings(height(hotspotSpots),1);
+
+for i = 1:height(hotspotSpots)
+    p = hotspotSpots{i,'Protocol'}{1};
+    if isstruct(p) && isfield(p,'hotspotStage') && ~isempty(p.hotspotStage)
+        st = string(p.hotspotStage);
+        if contains(lower(st),'exci') || contains(lower(st),'neg')
+            tag(i) = "exci";
+        elseif contains(lower(st),'inhi') || contains(lower(st),'pos') || contains(lower(st),'10')
+            tag(i) = "inhi";
+        else
+            tag(i) = "other";
+        end
+    end
+end
+
+% Fill any still-empty tags using Vhold heuristic
+v = hotspotSpots.Vhold;
+tag(tag=="") = "other";
+tag(tag=="other" & v < -50) = "exci";
+tag(tag=="other" & v > 0)   = "inhi";
+hotspotSpots.Tag = tag;
+
+depths = unique(hotspotSpots.Depth);
+for di = 1:numel(depths)
+    d = depths(di);
+    subD = hotspotSpots(hotspotSpots.Depth == d, :);
+    tags = unique(subD.Tag);
+    for ti = 1:numel(tags)
+        t = tags(ti);
+        sub = subD(subD.Tag == t, :);
+
+        % Save as spotsAtDepth (expected by downstream loader)
+        spotsAtDepth = sub;
+        spotsAtDepth = rmmissing(spotsAtDepth,DataVariables='Session');
+
+        filename = sprintf('spots_cell%d_epoch%d_hotspot_%s_depth%d', cellNum, epochNum, char(t), d);
+        save(fullfile(cellResultsPath, filename), 'spotsAtDepth', '-v7.3');
+        disp(strcat("New spots.mat created & saved (hotspot): ", filename));
+    end
+end
+
+% Remove Tag column from workspace (avoid accidental downstream dependence)
+% (Saved file still contains it; that's fine and harmless.)
+end
+% ======================= END CHANGE (Option 1 helpers: hotspot sweeps) =======================
