@@ -180,8 +180,46 @@ for d = 1:nDepth
 
     % Get opto and prestim traces
     optoData = cell2mat(depthCurrentMap); 
-    optoData = optoData(:,analysisWindow);
     ctrlData = cell2mat(depthBaselineMap);
+
+    % Check if calculated analysisWindow exceeds actual data dimensions.
+    % This typically happens with data reconstructed from .fig files (shorter time range).
+    if max(analysisWindow) > size(optoData, 2)
+        nAvailable = size(optoData, 2);
+        
+        % Heuristic: Check for standard reconstruction size (601 samples @ 10kHz = 60.1ms)
+        if nAvailable == 601 && options.outputFs == 10000
+             disp('[analyzeDMDSearch] Reconstructed data detected (601 samples). Re-aligning...');
+             newEventSample = 101; % 10ms baseline * 10 samples/ms + 1
+        else
+             % Fallback: Assume a standard 10ms pre-stim baseline if unknown
+             warning('[analyzeDMDSearch] Data length mismatch. Assuming 10ms baseline for alignment.');
+             newEventSample = round(10 * (options.outputFs/1000)) + 1;
+        end
+        
+        % 1. Recalculate analysis window (for statistics)
+        desiredLen = round(options.analysisWindowLength * (options.outputFs/1000));
+        startIdx = newEventSample;
+        endIdx   = min(nAvailable, newEventSample + desiredLen);
+        analysisWindow = startIdx:endIdx;
+
+        % 2. Recalculate PLOTTING indices (Fixes the crash at line 293)
+        % We calculate where the user's desired timeRange (e.g. -1 to 50ms) falls in this new data
+        reqFirst = newEventSample + round(options.timeRange(1)*options.outputFs/1000);
+        reqLast  = newEventSample + round(options.timeRange(2)*options.outputFs/1000);
+        
+        % Clamp these indices to the available data size
+        plotFirstSample = max(1, reqFirst);
+        plotLastSample  = min(nAvailable, reqLast);
+        
+        % 3. Update the Time Vector for plotting
+        % (indices - zeroPoint) / samplingRate
+        plotWindowTime = ((plotFirstSample:plotLastSample) - newEventSample) / (options.outputFs/1000);
+        plotWindowLength = length(plotWindowTime);
+    end
+
+    % Slice data
+    optoData = optoData(:,analysisWindow);
     ctrlData = ctrlData(:,size(ctrlData,2)-length(analysisWindow)+1:size(ctrlData,2));
     optoTime = linspace(0,options.analysisWindowLength,size(optoData,2));
     ctrlTime = linspace(-options.controlWindowLength,0,size(ctrlData,2));

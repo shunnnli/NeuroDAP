@@ -1,6 +1,6 @@
 function holdingVoltage = extractHoldingVoltage(holdingVoltageDataFile)
 
-    holdingVoltageData = holdingVoltageDataFile.data(10001:end)*100;
+    holdingVoltageData = holdingVoltageDataFile.data(1:5000)*100;
     holdingVoltage = mean(holdingVoltageData);
     
 %     if actualMeanVoltage >= -75 && actualMeanVoltage < -65; holdingVoltage = -70;

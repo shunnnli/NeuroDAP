@@ -13,6 +13,7 @@ arguments
     options.reloadCells logical = false
     options.reloadCellAnalysis logical = false
     options.calculateQC logical = true
+    options.reconstructDMD logical = true % reconstruct DMD if fullSearchTable is not found
 
     options.outputFs double = 10000
     options.timeRange double = [-20,100] % in ms
@@ -140,12 +141,35 @@ if options.reloadCells
             epoch = exp{row,'Epoch'};
             sweepAcq = exp{row,'Sweep names'}{1};
             epochPath = exp{row,'Options'}{1}.rawDataPath;
-            try load(fullfile(epochPath,strcat('Epoch',num2str(epoch),'_fullSearchTable.mat')),'fullSearchTable')
+            
+            % Intialize potentia reconstruction params
+            reconstructedSearch = false;
+            
+            try 
+                load(fullfile(epochPath,strcat('Epoch',num2str(epoch),'_fullSearchTable.mat')),'fullSearchTable')
             catch
-                warning(strcat("fullSearchtable for Epoch ",num2str(epoch), ...
-                        " of cell ",num2str(exp{row,'Cell'}),...
-                        " not saved, skipping this epoch!"));
-                continue
+                fullSearchTable = table();
+
+                warning(strcat("Epoch ",num2str(epoch)," (cell ",num2str(exp{row,'Cell'}),") is missing fullSearchTable. ", ...
+                    "Attempting reconstruction from *_responseMap.fig..."));
+            
+                if options.reconstructDMD
+                    [reconOK, reconNoise] = reconstructFromResponseMap(epochPath, cellResultsPath, exp(row,:), epoch, options);
+            
+                    if reconOK
+                        reconstructedSearch = true;
+                        % Append to noise buffers so noise_cellX.mat still builds
+                        nullSpotData = [nullSpotData, reconNoise.nullSpotData];
+                        preStimData  = [preStimData,  reconNoise.preStimData];
+                        baselineData = [baselineData, reconNoise.baselineData];
+                    else
+                        warning(strcat("Reconstruction failed for Epoch ",num2str(epoch),". Skipping this epoch."));
+                        continue
+                    end
+                else
+                    warning(strcat("Reconstruction disabled. Skipping Epoch ",num2str(epoch),"."));
+                    continue
+                end
             end
         
             % Read patching info csv file
@@ -177,13 +201,14 @@ if options.reloadCells
                 'VariableTypes',varTypes,'VariableNames',varNames);
 
             % ========================= CHANGE (Option 1: handle hotspot/extra sweeps) =========================
-            % Some sweeps at the end of a randomSearch epoch (e.g., hotspot validation sweeps)
-            % are not represented in Epoch*_fullSearchTable.mat. We collect them separately
-            % using Epoch*_finalHotspots_Depth*.mat and later save them as separate "searches"
-            % so analyzeDMDSearch can plot them.
-            hotspotSpots = table('Size',[0,length(varNames)],...
-                'VariableTypes',varTypes,'VariableNames',varNames);
-            [finalHotspotsByDepth, finalHotspotDepths] = localLoadFinalHotspots(epochPath, epoch);
+            % Some sweeps at the end of an epoch (e.g., hotspot validation sweeps)
+            % are not represented in Epoch*_fullSearchTable.mat. 
+            % We collect them separately using
+            % Epoch*_finalHotspots_Depth*.mat or Epoch*_maxSearchHotspots_Depth*.mat
+            % and later save them as separate "searches" so analyzeDMDSearch can plot them.
+
+            hotspotSpots = table('Size',[0,length(varNames)],'VariableTypes',varTypes,'VariableNames',varNames);
+            [sweepHotspots, sweepDepths] = localLoadHotspots(epochPath, epoch);
             % ======================= END CHANGE (Option 1: handle hotspot/extra sweeps) =======================
         
             %% Load individual sweeps
@@ -205,6 +230,13 @@ if options.reloadCells
                                            outputFs=options.outputFs,...
                                            rcCheckRecoveryWindow=options.rcCheckRecoveryWindow);
                 if k == 1; prevDepth = protocol.depth; end
+
+                % If we reconstructed search stage from responseMap figs, skip those sweeps
+                if reconstructedSearch
+                    disp(['Skipped (reconstructed search): ', sweepAcq{k}, ' depth ', num2str(protocol.depth)]);
+                    continue
+                end
+
                 % Find corresponding spots for this sweep.
                 % For normal randomSearch sweeps, use fullSearchTable rows in order.
                 % For extra/hotspot sweeps (not represented in fullSearchTable), use Epoch*_finalHotspots_Depth*.mat.
@@ -217,12 +249,18 @@ if options.reloadCells
                     isHotspotSweep = true;
 
                     % Choose finalHotspots table (depth derived from filename; fallback to max depth file)
-                    [sweepSpots, hotspotDepth, stageName] = localGetHotspotSweepSpots(finalHotspotsByDepth, finalHotspotDepths, protocol.depth, sweepAcq{k});
+                    try
+                        [sweepSpots, hotspotDepth, stageName, depthKind] = getHotspotSweeps(sweepHotspots, sweepDepths, protocol.depth, sweepAcq{k});
+                    catch ME
+                        warning(['Could not map extra/hotspot sweep ', sweepAcq{k}, ' for Epoch ', num2str(epoch), ': ', ME.message]);
+                        continue
+                    end
+
+                    % Update protocol
                     protocol.depth = hotspotDepth;
-                    
-                    % Store stage on protocol so we can split/label later
                     protocol.isHotspotSweep = true;
                     protocol.hotspotStage = stageName;
+                    protocol.hotspotDepthKind = depthKind;
 
                     % Hotspot sweeps don't have online 'response' labels; fill as false for compatibility.
                     if ~ismember('response', sweepSpots.Properties.VariableNames)
@@ -242,10 +280,32 @@ if options.reloadCells
 
                     sweepSpots = fullSearchTable(curSpot+1 : curSpot+nPulsesThisSweep,:);
 
+                    % If fullSearchTable includes per-sweep stage metadata (added by newer
+                    % hotspotSearch_shun), detect hotspot sweeps even though they are
+                    % represented in the table. This keeps hotspot validation sweeps from
+                    % being mixed into the main randomSearch depth files.
+                    if ismember('sweepStage', sweepSpots.Properties.VariableNames)
+                        st = unique(string(sweepSpots.sweepStage));
+                        st = st(st ~= "" & st ~= "search");
+                        if ~isempty(st)
+                            isHotspotSweep = true;
+                            protocol.isHotspotSweep = true;
+                            protocol.hotspotStage = st(1);
+                            if contains(lower(st(1)), 'final')
+                                protocol.hotspotDepthKind = "finalDepth";
+                            elseif contains(lower(st(1)), 'max')
+                                protocol.hotspotDepthKind = "maxSearchDepth";
+                            else
+                                protocol.hotspotDepthKind = "";
+                            end
+                        end
+                    end
+
                     % Check whether selected rows are of the right depth
                     if any(sweepSpots.("depth") ~= protocol.depth)
                         error('Error: selected spot are of the wrong depth based on headerString!');
                     end
+
                 end
 
                 % Define baseline window: have two windows, one before pulse and one after pulse
@@ -326,21 +386,7 @@ if options.reloadCells
                 stats.baseline.std = std(processed_trace(baselineWindow));
         
                 % Determine Vhold
-                if strcmpi(options.vholdChannel,'excel')
-                    % Find in .xlsx file first, if can't find, use the heuristic that
-                    % cells with negative leak current Vhold=-70, otherwise Vhold = 10;
-                    acqsplit = split(sweepAcq{k},'_'); acqNum = str2double(acqsplit{end});
-                    vhold = info{info.acq_ == acqNum,'holding'};
-                else
-                    acqsplit = split(sweepAcq{k},'_'); acqNum = str2double(acqsplit{end});
-                    curVholdChannel = strcat(['AD1','_',num2str(acqNum)]); %changed to AD1 by Paolo
-                    load(fullfile(epochPath,strcat(curVholdChannel,'.mat')));
-                    vhold = extractHoldingVoltage(eval([curVholdChannel])); %mean(eval([curVholdChannel,'.data']))*100;
-                end
-                if isempty(vhold)
-                    if stats.baseline.avg < 0; vhold = -70;
-                    else; vhold = 0; end
-                end
+                vhold = getSweepVhold(epochPath, sweepAcq{k}, stats.baseline.avg, options, info);
         
                 % Initialize matrix for noise analysis later
                 baselineData = [baselineData, processed_trace(baselineWindow)];
@@ -505,7 +551,7 @@ if options.reloadCells
 
                 % Save hotspot sweeps
                 if options.save && ~isempty(hotspotSpots)
-                    localSaveHotspotSpots(hotspotSpots, cellResultsPath, exp{row,'Cell'}, exp{row,'Epoch'});
+                    saveSweepHotspots(hotspotSpots, cellResultsPath, exp{row,'Cell'}, exp{row,'Epoch'});
                 end
             end
         end
@@ -787,7 +833,8 @@ if options.reloadCells
             searchTotalSpots{end+1} = totalSpots;
             cellProtocols{end+1} = searchProtocols;
         end
-if row == size(exp,1) || curCell ~= exp{row+1,'Cell'}
+
+        if row == size(exp,1) || curCell ~= exp{row+1,'Cell'}
             responseMap.responseMap = cellResponseMap';
             responseMap.isResponseMap = isResponseMap_cell';
             responseMap.hotspotMap = cellHotspotMap';
@@ -881,36 +928,72 @@ if options.reloadCellAnalysis
     
         % Initialize noise summary plot
         initializeFig(0.75,1); tiledlayout(1,3);
+
+        % Remove outliers
+        outlier1 = isoutlier(nullSpotData);
+        outlier2 = isoutlier(preStimData);
+        outlier3 = isoutlier(baselineData);
+
+        % Handle empty nullSpotData
+        if isempty(nullSpotData)
+            warning('Cell %d has NO null spots. Using preStimData as proxy for visualization.', c);
+            nullSpotData = preStimData; % Use pre-stim data for the specific "Null Spot" plot
+            titleSuffix = ' (Proxy: Pre-stim)';
+        else
+            titleSuffix = '';
+        end
         
         % pd1
-        nexttile; 
-        outlier1 = isoutlier(nullSpotData);
-        noise_nullSpot = fitdist(nullSpotData(~outlier1)','Normal');
-        histogram(nullSpotData,'Normalization','pdf'); hold on
-        histogram(nullSpotData(~outlier1),'Normalization','pdf');  hold on
-        xrange = [min(nullSpotData),max(nullSpotData)];
-        plot(linspace(xrange(1),xrange(2)),pdf(noise_nullSpot,linspace(xrange(1),xrange(2))),'LineWidth',2);
-        title('Null spot response');
+        nexttile;
+        cleanNull = nullSpotData(~outlier1);
+        if numel(cleanNull) > 1
+            noise_nullSpot = fitdist(cleanNull(:), 'Normal'); % Use (:) to enforce column vector
+            histogram(nullSpotData, 'Normalization', 'pdf'); hold on
+            if ~isempty(cleanNull)
+                histogram(cleanNull, 'Normalization', 'pdf'); hold on
+                xrange = [min(nullSpotData), max(nullSpotData)];
+                if diff(xrange)==0; xrange=[xrange(1)-1, xrange(2)+1]; end
+                plot(linspace(xrange(1),xrange(2)), pdf(noise_nullSpot, linspace(xrange(1),xrange(2))), 'LineWidth', 2);
+            end
+        else
+            % Fallback distribution if absolutely no data exists (rare)
+            noise_nullSpot = makedist('Normal', 'mu', 0, 'sigma', 1);
+        end
+        title(['Null spot response', titleSuffix]);
         
         % pd2
-        nexttile; 
-        outlier2 = isoutlier(preStimData);
-        noise_preStim = fitdist(preStimData(~outlier2)','Normal');
-        xrange=[min(preStimData),max(preStimData)];
-        histogram(preStimData,'Normalization','pdf'); hold on
-        histogram(preStimData(~outlier2),'Normalization','pdf'); hold on
-        plot(linspace(xrange(1),xrange(2)),pdf(noise_preStim,linspace(xrange(1),xrange(2))),'LineWidth',2);
-        title('Pre-stim period');
-        
+        nexttile;
+        cleanPre = preStimData(~outlier2);
+        if numel(cleanPre) > 1
+            noise_preStim = fitdist(cleanPre(:), 'Normal'); % Use (:) to enforce column vector
+            histogram(preStimData, 'Normalization', 'pdf'); hold on
+            if ~isempty(cleanPre)
+                histogram(cleanPre, 'Normalization', 'pdf'); hold on
+                xrange = [min(preStimData), max(preStimData)];
+                if diff(xrange)==0; xrange=[xrange(1)-1, xrange(2)+1]; end
+                plot(linspace(xrange(1),xrange(2)), pdf(noise_preStim, linspace(xrange(1),xrange(2))), 'LineWidth', 2);
+            end
+        else
+            % Fallback distribution if absolutely no data exists (rare)
+            noise_preStim = makedist('Normal', 'mu', 0, 'sigma', 1);
+        end
+        title(['Pre-stim response', titleSuffix]);
+
+
         % pd3
         nexttile;
-        outlier3 = isoutlier(baselineData);
         allNullData = [nullSpotData(~outlier1),preStimData(~outlier2),baselineData(~outlier3)];
-        noise_all = fitdist(allNullData','Normal');
-        xrange=[min(allNullData),max(allNullData)];
-        histogram(allNullData,'Normalization','pdf'); hold on
-        plot(linspace(xrange(1),xrange(2)),pdf(noise_all,linspace(xrange(1),xrange(2))),'LineWidth',2);
-        title('Baseline + Pre-stim + Null spot response');
+        if numel(allNullData) > 1
+            noise_all = fitdist(allNullData(:), 'Normal'); % Use (:) to enforce column vector
+            histogram(allNullData, 'Normalization', 'pdf'); hold on
+            xrange = [min(allNullData), max(allNullData)];
+            if diff(xrange)==0; xrange=[xrange(1)-1, xrange(2)+1]; end
+            plot(linspace(xrange(1),xrange(2)), pdf(noise_all, linspace(xrange(1),xrange(2))), 'LineWidth', 2);
+        else
+            % Fallback distribution if absolutely no data exists (rare)
+            noise_all = makedist('Normal', 'mu', 0, 'sigma', 1);
+        end
+        title(['Baseline + Pre-stim + Null spot response', titleSuffix]);
     
         % Set threshold based on the noise model (3*standard devation of the
         % symmetric noise)
@@ -976,16 +1059,16 @@ if options.reloadCellAnalysis
             end 
         end
     
-        % Save in diff structure
-        diff.response = diff_rmap_cell';
-        diff.commonSpots = common_isResponse_cell';
-        diff.pair = diff_pairs';
-        diff.diffVhold = diff_vholds;
-        diff.commonDepths = diff_depthList';
+        % Save in searchDiff structure
+        searchDiff.response = diff_rmap_cell';
+        searchDiff.commonSpots = common_isResponse_cell';
+        searchDiff.pair = diff_pairs';
+        searchDiff.diffVhold = diff_vholds;
+        searchDiff.commonDepths = diff_depthList';
 
         % Save in cells.mat
         cells{cellIdx,'Stats'} = {cellStats};
-        cells{cellIdx,'Difference map'} = {diff};
+        cells{cellIdx,'Difference map'} = {searchDiff};
     end
 end
 
@@ -999,78 +1082,282 @@ close all
 
 end
 
-% ========================= CHANGE (Option 1 helpers: hotspot sweeps) =========================
-function [finalHotspotsByDepth, depths] = localLoadFinalHotspots(epochPath, epochNumber)
-% Load all Epoch*_finalHotspots_Depth*.mat files for this epoch into a map keyed by depth.
 
-finalHotspotsByDepth = containers.Map('KeyType','double','ValueType','any');
-depths = [];
 
-pat = fullfile(epochPath, sprintf('Epoch%d_finalHotspots_Depth*.mat', epochNumber));
-files = dir(pat);
 
-for i = 1:numel(files)
-    fname = files(i).name;
-    tok = regexp(fname, 'Depth(\d+)\.mat$', 'tokens', 'once');
-    if isempty(tok); continue; end
-    d = str2double(tok{1});
-    S = load(fullfile(files(i).folder, files(i).name), 'finalHotspots');
-    if isfield(S,'finalHotspots') && ~isempty(S.finalHotspots)
-        finalHotspotsByDepth(d) = S.finalHotspots;
-        depths(end+1) = d; %#ok<AGROW>
+
+
+
+
+%% ==================== Helper functions ====================
+
+function [hotspotsByDepth, depths] = localLoadHotspots(epochPath, epochNumber)
+    % Load hotspot geometry tables into a map keyed by depth.
+    % Supports BOTH:
+    %   - Epoch*_finalHotspots_Depth*.mat
+    %   - Epoch*_maxSearchHotspots_Depth*.mat
+    
+    hotspotsByDepth = containers.Map('KeyType','double','ValueType','any');
+    depths = [];
+    
+    % ---- 1) maxDepthHotspots (hotspotSearch stage-1 geometry) ----
+    pat1 = fullfile(epochPath, sprintf('Epoch%d_maxSearchHotspots_Depth*.mat', epochNumber));
+    files1 = dir(pat1);
+    for i = 1:numel(files1)
+        fname = files1(i).name;
+        tok = regexp(fname, 'Depth(\d+)\.mat$', 'tokens', 'once');
+        if isempty(tok); continue; end
+        d = str2double(tok{1});
+    
+        S = load(fullfile(files1(i).folder, fname));
+        try
+            pack = struct();
+            pack.depthKind   = 'maxSearchDepth';
+            pack.spotsTable  = S.maxDepthHotspots;
+            pack.hotspotMeta = loadHotspotMeta(epochPath, epochNumber, d, 'maxSearchDepth', 'maxDepthHotspots');
+
+            if isKey(hotspotsByDepth, d)
+                existing = hotspotsByDepth(d);
+                if ~iscell(existing); existing = {existing}; end
+                hotspotsByDepth(d) = [existing, {pack}];
+            else
+                hotspotsByDepth(d) = pack;
+            end
+            depths(end+1) = d;
+        catch
+            warning("   maxSearch hotspots loading failed: .mat not found or is empty, skipped");
+        end
     end
+
+    % ---- 1) finalHotspots (subdivided geometry) ----
+    pat2 = fullfile(epochPath, sprintf('Epoch%d_finalHotspots_Depth*.mat', epochNumber));
+    files2 = dir(pat2);
+    for i = 1:numel(files2)
+        fname = files2(i).name;
+        tok = regexp(fname, 'Depth(\d+)\.mat$', 'tokens', 'once');
+        if isempty(tok); continue; end
+        d = str2double(tok{1});
+    
+        S = load(fullfile(files2(i).folder, fname));
+        try
+            pack = struct();
+            pack.depthKind   = 'finalDepth';
+            pack.spotsTable  = S.finalHotspots;
+            pack.hotspotMeta = loadHotspotMeta(epochPath, epochNumber, d, 'finalDepth', 'finalHotspots');
+
+            if isKey(hotspotsByDepth, d)
+                existing = hotspotsByDepth(d);
+                if ~iscell(existing); existing = {existing}; end
+                hotspotsByDepth(d) = [existing, {pack}];
+            else
+                hotspotsByDepth(d) = pack;
+            end
+            depths(end+1) = d;
+        catch
+            warning("   Final hotspots loading failed: .mat not found or is empty, skipped");
+        end
+    end
+    
+    depths = unique(depths);
 end
 
-depths = unique(depths);
-end
 
-function [sweepSpots, depthChosen, stageName] = localGetHotspotSweepSpots(finalHotspotsByDepth, depths, desiredDepth, sweepName)
-% Return a sweepSpots table compatible with fullSearchTable slicing:
-% requires vars: depth,xStart,yStart,xWidth,yHeight,response.
-%
-% Depth is determined from the finalHotspots filename set:
-% - If desiredDepth exists, use it.
-% - Else, use the maximum depth available (final depth).
 
-if isempty(depths)
-    error('No Epoch*_finalHotspots_Depth*.mat found, but extra sweeps were detected. Cannot map extra sweeps to spot locations.');
-end
+function hotspotMeta = loadHotspotMeta(epochPath, epochNum, depthValue, depthKind, stageName)
+    % localLoadHotspotMeta
+    % Tries to load the hotspotMeta file produced by hotspotSearch_shun.m:
+    %   Epoch#_hotspotMeta_maxSearchDepth#.mat  OR  Epoch#_hotspotMeta_finalDepth#.mat
+    %
+    % Returns:
+    %   - the loaded hotspotMeta struct (with hotspotMeta.stage as a struct array), OR
+    %   - a compatibility-safe minimal struct if not found / incompatible.
 
-if ismember(desiredDepth, depths)
-    depthChosen = desiredDepth;
-else
-    depthChosen = max(depths);
-end
-
-pack = finalHotspotsByDepth(depthChosen);
-
-% Support both old map format (table) and new packed struct format
-if istable(pack)
-    finalHotspots = pack;
     hotspotMeta = [];
-else
-    finalHotspots = pack.finalHotspots;
-    hotspotMeta = pack.hotspotMeta;
+
+    % Expected filenames from hotspotSearch_shun.m
+    % depthKind should be 'maxSearchDepth' or 'finalDepth'
+    metaFile = fullfile(epochPath, sprintf('Epoch%d_hotspotMeta_%s.mat', epochNum, depthKind));
+
+    if exist(metaFile, 'file')
+        S = load(metaFile);
+        if isfield(S, 'hotspotMeta')
+            hotspotMeta = S.hotspotMeta;
+        else
+            % In case variable name differs, attempt best-effort:
+            fns = fieldnames(S);
+            if ~isempty(fns)
+                hotspotMeta = S.(fns{1});
+            end
+        end
+    end
+
+    % ---- Compatibility normalization for downstream analysis ----
+    % Downstream code expects:
+    %   hotspotMeta.stage is a struct array, and may include stage(ii).acqNums, etc.
+    %
+    % If loaded file is missing / malformed, create a minimal struct that will NOT break code.
+    if isempty(hotspotMeta) || ~isstruct(hotspotMeta)
+        hotspotMeta = struct();
+    end
+
+    % Some older code patterns mistakenly used hotspotMeta.stage as a string.
+    % Normalize so hotspotMeta.stage is always a struct array.
+    if ~isfield(hotspotMeta, 'stage') || isempty(hotspotMeta.stage) || ischar(hotspotMeta.stage) || isstring(hotspotMeta.stage)
+        % Minimal, analysis-safe stage entry:
+        hotspotMeta.stage = struct( ...
+            'name',      stageName, ...
+            'depthKind', depthKind, ...
+            'depth',     depthValue, ...
+            'acqNums',   [], ...
+            'notes',     '' ...
+        );
+    else
+        % Ensure struct array + ensure required fields exist
+        if ~isstruct(hotspotMeta.stage)
+            hotspotMeta.stage = struct( ...
+                'name',      stageName, ...
+                'depthKind', depthKind, ...
+                'depth',     depthValue, ...
+                'acqNums',   [], ...
+                'notes',     '' ...
+            );
+        else
+            for ii = 1:numel(hotspotMeta.stage)
+	                % Normalize acquisition-number field naming across versions
+	                % (acqNum / acqNumbers / acqNums).
+	                if ~isfield(hotspotMeta.stage(ii), 'acqNums')
+	                    hotspotMeta.stage(ii).acqNums = [];
+	                end
+	                if isempty(hotspotMeta.stage(ii).acqNums)
+	                    if isfield(hotspotMeta.stage(ii), 'acqNum')
+	                        hotspotMeta.stage(ii).acqNums = hotspotMeta.stage(ii).acqNum;
+	                    elseif isfield(hotspotMeta.stage(ii), 'acqNumbers')
+	                        hotspotMeta.stage(ii).acqNums = hotspotMeta.stage(ii).acqNumbers;
+	                    end
+	                end
+	                % Ensure numeric row vector
+	                if ~isempty(hotspotMeta.stage(ii).acqNums)
+	                    hotspotMeta.stage(ii).acqNums = double(hotspotMeta.stage(ii).acqNums(:)');
+	                end
+                if ~isfield(hotspotMeta.stage(ii), 'depth');     hotspotMeta.stage(ii).depth = depthValue; end
+                if ~isfield(hotspotMeta.stage(ii), 'name');      hotspotMeta.stage(ii).name = stageName; end
+                if ~isfield(hotspotMeta.stage(ii), 'depthKind'); hotspotMeta.stage(ii).depthKind = depthKind; end
+                if ~isfield(hotspotMeta.stage(ii), 'notes');     hotspotMeta.stage(ii).notes = ''; end
+            end
+        end
+    end
+
+    % Also store convenience fields (safe even if downstream ignores them)
+    hotspotMeta.loadedFrom = metaFile;
 end
 
-% Ensure expected columns exist
-needVars = {'depth','xStart','yStart','xWidth','yHeight'};
-missing = setdiff(needVars, finalHotspots.Properties.VariableNames);
-if ~isempty(missing)
-    error('finalHotspots is missing required variables: %s', strjoin(missing, ', '));
-end
 
-sweepSpots = finalHotspots(:, needVars);
 
-% Add response column for compatibility
-sweepSpots.response = false(height(sweepSpots),1);
+function [sweepSpots, depthChosen, stageName, depthKind] = getHotspotSweeps(hotspotsByDepth, depths, desiredDepth, sweepName)
+    % Return a sweepSpots table compatible with fullSearchTable slicing.
+    %
+    % Handles BOTH hotspot sweep types:
+    %   - maxSearchDepth (Epoch*_maxSearchHotspots_Depth*.mat)
+    %   - finalDepth     (Epoch*_finalHotspots_Depth*.mat)
+    %
+    % Selection strategy (robust + backward compatible):
+    %   1) If we can parse the acquisition number from sweepName AND any
+    %      hotspotMeta file maps that acq number to a stage, prefer that pack.
+    %   2) Otherwise, use desiredDepth if present.
+    %   3) Otherwise, fall back to the maximum available depth.
 
-% ---- Determine stageName from hotspotMeta if available ----
-stageName = "hotspot_unknown";
-if ~isempty(hotspotMeta) && isfield(hotspotMeta,'stage') && ~isempty(hotspotMeta.stage)
+    if isempty(depths)
+        error('No hotspot geometry files found (Epoch*_finalHotspots_Depth*.mat or Epoch*_maxSearchHotspots_Depth*.mat), but extra sweeps were detected. Cannot map extra sweeps.');
+    end
+
+    % Parse acquisition number (best-effort)
+    acqNum = [];
     tok = regexp(sweepName, 'AD0_(\d+)', 'tokens', 'once');
     if ~isempty(tok)
         acqNum = str2double(tok{1});
+    end
+
+    % ---- 1) Prefer pack whose hotspotMeta explicitly contains this acqNum ----
+    packChosen = [];
+    depthChosen = NaN;
+    stageName = "hotspot_unknown";
+    depthKind = "";
+
+    if ~isempty(acqNum)
+        for di = 1:numel(depths)
+            d = depths(di);
+            packVal = hotspotsByDepth(d);
+            if ~iscell(packVal); packVal = {packVal}; end
+            for pi = 1:numel(packVal)
+                p = packVal{pi};
+                if isstruct(p) && isfield(p,'hotspotMeta') && ~isempty(p.hotspotMeta) && isfield(p.hotspotMeta,'stage')
+                    st = p.hotspotMeta.stage;
+                    for ii = 1:numel(st)
+                        if isfield(st(ii),'acqNums') && any(st(ii).acqNums == acqNum)
+                            packChosen = p;
+                            depthChosen = d;
+                            stageName = string(st(ii).name);
+                            if isfield(p,'depthKind'); depthKind = string(p.depthKind); end
+                            break
+                        end
+                    end
+                end
+                if ~isempty(packChosen); break; end
+            end
+            if ~isempty(packChosen); break; end
+        end
+    end
+
+    % ---- 2) Fall back to desiredDepth or max(depths) ----
+    if isempty(packChosen)
+        if ismember(desiredDepth, depths)
+            depthChosen = desiredDepth;
+        else
+            depthChosen = max(depths);
+        end
+        packVal = hotspotsByDepth(depthChosen);
+        if iscell(packVal)
+            packChosen = packVal{1};
+        else
+            packChosen = packVal;
+        end
+        if isstruct(packChosen) && isfield(packChosen,'depthKind')
+            depthKind = string(packChosen.depthKind);
+        end
+    end
+
+    % ---- Extract geometry table from chosen pack (supports old + new formats) ----
+    if istable(packChosen)
+        hotspotTable = packChosen;
+        hotspotMeta = [];
+    else
+        hotspotMeta = [];
+        if isfield(packChosen,'hotspotMeta'); hotspotMeta = packChosen.hotspotMeta; end
+
+        if isfield(packChosen,'spotsTable')
+            hotspotTable = packChosen.spotsTable;
+        elseif isfield(packChosen,'finalHotspots')
+            hotspotTable = packChosen.finalHotspots;
+        elseif isfield(packChosen,'maxDepthHotspots')
+            hotspotTable = packChosen.maxDepthHotspots;
+        elseif isfield(packChosen,'hotspots')
+            hotspotTable = packChosen.hotspots;
+        else
+            error('Unrecognized hotspot pack format; cannot locate geometry table.');
+        end
+    end
+
+    needVars = {'depth','xStart','yStart','xWidth','yHeight'};
+    missing = setdiff(needVars, hotspotTable.Properties.VariableNames);
+    if ~isempty(missing)
+        error('Hotspot geometry table is missing required variables: %s', strjoin(missing, ', '));
+    end
+
+    sweepSpots = hotspotTable(:, needVars);
+    sweepSpots.response = false(height(sweepSpots),1);
+
+    % If stageName is still unknown, attempt best-effort from chosen meta
+    if stageName == "hotspot_unknown" && ~isempty(acqNum) && ~isempty(hotspotMeta) && isfield(hotspotMeta,'stage')
         for ii = 1:numel(hotspotMeta.stage)
             if isfield(hotspotMeta.stage(ii),'acqNums') && any(hotspotMeta.stage(ii).acqNums == acqNum)
                 stageName = string(hotspotMeta.stage(ii).name);
@@ -1080,62 +1367,358 @@ if ~isempty(hotspotMeta) && isfield(hotspotMeta,'stage') && ~isempty(hotspotMeta
     end
 end
 
-end
 
-function localSaveHotspotSpots(hotspotSpots, cellResultsPath, cellNum, epochNum)
-% Save hotspot/extra sweeps as separate search keys so analyzeDMDSearch can plot them.
-% Files are saved as:
-%   spots_cellX_epochY_hotspot_<tag>_depthD.mat
-% where tag is based on holding potential (m70 / p10 / other).
-
-if isempty(hotspotSpots); return; end
-if ~exist(cellResultsPath,'dir'); mkdir(cellResultsPath); end
-
-% Tag by holding potential
-% Prefer stage tag from protocol.hotspotStage if present, otherwise fall back to Vhold
-tag = strings(height(hotspotSpots),1);
-
-for i = 1:height(hotspotSpots)
-    p = hotspotSpots{i,'Protocol'}{1};
-    if isstruct(p) && isfield(p,'hotspotStage') && ~isempty(p.hotspotStage)
-        st = string(p.hotspotStage);
-        if contains(lower(st),'exci') || contains(lower(st),'neg')
-            tag(i) = "exci";
-        elseif contains(lower(st),'inhi') || contains(lower(st),'pos') || contains(lower(st),'10')
-            tag(i) = "inhi";
-        else
-            tag(i) = "other";
-        end
-    end
-end
-
-% Fill any still-empty tags using Vhold heuristic
-v = hotspotSpots.Vhold;
-tag(tag=="") = "other";
-tag(tag=="other" & v < -50) = "exci";
-tag(tag=="other" & v > 0)   = "inhi";
-hotspotSpots.Tag = tag;
-
-depths = unique(hotspotSpots.Depth);
-for di = 1:numel(depths)
-    d = depths(di);
-    subD = hotspotSpots(hotspotSpots.Depth == d, :);
-    tags = unique(subD.Tag);
-    for ti = 1:numel(tags)
-        t = tags(ti);
-        sub = subD(subD.Tag == t, :);
+function saveSweepHotspots(hotspotSpots, cellResultsPath, cellNum, epochNum)
+    % Save hotspot/extra sweeps as separate search keys so analyzeDMDSearch can plot them.
+    % Files are saved as:
+    %   spots_cellX_epochY_hotspot_<tag>_depthD.mat
+    % where tag is based on holding potential (m70 / p10 / other).
+    
+    if isempty(hotspotSpots); return; end
+    if ~exist(cellResultsPath,'dir'); mkdir(cellResultsPath); end
+    
+    % Tag by holding potential
+    % Prefer stage tag from protocol.hotspotStage if present, otherwise fall back to Vhold
+    tag = strings(height(hotspotSpots),1);
+	    kind = strings(height(hotspotSpots),1);
+    
+	    for i = 1:height(hotspotSpots)
+	        p = hotspotSpots{i,'Protocol'}{1};
+	        if isstruct(p)
+	            % Stage/tag
+	            if isfield(p,'hotspotStage') && ~isempty(p.hotspotStage)
+	                st = string(p.hotspotStage);
+	                if contains(lower(st),'exci') || contains(lower(st),'neg')
+	                    tag(i) = "exci";
+	                elseif contains(lower(st),'inhi') || contains(lower(st),'pos') || contains(lower(st),'10')
+	                    tag(i) = "inhi";
+	                else
+	                    tag(i) = "other";
+	                end
+	
+	                % Best-effort infer kind from stage name
+	                if contains(lower(st),'final')
+	                    kind(i) = "finalDepth";
+	                elseif contains(lower(st),'max')
+	                    kind(i) = "maxSearchDepth";
+	                end
+	            end
+	
+	            % Explicit kind from protocol if present (preferred)
+	            if isfield(p,'hotspotDepthKind') && ~isempty(p.hotspotDepthKind)
+	                kind(i) = string(p.hotspotDepthKind);
+	            end
+	        end
+	    end
+    
+    % Fill any still-empty tags using Vhold heuristic
+    v = hotspotSpots.Vhold;
+    tag(tag=="") = "other";
+    tag(tag=="other" & v < -50) = "exci";
+    tag(tag=="other" & v > 0)   = "inhi";
+	    hotspotSpots.Tag = tag;
+	    hotspotSpots.Kind = kind;
+    
+	    depths = unique(hotspotSpots.Depth);
+    for di = 1:numel(depths)
+        d = depths(di);
+        subD = hotspotSpots(hotspotSpots.Depth == d, :);
+        kinds = unique(subD.Kind);
+        for ki = 1:numel(kinds)
+            kd = kinds(ki);
+            subK = subD(subD.Kind == kd, :);
+            tags = unique(subK.Tag);
+            for ti = 1:numel(tags)
+                t = tags(ti);
+                sub = subK(subK.Tag == t, :);
 
         % Save as spotsAtDepth (expected by downstream loader)
         spotsAtDepth = sub;
         spotsAtDepth = rmmissing(spotsAtDepth,DataVariables='Session');
 
-        filename = sprintf('spots_cell%d_epoch%d_hotspot_%s_depth%d', cellNum, epochNum, char(t), d);
+            if kd == "" || kd == "unknown"
+                filename = sprintf('spots_cell%d_epoch%d_hotspot_%s_depth%d', cellNum, epochNum, char(t), d);
+            else
+                filename = sprintf('spots_cell%d_epoch%d_hotspot_%s_%s_depth%d', cellNum, epochNum, char(kd), char(t), d);
+            end
         save(fullfile(cellResultsPath, filename), 'spotsAtDepth', '-v7.3');
         disp(strcat("New spots.mat created & saved (hotspot): ", filename));
+            end
+        end
     end
 end
 
-% Remove Tag column from workspace (avoid accidental downstream dependence)
-% (Saved file still contains it; that's fine and harmless.)
+
+%% ======================= Reconstruction functions =======================
+
+function [reconOK, reconNoise] = reconstructFromResponseMap(epochPath, cellResultsPath, expRow, epoch, options)
+    % Reconstruct spotsAtDepth depth files from EpochX_DepthY_responseMap.fig
+    % so downstream analyzeDMDSearch can run when fullSearchTable is missing.
+    
+    reconOK = false;
+    reconNoise = struct('nullSpotData',[],'preStimData',[],'baselineData',[]);
+    
+    if ~exist(cellResultsPath,'dir'); mkdir(cellResultsPath); end
+    
+    figList = dir(fullfile(epochPath, sprintf('Epoch%d_Depth*_responseMap.fig', epoch)));
+    if isempty(figList)
+        warning(['No responseMap.fig found for Epoch ', num2str(epoch)]);
+        return
+    end
+    
+    % Template protocol (try from first sweep)
+    protocolTemplate = struct('depth',nan,'pulseWidth',5,'cellX',nan,'cellY',nan,'repetition',1);
+    try
+        sweepAcq = expRow{1,'Sweep names'}{1};
+        if ~isempty(sweepAcq)
+            load(fullfile(epochPath, [sweepAcq{1},'.mat']));
+            headerString = eval([sweepAcq{1},'.UserData.headerString']);
+            p = getCellProtocol(headerString, outputFs=options.outputFs, rcCheckRecoveryWindow=options.rcCheckRecoveryWindow);
+            if ~isfield(p,'pulseWidth'); p.pulseWidth = 5; end
+            if ~isfield(p,'cellX'); p.cellX = nan; end
+            if ~isfield(p,'cellY'); p.cellY = nan; end
+            protocolTemplate = p;
+        end
+    catch
+    end
+    
+    Fs = options.outputFs;
+    analysisLen = round(options.analysisWindowLength*Fs/1000)+1;
+    ctrlLen     = round(options.controlWindowLength*Fs/1000)+1;
+    minHotspotSamples = round(5*Fs/1000); % 5ms
+    
+    cellNum = expRow{1,'Cell'};
+    basePrefix = sprintf('spots_cell%d_epoch%d', cellNum, epoch);
+    prefix = basePrefix;
+    
+    for i = 1:numel(figList)
+        figPath = fullfile(figList(i).folder, figList(i).name);
+        depthTok = regexp(figList(i).name, 'Depth(\d+)', 'tokens', 'once');
+        if isempty(depthTok); continue; end
+        depth = str2double(depthTok{1});
+
+        % 1. Load InfoPatching if needed for Excel lookup (done once per epoch ideally, but okay here)
+        infoPatching = [];
+        if strcmpi(options.vholdChannel, 'excel')
+            try
+                csvOpts = detectImportOptions(fullfile(epochPath,'InfoPatching.xlsx'));
+                csvOpts.SelectedVariableNames = 1:9; csvOpts.VariableNamesRange = 25;
+                infoPatching = readtable(fullfile(epochPath,'InfoPatching.xlsx'), csvOpts);
+                infoPatching = rmmissing(infoPatching, DataVariables="acq_");
+                if iscell(infoPatching.acq_); infoPatching.acq_ = str2double(infoPatching.acq_); end
+                if iscell(infoPatching.holding); infoPatching.holding = str2double(infoPatching.holding); end
+            catch
+                warning('Could not load InfoPatching.xlsx for reconstruction fallback.');
+            end
+        end
+    
+        % 2. Find the sweep file name that corresponds to this depth
+        targetSweepName = '';
+        try
+            sweepNames = expRow{1,'Sweep names'}{1};
+            for k = 1:length(sweepNames)
+                swName = sweepNames{k};
+                swFile = fullfile(epochPath, [swName, '.mat']);
+                if ~exist(swFile, 'file'); continue; end
+                
+                % Quick load header to check depth
+                S_sw = load(swFile);
+                if isfield(S_sw, swName); rec = S_sw.(swName); else; f=fieldnames(S_sw); rec=S_sw.(f{1}); end
+                
+                % Check protocol depth
+                p = getCellProtocol(rec.UserData.headerString, ...
+                    outputFs=options.outputFs, rcCheckRecoveryWindow=options.rcCheckRecoveryWindow);
+                
+                if p.depth == depth
+                    targetSweepName = swName;
+                    break; 
+                end
+            end
+        catch
+        end
+    
+        figData = extractFromResponseMap(figPath);
+        if isempty(figData.spotTraces); continue; end
+    
+        nSpots = numel(figData.spotTraces);
+        nSide = round(sqrt(nSpots));
+        if nSide^2 ~= nSpots; continue; end
+    
+        xEdges0 = round(linspace(0,608,nSide+1));
+        yEdges0 = round(linspace(0,684,nSide+1));
+    
+        plotWindowTime = figData.plotWindowTime;
+        [~,eventSample] = min(abs(plotWindowTime));
+        analysisWindow = eventSample:min(eventSample+analysisLen-1,numel(plotWindowTime));
+    
+        depthResponseMap = figData.depthResponseMap;
+        if isempty(depthResponseMap); depthResponseMap=zeros(684,608); end
+    
+        varTypes = {'string','string','string','double','double','double',...
+                    'double','double','string','cell','cell','cell','cell','cell','cell'};
+        varNames = {'Session','Animal','Task','Epoch','Cell','Vhold',...
+                    'Depth','Repetition','Sweep','Location','Protocol',...
+                    'Response','Stats','QC','Options'};
+        spotsAtDepth = table('Size',[0,length(varNames)],'VariableTypes',varTypes,'VariableNames',varNames);
+    
+        for spotIdx = 1:nSpots
+            traces = figData.spotTraces{spotIdx};
+            if isempty(traces); continue; end
+    
+            col = mod(spotIdx-1,nSide)+1;
+            row = floor((spotIdx-1)/nSide)+1;
+            xStart0=xEdges0(col); xWidth=xEdges0(col+1)-xEdges0(col);
+            yStart0=yEdges0(row); yHeight=yEdges0(row+1)-yEdges0(row);
+            location = [xStart0+1, xStart0+xWidth, yStart0+1, yStart0+yHeight];
+    
+            yRange = max(1,min(608,location(1):location(2)));
+            xRange = max(1,min(684,location(3):location(4)));
+            isResponse_img = any(depthResponseMap(xRange,yRange)>0,'all');
+    
+            for rep = 1:size(traces,1)
+                processed = traces(rep,:);
+                control   = localMakeSyntheticControl(processed, plotWindowTime, ctrlLen);
+    
+                baseMean = mean(control, 'omitnan');
+                effectiveVhold = getSweepVhold(epochPath, targetSweepName, baseMean, options, infoPatching);
+
+                baseStd = std(control,0, 'omitnan');
+                thr = options.thresholdFactor*baseStd;
+                isHotspot = sum(abs(processed(analysisWindow))>=thr)>=minHotspotSamples;
+    
+                responses = struct('raw',processed,'processed',processed,'control',control,...
+                                   'rawTrace',processed,'processedTrace',processed,...
+                                   'isResponse',logical(isResponse_img),'hotspot',logical(isHotspot));
+    
+                stats = localComputeStatsFromProcessed(processed, control, analysisWindow, effectiveVhold, options);
+    
+                idx = height(spotsAtDepth)+1;
+                spotsAtDepth{idx,'Session'}     = string(cellResultsPath);
+                spotsAtDepth{idx,'Animal'}      = string(expRow{1,'Animal'});
+                spotsAtDepth{idx,'Task'}        = string(expRow{1,'Task'});
+                spotsAtDepth{idx,'Epoch'}       = epoch;
+                spotsAtDepth{idx,'Cell'}        = cellNum;
+                spotsAtDepth{idx,'Vhold'}       = effectiveVhold;
+                spotsAtDepth{idx,'Depth'}       = depth;
+                spotsAtDepth{idx,'Repetition'}  = rep;
+                spotsAtDepth{idx,'Sweep'}       = string(figList(i).name);
+                spotsAtDepth{idx,'Location'}    = num2cell(location,[1 2]);
+    
+                p=protocolTemplate; p.depth=depth; p.repetition=rep; p.pulseWidth=5;
+                spotsAtDepth{idx,'Protocol'} = {p};
+    
+                spotsAtDepth{idx,'Response'}    = {responses};
+                spotsAtDepth{idx,'Stats'}       = {stats};
+                spotsAtDepth{idx,'QC'}          = {struct('included',true,'reconstructed',true)};
+                spotsAtDepth{idx,'Options'}     = {options};
+    
+                reconNoise.preStimData  = [reconNoise.preStimData, control];
+                reconNoise.baselineData = [reconNoise.baselineData, control];
+                if ~responses.hotspot
+                    reconNoise.nullSpotData = [reconNoise.nullSpotData, processed];
+                end
+            end
+        end
+    
+        spotsAtDepth = rmmissing(spotsAtDepth,DataVariables='Session');
+        if height(spotsAtDepth)==0; continue; end
+    
+        outName = sprintf('%s_depth%d', prefix, depth);
+        save(fullfile(cellResultsPath,outName),'spotsAtDepth','-v7.3');
+        disp(['Reconstructed & saved: ', outName]);
+        reconOK = true;
+    end
 end
-% ======================= END CHANGE (Option 1 helpers: hotspot sweeps) =======================
+
+
+
+function figData = extractFromResponseMap(figPath)
+    figData = struct('spotTraces',[],'plotWindowTime',[],'depthResponseMap',[]);
+    hFig = openfig(figPath,'invisible');
+    cleanupObj = onCleanup(@() close(hFig));
+    
+    imgs = findall(hFig,'Type','image');
+    depthMap=[];
+    for i=1:numel(imgs)
+        C=imgs(i).CData;
+        if isnumeric(C) && ismatrix(C) && all(size(C)==[684 608])
+            depthMap=C; break
+        end
+    end
+    figData.depthResponseMap = depthMap;
+    
+    axAll = findall(hFig,'Type','axes');
+    isSpotAx=false(size(axAll));
+    for a=1:numel(axAll)
+        isSpotAx(a) = ~isempty(findall(axAll(a),'Type','line')) && isempty(findall(axAll(a),'Type','image'));
+    end
+    axSpot=axAll(isSpotAx);
+    if isempty(axSpot); return; end
+    
+    pos=zeros(numel(axSpot),4);
+    for i=1:numel(axSpot); pos(i,:)=axSpot(i).Position; end
+    [~,order] = sortrows([-pos(:,2), pos(:,1)]);
+    axSpot = axSpot(order);
+    
+    ln0 = findall(axSpot(1),'Type','line');
+    ln0 = ln0(arrayfun(@(h) isnumeric(h.XData) && numel(h.XData)>20, ln0));
+    if ~isempty(ln0); figData.plotWindowTime = ln0(1).XData(:)'; end
+    
+    spotTraces=cell(numel(axSpot),1);
+    for s=1:numel(axSpot)
+        ln=findall(axSpot(s),'Type','line');
+        ln=ln(arrayfun(@(h) isnumeric(h.YData) && numel(h.YData)>20, ln));
+        if isempty(ln); continue; end
+    
+        lw=arrayfun(@(h) h.LineWidth, ln);
+        [~,imax]=max(lw);
+        ln(imax)=[];
+    
+        Y=arrayfun(@(h) h.YData(:)', ln,'UniformOutput',false);
+        L=cellfun(@numel,Y);
+        if isempty(L); continue; end
+        Lmode=mode(L);
+        Y=Y(L==Lmode);
+        if isempty(Y); continue; end
+        spotTraces{s}=cell2mat(Y(:));
+    end
+    figData.spotTraces = spotTraces;
+end
+
+function control = localMakeSyntheticControl(processed, plotWindowTime, ctrlLen)
+    pre = processed(plotWindowTime<0);
+    if isempty(pre); pre = processed(1:min(20,numel(processed))); end
+    pre = pre(:)';
+    repN = ceil(ctrlLen/numel(pre));
+    control = repmat(pre,1,repN);
+    control = control(1:ctrlLen);
+    end
+    
+    function stats = localComputeStatsFromProcessed(processed, control, analysisWindow, vhold, options)
+    Fs = options.outputFs;
+    peakWindowWidth = round(options.peakWindow*Fs/1000);
+    
+    stats.baseline.avg = mean(control,'omitnan');
+    stats.baseline.std = std(control,0,'omitnan');
+    
+    trace = processed(analysisWindow);
+    stats.response.auc = sum(trace,'omitnan')/Fs;
+    stats.baseline.auc = sum(control,'omitnan')/Fs;
+    
+    [~,maxIdx]=max(trace); [~,minIdx]=min(trace);
+    mw=max(1,maxIdx-peakWindowWidth):min(numel(trace),maxIdx+peakWindowWidth);
+    nw=max(1,minIdx-peakWindowWidth):min(numel(trace),minIdx+peakWindowWidth);
+    stats.response.max = mean(trace(mw),'omitnan');
+    stats.response.min = mean(trace(nw),'omitnan');
+    stats.response.maxTime = maxIdx*1000/Fs;
+    stats.response.minTime = minIdx*1000/Fs;
+    
+    den = abs(stats.response.max)+abs(stats.response.min);
+    if den==0; stats.response.EIindex=0;
+    else; stats.response.EIindex=(abs(stats.response.max)-abs(stats.response.min))/den;
+    end
+    
+    if ~isfield(stats.response, options.feature)
+        stats.response.(options.feature) = stats.response.auc;
+    end
+end

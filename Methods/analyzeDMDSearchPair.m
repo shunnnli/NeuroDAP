@@ -105,10 +105,10 @@ search1_vhold = curCell.Vhold{1}(search1Idx);
 search1_hotspot = curCell.('Response map'){1}.hotspot{search1Idx};
 search1_depths = curCell.('Response map'){1}.depths{search1Idx};
 
-    % ========================= CHANGE (Full grid for analysis) =========================
-    % Store per-depth spotLocation so we can expand sampled maps into a full 2^depth x 2^depth grid for plotting.
-    search1_spotLocation = curCell.('Response map'){1}.spotLocation{search1Idx};
-    % ======================= END CHANGE (Full grid for analysis) =======================
+% ========================= CHANGE (Full grid for analysis) =========================
+% Store per-depth spotLocation so we can expand sampled maps into a full 2^depth x 2^depth grid for plotting.
+search1_spotLocation = curCell.('Response map'){1}.spotLocation{search1Idx};
+% ======================= END CHANGE (Full grid for analysis) =======================
 
 
 % Load search 2 info
@@ -118,9 +118,9 @@ search2_vhold = curCell.Vhold{1}(search2Idx);
 search2_hotspot = curCell.('Response map'){1}.hotspot{search2Idx};
 search2_depths = curCell.('Response map'){1}.depths{search2Idx};
 
-    % ========================= CHANGE (Full grid for analysis) =========================
-    search2_spotLocation = curCell.('Response map'){1}.spotLocation{search2Idx};
-    % ======================= END CHANGE (Full grid for analysis) =======================
+% ========================= CHANGE (Full grid for analysis) =========================
+search2_spotLocation = curCell.('Response map'){1}.spotLocation{search2Idx};
+% ======================= END CHANGE (Full grid for analysis) =======================
 
 
 % Load cell location (not necessary)
@@ -212,16 +212,57 @@ for d = 1:length(commonDepth)
     if curDepth <= length(options.depthLineWidth); LineWidth = options.depthLineWidth(curDepth);
     else; LineWidth = options.depthLineWidth(end); end
 
-    % Get opto and prestim traces
+    % Get optoData
     optoData1 = cell2mat(depthCurrentMap1); 
-    optoData1 = optoData1(:,analysisWindow);
     ctrlData1 = cell2mat(depthBaselineMap1);
+    optoData2 = cell2mat(depthCurrentMap2); 
+    ctrlData2 = cell2mat(depthBaselineMap2);
+
+    % ========================= FIX: Handle Reconstructed Data Limits =========================
+    % Determine available data length (check both datasets if present)
+    nAvailable = size(optoData1, 2);
+    if exist('optoData2', 'var')
+        nAvailable = min(nAvailable, size(optoData2, 2));
+    end
+
+    % Check if the standard analysis window exceeds what we actually have
+    if max(analysisWindow) > nAvailable
+        
+        % Heuristic: Check for standard reconstruction size (601 samples @ 10kHz = 60.1ms)
+        if nAvailable == 601 && options.outputFs == 10000
+             disp('[analyzeDMDSearchPair] Reconstructed data detected (601 samples). Re-aligning...');
+             newEventSample = 101; % 10ms baseline * 10 samples/ms + 1
+        else
+             % Fallback: Assume a standard 10ms pre-stim baseline if unknown
+             warning('[analyzeDMDSearchPair] Data length mismatch. Assuming 10ms baseline for alignment.');
+             newEventSample = round(10 * (options.outputFs/1000)) + 1;
+        end
+        
+        % 1. Recalculate analysis window (for statistics like AUC)
+        desiredLen = round(options.analysisWindowLength * (options.outputFs/1000));
+        startIdx = newEventSample;
+        endIdx   = min(nAvailable, newEventSample + desiredLen);
+        analysisWindow = startIdx:endIdx;
+
+        % 2. Recalculate PLOTTING indices (Critical to prevent crashes in later plotting loops)
+        reqFirst = newEventSample + round(options.timeRange(1)*options.outputFs/1000);
+        reqLast  = newEventSample + round(options.timeRange(2)*options.outputFs/1000);
+        
+        plotFirstSample = max(1, reqFirst);
+        plotLastSample  = min(nAvailable, reqLast);
+        
+        % 3. Update the Time Vector for plotting
+        plotWindowTime = ((plotFirstSample:plotLastSample) - newEventSample) / (options.outputFs/1000);
+        plotWindowLength = length(plotWindowTime);
+    end
+    % ===========================================================================================
+
+    % Get prestim traces
+    optoData1 = optoData1(:,analysisWindow);
     ctrlData1 = ctrlData1(:,size(ctrlData1,2)-length(analysisWindow)+1:size(ctrlData1,2));
     optoTime1 = linspace(0,options.analysisWindowLength,size(optoData1,2));
     ctrlTime1 = linspace(-options.controlWindowLength,0,size(ctrlData1,2));
-    optoData2 = cell2mat(depthCurrentMap2); 
     optoData2 = optoData2(:,analysisWindow);
-    ctrlData2 = cell2mat(depthBaselineMap2);
     ctrlData2 = ctrlData2(:,size(ctrlData2,2)-length(analysisWindow)+1:size(ctrlData2,2));
     optoTime2 = linspace(0,options.analysisWindowLength,size(optoData2,2));
     ctrlTime2 = linspace(-options.controlWindowLength,0,size(ctrlData2,2));
