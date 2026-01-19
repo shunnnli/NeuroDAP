@@ -135,7 +135,8 @@ if options.reloadCells
             % Initialize fullSearchTable pointer
             % Since I'm iterating sweep in order, the spots are correspond to the
             % order recorded in fullSearchTable
-            curSpot = 0; 
+            curFSRow = 0;   % pointer into fullSearchTable rows
+            curSpot  = 0;   % number of stored rows in "spots" (main search only)
         
             % Load fullSearchTable
             epoch = exp{row,'Epoch'};
@@ -155,7 +156,6 @@ if options.reloadCells
             
                 if options.reconstructDMD
                     [reconOK, reconNoise] = reconstructFromResponseMap(epochPath, cellResultsPath, exp(row,:), epoch, options);
-            
                     if reconOK
                         reconstructedSearch = true;
                         % Append to noise buffers so noise_cellX.mat still builds
@@ -176,14 +176,15 @@ if options.reloadCells
             csvOpts = detectImportOptions(fullfile(epochPath,'InfoPatching.xlsx'));
             csvOpts.SelectedVariableNames = 1:9;
             csvOpts.VariableNamesRange = 25;
-            info = readtable(fullfile(epochPath,'InfoPatching.xlsx'),csvOpts);
-            info = rmmissing(info,DataVariables="acq_");
-            info = rmmissing(info,DataVariables="epoch");
-    
-            if iscell(info.acq_); info.acq_ = str2double(info.acq_); end
-            if iscell(info.epoch); info.epoch = str2double(info.epoch); end
-            if iscell(info.cyclePos); info.epoch = str2double(info.cyclePos); end
-            if iscell(info.holding); info.acq_ = str2double(info.holding); end
+            patchInfo = readtable(fullfile(epochPath,'InfoPatching.xlsx'),csvOpts);
+            patchInfo = rmmissing(patchInfo,DataVariables="acq_");
+            patchInfo = rmmissing(patchInfo,DataVariables="epoch");
+            
+            if iscell(patchInfo.acq_);     patchInfo.acq_     = str2double(patchInfo.acq_); end
+            if iscell(patchInfo.epoch);    patchInfo.epoch    = str2double(patchInfo.epoch); end
+            if iscell(patchInfo.cyclePos); patchInfo.cyclePos = str2double(patchInfo.cyclePos); end
+            if iscell(patchInfo.holding);  patchInfo.holding  = str2double(patchInfo.holding); end
+
         
             %% Initialize spots table
             
@@ -200,16 +201,21 @@ if options.reloadCells
             spots = table('Size',[height(fullSearchTable),length(varNames)],...
                 'VariableTypes',varTypes,'VariableNames',varNames);
 
-            % ========================= CHANGE (Option 1: handle hotspot/extra sweeps) =========================
+            hotOpts = struct( ...
+                        'AllowCrossDepth', true, ...
+                        'PreferDepthMatch', true, ...
+                        'PreferDepthKind', "any", ...      % or "finalDepth"
+                        'PulseTolRel', 0.01, ...
+                        'PulseTolAbs', NaN, ...
+                        'Debug', false);
+
             % Some sweeps at the end of an epoch (e.g., hotspot validation sweeps)
             % are not represented in Epoch*_fullSearchTable.mat. 
             % We collect them separately using
             % Epoch*_finalHotspots_Depth*.mat or Epoch*_maxSearchHotspots_Depth*.mat
             % and later save them as separate "searches" so analyzeDMDSearch can plot them.
-
             hotspotSpots = table('Size',[0,length(varNames)],'VariableTypes',varTypes,'VariableNames',varNames);
             [sweepHotspots, sweepDepths] = localLoadHotspots(epochPath, epoch);
-            % ======================= END CHANGE (Option 1: handle hotspot/extra sweeps) =======================
         
             %% Load individual sweeps
             for k = 1:length(sweepAcq)
@@ -220,106 +226,40 @@ if options.reloadCells
                     warning(strcat("Sweep ",num2str(sweepAcq{k}), " not saved, skipping this sweep!"));
                     continue
                 end
-        
-                % Extract raw trace
-                raw_trace = eval([sweepAcq{k},'.data']);
-                headerString = eval([sweepAcq{k},'.UserData.headerString']);
                 
                 % Extract experiment protocol from header string
+                headerString = eval([sweepAcq{k},'.UserData.headerString']);
                 protocol = getCellProtocol(headerString,...
                                            outputFs=options.outputFs,...
                                            rcCheckRecoveryWindow=options.rcCheckRecoveryWindow);
                 if k == 1; prevDepth = protocol.depth; end
+                
+                % ---- Decide which spot geometry to use for this sweep ----
+                [sweepSpots, protocol, nPulsesThisSweep, isHotspotSweep, curFSRow] = ...
+                    selectSweepSpots(headerString, protocol, fullSearchTable, curFSRow, reconstructedSearch, ...
+                                     sweepHotspots, sweepDepths, hotOpts);
+                if isempty(sweepSpots); continue; end
 
-                % If we reconstructed search stage from responseMap figs, skip those sweeps
-                if reconstructedSearch
-                    disp(['Skipped (reconstructed search): ', sweepAcq{k}, ' depth ', num2str(protocol.depth)]);
-                    continue
-                end
+                % Extract raw trace
+                raw_trace = eval([sweepAcq{k},'.data']);
 
-                % Find corresponding spots for this sweep.
-                % For normal randomSearch sweeps, use fullSearchTable rows in order.
-                % For extra/hotspot sweeps (not represented in fullSearchTable), use Epoch*_finalHotspots_Depth*.mat.
-                startRow = curSpot + 1;
-                nFS = height(fullSearchTable);
-                isHotspotSweep = false;
-
-                if startRow > nFS
-                    % We've consumed all rows in fullSearchTable; treat remaining sweeps as hotspot/extra sweeps.
-                    isHotspotSweep = true;
-
-                    % Choose finalHotspots table (depth derived from filename; fallback to max depth file)
-                    try
-                        [sweepSpots, hotspotDepth, stageName, depthKind] = getHotspotSweeps(sweepHotspots, sweepDepths, protocol.depth, sweepAcq{k});
-                    catch ME
-                        warning(['Could not map extra/hotspot sweep ', sweepAcq{k}, ' for Epoch ', num2str(epoch), ': ', ME.message]);
-                        continue
-                    end
-
-                    % Update protocol
-                    protocol.depth = hotspotDepth;
-                    protocol.isHotspotSweep = true;
-                    protocol.hotspotStage = stageName;
-                    protocol.hotspotDepthKind = depthKind;
-
-                    % Hotspot sweeps don't have online 'response' labels; fill as false for compatibility.
-                    if ~ismember('response', sweepSpots.Properties.VariableNames)
-                        sweepSpots.response = false(height(sweepSpots),1);
-                    end
-
-                    nPulsesThisSweep = height(sweepSpots);
-                else
-                    % Normal sweep: pull the next N rows from fullSearchTable (clipped if truncated)
-                    nPulsesThisSweep = protocol.numPulses;
-                    if (curSpot + protocol.numPulses) > nFS
-                        nPulsesThisSweep = nFS - curSpot;
-                        warning(['fullSearchTable truncated/mismatch for Epoch ', num2str(epoch), ', sweep ', sweepAcq{k}, ...
-                                 ': header expects ', num2str(protocol.numPulses), ' pulses, but only ', num2str(nPulsesThisSweep), ...
-                                 ' rows remain. Processing first ', num2str(nPulsesThisSweep), ' pulses only.']);
-                    end
-
-                    sweepSpots = fullSearchTable(curSpot+1 : curSpot+nPulsesThisSweep,:);
-
-                    % If fullSearchTable includes per-sweep stage metadata (added by newer
-                    % hotspotSearch_shun), detect hotspot sweeps even though they are
-                    % represented in the table. This keeps hotspot validation sweeps from
-                    % being mixed into the main randomSearch depth files.
-                    if ismember('sweepStage', sweepSpots.Properties.VariableNames)
-                        st = unique(string(sweepSpots.sweepStage));
-                        st = st(st ~= "" & st ~= "search");
-                        if ~isempty(st)
-                            isHotspotSweep = true;
-                            protocol.isHotspotSweep = true;
-                            protocol.hotspotStage = st(1);
-                            if contains(lower(st(1)), 'final')
-                                protocol.hotspotDepthKind = "finalDepth";
-                            elseif contains(lower(st(1)), 'max')
-                                protocol.hotspotDepthKind = "maxSearchDepth";
-                            else
-                                protocol.hotspotDepthKind = "";
-                            end
-                        end
-                    end
-
-                    % Check whether selected rows are of the right depth
-                    if any(sweepSpots.("depth") ~= protocol.depth)
-                        error('Error: selected spot are of the wrong depth based on headerString!');
-                    end
-
-                end
+                % Safety: make stimOnset consistent with what we analyze
+                protocol.stimOnset = protocol.stimOnset(1:nPulsesThisSweep);
 
                 % Define baseline window: have two windows, one before pulse and one after pulse
                 rcCheckOnset = getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck',pulseVar='delay') * (options.outputFs/1000);
                 rcCheckPulseWidth = getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck',pulseVar='pulseWidth') * (options.outputFs/1000);
-                stimDuration = ((protocol.numPulses * protocol.isi)+200) * options.outputFs/1000; % 200ms recovery window after last pulse
+                lastStim = protocol.stimOnset(nPulsesThisSweep);
+                postStimStart = lastStim + round(0.200 * options.outputFs); % 200 ms after last pulse
+
                 if rcCheckOnset < protocol.stimOnset(1)
                     rcCheckEnd = rcCheckOnset + rcCheckPulseWidth + (options.rcCheckRecoveryWindow*(options.outputFs/1000));
                     preStimWindow = rcCheckEnd : (protocol.stimOnset(1)-1);
-                    postStimWindow = (protocol.stimOnset(1) + stimDuration):length(raw_trace);
+                    postStimWindow = postStimStart:length(raw_trace);
                     baselineWindow = [preStimWindow,postStimWindow];
                 else
                     preStimWindow = 1:(protocol.stimOnset(1)-1);
-                    postStimWindow = (protocol.stimOnset(1) + stimDuration):rcCheckOnset;
+                    postStimWindow = postStimStart:rcCheckOnset;
                     baselineWindow = [preStimWindow,postStimWindow];
                 end
         
@@ -386,7 +326,7 @@ if options.reloadCells
                 stats.baseline.std = std(processed_trace(baselineWindow));
         
                 % Determine Vhold
-                vhold = getSweepVhold(epochPath, sweepAcq{k}, stats.baseline.avg, options, info);
+                vhold = getSweepVhold(epochPath, sweepAcq{k}, stats.baseline.avg, options, patchInfo);
         
                 % Initialize matrix for noise analysis later
                 baselineData = [baselineData, processed_trace(baselineWindow)];
@@ -548,12 +488,13 @@ if options.reloadCells
                         prevDepth = protocol.depth; clearvars AD*
                     end
                 end
-
-                % Save hotspot sweeps
-                if options.save && ~isempty(hotspotSpots)
-                    saveSweepHotspots(hotspotSpots, cellResultsPath, exp{row,'Cell'}, exp{row,'Epoch'});
-                end
             end
+
+            % after finishing all sweeps for this epoch:
+            if options.save && ~isempty(hotspotSpots)
+                saveSweepHotspots(hotspotSpots, cellResultsPath, exp{row,'Cell'}, exp{row,'Epoch'});
+            end
+
         end
         
         %% Loop through all depth and add search results to cells.mat
@@ -636,6 +577,7 @@ if options.reloadCells
 
         % Ensure the basePrefix (main search) is processed first if present
         if any(strcmp(searchKeys, basePrefix))
+            searchKeys = searchKeys(:);
             searchKeys = [{basePrefix}; searchKeys(~strcmp(searchKeys, basePrefix))];
         end
 
@@ -1124,6 +1066,7 @@ function [hotspotsByDepth, depths] = localLoadHotspots(epochPath, epochNumber)
                 hotspotsByDepth(d) = pack;
             end
             depths(end+1) = d;
+            disp(['     [localLoadHotspots]: loaded ', fname]);
         catch
             warning("   maxSearch hotspots loading failed: .mat not found or is empty, skipped");
         end
@@ -1153,6 +1096,7 @@ function [hotspotsByDepth, depths] = localLoadHotspots(epochPath, epochNumber)
                 hotspotsByDepth(d) = pack;
             end
             depths(end+1) = d;
+            disp(['     [localLoadHotspots]: loaded ', fname]);
         catch
             warning("   Final hotspots loading failed: .mat not found or is empty, skipped");
         end
@@ -1253,7 +1197,8 @@ end
 
 
 
-function [sweepSpots, depthChosen, stageName, depthKind] = getHotspotSweeps(hotspotsByDepth, depths, desiredDepth, sweepName)
+function [sweepSpots, depthChosen, stageName, depthKind] = ...
+    getHotspotSweeps(hotspotsByDepth, depths, desiredDepth, sweepName, expectedNumPulses, depthKindHint)
     % Return a sweepSpots table compatible with fullSearchTable slicing.
     %
     % Handles BOTH hotspot sweep types:
@@ -1269,6 +1214,9 @@ function [sweepSpots, depthChosen, stageName, depthKind] = getHotspotSweeps(hots
     if isempty(depths)
         error('No hotspot geometry files found (Epoch*_finalHotspots_Depth*.mat or Epoch*_maxSearchHotspots_Depth*.mat), but extra sweeps were detected. Cannot map extra sweeps.');
     end
+
+    if nargin < 5; expectedNumPulses = []; end
+    if nargin < 6; depthKindHint = ""; end
 
     % Parse acquisition number (best-effort)
     acqNum = [];
@@ -1315,12 +1263,29 @@ function [sweepSpots, depthChosen, stageName, depthKind] = getHotspotSweeps(hots
         else
             depthChosen = max(depths);
         end
+
         packVal = hotspotsByDepth(depthChosen);
-        if iscell(packVal)
-            packChosen = packVal{1};
-        else
-            packChosen = packVal;
+        if ~iscell(packVal); packVal = {packVal}; end
+        
+        % Prefer matching depthKindHint (finalDepth vs maxSearchDepth) if provided
+        idx = [];
+        if depthKindHint ~= ""
+            idx = find(cellfun(@(p) isstruct(p) && isfield(p,'depthKind') && string(p.depthKind)==string(depthKindHint), packVal), 1);
         end
+        
+        % Next prefer matching expectedNumPulses if provided
+        if isempty(idx) && ~isempty(expectedNumPulses)
+            idx = find(cellfun(@(p) height(getHotspotTable(p)) == expectedNumPulses, packVal), 1);
+        end
+        
+        % Otherwise take the first
+        if isempty(idx); idx = 1; end
+        packChosen = packVal{idx};
+        
+        if isstruct(packChosen) && isfield(packChosen,'depthKind')
+            depthKind = string(packChosen.depthKind);
+        end
+
         if isstruct(packChosen) && isfield(packChosen,'depthKind')
             depthKind = string(packChosen.depthKind);
         end
@@ -1366,6 +1331,261 @@ function [sweepSpots, depthChosen, stageName, depthKind] = getHotspotSweeps(hots
         end
     end
 end
+
+
+function info = detectHotspotSweep(headerString, protocol, hotspotsByDepth, depths, opts)
+% Detect and materialize hotspot sweep geometry even when header is missing stage strings.
+%
+% Returns struct "info" with fields:
+%   .isHotspot (logical)
+%   .sweepSpots (table)        % geometry table (depth,xStart,yStart,xWidth,yHeight,response)
+%   .depthChosen (double)
+%   .depthKind (string)        % "finalDepth" / "maxSearchDepth" / "unknown"
+%   .stageName (string)        % parsed stage or "hotspot_inferred"
+%   .matchMethod (string)      % "header" / "pulseCount" / "none"
+%   .why (string)              % debug reason
+
+    arguments
+        headerString
+        protocol struct
+        hotspotsByDepth
+        depths double = []
+        opts.AllowCrossDepth (1,1) logical = true
+        opts.PreferDepthMatch (1,1) logical = true
+        opts.PreferDepthKind (1,1) string = "any"  % "finalDepth"|"maxSearchDepth"|"any"
+        opts.PulseTolAbs (1,1) double = NaN               % if NaN -> auto
+        opts.PulseTolRel (1,1) double = 0.01              % 1% default
+        opts.StageRegex (1,1) string = "state\.zDMD\.sweepStage\s*=\s*'([^']+)'"
+        opts.RequireGeometryVars (1,:) string = ["depth","xStart","yStart","xWidth","yHeight"]
+        opts.Debug (1,1) logical = false
+    end
+
+    info = struct( ...
+        'isHotspot', false, ...
+        'sweepSpots', table(), ...
+        'depthChosen', NaN, ...
+        'depthKind', "unknown", ...
+        'stageName', "", ...
+        'matchMethod', "none", ...
+        'why', "" );
+
+    if isempty(depths) || isempty(hotspotsByDepth)
+        info.why = "No hotspot tables loaded (no Epoch*_maxSearchHotspots_*.mat / finalHotspots_*.mat).";
+        return
+    end
+
+    % --- Parse stage from header if possible (newer versions)
+    stageName = "";
+    depthKindHint = "unknown";
+    if ~isempty(headerString)
+        tok = regexp(string(headerString), opts.StageRegex, "tokens", "once");
+        if ~isempty(tok)
+            stageName = string(tok{1});
+            if contains(stageName,"finalDepth","IgnoreCase",true)
+                depthKindHint = "finalDepth"; 
+            elseif contains(stageName,"maxDepth","IgnoreCase",true) || contains(stageName,"maxSearch","IgnoreCase",true)
+                depthKindHint = "maxSearchDepth";
+            else
+                disp(['     [detectHotspotSweep] did not find finalDepth or maxSearchDepth in stageName: ', stageName]);
+            end
+        end
+    end
+
+    % --- Get expected pulse count (critical for old headers)
+    nP = [];
+    if isfield(protocol,'numPulses') && ~isempty(protocol.numPulses) && ~isnan(protocol.numPulses)
+        nP = double(protocol.numPulses);
+    end
+
+    % --- Candidate packs: collect (depth, depthKind, nBoxes, table)
+    cands = collectHotspotCandidates(hotspotsByDepth, depths, opts);
+    if isempty(cands)
+        info.why = "Hotspot tables exist, but none contain required geometry variables.";
+        return
+    end
+
+    % --- Filter by depth domain
+    d0 = NaN;
+    if isfield(protocol,'depth') && ~isempty(protocol.depth) && ~isnan(protocol.depth)
+        d0 = double(protocol.depth);
+    end
+    if opts.PreferDepthMatch && ~isnan(d0)
+        % Prefer candidates at same depth; if none, optionally allow cross-depth
+        sameDepth = cands([cands.depth] == d0);
+        if ~isempty(sameDepth)
+            cands = sameDepth;
+        elseif ~opts.AllowCrossDepth
+            info.why = "No hotspot table at protocol.depth and cross-depth disabled.";
+            return
+        end
+    elseif ~opts.AllowCrossDepth && ~isnan(d0)
+        cands = cands([cands.depth] == d0);
+        if isempty(cands)
+            info.why = "Cross-depth disabled and no candidates at protocol.depth.";
+            return
+        end
+    end
+
+    % --- Filter by depth kind preference
+    if opts.PreferDepthKind ~= "any"
+        pref = string(opts.PreferDepthKind);
+        isPref = strcmpi(string({cands.depthKind}), pref);
+        if any(isPref)
+            cands = cands(isPref);
+        end
+    end
+
+    % --- Rank / choose candidate
+    chosen = [];
+    % 1) If header stage is available, try to honor depthKindHint first
+    if stageName ~= ""
+        info.stageName = stageName;
+        info.matchMethod = "header";
+
+        if depthKindHint ~= "unknown"
+            isHint = strcmpi(string({cands.depthKind}), depthKindHint);
+            if any(isHint)
+                candsH = cands(isHint);
+            else
+                candsH = cands;
+            end
+        else
+            candsH = cands;
+        end
+
+        % If multiple remain, use pulse count if available
+        if ~isempty(nP)
+            chosen = chooseByPulseCountThenDepth(candsH, nP, d0, opts);
+        end
+
+        if isempty(chosen)
+            % fallback: choose closest depth (if d0 known), else first
+            chosen = chooseByDepthOnly(candsH, d0);
+        end
+    end
+
+    % 2) If no header stage, use pulse-count matching (old versions)
+    if isempty(chosen)
+        info.stageName = "hotspot_inferred";
+        info.matchMethod = "pulseCount";
+
+        if isempty(nP)
+            info.matchMethod = "none";
+            info.why = "No sweepStage in header and protocol.numPulses missing -> cannot infer hotspot sweep reliably.";
+            return
+        end
+
+        chosen = chooseByPulseCountThenDepth(cands, nP, d0, opts);
+        if isempty(chosen)
+            info.matchMethod = "none";
+            info.why = "No hotspot geometry table matches this sweep's numPulses (within tolerance).";
+            return
+        end
+    end
+
+    % --- Materialize output geometry table
+    T = chosen.table;
+    if ~ismember("response", T.Properties.VariableNames)
+        T.response = false(height(T),1);
+    end
+
+    info.isHotspot = true;
+    info.sweepSpots = T;
+    info.depthChosen = chosen.depth;
+    info.depthKind = chosen.depthKind;
+
+    if info.matchMethod == "header" && stageName == ""
+        info.stageName = "hotspot_header_unknown";
+    end
+
+    if opts.Debug
+        info.why = sprintf("Chosen: depth=%g kind=%s nBoxes=%d method=%s", ...
+            chosen.depth, chosen.depthKind, chosen.nBoxes, info.matchMethod);
+    end
+end
+
+
+
+
+function cands = collectHotspotCandidates(hotspotsByDepth, depths, opts)
+    cands = struct('depth',{},'depthKind',{},'nBoxes',{},'table',{});
+    for di = 1:numel(depths)
+        d = depths(di);
+        pv = hotspotsByDepth(d);
+        if ~iscell(pv); pv = {pv}; end
+        for pi = 1:numel(pv)
+            p = pv{pi};
+            T = getHotspotTable(p);
+            if isempty(T) || ~istable(T), continue; end
+            if ~all(ismember(opts.RequireGeometryVars, string(T.Properties.VariableNames)))
+                continue
+            end
+            cands(end+1).depth = d; %#ok<AGROW>
+            cands(end).table = T(:, intersect(T.Properties.VariableNames, cellstr(opts.RequireGeometryVars), 'stable'));
+            cands(end).nBoxes = height(T);
+            if isstruct(p) && isfield(p,'depthKind')
+                cands(end).depthKind = string(p.depthKind);
+            else
+                cands(end).depthKind = "unknown";
+            end
+        end
+    end
+end
+
+
+
+function chosen = chooseByPulseCountThenDepth(cands, nP, d0, opts)
+    chosen = [];
+    tolAbs = opts.PulseTolAbs;
+    if isnan(tolAbs)
+        tolAbs = max(1, round(opts.PulseTolRel * nP));
+    end
+
+    deltas = abs([cands.nBoxes] - nP);
+    keep = find(deltas <= tolAbs);
+    if isempty(keep), return; end
+    c = cands(keep);
+
+    % tie-break: closest depth if d0 known
+    if ~isnan(d0)
+        [~,ord] = sort(abs([c.depth] - d0), 'ascend');
+        c = c(ord);
+    end
+
+    % choose first after tie-break
+    chosen = c(1);
+end
+
+
+
+function chosen = chooseByDepthOnly(cands, d0)
+    if isempty(cands), chosen = []; return; end
+    if ~isnan(d0)
+        [~,i] = min(abs([cands.depth] - d0));
+        chosen = cands(i);
+    else
+        chosen = cands(1);
+    end
+end
+
+
+
+function T = getHotspotTable(packChosen)
+    T = [];
+    try
+        if istable(packChosen)
+            T = packChosen; return
+        end
+        if isstruct(packChosen)
+            if isfield(packChosen,'spotsTable'),       T = packChosen.spotsTable; return; end
+            if isfield(packChosen,'finalHotspots'),    T = packChosen.finalHotspots; return; end
+            if isfield(packChosen,'maxDepthHotspots'), T = packChosen.maxDepthHotspots; return; end
+        end
+    catch
+        T = [];
+    end
+end
+
 
 
 function saveSweepHotspots(hotspotSpots, cellResultsPath, cellNum, epochNum)
@@ -1449,6 +1669,103 @@ function saveSweepHotspots(hotspotSpots, cellResultsPath, cellNum, epochNum)
 end
 
 
+
+function [sweepSpots, protocol, nPulsesThisSweep, isHotspotSweep, curFSRow] = ...
+    selectSweepSpots(headerString, protocol, fullSearchTable, curFSRow, reconstructedSearch, ...
+                     sweepHotspots, sweepDepths, hotOpts)
+
+    sweepSpots = table();
+    nPulsesThisSweep = 0;
+    isHotspotSweep = false;
+
+    if ~isfield(protocol,'stimOnset') || isempty(protocol.stimOnset)
+        return
+    end
+    stimCount = numel(protocol.stimOnset);
+
+    nFS = height(fullSearchTable);
+
+    % ---- Case 1: Use fullSearchTable rows (normal) ----
+    if ~reconstructedSearch && curFSRow < nFS
+
+        expectedPulses = stimCount;
+        if isfield(protocol,'numPulses') && ~isempty(protocol.numPulses) && ~isnan(protocol.numPulses)
+            expectedPulses = double(protocol.numPulses);
+        end
+
+        nRemain = nFS - curFSRow;
+        nPulsesThisSweep = min([expectedPulses, nRemain, stimCount]);
+        if nPulsesThisSweep <= 0
+            return
+        end
+
+        sweepSpots = fullSearchTable(curFSRow+1 : curFSRow+nPulsesThisSweep, :);
+        curFSRow = curFSRow + nPulsesThisSweep; % always advance when consuming the table
+
+        % Detect whether this sweep is tagged as a hotspot inside fullSearchTable
+        if ismember('sweepStage', sweepSpots.Properties.VariableNames)
+            st = unique(string(sweepSpots.sweepStage));
+            st = st(st ~= "" & lower(st) ~= "search");
+            if ~isempty(st)
+                isHotspotSweep = true;
+                protocol.isHotspotSweep = true;
+                protocol.hotspotStage = st(1);
+
+                st1 = lower(st(1));
+                if contains(st1,'final')
+                    protocol.hotspotDepthKind = "finalDepth";
+                elseif contains(st1,'max')
+                    protocol.hotspotDepthKind = "maxSearchDepth";
+                else
+                    protocol.hotspotDepthKind = "";
+                end
+            end
+        end
+
+        if ismember('depth', sweepSpots.Properties.VariableNames)
+            if any(sweepSpots.depth ~= protocol.depth)
+                error('Selected spots have wrong depth vs protocol.depth.');
+            end
+        end
+
+        if ~ismember('response', sweepSpots.Properties.VariableNames)
+            sweepSpots.response = false(height(sweepSpots),1);
+        end
+
+        return
+    end
+
+    % ---- Case 2: reconstructedSearch OR extra sweeps beyond fullSearchTable ----
+    hotInfo = detectHotspotSweep(headerString, protocol, sweepHotspots, sweepDepths, ...
+                                    PreferDepthMatch = hotOpts.PreferDepthMatch, ...
+                                    PreferDepthKind  = hotOpts.PreferDepthKind, ...
+                                    Debug            = hotOpts.Debug);
+
+    if ~hotInfo.isHotspot
+        % In reconstructedSearch mode: skip non-hotspot sweeps (search already reconstructed from fig)
+        % In normal mode: unmappable extra sweep -> skip
+        return
+    end
+
+    isHotspotSweep = true;
+    sweepSpots = hotInfo.sweepSpots;
+
+    protocol.depth = hotInfo.depthChosen;
+    protocol.isHotspotSweep = true;
+    protocol.hotspotStage = hotInfo.stageName;
+    protocol.hotspotDepthKind = hotInfo.depthKind;
+
+    nPulsesThisSweep = min(height(sweepSpots), stimCount);
+    sweepSpots = sweepSpots(1:nPulsesThisSweep, :);
+
+    if ~ismember('response', sweepSpots.Properties.VariableNames)
+        sweepSpots.response = false(height(sweepSpots),1);
+    end
+end
+
+
+
+
 %% ======================= Reconstruction functions =======================
 
 function [reconOK, reconNoise] = reconstructFromResponseMap(epochPath, cellResultsPath, expRow, epoch, options)
@@ -1496,6 +1813,7 @@ function [reconOK, reconNoise] = reconstructFromResponseMap(epochPath, cellResul
         depthTok = regexp(figList(i).name, 'Depth(\d+)', 'tokens', 'once');
         if isempty(depthTok); continue; end
         depth = str2double(depthTok{1});
+        disp(['Reconstructing: ', prefix, ', depth ', num2str(depth)]);
 
         % 1. Load InfoPatching if needed for Excel lookup (done once per epoch ideally, but okay here)
         infoPatching = [];
@@ -1519,7 +1837,10 @@ function [reconOK, reconNoise] = reconstructFromResponseMap(epochPath, cellResul
             for k = 1:length(sweepNames)
                 swName = sweepNames{k};
                 swFile = fullfile(epochPath, [swName, '.mat']);
-                if ~exist(swFile, 'file'); continue; end
+                if ~exist(swFile, 'file')
+                    disp(['     [reconstructFromResponseMap] did not find ', swName,' , skipped']);
+                    continue; 
+                end
                 
                 % Quick load header to check depth
                 S_sw = load(swFile);
@@ -1537,13 +1858,13 @@ function [reconOK, reconNoise] = reconstructFromResponseMap(epochPath, cellResul
         catch
         end
     
-        figData = extractFromResponseMap(figPath);
+        nSide = 2^depth;
+        nTotal = nSide^2;
+
+        figData = extractFromResponseMap(figPath, nSide);
         if isempty(figData.spotTraces); continue; end
     
         nSpots = numel(figData.spotTraces);
-        nSide = round(sqrt(nSpots));
-        if nSide^2 ~= nSpots; continue; end
-    
         xEdges0 = round(linspace(0,608,nSide+1));
         yEdges0 = round(linspace(0,684,nSide+1));
     
@@ -1561,7 +1882,7 @@ function [reconOK, reconNoise] = reconstructFromResponseMap(epochPath, cellResul
                     'Response','Stats','QC','Options'};
         spotsAtDepth = table('Size',[0,length(varNames)],'VariableTypes',varTypes,'VariableNames',varNames);
     
-        for spotIdx = 1:nSpots
+        for spotIdx = 1:nTotal
             traces = figData.spotTraces{spotIdx};
             if isempty(traces); continue; end
     
@@ -1631,59 +1952,105 @@ function [reconOK, reconNoise] = reconstructFromResponseMap(epochPath, cellResul
 end
 
 
+function figData = extractFromResponseMap(figPath, nSideTotal)
+    nTotal = nSideTotal^2;
 
-function figData = extractFromResponseMap(figPath)
-    figData = struct('spotTraces',[],'plotWindowTime',[],'depthResponseMap',[]);
+    figData = struct( ...
+        'spotTraces',    {cell(nTotal,1)}, ...
+        'plotWindowTime',[], ...
+        'depthResponseMap',[] , ...
+        'spotRow',[], ...
+        'spotCol',[] );
+
     hFig = openfig(figPath,'invisible');
     cleanupObj = onCleanup(@() close(hFig));
-    
+
+    % --- hotspot response map image (684x608)
     imgs = findall(hFig,'Type','image');
-    depthMap=[];
+    depthMap = [];
     for i=1:numel(imgs)
-        C=imgs(i).CData;
+        C = imgs(i).CData;
         if isnumeric(C) && ismatrix(C) && all(size(C)==[684 608])
-            depthMap=C; break
+            depthMap = C; break;
         end
     end
     figData.depthResponseMap = depthMap;
-    
+
+    % --- get all axes, exclude any that contains an image (big map panel)
     axAll = findall(hFig,'Type','axes');
-    isSpotAx=false(size(axAll));
-    for a=1:numel(axAll)
-        isSpotAx(a) = ~isempty(findall(axAll(a),'Type','line')) && isempty(findall(axAll(a),'Type','image'));
+    hasImg = false(size(axAll));
+    for a = 1:numel(axAll)
+        hasImg(a) = ~isempty(findall(axAll(a),'Type','image'));
     end
-    axSpot=axAll(isSpotAx);
+    axCand = axAll(~hasImg);
+    if isempty(axCand); return; end
+
+    % --- choose the tiled spot axes by size (area mode)
+    posAll = vertcat(axCand.Position);         % [x y w h] normalized
+    area   = posAll(:,3).*posAll(:,4);
+    areaQ  = round(area*1e4)/1e4;              % quantize for stable mode
+    aMode  = mode(areaQ);
+
+    tol = 0.35;                                % generous layout tolerance
+    isSpot = abs(area - aMode) <= tol*aMode;
+
+    axSpot = axCand(isSpot);
     if isempty(axSpot); return; end
-    
-    pos=zeros(numel(axSpot),4);
-    for i=1:numel(axSpot); pos(i,:)=axSpot(i).Position; end
-    [~,order] = sortrows([-pos(:,2), pos(:,1)]);
-    axSpot = axSpot(order);
-    
-    ln0 = findall(axSpot(1),'Type','line');
-    ln0 = ln0(arrayfun(@(h) isnumeric(h.XData) && numel(h.XData)>20, ln0));
-    if ~isempty(ln0); figData.plotWindowTime = ln0(1).XData(:)'; end
-    
-    spotTraces=cell(numel(axSpot),1);
-    for s=1:numel(axSpot)
-        ln=findall(axSpot(s),'Type','line');
-        ln=ln(arrayfun(@(h) isnumeric(h.YData) && numel(h.YData)>20, ln));
-        if isempty(ln); continue; end
-    
-        lw=arrayfun(@(h) h.LineWidth, ln);
-        [~,imax]=max(lw);
-        ln(imax)=[];
-    
-        Y=arrayfun(@(h) h.YData(:)', ln,'UniformOutput',false);
-        L=cellfun(@numel,Y);
-        if isempty(L); continue; end
-        Lmode=mode(L);
-        Y=Y(L==Lmode);
-        if isempty(Y); continue; end
-        spotTraces{s}=cell2mat(Y(:));
+
+    pos = vertcat(axSpot.Position);
+    xc = pos(:,1) + pos(:,3)/2;
+    yc = pos(:,2) + pos(:,4)/2;
+
+    % --- map axes to grid lanes
+    xRef = linspace(min(xc), max(xc), nSideTotal);
+    yRef = linspace(max(yc), min(yc), nSideTotal);   % top -> bottom
+
+    [~, col] = min(abs(xc - xRef), [], 2);           % nAxes x 1
+    [~, row] = min(abs(yc - yRef), [], 2);           % nAxes x 1
+
+    figData.spotRow = row;
+    figData.spotCol = col;
+
+    % --- get plotWindowTime from any axis that actually has a line
+    for k = 1:numel(axSpot)
+        ln0 = findall(axSpot(k),'Type','line');
+        ln0 = ln0(arrayfun(@(h) isnumeric(h.XData) && numel(h.XData)>20, ln0));
+        if ~isempty(ln0)
+            figData.plotWindowTime = ln0(1).XData(:)';
+            break;
+        end
     end
-    figData.spotTraces = spotTraces;
+
+    % --- extract traces, place into full nTotal indexing
+    for k = 1:numel(axSpot)
+        spotIdx = (row(k)-1)*nSideTotal + col(k);
+        if spotIdx < 1 || spotIdx > nTotal
+            continue;
+        end
+
+        ln = findall(axSpot(k),'Type','line');
+        ln = ln(arrayfun(@(h) isnumeric(h.YData) && numel(h.YData)>20, ln));
+        if isempty(ln)
+            % empty spot -> leave figData.spotTraces{spotIdx} = []
+            continue;
+        end
+
+        % remove thick summary line (same idea as your current code)
+        lw = arrayfun(@(h) h.LineWidth, ln);
+        [~,imax] = max(lw);
+        ln(imax) = [];
+
+        Y = arrayfun(@(h) h.YData(:)', ln, 'UniformOutput', false);
+        L = cellfun(@numel, Y);
+        if isempty(L); continue; end
+        Lmode = mode(L);
+        Y = Y(L==Lmode);
+        if isempty(Y); continue; end
+
+        figData.spotTraces{spotIdx} = cell2mat(Y(:));   % reps x time
+    end
 end
+
 
 function control = localMakeSyntheticControl(processed, plotWindowTime, ctrlLen)
     pre = processed(plotWindowTime<0);

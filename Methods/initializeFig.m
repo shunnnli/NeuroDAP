@@ -15,7 +15,7 @@ arguments
     horizontalPortion (1,1) double {mustBeGreaterThan(horizontalPortion,0), mustBeLessThanOrEqual(horizontalPortion,1)} = 0.5
     verticalPortion   (1,1) double {mustBeGreaterThan(verticalPortion,0),   mustBeLessThanOrEqual(verticalPortion,1)}   = 0.5
 
-    options.ScreenSize (1,4) double = [1 1 3440 1440]   % [left bottom width height] (pixels)
+    options.ScreenSize (1,4) double = [0 0 3440 1440]   % [left bottom width height] (pixels)
     options.FontSize (1,1) double = 20
     options.AxesLineWidth (1,1) double = 1.5
 end

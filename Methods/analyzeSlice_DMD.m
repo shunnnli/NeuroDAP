@@ -92,6 +92,7 @@ if options.plotSearch
                          savePNG=false,savePDF=true,saveFIG=false);
         end
     end
+    disp('Finished: plotting search summary for all cells');
 end
 
 %% Plot search comparisions
@@ -102,9 +103,9 @@ if options.plotPairs
 
     for cellIdx = 1:size(cells,1)
         c = cellList(cellIdx);
-        disp(['Ongoing: plotting search pairs for cell',num2str(c)]);
         curCell = cells(cells.Cell == c,:);
         allPairs = curCell.('Difference map'){1}.diffVhold;
+        disp(['Ongoing: plotting search pairs for cell ',num2str(c)]);
 
         for pairIdx = 1:length(allPairs)
             % Plot a figure for each search depth, organize depth figures of each 
@@ -116,6 +117,7 @@ if options.plotPairs
                          savePNG=false,savePDF=true,saveFIG=false);
         end
     end
+    disp('Finished: plotting search pairs for all cells');
 end
 
 close all
