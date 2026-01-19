@@ -667,8 +667,9 @@ function [acqNums, fullSearchTable] = runHotspotSweeps(finalHotspots, nSweeps, d
 
     % Setup hotspot meta params
     state.zDMD.sweepStage = stageName;
-    acqNums = nan(1, nSweeps);
+    updateHeaderString('state.zDMD.sweepStage');
 
+    acqNums = nan(1, nSweeps);
     sweepDepth = finalHotspots.depth(1);  % all boxes share the same depth
 
     for iSweep = 1:nSweeps
