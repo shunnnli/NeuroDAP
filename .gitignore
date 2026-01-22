@@ -2,8 +2,10 @@
 *.mat
 *.asv
 
-*.DS_Store
+.DS_Store
+Thumbs.db
 Tutorials/Sample data/Recordings/202310-Photometry-paAIP2/20231114-SL133-R2_g0/20231114-SL133-R2_g0_t0.nidq.bin
 Tutorials/Sample data/Recordings/202310-Photometry-paAIP2/20231114-SL133-R2_g0/cam1-2023-11-14T12_34_11.avi
 Tutorials/Sample data/Recordings/202310-Photometry-paAIP2/20231114-SL133-R2_g0/Summary_photometry_processing.fig
 Tutorials/Sample data/Recordings/202310-Photometry-paAIP2/20231114-SL133-R2_g0/times_cam1-2023-11-14T12_34_11.csv
+.DS_Store
