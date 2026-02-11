@@ -20,6 +20,8 @@ arguments
     options.peakWindow double = 2 % in ms around the peak to average
 
     options.defaultStimOnset double
+    options.vholdChannel = 'AD2'
+    options.sortSweepsByAcq logical = true
 
     options.rawDataPath string
     options.saveDataPath string = 'default'
@@ -147,13 +149,13 @@ if options.reload
     if strcmp(rig,'Wengang')
         if createNew
             epochList = sortrows(struct2cell(dir(fullfile(exp,['AD0_e*','p1avg.mat'])))',3);
-            vholdList = sortrows(struct2cell(dir(fullfile(exp,['AD2_e*','p1avg.mat'])))',3);
+            vholdList = sortrows(struct2cell(dir(fullfile(exp,[options.vholdChannel,'_e*','p1avg.mat'])))',3);
         else
             epochList = {}; vholdList = {};
             for i = 1:size(exp,1)
                 epochPath = strcat(filesep,'AD0_e',num2str(exp{i,"Epoch"}),'p1avg.mat');
                 epochList = [epochList; struct2cell(dir(fullfile(strcat(exp{:,"Session"}{i}, epochPath))))'];
-                vholdPath = strcat(filesep,'AD2_e',num2str(exp{i,"Epoch"}),'p1avg.mat');
+                vholdPath = strcat(filesep,'options.vholdChannel_e',num2str(exp{i,"Epoch"}),'p1avg.mat');
                 vholdList = [vholdList; struct2cell(dir(fullfile(strcat(exp{:,"Session"}{i}, vholdPath))))'];
             end
         end
@@ -170,7 +172,7 @@ if options.reload
                 cellEpochList = sortrows(struct2cell(dir(fullfile(cellPath,['AD0_e*','p*avg.mat'])))',3);
                 cellEpochList(:,end+1) = num2cell(sscanf(cellFolders(c).name,'cell%d'),[1 2]); % store cell number as the last column
                 epochList = [epochList; cellEpochList];
-                cellVholdList = sortrows(struct2cell(dir(fullfile(cellPath,['AD2_e*','p*avg.mat'])))',3);
+                cellVholdList = sortrows(struct2cell(dir(fullfile(cellPath,[options.vholdChannel,'_e*','p*avg.mat'])))',3);
                 cellVholdList(:,end+1) = num2cell(sscanf(cellFolders(c).name,'cell%d'),[1 2]); % store cell number as the last column
                 vholdList = [vholdList; cellVholdList];
             end
@@ -179,11 +181,50 @@ if options.reload
             for i = 1:size(exp,1)
                 epochPath = strcat(filesep,'cell',num2str(exp{i,"Cell"}),filesep,'AD0_e',num2str(exp{i,"Epoch"}),'p*avg.mat');
                 epochList = [epochList; struct2cell(dir(fullfile(strcat(exp{:,"Session"}{i}, epochPath))))'];
-                vholdPath = strcat(filesep,'cell',num2str(exp{i,"Cell"}),filesep,'AD2_e',num2str(exp{i,"Epoch"}),'p*avg.mat');
+                vholdPath = strcat(filesep,'cell',num2str(exp{i,"Cell"}),filesep,options.vholdChannel,'_e',num2str(exp{i,"Epoch"}),'p*avg.mat');
                 vholdList = [vholdList; struct2cell(dir(fullfile(strcat(exp{:,"Session"}{i}, vholdPath))))'];
             end
         end
     end
+    
+    %% Group multiple p*avg files into one epoch entry
+    n = size(epochList,1);
+    epochNum = nan(n,1);
+    pulseNum = nan(n,1);
+    cellNum  = zeros(n,1);
+    
+    for i = 1:n
+        fn = epochList{i,1};                 % e.g. AD0_e140p19avg.mat
+        ns = strsplit(fn, {'e','p','avg.mat'});
+        epochNum(i) = str2double(ns{2});
+        pulseNum(i) = str2double(ns{3});
+        if ~strcmp(rig,'Wengang')
+            cellNum(i) = epochList{i,end};   % Paolo: cell number stored in last col
+        end
+    end
+    
+    key = strcat(string(epochList(:,2)), "|c", string(cellNum), "|e", string(epochNum));
+    [ukey,~,g] = unique(key,'stable');
+    nGroups = numel(ukey);
+    
+    grpFolder   = cell(nGroups,1);
+    grpEpoch    = nan(nGroups,1);
+    grpCell     = nan(nGroups,1);
+    grpAvgFiles = cell(nGroups,1);   % cell array of filenames
+    grpPulses   = cell(nGroups,1);   % numeric array per group (same order as files)
+    
+    for gi = 1:nGroups
+        idx = find(g==gi);
+        grpFolder{gi} = epochList{idx(1),2};
+        grpEpoch(gi)  = epochNum(idx(1));
+        grpCell(gi)   = cellNum(idx(1));
+    
+        % sort p-files by PulseNum so things are deterministic
+        [~,ord] = sort(pulseNum(idx));
+        grpAvgFiles{gi} = epochList(idx(ord),1);
+        grpPulses{gi}   = pulseNum(idx(ord));
+    end
+
     
     %% Initialize epochs table
     
@@ -204,12 +245,19 @@ if options.reload
                 'Stats',...
                 'QC',...
                 'VholdInfo','Options'};
-    epochs = table('Size',[length(epochList),length(varNames)],...
+    epochs = table('Size',[nGroups,length(varNames)],...
         'VariableTypes',varTypes,'VariableNames',varNames);
     
-    % Check whether there's AD2 to record Vhold
-    withVhold = ~isempty(dir(fullfile(epochList{1,2},"AD2*.mat")));
-    withVholdAvg = length(epochList)==length(vholdList);
+    % Check whether vhold source exists (AD channel files or Excel)
+    if strcmpi(string(options.vholdChannel),'excel')
+        withVhold = exist(fullfile(grpFolder{1},'InfoPatching.xlsx'),'file') == 2;
+    else
+        withVhold = ~isempty(dir(fullfile(grpFolder{1}, options.vholdChannel + "_*.mat")));
+        if ~withVhold
+            % fallback if your files don't use the underscore convention
+            withVhold = ~isempty(dir(fullfile(grpFolder{1}, options.vholdChannel + "*.mat")));
+        end
+    end
     vholdInfo.vholdEpochMean = nan;
     vholdInfo.vholdSweepsMean = nan;
     vholdInfo.vholdEpochTrace = nan;
@@ -217,15 +265,34 @@ if options.reload
     
     %% Iterate & analyze individual epoch
     
-    for row = 1:size(epochList,1)
+    for row = 1:nGroups
         clearvars AD*
     
-        % Load epoch file to find individual sweep.mat
-        load(fullfile(epochList{row,2},epochList{row,1}));
-        namesplit = strsplit(epochList{row,1},{'e','p','avg.mat'}); 
-        epoch = str2double(namesplit{2});
-        options.rawDataPath = epochList{row,2};
-        sweepAcq = eval(['AD0_e',num2str(epoch),'p',namesplit{3},'avg.UserData.Components']);
+        % --- NEW: load all avg files for this epoch and combine acquisitions ---
+        epoch = grpEpoch(row);
+        options.rawDataPath = grpFolder{row};
+        avgFilesThisEpoch = grpAvgFiles{row};
+        pulseNumsThisEpoch = grpPulses{row};
+        
+        sweepAcq = {};
+        pulseNumByAcq = [];     % same length as sweepAcq
+        avgLen = [];
+        for f = 1:numel(avgFilesThisEpoch)
+            fn = avgFilesThisEpoch{f};
+            p  = pulseNumsThisEpoch(f);
+            load(fullfile(options.rawDataPath, fn));
+            comps = eval(sprintf('AD0_e%dp%davg.UserData.Components', epoch, p));
+            sweepAcq = [sweepAcq; comps(:)];
+            pulseNumByAcq = [pulseNumByAcq; repmat(p, numel(comps), 1)];
+            thisLen = size(eval(sprintf('AD0_e%dp%davg.data', epoch, p)), 2);
+            if isempty(avgLen)
+                avgLen = thisLen;
+            elseif thisLen ~= avgLen
+                warning('Epoch %d has p%davg with different avg length (%d vs %d). Those sweeps may be skipped later.', ...
+                        epoch, p, thisLen, avgLen);
+                % (you can decide to handle this more strictly if you want)
+            end
+        end
     
         % Import processed numbers if post QC
         if ~createNew
@@ -236,57 +303,82 @@ if options.reload
             sweepAcq = exp{row,"Sweep names"}{1};
             vhold = exp{row,"Vhold"};
             vholdInfo = exp{row,"VholdInfo"}{1};
+            prot = exp{row,"Protocol"}{1};
+            if isfield(prot,'PulseNumByAcq')
+                pulseNumByAcq = prot.PulseNumByAcq;
+            end
         end
+
         
         % Initialize some temporary matrix
-        sweeps = zeros(length(sweepAcq), size(eval(['AD0_e',num2str(epoch),'p',namesplit{3},'avg.data']),2));
+        % sweeps = zeros(length(sweepAcq), size(eval(['AD0_e',num2str(epoch),'p',namesplit{3},'avg.data']),2));
+        sweeps = zeros(length(sweepAcq), avgLen);
         nAnalyzedSweeps = length(sweepAcq);
         processed = zeros(size(sweeps));
         QCs = cell(length(sweepAcq),1);
         cycles = cell(length(sweepAcq),1); % For detecting whether a sweep uses different cycle within an epoch
         protocols = cell(length(sweepAcq),1);
         statistics = cell(length(sweepAcq),1);
+        
 
-    
-        % Load Vhold for epoch avg file (AD2)
-        if withVholdAvg && withVhold
-            load(fullfile(vholdList{row,2},vholdList{row,1}));
-            namesplit = strsplit(vholdList{row,1},{'e','p'}); 
-            if epoch ~= str2double(namesplit{2})
-                error('Epoch number does not match between AD0 and AD2!!');
-                vholdAcq = sweepAcq;
-                vholdSweeps = zeros(size(sweeps));
-                withVholdAvg = false;
-            else
-                vholdAcq = eval(['AD2_e',num2str(epoch),'p1avg.UserData.Components']);
-                vholdEpoch = eval(['AD2_e',num2str(epoch),'p1avg.data']);
-                vholdSweeps = zeros(length(vholdAcq),length(vholdEpoch));
-            end
-        elseif withVhold && ~withVholdAvg
-            vholdAcq = sweepAcq;
-            vholdSweeps = zeros(size(sweeps));
+        % --- Vhold bookkeeping (per-sweep) via getSweepVhold ---
+        % Keep vholdInfo fields the same as before:
+        %   vholdInfo.vholdEpochMean   : most common vhold across sweeps in this epoch
+        %   vholdInfo.vholdSweepsMean  : per-sweep scalar vhold values
+        %   vholdInfo.vholdEpochTrace  : mean vhold trace (if available) or constant vholdEpochMean
+        %   vholdInfo.vholdSweepsTrace : per-sweep vhold traces (if available; NaNs otherwise)
+        vholdSweeps = nan(length(sweepAcq), avgLen);
+        vholdSweepsMean = nan(length(sweepAcq), 1);
+
+        % Load InfoPatching.xlsx once (if present) and pass into getSweepVhold
+        infoTable = [];
+        xlsxPath = fullfile(grpFolder{row}, 'InfoPatching.xlsx');
+        if exist(xlsxPath,'file')
+            csvOpts = detectImportOptions(xlsxPath);
+            csvOpts.SelectedVariableNames = 1:11;
+            csvOpts.VariableNamesRange = 25;
+            infoTable = readtable(xlsxPath, csvOpts);
+            infoTable = rmmissing(infoTable, DataVariables="acq_");
+            infoTable = rmmissing(infoTable, DataVariables="epoch");
+
+            if iscell(infoTable.acq_); infoTable.acq_ = str2double(infoTable.acq_); end
+            if iscell(infoTable.epoch); infoTable.epoch = str2double(infoTable.epoch); end
+            if iscell(infoTable.cyclePos); infoTable.cyclePos = str2double(infoTable.cyclePos); end
+            if iscell(infoTable.holding); infoTable.holding = str2double(infoTable.holding); end
         end
 
-        % Load csv file for vhold
-        if ~strcmp(rig,'Wengang')
-            csvOpts = detectImportOptions(fullfile(epochList{row,2},'InfoPatching.xlsx'));
-            csvOpts.SelectedVariableNames = 1:11;%1:9
-            csvOpts.VariableNamesRange = 25;
-            info = readtable(fullfile(epochList{row,2},'InfoPatching.xlsx'),csvOpts);
-            info = rmmissing(info,DataVariables="acq_");
-            info = rmmissing(info,DataVariables="epoch");
 
-            if iscell(info.acq_); info.acq_ = str2double(info.acq_); end
-            if iscell(info.epoch); info.epoch = str2double(info.epoch); end
-            if iscell(info.cyclePos); info.epoch = str2double(info.cyclePos); end
-            if iscell(info.holding); info.acq_ = str2double(info.holding); end
+        % --- OPTIONAL: sort sweep names by acquisition number (AD0_###) ---
+        if options.sortSweepsByAcq && ~isempty(sweepAcq)
+            % Extract numeric acquisition number from strings like "AD0_342"
+            acqNums = nan(numel(sweepAcq),1);
+            for i = 1:numel(sweepAcq)
+                s = string(sweepAcq{i});
+                tok = regexp(s, '_(\d+)$', 'tokens', 'once');
+                if ~isempty(tok)
+                    acqNums(i) = str2double(tok{1});
+                end
+            end
+            % Sort, putting any non-parsable names at the end (NaNs last)
+            [~, ord] = sort(acqNums, 'ascend', 'MissingPlacement','last');
+            sweepAcq = sweepAcq(ord);
+            % Keep any per-sweep vectors aligned with sweepAcq
+            if exist('pulseNumByAcq','var') && numel(pulseNumByAcq) == numel(ord)
+                pulseNumByAcq = pulseNumByAcq(ord);
+            end
+            if exist('included','var') && numel(included) == numel(ord)
+                included = included(ord);
+            end
+            if exist('vholdInfo','var') && numel(vholdInfo) == numel(ord)
+                vholdInfo = vholdInfo(ord);
+            end
         end
     
         %% Load individual sweeps
         for k = 1:length(sweepAcq)
             % Load sweep traces (.data)
             disp(['Loading ',sweepAcq{k},'.mat for epoch ',num2str(epoch)]);
-            try load(fullfile(epochList{row,2},strcat(sweepAcq{k},'.mat'))); 
+            try load(fullfile(grpFolder{row},strcat(sweepAcq{k},'.mat'))); 
             catch
                 warning(strcat("Sweep ",num2str(sweepAcq{k}), " not saved, skipping this sweep!"));
                 nAnalyzedSweeps = nAnalyzedSweeps - 1;
@@ -304,6 +396,7 @@ if options.reload
                                        outputFs=options.outputFs,...
                                        rcCheckRecoveryWindow=options.rcCheckRecoveryWindow,...
                                        rig=rig);
+            protocol.PulseNum = pulseNumByAcq(k);  % the p# that this acq came from
             protocols{k} = protocol;
             cycles{k} = protocol.cycle;
 
@@ -418,6 +511,23 @@ if options.reload
                 processed_trace = mean_subtracted;
                 processed(k,:) = processed_trace;
             end
+
+
+            % --- Vhold (per-sweep) via getSweepVhold ---
+            try
+                [vh, vhMeta] = getSweepVhold(epochList{row,2}, sweepAcq{k}, baselineAvg, options.vholdChannel, infoTable=infoTable);
+                vholdSweepsMean(k) = vh;
+                if isfield(vhMeta,'trace') && ~isempty(vhMeta.trace)
+                    tr = vhMeta.trace(:)';
+                    if numel(tr) == avgLen
+                        vholdSweeps(k,:) = tr;
+                    else
+                        warning('Vhold trace length mismatch for %s (got %d, expected %d).', sweepAcq{k}, numel(tr), avgLen);
+                    end
+                end
+            catch ME
+                warning('getSweepVhold failed for %s: %s', sweepAcq{k}, ME.message);
+            end
     
             
             % Find peak and area during analysis window (for processed)
@@ -459,27 +569,15 @@ if options.reload
 
                 statistics{k} = stats;
             end
-
-
-            % Load Vhold traces if needed
-            if withVhold
-                try load(fullfile(vholdList{row,2},strcat(vholdAcq{k},'.mat'))); 
-                catch
-                    warning(strcat("Vhold for sweep ",num2str(vholdAcq{k}), " not saved, skipping vhold of this sweep!"));
-                    continue
-                end
-                vhold_trace = eval([vholdAcq{k},'.data']);
-                if length(vhold_trace) ~= size(vholdSweeps,2)
-                    warning("Sweep duration is different from epoch avg duration!!");
-                    continue;
-                end
-                vholdSweeps(k,:) = vhold_trace;
-            end
         end
 
         %% Merge protocol/qc/stats for each sweep into one for each epoch
         if ~contains(protocol.cycle,{'randomSearch','plasticity'})
             protocols = mergeStructs(protocols);
+            protocols.PulseNumByAcq = pulseNumByAcq;
+            protocols.PulseNumsInEpoch = unique(pulseNumByAcq)';  % quick summary
+            protocols.AcqPulseMap = table(string(sweepAcq), pulseNumByAcq, ...
+                                          'VariableNames', {'Acq','PulseNum'});
             statistics = mergeStructs(statistics);
             QC = mergeStructs(QCs);
 
@@ -516,38 +614,74 @@ if options.reload
         
             %% Determine cellID and mean epoch vhold for that cell
             if createNew
-                if strcmp(rig,'Wengang')
-                    if withVhold
-                        if withVholdAvg
-                            vholdEpochMean = mean(vholdEpoch(:,baselineWindow),"all");
-                        else
-                            vholdEpochMean = mean(vholdSweeps(:,baselineWindow),"all"); 
-                            vholdEpoch = mean(vholdSweeps(:,baselineWindow),1);
-                        end
-                        if vholdEpochMean < -50; cellid = cellid + 1; end
-                        vholdSweepsMean = mean(vholdSweeps(:,1:20000),2);
-                        vholdInfo.vholdSweepsMean = vholdSweepsMean;
-                        vholdInfo.vholdEpochTrace = vholdEpoch;
-                        vholdInfo.vholdSweepsTrace = vholdSweeps;
-                    else
-                        cellid = row;
-                        vholdEpochMean = 100;
-                    end
-                    vhold = vholdEpochMean;
-                    vholdInfo.vholdEpochMean = vholdEpochMean;
+                % Most common (mode) vhold across sweeps in this epoch.
+                % Tip: change the rounding/bin size below if your vhold values are noisy.
+                vh = vholdSweepsMean;
+                vh = vh(~isnan(vh));
+                if isempty(vh)
+                    vholdEpochMean = NaN;
+                    vholdEpochTrace = nan(1, avgLen);
                 else
-                    cellid = epochList{row,end};
-                    
-                    % Determine Vhold
-                    % Find in .xlsx file first, if can't find, use the heuristic that
-                    % cells with negative leak current Vhold=-70, otherwise Vhold = 10;
-                    acqsplit = split(sweepAcq{k},'_'); acqNum = str2double(acqsplit{end});
-                    vhold = info{info.acq_ == acqNum,'holding'};
-                    if isempty(vhold)
-                        if baselineAvg < 0; vhold = -70;
-                        else; vhold = 10; end
+                    vhRounded = round(vh);   % e.g. -69.7 -> -70
+                    vholdEpochMean = mode(vhRounded);
+
+                    % If we managed to load vhold traces, keep the epoch trace as their mean.
+                    if any(~isnan(vholdSweeps(:)))
+                        vholdEpochTrace = mean(vholdSweeps, 1, 'omitnan');
+                    else
+                        vholdEpochTrace = vholdEpochMean * ones(1, avgLen);
                     end
                 end
+
+                % Preserve original cellid heuristic for Wengang recordings
+                if strcmp(rig,'Wengang')
+                    if ~isnan(vholdEpochMean) && vholdEpochMean < -50
+                        cellid = cellid + 1;
+                    end
+                else
+                    cellid = grpCell(row);
+                end
+
+                vhold = vholdEpochMean;
+
+                % Keep vholdInfo fields identical to previous versions
+                vholdInfo.vholdEpochMean   = vholdEpochMean;
+                vholdInfo.vholdSweepsMean  = vholdSweepsMean;
+                vholdInfo.vholdEpochTrace  = vholdEpochTrace;
+                vholdInfo.vholdSweepsTrace = vholdSweeps;
+
+                % if strcmp(rig,'Wengang')
+                %     if withVhold
+                %         if withVholdAvg
+                %             vholdEpochMean = mean(vholdEpoch(:,baselineWindow),"all");
+                %         else
+                %             vholdEpochMean = mean(vholdSweeps(:,baselineWindow),"all"); 
+                %             vholdEpoch = mean(vholdSweeps(:,baselineWindow),1);
+                %         end
+                %         if vholdEpochMean < -50; cellid = cellid + 1; end
+                %         vholdSweepsMean = mean(vholdSweeps(:,1:20000),2);
+                %         vholdInfo.vholdSweepsMean = vholdSweepsMean;
+                %         vholdInfo.vholdEpochTrace = vholdEpoch;
+                %         vholdInfo.vholdSweepsTrace = vholdSweeps;
+                %     else
+                %         cellid = row;
+                %         vholdEpochMean = 100;
+                %     end
+                %     vhold = vholdEpochMean;
+                %     vholdInfo.vholdEpochMean = vholdEpochMean;
+                % else
+                %     cellid = grpCell(row);
+                % 
+                %     % Determine Vhold
+                %     % Find in .xlsx file first, if can't find, use the heuristic that
+                %     % cells with negative leak current Vhold=-70, otherwise Vhold = 10;
+                %     acqsplit = split(sweepAcq{k},'_'); acqNum = str2double(acqsplit{end});
+                %     vhold = info{info.acq_ == acqNum,'holding'};
+                %     if isempty(vhold)
+                %         if baselineAvg < 0; vhold = -70;
+                %         else; vhold = 10; end
+                %     end
+                % end
             end
     
             %% Remove empty/erraneous sweeps
@@ -563,7 +697,7 @@ if options.reload
                     % included = all([included,diffVhold_included],2);
                 end 
         
-                % Remove sweeps with different cycles
+                % Remove sweeps with non full field cycles
                 cycles = cycles(~cellfun(@isempty,cycles));
                 if ~isempty(cycles)
                     cyclesCount = tabulate(cycles);
@@ -571,7 +705,9 @@ if options.reload
                     if ~all(strcmp(cycles, cycles{mostCommonIdx}))
                         cycles_included = strcmp(cycles, cycles{mostCommonIdx});
                         % protocol = protocols{mostCommonIdx};
-                        included = all([included,cycles_included],2);
+                        if length(included) == length(cycles_included)
+                            included = all([included,cycles_included],2);
+                        end
                     end
                 end
     
@@ -587,7 +723,9 @@ if options.reload
                         QCIncluded = all([Ibaseline_avg_filter,Ibaseline_std_filter],2);
                         QC.included = QCIncluded;
                     end
-                    included = all([included,QCIncluded],2);
+                    if length(included) == length(QCIncluded)
+                        included = all([included,QCIncluded],2);
+                    end
     
                     % Remove epochs with high Rs or high Verror
                     Rs_final = mean(QC.Rs(included==1));

@@ -62,7 +62,13 @@ function masterStruct = mergeStructFields(masterStruct,currentStruct,nStructs,st
             if structIdx == nStructs
                 if options.combine && all(cellfun(@isnumeric, masterStruct.(field)))
                     try
-                        values = cell2mat(masterStruct.(field));
+                        vals = masterStruct.(field);
+                        % Force each entry to be a row vector (flatten everything)
+                        vals = cellfun(@(x) reshape(x, 1, []), vals, 'UniformOutput', false);
+                        % Pad to equal length so cell2mat works
+                        maxLen = max(cellfun(@numel, vals));
+                        vals = cellfun(@(x) [x, nan(1, maxLen - numel(x))], vals, 'UniformOutput', false);
+                        values = cell2mat(vals);  % => nStructs x maxLen
                     catch ME
                         disp(getReport(ME));
                         warning(['Field ', field, ' have an error, skipped for now!!!!']);

@@ -17,8 +17,8 @@ arguments
 
     options.outputFs double = 10000
     options.timeRange double = [-20,100] % in ms
-    options.analysisWindowLength double = 50 % in ms after stim onset
-    options.controlWindowLength double = 50 % in ms before stim onset
+    options.analysisWindowLength double = 30 % in ms after stim onset
+    options.controlWindowLength double = 30 % in ms before stim onset
     options.eventSample % in sample
     options.nArtifactSamples double = 0 % in sample
     options.rcCheckRecoveryWindow double = 100 % in ms
@@ -36,7 +36,8 @@ end
 %% General setup
 
 today = char(datetime('today','Format','yyyyMMdd'));
-dirsplit = split(epochs{1,"Session"},filesep); expName = dirsplit{end};
+sessionPath = osPathSwitch(epochs{1,"Session"});
+dirsplit = split(sessionPath,filesep); expName = dirsplit{end};
 
 % Decide reload if session has already been loaded
 if options.reload
@@ -44,7 +45,7 @@ if options.reload
     options.reloadCellAnalysis = true;
     resultsFolderName = ['Results-',today];
 else
-    resultsList = sortrows(struct2cell(dir(fullfile(epochs{1,"Session"},'Results-*')))',3);
+    resultsList = sortrows(struct2cell(dir(fullfile(sessionPath,'Results-*')))',3);
     if isempty(resultsList)
         options.reload = true;
         options.reloadCells = true;
@@ -75,17 +76,18 @@ end
 % 2. If saveDataPath ~= 'default', saveDataPath should be specified by the user
 % 3. "Sessions" in epochs and cells table should be the same as rawDataPath
 if strcmp(options.saveDataPath,'default')
-    options.rawDataPath = epochs{1,"Session"};
+    options.rawDataPath = sessionPath;
     options.saveDataPath = strcat(options.rawDataPath,filesep,resultsFolderName);
     if ~exist(options.saveDataPath, 'dir')
         mkdir(options.saveDataPath);
     end
 else
-    options.rawDataPath = epochs{1,"Session"};
+    options.rawDataPath = sessionPath;
     if ~exist(options.saveDataPath, 'dir')
         mkdir(options.saveDataPath);
     end
 end
+options.saveDataPath = string(options.saveDataPath);
 
 % Turn off some warnings
 warning('off','MATLAB:unknownObjectNowStruct');
@@ -127,7 +129,7 @@ if options.reloadCells
     %% Iterate & analyze individual epoch
     for row = 1:size(exp,1)
         clearvars AD*
-        cellResultsPath = strcat(options.saveDataPath,filesep,['cell',num2str(exp{row,'Cell'})]);
+        cellResultsPath = string(strcat(options.saveDataPath,filesep,['cell',num2str(exp{row,'Cell'})]));
     
         if options.reload
             %% Load basic info
@@ -141,16 +143,15 @@ if options.reloadCells
             % Load fullSearchTable
             epoch = exp{row,'Epoch'};
             sweepAcq = exp{row,'Sweep names'}{1};
-            epochPath = exp{row,'Options'}{1}.rawDataPath;
+            epochPath = osPathSwitch(exp{row,'Options'}{1}.rawDataPath);
             
             % Intialize potentia reconstruction params
             reconstructedSearch = false;
             
             try 
-                load(fullfile(epochPath,strcat('Epoch',num2str(epoch),'_fullSearchTable.mat')),'fullSearchTable')
+                load(fullfile(epochPath,strcat('Epoch',num2str(epoch),'_fullSearchTable.mat')),'fullSearchTable');
             catch
                 fullSearchTable = table();
-
                 warning(strcat("Epoch ",num2str(epoch)," (cell ",num2str(exp{row,'Cell'}),") is missing fullSearchTable. ", ...
                     "Attempting reconstruction from *_responseMap.fig..."));
             
@@ -236,8 +237,8 @@ if options.reloadCells
                 
                 % ---- Decide which spot geometry to use for this sweep ----
                 [sweepSpots, protocol, nPulsesThisSweep, isHotspotSweep, curFSRow] = ...
-                    selectSweepSpots(headerString, protocol, fullSearchTable, curFSRow, reconstructedSearch, ...
-                                     sweepHotspots, sweepDepths, hotOpts);
+                            selectSweepSpots(headerString, protocol, fullSearchTable, curFSRow, reconstructedSearch, ...
+                                             sweepHotspots, sweepDepths, hotOpts, sweepAcq{k});
                 if isempty(sweepSpots); continue; end
 
                 % Extract raw trace
@@ -300,7 +301,8 @@ if options.reloadCells
 
                 % Process trace: mean-subtracted, optional LP
                 % Mean subtraction
-                mean_subtracted = raw_trace - mean(raw_trace(baselineWindow));
+                meanRawBaseline = mean(raw_trace(baselineWindow));
+                mean_subtracted = raw_trace - meanRawBaseline;
                 if options.filterSignal
                     Fs = options.outputFs; % Sampling frequency  
                     LP = lowpass(mean_subtracted',2000,Fs);
@@ -326,7 +328,7 @@ if options.reloadCells
                 stats.baseline.std = std(processed_trace(baselineWindow));
         
                 % Determine Vhold
-                vhold = getSweepVhold(epochPath, sweepAcq{k}, stats.baseline.avg, options, patchInfo);
+                [vhold,~] = getSweepVhold(epochPath, sweepAcq{k}, meanRawBaseline, options.vholdChannel, infoTable=patchInfo);
         
                 % Initialize matrix for noise analysis later
                 baselineData = [baselineData, processed_trace(baselineWindow)];
@@ -550,7 +552,7 @@ if options.reloadCells
                 % Save noise data for this cell
                 if options.reload
                     filename = strcat('noise_cell',num2str(curCell));
-                    save(fullfile(epochs{1,"Session"},filename),'nullSpotData','preStimData','baselineData','-v7.3');
+                    save(fullfile(sessionPath,filename),'nullSpotData','preStimData','baselineData','-v7.3');
                     disp(strcat("Saved noise data for cell: ",num2str(curCell)));
                 end
 
@@ -689,22 +691,34 @@ if options.reloadCells
                     else; depthResponseMap(xRange,yRange) = mean([originalValue,newValue]);
                     end
     
-                    % Get isResponse value 
-                    % value during online search
-                    originalValue_isResponse = mode(isResponseMap_depth(xRange,yRange),'all');
-                    newValue_isResponse = spotsAtDepth{s,'Response'}{1}.isResponse;
-                    % Add to isResponseMap
-                    if originalValue_isResponse==0; isResponseMap_depth(xRange,yRange) = newValue_isResponse;
-                    else; isResponseMap_depth(xRange,yRange) = originalValue_isResponse || newValue_isResponse;
+                    % Get isResponse value (robust to NaNs)
+                    tmp = isResponseMap_depth(xRange,yRange);
+                    tmp = tmp(~isnan(tmp));
+                    if isempty(tmp); originalValue_isResponse = 0;
+                    else; originalValue_isResponse = mode(tmp(:));
                     end
+                    newValue_isResponse = spotsAtDepth{s,'Response'}{1}.isResponse;
+                    if isempty(newValue_isResponse) || (isnumeric(newValue_isResponse) && isnan(newValue_isResponse))
+                        newValue_isResponse = 0;
+                    end
+                    origBool = (~isnan(originalValue_isResponse)) && (originalValue_isResponse ~= 0);
+                    newBool  = (~isnan(newValue_isResponse))      && (newValue_isResponse ~= 0);
+                    isResponseMap_depth(xRange,yRange) = origBool | newBool;
+
 
                     % Get hotspot value
-                    originalValue_hotspot = mode(depthHotspotMap(xRange,yRange),'all');
-                    newValue_hotspot = spotsAtDepth{s,'Response'}{1}.hotspot;
-                    % Add to hotspot map
-                    if originalValue_hotspot==0; depthHotspotMap(xRange,yRange) = newValue_hotspot;
-                    else; depthHotspotMap(xRange,yRange) = originalValue_hotspot || newValue_hotspot;
+                    tmp = depthHotspotMap(xRange,yRange);
+                    tmp = tmp(~isnan(tmp));
+                    if isempty(tmp); originalValue_hotspot = 0;
+                    else; originalValue_hotspot = mode(tmp(:));
                     end
+                    newValue_hotspot = spotsAtDepth{s,'Response'}{1}.hotspot;
+                    if isempty(newValue_hotspot) || (isnumeric(newValue_hotspot) && isnan(newValue_hotspot))
+                        newValue_hotspot = 0;
+                    end
+                    origBool = (~isnan(originalValue_hotspot)) && (originalValue_hotspot ~= 0);
+                    newBool  = (~isnan(newValue_hotspot))      && (newValue_hotspot ~= 0);
+                    depthHotspotMap(xRange,yRange) = origBool | newBool;
                 end        
 
                 % Extract statistics
@@ -814,7 +828,7 @@ if options.reloadCells
             % Save noise data for this cell
             if options.reload
                 filename = strcat('noise_cell',num2str(curCell));
-                save(fullfile(epochs{1,"Session"},filename),'nullSpotData','preStimData','baselineData','-v7.3');
+                save(fullfile(sessionPath,filename),'nullSpotData','preStimData','baselineData','-v7.3');
                 disp(strcat("Saved noise data for cell: ",num2str(curCell)));
             end
     
@@ -864,9 +878,9 @@ if options.reloadCellAnalysis
         disp(['Ongoing: building noise model for cell ',num2str(num2str(c))]);
     
         % Load noise data
-        cellResultsPath = strcat(options.saveDataPath,filesep,['cell',num2str(c)]);
+        cellResultsPath = string(strcat(options.saveDataPath,filesep,['cell',num2str(c)]));
         filename = strcat('noise_cell',num2str(c),'.mat');
-        load(fullfile(epochs{1,"Session"},filename));
+        load(fullfile(sessionPath,filename));
     
         % Initialize noise summary plot
         initializeFig(0.75,1); tiledlayout(1,3);
@@ -946,7 +960,7 @@ if options.reloadCellAnalysis
         % Save noise model
         if options.save
             saveFigures(gcf,['cell',num2str(c),'_noise'],cellResultsPath);
-            save(fullfile(epochs{1,"Session"},filename),'noise_nullSpot','noise_preStim','noise_all','allNullData','-append');
+            save(fullfile(sessionPath,filename),'noise_nullSpot','noise_preStim','noise_all','allNullData','-append');
             disp(strcat("Saved noise model for cell: ",num2str(c))); close all;
         end
         
@@ -1672,18 +1686,103 @@ end
 
 function [sweepSpots, protocol, nPulsesThisSweep, isHotspotSweep, curFSRow] = ...
     selectSweepSpots(headerString, protocol, fullSearchTable, curFSRow, reconstructedSearch, ...
-                     sweepHotspots, sweepDepths, hotOpts)
+                     sweepHotspots, sweepDepths, hotOpts, sweepName)
 
     sweepSpots = table();
     nPulsesThisSweep = 0;
     isHotspotSweep = false;
 
+    if nargin < 9 || isempty(sweepName)
+        sweepName = "";
+    end
+
     if ~isfield(protocol,'stimOnset') || isempty(protocol.stimOnset)
         return
     end
     stimCount = numel(protocol.stimOnset);
-
     nFS = height(fullSearchTable);
+
+    % ---- Case 0: Prefer acqNum matching when available (prevents curFSRow drift) ----
+    if ~reconstructedSearch && ...
+            ismember('acqNum', fullSearchTable.Properties.VariableNames) && ...
+            any(~isnan(fullSearchTable.acqNum))
+    
+        % Parse acquisition number from sweepName, e.g. "AD0_0123..." -> 123
+        thisAcq = nan;
+        if ~isempty(sweepName)
+            tok = regexp(char(sweepName), 'AD0[_-]?(\d+)', 'tokens', 'once');
+            if ~isempty(tok)
+                thisAcq = str2double(tok{1});
+            end
+        end
+    
+        if ~isnan(thisAcq)
+            idx = find(fullSearchTable.acqNum == thisAcq);
+            if ~isempty(idx)
+    
+                sweepSpots = fullSearchTable(idx, :);
+    
+                % If pulseIndex exists, order spots by pulseIndex (stable sweep ordering)
+                if ismember('pulseIndex', sweepSpots.Properties.VariableNames)
+                    [~, ord] = sort(sweepSpots.pulseIndex);
+                    sweepSpots = sweepSpots(ord, :);
+                end
+    
+                % Respect expected pulses if available; otherwise default to stimCount
+                expectedPulses = stimCount;
+                if isfield(protocol,'numPulses') && ~isempty(protocol.numPulses) && ~isnan(protocol.numPulses)
+                    expectedPulses = double(protocol.numPulses);
+                end
+    
+                nPulsesThisSweep = min([height(sweepSpots), stimCount, expectedPulses]);
+                if nPulsesThisSweep <= 0
+                    sweepSpots = table();
+                    return
+                end
+                sweepSpots = sweepSpots(1:nPulsesThisSweep, :);
+    
+                % Detect hotspot stage (same logic as your Case 1)
+                if ismember('sweepStage', sweepSpots.Properties.VariableNames)
+                    st = unique(string(sweepSpots.sweepStage));
+                    st = st(st ~= "" & lower(st) ~= "search");
+                    if ~isempty(st)
+                        isHotspotSweep = true;
+                        protocol.isHotspotSweep = true;
+                        protocol.hotspotStage = st(1);
+    
+                        st1 = lower(st(1));
+                        if contains(st1,'final')
+                            protocol.hotspotDepthKind = "finalDepth";
+                        elseif contains(st1,'max')
+                            protocol.hotspotDepthKind = "maxSearchDepth";
+                        else
+                            protocol.hotspotDepthKind = "";
+                        end
+                    end
+                end
+    
+                % Trust table depth if consistent
+                if ismember('depth', sweepSpots.Properties.VariableNames)
+                    dUnique = unique(sweepSpots.depth);
+                    dUnique = dUnique(~isnan(dUnique));
+                    if numel(dUnique) == 1 && protocol.depth ~= dUnique
+                        protocol.depth = dUnique;
+                        warning(['Depth mismatch: using fullSearchTable depth = ', num2str(dUnique)]);
+                    elseif numel(dUnique) > 1
+                        warning('acqNum-matched rows span multiple depths (unexpected).');
+                    end
+                end
+    
+                if ~ismember('response', sweepSpots.Properties.VariableNames)
+                    sweepSpots.response = false(height(sweepSpots),1);
+                end
+    
+                % IMPORTANT: return early so we do NOT slice by curFSRow
+                return
+            end
+        end
+    end
+
 
     % ---- Case 1: Use fullSearchTable rows (normal) ----
     if ~reconstructedSearch && curFSRow < nFS
@@ -1700,6 +1799,14 @@ function [sweepSpots, protocol, nPulsesThisSweep, isHotspotSweep, curFSRow] = ..
         end
 
         sweepSpots = fullSearchTable(curFSRow+1 : curFSRow+nPulsesThisSweep, :);
+        % ---- Drift check: sliced rows should come from ONE acqNum (or all NaN for old data) ----
+        if ismember('acqNum', sweepSpots.Properties.VariableNames)
+            a = unique(sweepSpots.acqNum); a = a(~isnan(a));
+            if numel(a) > 1
+                warning('Likely curFSRow drift: sliced chunk contains multiple acqNum values: %s', mat2str(a'));
+            end
+        end
+
         curFSRow = curFSRow + nPulsesThisSweep; % always advance when consuming the table
 
         % Detect whether this sweep is tagged as a hotspot inside fullSearchTable
@@ -1724,7 +1831,13 @@ function [sweepSpots, protocol, nPulsesThisSweep, isHotspotSweep, curFSRow] = ..
 
         if ismember('depth', sweepSpots.Properties.VariableNames)
             if any(sweepSpots.depth ~= protocol.depth)
-                error('Selected spots have wrong depth vs protocol.depth.');
+                dUnique = unique(sweepSpots.depth);
+                if numel(dUnique)==1 && protocol.depth ~= dUnique
+                    protocol.depth = dUnique;   % trust geometry table
+                    warning(['Selected spots have wrong depth vs protocol.depth. Set to depth as ', num2str(dUnique)]);
+                elseif numel(dUnique)>1
+                    warning("fullSearchTable slice spans multiple depths -> likely curFSRow drift");
+                end
             end
         end
 
@@ -1900,8 +2013,7 @@ function [reconOK, reconNoise] = reconstructFromResponseMap(epochPath, cellResul
                 processed = traces(rep,:);
                 control   = localMakeSyntheticControl(processed, plotWindowTime, ctrlLen);
     
-                baseMean = mean(control, 'omitnan');
-                effectiveVhold = getSweepVhold(epochPath, targetSweepName, baseMean, options, infoPatching);
+                [effectiveVhold,~] = getSweepVhold(epochPath, targetSweepName, nan, options.vholdChannel, infoTable=infoPatching);
 
                 baseStd = std(control,0, 'omitnan');
                 thr = options.thresholdFactor*baseStd;

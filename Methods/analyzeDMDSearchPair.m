@@ -7,7 +7,8 @@ arguments
     pairIdx double
 
     options.redStim logical = true
-    options.depthLineWidth double = [3,2.5,2,1.5,1.1,1,0.5];
+    options.depthLineWidth = 'scale' %[3,2.5,2,1.5,1.1,1,0.5];
+    options.depthLineWidthAlpha double = 0.3
 
     options.color
 
@@ -38,7 +39,7 @@ end
 
 % Define path
 strsplit = split(curCell.Session,'Results');
-expPath = strsplit{1};
+expPath = osPathSwitch(strsplit{1});
 
 % Define results path
 if strcmp(options.saveDataPath,'default')
@@ -199,63 +200,75 @@ for d = 1:length(commonDepth)
     % ========================= CHANGE (Full grid for analysis) =========================
     % Expand per-depth maps to a full 2^curDepth x 2^curDepth grid (length 4^curDepth) for tile-by-tile plotting.
     % Unsampled tiles remain empty ([]), so full-grid indexing/plotting never errors.
-    [depthCurrentMap1Full, depthBaselineMap1Full, depthHotspot1Full, ~] = ...
+    [depthCurrentMap1Full, ~, depthHotspot1Full, ~] = ...
         expandDepthToFullGrid(depthCurrentMap1, depthBaselineMap1, depthHotspot1, ...
                               search1_spotLocation{depthIdx1}, depthResponseMap, curDepth);
-    [depthCurrentMap2Full, depthBaselineMap2Full, depthHotspot2Full, ~] = ...
+    [depthCurrentMap2Full, ~, depthHotspot2Full, ~] = ...
         expandDepthToFullGrid(depthCurrentMap2, depthBaselineMap2, depthHotspot2, ...
                               search2_spotLocation{depthIdx2}, depthResponseMap, curDepth);
+
+    nCol = 2^curDepth;
+    nRow = 2^curDepth;
     % ======================= END CHANGE (Full grid for analysis) =======================
 
 
     % Determine current plot line width
-    if curDepth <= length(options.depthLineWidth); LineWidth = options.depthLineWidth(curDepth);
-    else; LineWidth = options.depthLineWidth(end); end
+    if ~ischar(options.depthLineWidth)
+        if curDepth <= length(options.depthLineWidth); LineWidth = options.depthLineWidth(curDepth);
+        else; LineWidth = options.depthLineWidth(end); end
+    elseif contains(options.depthLineWidth,'scale')
+        nTiles = nRow * nCol;   % total subplots on this depth
+        nRef  = 4;              % "first depth" reference
+        LWref = 3;              % linewidth when nTiles == 4
+        alpha = options.depthLineWidthAlpha;            % shrink speed (tune this)
+        
+        LineWidth = LWref * (nRef / nTiles)^alpha;
+        LineWidth = max(0.2, min(3, LineWidth));
+    end
 
     % Get optoData
-    optoData1 = cell2mat(depthCurrentMap1); 
+    optoData1 = cell2mat(depthCurrentMap1);
     ctrlData1 = cell2mat(depthBaselineMap1);
-    optoData2 = cell2mat(depthCurrentMap2); 
+    optoData2 = cell2mat(depthCurrentMap2);
     ctrlData2 = cell2mat(depthBaselineMap2);
-
-    % ========================= FIX: Handle Reconstructed Data Limits =========================
-    % Determine available data length (check both datasets if present)
-    nAvailable = size(optoData1, 2);
-    if exist('optoData2', 'var')
-        nAvailable = min(nAvailable, size(optoData2, 2));
-    end
-
-    % Check if the standard analysis window exceeds what we actually have
-    if max(analysisWindow) > nAvailable
-        
-        % Heuristic: Check for standard reconstruction size (601 samples @ 10kHz = 60.1ms)
-        if nAvailable == 601 && options.outputFs == 10000
-             disp('[analyzeDMDSearchPair] Reconstructed data detected (601 samples). Re-aligning...');
-             newEventSample = 101; % 10ms baseline * 10 samples/ms + 1
-        else
-             % Fallback: Assume a standard 10ms pre-stim baseline if unknown
-             warning('[analyzeDMDSearchPair] Data length mismatch. Assuming 10ms baseline for alignment.');
-             newEventSample = round(10 * (options.outputFs/1000)) + 1;
-        end
-        
-        % 1. Recalculate analysis window (for statistics like AUC)
-        desiredLen = round(options.analysisWindowLength * (options.outputFs/1000));
-        startIdx = newEventSample;
-        endIdx   = min(nAvailable, newEventSample + desiredLen);
-        analysisWindow = startIdx:endIdx;
-
-        % 2. Recalculate PLOTTING indices (Critical to prevent crashes in later plotting loops)
-        reqFirst = newEventSample + round(options.timeRange(1)*options.outputFs/1000);
-        reqLast  = newEventSample + round(options.timeRange(2)*options.outputFs/1000);
-        
+    
+    % ========================= Shared realignment for both datasets =========================
+    % Use a common available length so analysisWindow/plot window are identical for (1) and (2)
+    nAvail1 = min(size(optoData1,2), size(ctrlData1,2));
+    nAvail2 = min(size(optoData2,2), size(ctrlData2,2));
+    nAvail  = min(nAvail1, nAvail2);
+    
+    % (Recommended) Trim to common length so downstream indexing is guaranteed consistent
+    optoData1 = optoData1(:, 1:nAvail);
+    ctrlData1 = ctrlData1(:, 1:nAvail);
+    optoData2 = optoData2(:, 1:nAvail);
+    ctrlData2 = ctrlData2(:, 1:nAvail);
+    
+    needRealign = (plotFirstSample < 1) || (plotLastSample > nAvail) || (max(analysisWindow) > nAvail);
+    
+    if needRealign
+        samplesPerMs = options.outputFs/1000;
+        baselineSamplesWanted = round(abs(options.timeRange(1)) * samplesPerMs);
+        baselineSamples = min(max(baselineSamplesWanted, 0), nAvail - 1);
+        newEventSample = baselineSamples + 1;
+    
+        % 1) Shared analysis window (inclusive)
+        analysisLen = round(options.analysisWindowLength * samplesPerMs) + 1;
+        analysisWindow = newEventSample : min(nAvail, newEventSample + analysisLen - 1);
+    
+        % 2) Shared plotting indices
+        reqFirst = newEventSample + round(options.timeRange(1) * samplesPerMs);
+        reqLast  = newEventSample + round(options.timeRange(2) * samplesPerMs);
+    
         plotFirstSample = max(1, reqFirst);
-        plotLastSample  = min(nAvailable, reqLast);
-        
-        % 3. Update the Time Vector for plotting
-        plotWindowTime = ((plotFirstSample:plotLastSample) - newEventSample) / (options.outputFs/1000);
-        plotWindowLength = length(plotWindowTime);
+        plotLastSample  = min(nAvail, reqLast);
+    
+        % 3) Shared time vector (ms)
+        plotWindowTime   = ((plotFirstSample:plotLastSample) - newEventSample) / samplesPerMs;
+        plotWindowLength = numel(plotWindowTime);
     end
-    % ===========================================================================================
+    % ============================================================================================
+
 
     % Get prestim traces
     optoData1 = optoData1(:,analysisWindow);
@@ -268,8 +281,10 @@ for d = 1:length(commonDepth)
     ctrlTime2 = linspace(-options.controlWindowLength,0,size(ctrlData2,2));
 
     % Calculate max/min current for plotting
-    optoMax1 = max(optoData1,[],'all'); optoMax2 = max(optoData2,[],'all');
-    optoMin1 = min(optoData1,[],'all'); optoMin2 = min(optoData2,[],'all');
+    % optoMax1 = max(optoData1,[],'all'); optoMax2 = max(optoData2,[],'all');
+    % optoMin1 = min(optoData1,[],'all'); optoMin2 = min(optoData2,[],'all');
+    [optoMin1, optoMax1] = getYlimit(optoData1, Ethres=Ethres, Ithres=Ithres, k_sem=3);
+    [optoMin2, optoMax2] = getYlimit(optoData2, Ethres=Ethres, Ithres=Ithres, k_sem=3);
     optoMax = max([optoMax1 optoMax2],[],'all'); 
     optoMin = min([optoMin1 optoMin2],[],'all');
 
@@ -416,9 +431,10 @@ for d = 1:length(commonDepth)
         plotEvent('',stimDuration1,shadeOnly=true,color=color1,FaceAlpha=0.3,percentY=10,zeroValue=Ithres);
         plotEvent('',stimDuration2,shadeOnly=true,color=color2,FaceAlpha=0.3,percentY=10,zeroValue=Ethres);
         % Plot thresholds
-        if any([search1_vhold,search2_vhold] > -10); yline(Ithres,'--',color=blue,Alpha=0.5);
-        elseif any([search1_vhold,search2_vhold] < -50); yline(Ethres,'--',color=red,Alpha=0.5);
-        else; yline(Ithres,'--',color=blue,Alpha=0.5); yline(Ethres,'--',color=red,Alpha=0.5);
+        threshold_lineWidth = max(0.01,LineWidth-1);
+        if any([search1_vhold,search2_vhold] > -10); yline(Ithres,'--',color=blue,Alpha=0.5,LineWidth=threshold_lineWidth);
+        elseif any([search1_vhold,search2_vhold] < -50); yline(Ethres,'--',color=red,Alpha=0.5,LineWidth=threshold_lineWidth);
+        else; yline(Ithres,'--',color=blue,Alpha=0.5,LineWidth=threshold_lineWidth); yline(Ethres,'--',color=red,Alpha=0.5,LineWidth=threshold_lineWidth);
         end
         % Plot axis at the bottom-left tile
         if t ~= 4^curDepth-2^curDepth+1; axis off
@@ -760,3 +776,35 @@ function starts = localSplitStarts(totalLen, depth)
 end
 % ======================= END CHANGE (Full grid for analysis) =======================
 
+
+%% Define optoMax or optoMin
+
+function [optoMin, optoMax] = getYlimit(data, options)
+
+    arguments
+        data double
+        options.Ethres = nan
+        options.Ithres = nan
+        options.k_sem double = 3 % room around mean (3*SEM). Try 2–5 depending on how tight you want it.
+        options.pad double = 0.1
+    end
+
+    % --- Robust y-limits based on mean trace (not outliers) ---
+    mu  = mean(data, 1, 'omitnan');
+    sig = std(data, 0, 1, 'omitnan');
+    sem = sig / sqrt(size(data,1));
+
+    yLo = min(mu - options.k_sem*sem);
+    yHi = max(mu + options.k_sem*sem);
+
+    % Make sure thresholds are visible 
+    yLo = min([yLo, options.Ethres, options.Ithres], [], 'omitnan');
+    yHi = max([yHi, options.Ethres, options.Ithres], [], 'omitnan');
+    
+    % Add a little extra padding
+    pad = options.pad * (yHi - yLo);
+    if pad == 0, pad = 1; end
+    optoMin = yLo - pad;
+    optoMax = yHi + pad;
+
+end

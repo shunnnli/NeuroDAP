@@ -1,7 +1,10 @@
 function holdingVoltage = extractHoldingVoltage(holdingVoltageDataFile)
 
-    holdingVoltageData = holdingVoltageDataFile.data(1:5000)*100;
-    holdingVoltage = mean(holdingVoltageData);
+    holdingVoltageData = holdingVoltageDataFile.data * 100;
+    nbins = 200;
+    [counts, edges] = histcounts(holdingVoltageData, nbins);
+    [~, i] = max(counts);
+    holdingVoltage = mean(edges(i:i+1));   % bin center of the most-populated bin
     
 %     if actualMeanVoltage >= -75 && actualMeanVoltage < -65; holdingVoltage = -70;
 %     elseif actualMeanVoltage >= -40 && actualMeanVoltage < -30; holdingVoltage = -35; 

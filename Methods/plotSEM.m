@@ -1,6 +1,5 @@
 function varargout = plotSEM(x,y,color,options)
 
-% parse inputs
 arguments
     x double
     y double
