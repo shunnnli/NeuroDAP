@@ -37,7 +37,12 @@ else
     sessionName = options.outputName;
     dirsplit = strsplit(options.outputName,{'-','_'}); 
 end
-date = dirsplit{1}; animal = dirsplit{2}; sessionTask = dirsplit{3};
+date = dirsplit{1}; animal = dirsplit{2}; 
+if length(dirsplit) > 2
+    sessionTask = dirsplit{3};
+else
+    sessionTask = 'unknown';
+end
 clear dirsplit
 
 disp(strcat('**********',options.outputName,'**********'));

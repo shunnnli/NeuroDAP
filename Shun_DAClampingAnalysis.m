@@ -17,7 +17,7 @@ errorSessionIdx = [];
                                 recordLJ='[0 0 0]',...
                                 plotPhotometry=false,...
                                 plotBehavior=true,...
-                                withPhotometryNI=false);
+                                withPhotometryNI=true);
 if canceled; return; end
 for s = 1:length(sessionList)
     analysisParams(s).rollingWindowTime = str2double(analysisParams(s).rollingWindowTime);
@@ -86,9 +86,10 @@ for s = 1:length(sessionList)
 end
 close all
 
-% Settings
+%% Settings
 originalFs = 10000;
 Fs_5ms = 1 / 0.005;
+detrendWindow = 180; % in sec
 
 % Plot options
 baselineColor = [.7 .7 .7];
@@ -107,7 +108,10 @@ dirsplit = strsplit(sessionpath,filesep);
 sessionName = dirsplit{end}; clear dirsplit
 load(strcat(sessionpath,filesep,'data_',sessionName,'.mat'));
 
-baseline_raw = photometry_raw;
+baseline_raw = voltage2arduino(photometry_raw);
+baseline_lp = lowpass(baseline_raw',500,originalFs);
+% baseline_zscore = rollingZ(baseline_lp,detrendWindow*originalFs);
+
 baseline_blueLaser = blueLaser;
 baseline_airpuffIdx = find(airpuff);
 baseline_rewardIdx = find(rightSolenoid);
@@ -124,7 +128,7 @@ baseline_waterLickIdx = rmmissing(baseline_waterLickIdx);
 
 % Downsample photometry signal
 if ~exist('baseline_5ms','var')
-    downsampled = downsampleSignal(baseline_raw,targetFs=Fs_5ms,originalFs=originalFs,rollingZ=false);
+    downsampled = downsampleSignal(baseline_lp,targetFs=Fs_5ms,originalFs=originalFs,rollingZ=false);
     baseline_5ms = downsampled.dsData;
     save(strcat(sessionpath,filesep,'data_',sessionName,'.mat'),'baseline_5ms','-append');
     disp('Finished: downsampled and saved baseline raw photometry');
@@ -149,7 +153,10 @@ dirsplit = strsplit(sessionpath,filesep);
 sessionName = dirsplit{end}; clear dirsplit
 load(strcat(sessionpath,filesep,'data_',sessionName,'.mat'));
 
-pid_raw = photometry_raw;
+pid_raw = voltage2arduino(photometry_raw);
+pid_lp = lowpass(pid_raw',500,originalFs);
+% pid_zscore = rollingZ(pid_lp,detrendWindow*originalFs);
+
 pid_blueLaser = blueLaser;
 pid_airpuffIdx = find(airpuff);
 pid_rewardIdx = find(rightSolenoid);
@@ -166,7 +173,7 @@ pid_waterLickIdx = rmmissing(pid_waterLickIdx);
 
 % Downsample photometry signal
 if ~exist('pid_5ms','var')
-    downsampled = downsampleSignal(pid_raw,targetFs=Fs_5ms,originalFs=originalFs,rollingZ=false);
+    downsampled = downsampleSignal(pid_lp,targetFs=Fs_5ms,originalFs=originalFs,rollingZ=false);
     pid_5ms = downsampled.dsData;
     save(strcat(sessionpath,filesep,'data_',sessionName,'.mat'),'pid_5ms','-append');
     disp('Finished: downsampled and saved PID raw photometry');
@@ -191,21 +198,25 @@ initializeFig(1,1); tiledlayout(2,4);
 nexttile(1,[1 2]);
 % minLength = min(length(pid_photometry),length(baseline_photometry));
 % t = (1:minLength)/Fs; plotWindow = 1:minLength;
-timeToPlot = [70,90]; % in sec
+timeToPlot = [0,0]; % in sec
 % Plot photometry trace
-plotWindow = timeToPlot(1)*Fs : timeToPlot(2)*Fs;
+if timeToPlot(2) <= 0
+    plotWindow = 1 : min([length(baseline_photometry),length(pid_photometry)]);
+else
+    plotWindow = timeToPlot(1)*Fs : timeToPlot(2)*Fs;
+end
 t = (timeToPlot(1)*Fs : timeToPlot(2)*Fs) / Fs;
-yyaxis left; ylabel('Intensity'); 
+% yyaxis left;
 plot(t,baseline_photometry(plotWindow),Color=baselineColor,LineWidth=3,LineStyle='-'); hold on;
 plot(t,pid_photometry(plotWindow),Color=pidColor,LineWidth=3,LineStyle='-'); hold on;
-% Plot blue laser
-plotWindow = timeToPlot(1)*originalFs : timeToPlot(2)*originalFs;
-t = (timeToPlot(1)*originalFs : timeToPlot(2)*originalFs) / originalFs;
-yyaxis right; ylabel('Time (ms)');
-plot(t,pid_blueLaserON(plotWindow)*1000,Color=blueColor,LineWidth=3);
-% Plot settings
+% yyaxis right;
+% % Plot blue laser
+% plotWindow = timeToPlot(1)*originalFs : timeToPlot(2)*originalFs;
+% t = (timeToPlot(1)*originalFs : timeToPlot(2)*originalFs) / originalFs;
+% ylabel('Intensity');
+% plot(t,pid_blueLaserON(plotWindow)*1000,Color=blueColor,LineWidth=3);
 xlabel('Time (s)'); box off;
-legend('Baseline','PID','Blue laser');
+legend('Baseline','PID');
 
 
 nexttile(4);
@@ -219,27 +230,46 @@ yyaxis left; histogram(baseline_photometry,200,EdgeColor=baselineColor,FaceColor
 yyaxis right; histogram(pid_photometry,200,EdgeColor=pidColor,FaceColor=pidColor); hold on
 xlabel('Intensity'); legend({'Baseline','PID'}); box off;
 title('dLight');
-subtitle({strcat("Basline std: ",num2str(std(baseline_raw)),", PID std: ",num2str(std(pid_raw)))});
+subtitle({strcat("Basline std: ",num2str(std(baseline_lp)),", PID std: ",num2str(std(pid_lp)))});
 
 
-nexttile(5,[1 2]);
-yyaxis left
-[baseline_rewardTraces,~] = plotTraces(baseline_waterLickIdx,[-1,5],baseline_raw,...
+nexttile(5);
+% yyaxis left
+[baseline_rewardTraces,~] = plotTraces(baseline_waterLickIdx,[-1,5],baseline_lp,...
                          signalFs=originalFs,sameSystem=true,...
-                         plotIndividual=false,color=baselineColor,...
-                         xlabel='Time (s)',ylabel='Intensity');
-[pid_rewardTraces,timestamp] = plotTraces(pid_waterLickIdx,[-1,5],pid_raw,...
+                         plotIndividual=false,color=baselineColor);
+[pid_rewardTraces,~] = plotTraces(pid_waterLickIdx,[-1,5],pid_lp,...
                          signalFs=originalFs,sameSystem=true,...
-                         plotIndividual=false,color=pidColor,...
-                         xlabel='Time (s)',ylabel='Intensity');
-yyaxis right
-[~,~] = plotTraces(pid_waterLickIdx,[-1,5],pid_blueLaserON*1000,...
-                     signalFs=originalFs,sameSystem=true,...
-                     plotIndividual=false,color=blueColor,...
-                     xlabel='Time (s)',ylabel='Stim duration (ms)');
+                         plotIndividual=false,color=pidColor);
+% yyaxis right
+% [~,~] = plotTraces(pid_waterLickIdx,[-1,5],pid_blueLaserON*1000,...
+%                      signalFs=originalFs,sameSystem=true,...
+%                      plotIndividual=false,color=blueColor,...
+%                      xlabel='Time (s)',ylabel='Stim duration (ms)');
 legend({['Baseline (n=',num2str(size(baseline_rewardTraces,1)),')'],...
-        ['PID (n=',num2str(size(pid_rewardTraces,1)),')'],...
-        ['Blue laser (n=',num2str(size(pid_rewardTraces,1)),')']});
+        ['PID (n=',num2str(size(pid_rewardTraces,1)),')']});
+xlabel('Time (s)'); ylabel('Intensity');
+plotEvent('Water',0);
+
+
+nexttile(6);
+% yyaxis left
+[baseline_rewardTraces_delta,~] = plotTraces(baseline_waterLickIdx,[-1,5],baseline_lp,...
+                         baseline=[-1,0],...
+                         signalFs=originalFs,sameSystem=true,...
+                         plotIndividual=false,color=baselineColor);
+[pid_rewardTraces_delta,~] = plotTraces(pid_waterLickIdx,[-1,5],pid_lp,...
+                         baseline=[-1,0],...
+                         signalFs=originalFs,sameSystem=true,...
+                         plotIndividual=false,color=pidColor);
+% yyaxis right
+% [~,~] = plotTraces(pid_waterLickIdx,[-1,5],pid_blueLaserON*1000,...
+%                      signalFs=originalFs,sameSystem=true,...
+%                      plotIndividual=false,color=blueColor,...
+%                      xlabel='Time (s)',ylabel='Stim duration (ms)');
+legend({['Baseline (n=',num2str(size(baseline_rewardTraces_delta,1)),')'],...
+        ['PID (n=',num2str(size(pid_rewardTraces_delta,1)),')']});
+xlabel('Time (s)'); ylabel('\Delta Intensity');
 plotEvent('Water',0);
 
 

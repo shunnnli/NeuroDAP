@@ -467,7 +467,8 @@ if options.reloadCells
     
                 % Save spots.mat for a specific depth
                 % If not, spots are too big and matlab can't load later
-                if ~isHotspotSweep && (k == length(sweepAcq) || prevDepth ~= protocol.depth)
+                searchRowsCount = sum(strcmp(fullSearchTable.sweepStage, 'search'));
+                if ~isHotspotSweep && (k == length(sweepAcq) || prevDepth ~= protocol.depth || curFSRow == searchRowsCount)
                     if options.save
                         % Generate spotsAtDepth
                         if k == length(sweepAcq)
@@ -1614,46 +1615,46 @@ function saveSweepHotspots(hotspotSpots, cellResultsPath, cellNum, epochNum)
     % Tag by holding potential
     % Prefer stage tag from protocol.hotspotStage if present, otherwise fall back to Vhold
     tag = strings(height(hotspotSpots),1);
-	    kind = strings(height(hotspotSpots),1);
-    
-	    for i = 1:height(hotspotSpots)
-	        p = hotspotSpots{i,'Protocol'}{1};
-	        if isstruct(p)
-	            % Stage/tag
-	            if isfield(p,'hotspotStage') && ~isempty(p.hotspotStage)
-	                st = string(p.hotspotStage);
-	                if contains(lower(st),'exci') || contains(lower(st),'neg')
-	                    tag(i) = "exci";
-	                elseif contains(lower(st),'inhi') || contains(lower(st),'pos') || contains(lower(st),'10')
-	                    tag(i) = "inhi";
-	                else
-	                    tag(i) = "other";
-	                end
-	
-	                % Best-effort infer kind from stage name
-	                if contains(lower(st),'final')
-	                    kind(i) = "finalDepth";
-	                elseif contains(lower(st),'max')
-	                    kind(i) = "maxSearchDepth";
-	                end
-	            end
-	
-	            % Explicit kind from protocol if present (preferred)
-	            if isfield(p,'hotspotDepthKind') && ~isempty(p.hotspotDepthKind)
-	                kind(i) = string(p.hotspotDepthKind);
-	            end
-	        end
-	    end
+    kind = strings(height(hotspotSpots),1);
+
+    for i = 1:height(hotspotSpots)
+        p = hotspotSpots{i,'Protocol'}{1};
+        if isstruct(p)
+            % Stage/tag
+            if isfield(p,'hotspotStage') && ~isempty(p.hotspotStage)
+                st = string(p.hotspotStage);
+                if contains(lower(st),'exci') || contains(lower(st),'neg')
+                    tag(i) = "exci";
+                elseif contains(lower(st),'inhi') || contains(lower(st),'pos') || contains(lower(st),'10')
+                    tag(i) = "inhi";
+                else
+                    tag(i) = "other";
+                end
+
+                % Best-effort infer kind from stage name
+                if contains(lower(st),'final')
+                    kind(i) = "finalDepth";
+                elseif contains(lower(st),'max')
+                    kind(i) = "maxSearchDepth";
+                end
+            end
+
+            % Explicit kind from protocol if present (preferred)
+            if isfield(p,'hotspotDepthKind') && ~isempty(p.hotspotDepthKind)
+                kind(i) = string(p.hotspotDepthKind);
+            end
+        end
+    end
     
     % Fill any still-empty tags using Vhold heuristic
     v = hotspotSpots.Vhold;
     tag(tag=="") = "other";
     tag(tag=="other" & v < -50) = "exci";
     tag(tag=="other" & v > 0)   = "inhi";
-	    hotspotSpots.Tag = tag;
-	    hotspotSpots.Kind = kind;
-    
-	    depths = unique(hotspotSpots.Depth);
+    hotspotSpots.Tag = tag;
+    hotspotSpots.Kind = kind;
+
+    depths = unique(hotspotSpots.Depth);
     for di = 1:numel(depths)
         d = depths(di);
         subD = hotspotSpots(hotspotSpots.Depth == d, :);
@@ -1666,17 +1667,18 @@ function saveSweepHotspots(hotspotSpots, cellResultsPath, cellNum, epochNum)
                 t = tags(ti);
                 sub = subK(subK.Tag == t, :);
 
-        % Save as spotsAtDepth (expected by downstream loader)
-        spotsAtDepth = sub;
-        spotsAtDepth = rmmissing(spotsAtDepth,DataVariables='Session');
-
-            if kd == "" || kd == "unknown"
-                filename = sprintf('spots_cell%d_epoch%d_hotspot_%s_depth%d', cellNum, epochNum, char(t), d);
-            else
-                filename = sprintf('spots_cell%d_epoch%d_hotspot_%s_%s_depth%d', cellNum, epochNum, char(kd), char(t), d);
-            end
-        save(fullfile(cellResultsPath, filename), 'spotsAtDepth', '-v7.3');
-        disp(strcat("New spots.mat created & saved (hotspot): ", filename));
+                % Save as spotsAtDepth (expected by downstream loader)
+                spotsAtDepth = sub;
+                spotsAtDepth = rmmissing(spotsAtDepth,DataVariables='Session');
+        
+                if kd == "" || kd == "unknown"
+                    filename = sprintf('spots_cell%d_epoch%d_hotspot_%s_depth%d', cellNum, epochNum, char(t), d);
+                else
+                    filename = sprintf('spots_cell%d_epoch%d_hotspot_%s_%s_depth%d', cellNum, epochNum, char(kd), char(t), d);
+                end
+    
+                save(fullfile(cellResultsPath, filename), 'spotsAtDepth', '-v7.3');
+                disp(strcat("New spots.mat created & saved (hotspot): ", filename));
             end
         end
     end

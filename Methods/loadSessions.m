@@ -13,6 +13,9 @@ arguments
    options.labjackSetup string = 'Shun'
    options.followOriginal logical = true
 
+   % Camera setup options
+   options.cameraSetup string = 'Shun'
+
    % Neuropixel recording options
    options.noSyncPulse logical = false
    
@@ -74,7 +77,12 @@ if ispc; session.projectPath = strcat('\\',fullfile(dirsplit{2:end-1}));
 elseif isunix; session.projectPath = strcat('/',fullfile(dirsplit{2:end-1}));
 end
 dirsplit = strsplit(sessionName,{'-','_'});
-date = dirsplit{1}; animal = dirsplit{2}; sessionTask = dirsplit{3};
+date = dirsplit{1}; animal = dirsplit{2}; 
+if length(dirsplit) > 2
+    sessionTask = dirsplit{3};
+else
+    sessionTask = 'unknown';
+end
 clear dirsplit
 
 disp(strcat('**********',sessionName,'**********'));
@@ -666,6 +674,7 @@ if withCamera && (options.reloadAll || options.reloadCam)
     % Read camera table
     opts = detectImportOptions(csvpath);
 
+    % if strcmp(options.cameraSetup, 'Shun')
     % Determine whether there's eye tracking built in
     if length(opts.VariableNames) == 8
         session.withEyeTracking = true;
@@ -878,6 +887,45 @@ if withCamera && (options.reloadAll || options.reloadCam)
                 disp(['Found ', num2str(length(skipped_frame)), ' skipped frames after filling!']);
             end
         end
+
+    elseif length(opts.VariableNames) == 3 % sally's setup
+        session.withEyeTracking = false;
+        opts.VariableNames = {'Sync','FrameCounter','FrameTime'};
+    
+        camera = readtable(csvpath,opts);
+        camera{:,end+1} = zeros(size(camera,1),1);
+        camera.Properties.VariableNames{end} = 'SkippedFrame';
+        disp("Finished: read camera csv file");
+    
+        % Calculate frame rate 
+        camFs = 1/mean(diff(camera{:,'FrameTime'}));
+        params.sync.camFs = camFs;
+    
+        % Check skipped frames
+        skipped_frame = find(diff(camera{:,2}) > 1);
+        if ~isempty(skipped_frame) && length(skipped_frame) <= 1000
+            disp(['Ongoing: filling ', num2str(length(skipped_frame)), ' skipped frames']);
+        
+            % Fill in skip frames with the previous frame
+            fill_in = [];
+            for i = 1:length(skipped_frame)
+                prev_frame = camera{skipped_frame(i),2};
+                post_frame = camera{skipped_frame(i)+1,2};
+                frame_diff = post_frame - prev_frame;
+        
+                fill = repelem(camera(skipped_frame(i),:),frame_diff-1,1);
+                fill{:,'SkippedFrame'} = 1;
+                fill{:,'FrameCounter'} = linspace(prev_frame+1,post_frame-1,frame_diff-1)';
+                fill_in = [fill_in;fill];
+            end
+        
+            % Re-check again
+            camera = sortrows([camera;fill_in],2);
+            skipped_frame = find(diff(camera{:,2}) > 1);
+            if ~isempty(skipped_frame)
+                disp(['Found ', num2str(length(skipped_frame)), ' skipped frames after filling!']);
+            end
+        end
     end
 end
 
@@ -912,7 +960,7 @@ if ~options.noSyncPulse
     end
     
     if withCamera
-        syncCam = (camera{:,1} > max(camera{:,1}/2))';
+        syncCam = (camera{:,1} > (min(camera{:,1}) + max(camera{:,1}))/2)';
         temp = [false,diff(syncCam)];
         syncCam_diff = (temp==1);
     end
@@ -1031,6 +1079,19 @@ if ~options.noSyncPulse
     elseif ~(withRecording || withNI || withCamera) % Only Labjack
         firstPulse_inLJ = find(syncLJ_diff>0,1);
         if isempty(firstPulse_inLJ); firstPulse_inLJ = 1; end
+    elseif ~(withRecording || withNI) % Only Labjack and camera
+        firstPulse_inLJ = find(syncLJ_diff>0,1);
+        if isempty(firstPulse_inLJ); firstPulse_inLJ = 1; end
+        firstSamp = [Cam_inBaseline,LJ_inBaseline];
+        firstIdx = [Cam_inBaselineIdx,LJ_inBaselineIdx];
+        [firstPulse_inLJ,system] = max(firstSamp);
+
+        if system ~= 1 % if some system comes online after baseline
+            if withCamera
+                diffIdx = firstIdx(system) - Cam_inBaselineIdx; 
+                firstPulse_inCam = cam_idx(firstPulse_inCamIdx + diffIdx);
+            end
+        end
     else
         firstPulse_inNI = find(syncNI_diff>0,1);
         firstSamp = [firstPulse_inNI,Imec_inBaseline,Cam_inBaseline,LJ_inBaseline,LFP_inBaseline];

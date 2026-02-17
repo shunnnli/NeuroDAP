@@ -75,12 +75,6 @@ function fig = initializeFig(horizontalPortion, verticalPortion, options)
     % --- Create figure ---
     fig = figure('Color', 'w', 'Units', 'pixels', 'Position', pos, ...
                  'Visible', finalVisible);
-
-    % =========================================================================
-    % --- CRITICAL FIX: Decouple Export Layout from Screen Limitation ---
-    % =========================================================================
-    % Even if the OS clamps 'fig.Position', we force the 'PaperPosition' 
-    % (used for saving/printing) to match the DESIRED dimensions exactly.
     
     % We use 'points' as a proxy for pixels (1 pt approx 1 pixel at standard 
     % screen DPI) to maintain the font-to-canvas ratio.
@@ -93,7 +87,6 @@ function fig = initializeFig(horizontalPortion, verticalPortion, options)
     % 'manual' tells MATLAB: "Do not look at the screen size when saving.
     % Use the PaperPosition I just gave you."
     fig.PaperPositionMode = 'manual';
-    % =========================================================================
     
     % --- CLAMPING (Only if Visible) ---
     % We only clamp to screen edges if the user can actually see the window.

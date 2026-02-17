@@ -1,4 +1,4 @@
-% Shun_loadSessionData_forSally
+% Shun_loadSessionData_forSall
 % Shun Li, 4/2/2022
 
 %% Single session analysis
@@ -8,6 +8,7 @@ addpath(genpath(osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDA
 
 % Select sessions via uipickfiles
 sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project misc/Recordings'))';
+% sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/NEUROBIOLOGY SHARED/Sabatini Lab/Shun/withSally'))';
 errorSessionIdx = [];
 
 % Select anlaysis params
@@ -24,7 +25,7 @@ for s = 1:length(sessionList)
 end
 
 
-% Run each session
+%% Run each session
 for s = 1:length(sessionList)
     close all;
     clearvars -except s sessionList errorSessionIdx analysisParams sessionParams taskList redStimPatternList blueStimPatternList withPhotometryNI plotPhotometry reloadAll
