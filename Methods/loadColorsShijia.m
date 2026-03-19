@@ -1,13 +1,12 @@
 % shijia's own colors, 09/2024
 function varargout = loadColorsShijia()
-% RGB settings: 
+
+% RGB settings:
 black = [0 0 0]; %#000000
 red = [255, 50, 58]; % FF323A
 blue = [75, 92, 204]; % 4B5CCC
-% lightBlue = [7 136 225]; % 0788E1
 orange = [252, 137, 35]; % fc8923
 green = [58, 161, 85]; % 3aa155
-% lightPurple = [241 160 255]; % #F1A0FF
 darkPurple = [37 12 98]; % #250C62
 darkGray = [84 76 74]; % #544c4a
 lightGray = [153 157 160]; % #999DA0
@@ -20,19 +19,19 @@ purpleWhiteOrange = getColormap(darkPurple,orange,500,'midCol',[255 255 255]);
 purpleWhiteGreen = getColormap(darkPurple,green,500,'midCol',[255 255 255]);
 blackDarkgrayLightgray = getColormap(black,darkGray,500,'midCol',lightGray);
 
-% Color palettes
+% Color palettes (HEX)
 mainColors = string([ ...
-    '#4B5CCC'; % blue, rewarded
-    '#FF6198'; % pink, omission
-    '#C967ED'; % purple, light in ACC
-    '#82ED82'; % green, light in OFC
-    '#CC1A99'; % red-purple, light in PL
-    '#008B8B'; % teal, light in SC
-    '#8C564B'; % brown, light in IRt
-    ]); 
+    '#4B5CCC'; % (1) blue, rewarded
+    '#FF6198'; % (2) pink, omission
+    '#C967ED'; % (3) purple, light in ACC
+    '#82ED82'; % (4) green, light in OFC
+    '#CC1A99'; % (5) red-purple, light in PL
+    '#008B8B'; % (6) teal, light in SC and InsCtx
+    '#8C564B'; % (7) brown, light in IRt
+    ]);
 
 colors = string([ ...
-    '#FF6198'; % pink, omission 
+    '#FF6198'; % pink, omission
     '#fc8923'; % orange
     '#FFC25C'; % yellow
     '#3aa155'; % green
@@ -42,44 +41,38 @@ colors = string([ ...
     '#999DA0'; % gray
     '#d12156']); % red
 
-varargout{1} = mainColors;
-varargout{2} = colors;
-varargout{3} = blackDarkgrayLightgray;
-varargout{4} = purpleWhiteOrange;
-varargout{5} = blueWhiteRed;
-varargout{6} = blueDarkPurpleRed;
-varargout{7} = purpleWhiteGreen;
-varargout{8} = purpleWhiteRed;
+% ============================================================
+% NEW: block-task 4-color set (small/big x rew/omit)
+%   smallR  = lightBLUE
+%   smallO  = lightPINK
+%   bigR    = darkBLUE
+%   bigO    = darkPINK
+% ============================================================
+amount = 0.2;  % same as your snippet
 
+% mainColors(1) = blue, mainColors(2) = pink
+[lightBLUE, darkBLUE] = adjustHexBrightness(mainColors(1), amount); % returns RGB in [0,1]
+[lightPINK, darkPINK] = adjustHexBrightness(mainColors(2), amount);
+
+% convenient 4x3 RGB stack in YOUR requested order:
+blockColors = [
+    lightBLUE;   % smallR
+    lightPINK;   % smallO
+    darkBLUE;    % bigR
+    darkPINK     % bigO
+];
+
+
+% ---- outputs (keep existing numbering; add new ones at the end) ----
+varargout{1}  = mainColors;
+varargout{2}  = colors;
+varargout{3}  = blackDarkgrayLightgray;
+varargout{4}  = purpleWhiteOrange;
+varargout{5}  = blueWhiteRed;
+varargout{6}  = blueDarkPurpleRed;
+varargout{7}  = purpleWhiteGreen;
+varargout{8}  = purpleWhiteRed;
+
+% NEW outputs:
+varargout{9}  = blockColors;   % 4x3 RGB, order: [smallR; smallO; bigR; bigO]
 end
-
-% colors = string(['#4B5CCC';'#C355BC';'#FF6198';...
-%                  '#FF8C72';'#FFC25C';'#F9F871']);
-
-% blueRedYellow = string(['#4b5ccc'; '#6a5bcc'; '#8359ca'; '#9958c7';...
-%     '#ac56c3'; '#cf55b7'; '#ea57a8'; '#ff6098'; ...
-%     '#ff7d7b'; '#ffa564'; '#ffcf5c'; '#f9f871']);
-
-% this is how i get the purple and green colors in mainColors palette
-    % % Define colors
-    % lighterGray = [0.75, 0.75, 0.75]; % Lightened gray for no light condition
-    % darkGray = [0.5, 0.5, 0.5]; % Slightly darker gray for contrast
-    % 
-    % % Highly contrasting purple
-    % highContrastPurple = [0.7, 0.15, 0.9]; % Boost blue, reduce green for maximum distinction
-    % % highContrastGreen = [0.1, 0.8, 0.2]; % Boost green, reduce red and blue for maximum distinction
-    % highContrastGreen = [0.3, 0.9, 0.3]; % A vibrant and bright green (balance R, high G, and moderate B)
-    % 
-    % if strcmp(animalPrefix,'EF')
-    %     highContrastColor = highContrastGreen;
-    % else
-    %     highContrastColor = highContrastPurple;
-    % end
-    % 
-    % pastelWeight = 0.3; % Keep pastel effect for vibrancy
-    % 
-    % % Generate colors
-    % pastelColorL = pastelWeight * [1, 1, 1] + (1 - pastelWeight) * highContrastColor; % Vibrant lighter purple
-    % darkColorL = highContrastColor * 0.85; % Darker, richer purple for contrast
-    % pastelColorRO = pastelWeight * [1, 1, 1] + (1 - pastelWeight) * lighterGray; % Softer light gray
-    % darkColorRO = darkGray; % Slightly darker gray for differentiation

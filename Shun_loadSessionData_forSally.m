@@ -1,4 +1,4 @@
-% Shun_loadSessionData_forSall
+% Shun_loadSessionData_forSally
 % Shun Li, 4/2/2022
 
 %% Single session analysis

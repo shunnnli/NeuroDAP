@@ -121,7 +121,6 @@ leftTone = output(mod(1:totalLen,numChannels)==9);
 leftSolenoid = output(mod(1:totalLen,numChannels)==10);
 leftLick = output(mod(1:totalLen,numChannels)==11);
 
-
 %% Plot photometry summary plot (skipped by default)
 if options.plot
     initializeFig(0.67,0.67);

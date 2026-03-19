@@ -14,7 +14,7 @@ errorSessionIdx = [];
 % Select anlaysis params
 [analysisParams,canceled] = inputAnalysisParams(sessionList,...
                                 reloadAll=false,...
-                                recordLJ='[0 0 0]',...
+                                recordLJ='[1 0 0]',...
                                 plotPhotometry=false,...
                                 plotBehavior=true,...
                                 withPhotometryNI=true);
@@ -25,7 +25,7 @@ for s = 1:length(sessionList)
 end 
 % Select session params
 [sessionParams,canceled] = inputSessionParams(sessionList,...
-                                paradigm=2,...
+                                paradigm=1,...
                                 redStim=true,pavlovian=false,...
                                 reactionTime=2,...
                                 redPulseFreq=50,redPulseDuration=5,redStimDuration=500,...
@@ -107,14 +107,17 @@ sessionpath = sessionPath{1};
 dirsplit = strsplit(sessionpath,filesep); 
 sessionName = dirsplit{end}; clear dirsplit
 load(strcat(sessionpath,filesep,'data_',sessionName,'.mat'));
+load(strcat(sessionpath,filesep,'sync_',sessionName,'.mat'),'params');
 
+baseline_params = params;
 baseline_raw = voltage2arduino(photometry_raw);
-baseline_lp = lowpass(baseline_raw',500,originalFs);
+baseline_lp = lowpass(baseline_raw',50,originalFs);
 % baseline_zscore = rollingZ(baseline_lp,detrendWindow*originalFs);
 
 baseline_blueLaser = blueLaser;
 baseline_airpuffIdx = find(airpuff);
 baseline_rewardIdx = find(rightSolenoid);
+baseline_licks = rightLick;
 baseline_lickON = find(rightLick);
 baseline_tone = find(leftTone);
 
@@ -152,14 +155,17 @@ sessionpath = sessionPath{1};
 dirsplit = strsplit(sessionpath,filesep); 
 sessionName = dirsplit{end}; clear dirsplit
 load(strcat(sessionpath,filesep,'data_',sessionName,'.mat'));
+load(strcat(sessionpath,filesep,'sync_',sessionName,'.mat'),'params');
 
+pid_params = params;
 pid_raw = voltage2arduino(photometry_raw);
-pid_lp = lowpass(pid_raw',500,originalFs);
+pid_lp = lowpass(pid_raw',50,originalFs);
 % pid_zscore = rollingZ(pid_lp,detrendWindow*originalFs);
 
 pid_blueLaser = blueLaser;
 pid_airpuffIdx = find(airpuff);
 pid_rewardIdx = find(rightSolenoid);
+pid_licks = rightLick;
 pid_lickON = find(rightLick);
 pid_tone = find(leftTone);
 
@@ -188,17 +194,29 @@ end
 
 %% Plot DA session summary trace
 
+% Determine event to align
+event = 'airpuff';
+if strcmp(event, 'water')
+    baseline_event = baseline_waterLickIdx;
+    pid_event      = pid_waterLickIdx;
+elseif strcmp(event, 'airpuff')
+    baseline_event = baseline_airpuffIdx;
+    pid_event      = pid_airpuffIdx;
+end
+
+
 baseline_photometry = baseline_5ms;
 pid_photometry = pid_5ms;
 Fs = Fs_5ms;
 fftWindow = 10;
+tonicWindowTime = 60; %sec
 
 initializeFig(1,1); tiledlayout(2,4);
 
 nexttile(1,[1 2]);
 % minLength = min(length(pid_photometry),length(baseline_photometry));
 % t = (1:minLength)/Fs; plotWindow = 1:minLength;
-timeToPlot = [0,0]; % in sec
+timeToPlot = [70, 100]; % in sec
 % Plot photometry trace
 if timeToPlot(2) <= 0
     plotWindow = 1 : min([length(baseline_photometry),length(pid_photometry)]);
@@ -226,6 +244,13 @@ legend('Baseline','PID');
 title('FFT');
 
 nexttile(8);
+% Calculate a running average of baseline dopamine
+movingAverageWindow = floor(Fs * tonicWindowTime);
+b = (1/movingAverageWindow)*ones(1,movingAverageWindow); a = 1;
+baseline_tonic = filter(b,a,baseline_photometry);
+pid_tonic = filter(b,a,pid_photometry);
+
+% Plot distribution
 yyaxis left; histogram(baseline_photometry,200,EdgeColor=baselineColor,FaceColor=baselineColor); hold on
 yyaxis right; histogram(pid_photometry,200,EdgeColor=pidColor,FaceColor=pidColor); hold on
 xlabel('Intensity'); legend({'Baseline','PID'}); box off;
@@ -235,52 +260,86 @@ subtitle({strcat("Basline std: ",num2str(std(baseline_lp)),", PID std: ",num2str
 
 nexttile(5);
 % yyaxis left
-[baseline_rewardTraces,~] = plotTraces(baseline_waterLickIdx,[-1,5],baseline_lp,...
+[baseline_traces,~] = plotTraces(baseline_event,[-1,5],baseline_lp,...
                          signalFs=originalFs,sameSystem=true,...
                          plotIndividual=false,color=baselineColor);
-[pid_rewardTraces,~] = plotTraces(pid_waterLickIdx,[-1,5],pid_lp,...
+[pid_traces,~] = plotTraces(pid_event,[-1,5],pid_lp,...
                          signalFs=originalFs,sameSystem=true,...
                          plotIndividual=false,color=pidColor);
 % yyaxis right
-% [~,~] = plotTraces(pid_waterLickIdx,[-1,5],pid_blueLaserON*1000,...
+% [~,~] = plotTraces(pid_event,[-1,5],pid_blueLaserON*1000,...
 %                      signalFs=originalFs,sameSystem=true,...
 %                      plotIndividual=false,color=blueColor,...
 %                      xlabel='Time (s)',ylabel='Stim duration (ms)');
-legend({['Baseline (n=',num2str(size(baseline_rewardTraces,1)),')'],...
-        ['PID (n=',num2str(size(pid_rewardTraces,1)),')']});
+legend({['Baseline (n=',num2str(size(baseline_traces,1)),')'],...
+        ['PID (n=',num2str(size(pid_traces,1)),')']});
 xlabel('Time (s)'); ylabel('Intensity');
-plotEvent('Water',0);
+plotEvent(event,0);
 
 
 nexttile(6);
 % yyaxis left
-[baseline_rewardTraces_delta,~] = plotTraces(baseline_waterLickIdx,[-1,5],baseline_lp,...
+[baseline_traces_delta,timestamp] = plotTraces(baseline_event,[-1,5],baseline_lp,...
                          baseline=[-1,0],...
                          signalFs=originalFs,sameSystem=true,...
                          plotIndividual=false,color=baselineColor);
-[pid_rewardTraces_delta,~] = plotTraces(pid_waterLickIdx,[-1,5],pid_lp,...
+[pid_traces_delta,~] = plotTraces(pid_event,[-1,5],pid_lp,...
                          baseline=[-1,0],...
                          signalFs=originalFs,sameSystem=true,...
                          plotIndividual=false,color=pidColor);
 % yyaxis right
-% [~,~] = plotTraces(pid_waterLickIdx,[-1,5],pid_blueLaserON*1000,...
+% [~,~] = plotTraces(pid_event,[-1,5],pid_blueLaserON*1000,...
 %                      signalFs=originalFs,sameSystem=true,...
 %                      plotIndividual=false,color=blueColor,...
 %                      xlabel='Time (s)',ylabel='Stim duration (ms)');
-legend({['Baseline (n=',num2str(size(baseline_rewardTraces_delta,1)),')'],...
-        ['PID (n=',num2str(size(pid_rewardTraces_delta,1)),')']});
+legend({['Baseline (n=',num2str(size(baseline_traces_delta,1)),')'],...
+        ['PID (n=',num2str(size(pid_traces_delta,1)),')']});
 xlabel('Time (s)'); ylabel('\Delta Intensity');
-plotEvent('Water',0);
+plotEvent(event,0);
 
 
-nexttile(3,[2 1]);
-plotHeatmap(pid_rewardTraces,timestamp);
+% Tile 3: Baseline heatmap
+globalMin = min([baseline_traces(:); pid_traces(:)]);
+globalMax = max([baseline_traces(:); pid_traces(:)]);
+clims = [globalMin globalMax];
+
+axBase = nexttile(3);
+plotHeatmap(baseline_traces, timestamp, colorlim=clims, colormap=summer);
 xlabel('Time (s)'); ylabel('Trials');
-title('PID: water');
+title('Baseline');
+
+% Tile 7: PID heatmap
+axPID = nexttile(7);
+plotHeatmap(pid_traces, timestamp, colorlim=clims, colormap=summer);
+xlabel('Time (s)'); ylabel('Trials');
+title('PID');
 
 % Save
-% saveFigures(gcf,'Summary',sessionpath); close all;
+saveFigures(gcf,['Summary',event],sessionpath, savePDF=true); close all;
 return
+
+%% Plot lick number differences for reward
+
+lick_binsize = 0.2;
+
+initializeFig(0.5,0.5); tiledlayout(1,2);
+
+% Plot lick rate (weird, cap at 5Hz)
+nexttile;
+[baseline_rewardLickRate, baseline_rewardLicks] = plotLicks(baseline_waterLickIdx,[-1,5],lick_binsize,baselineColor,[],baseline_licks,baseline_params);
+[pid_rewardLickRate, pid_rewardLicks] = plotLicks(pid_waterLickIdx,[-1,5],lick_binsize,pidColor,[],pid_licks,pid_params);
+xlabel('Time (s)'); ylabel('Lick rate (Hz)'); ylim([0,5]);
+
+% Plot lick number bar plot
+baseline_rewardLickNum = cellfun(@numel, baseline_rewardLicks);
+pid_rewardLickNum = cellfun(@numel, pid_rewardLicks);
+nexttile;
+plotScatterBar(1,baseline_rewardLickNum,color=baselineColor);
+plotScatterBar(2,pid_rewardLickNum,color=pidColor);
+plotStats(baseline_rewardLickNum, pid_rewardLickNum, [1 2]);
+xticks([1 2]); xticklabels({'baseline','PID'});
+ylabel('Total licks');
+
 
 %% Plot DA aligned trace
 

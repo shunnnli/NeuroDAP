@@ -38,11 +38,24 @@ end
 
 %% Plot heatmap
 if strcmpi(options.dataType,'trials')
-    imagesc(timestamp,1:size(data,1),data);
+    h = imagesc(timestamp, 1:size(data,1), data);
+
     if ~options.flipYAxis
         set(gca,'YDir','normal');
     end
-    colorbar; box off
+
+    % Apply shared color limits + colormap HERE
+    if ~isempty(options.colorlim)
+        clim(gca, options.colorlim);           % or: caxis(gca, options.colorlim)
+    end
+    colormap(gca, options.colormap);
+
+    if options.plotColorBar
+        cb = colorbar;
+        cb.Label.String = options.colorBarLabel;
+    end
+
+    box off
     return;
 elseif strcmpi(options.dataType,'heatmap')
     if isfield(options,'tile') 
