@@ -286,7 +286,8 @@ if options.plotPhotometry && exist('timeSeries','var')
                 legend(makePWMlegend(S,"Blue"));
                 title(strcat('Blue (',num2str(d),' s)'));
             end
-            saveas(gcf, fullfile(sessionpath, sprintf('Summary-blue-%s.png', name)));
+            % saveas(gcf, fullfile(sessionpath, sprintf('Summary-blue-%s.pdf', name)));
+            saveFigures(gcf,['Summary-blue-',name],sessionpath,savePDF=true,savePNG=false);
         end
 
         % ---------- RED FIGURE (columns = durations; curves = PWM freqs) ----------
@@ -337,7 +338,8 @@ if options.plotPhotometry && exist('timeSeries','var')
                 legend(makePWMlegend(S,"Red"));
                 title(strcat('Red (',num2str(d),' s)'));
             end
-            saveas(gcf, fullfile(sessionpath, sprintf('Summary-red-%s.png', name)));
+            % saveas(gcf, fullfile(sessionpath, sprintf('Summary-red-%s.pdf', name)));
+            saveFigures(gcf,['Summary-red-',name],sessionpath,savePDF=true,savePNG=false);
         end
 
         if ~isempty(waterLickIdx_laser)
@@ -373,7 +375,8 @@ if options.plotPhotometry && exist('timeSeries','var')
                     'timestamp',timestamp);
             xlabel('Time (s)'); ylabel([name,' z-score']);
             legend({'Water (ctrl)', 'Water (laser)'});
-            saveas(gcf, fullfile(sessionpath, sprintf('Summary-collison-water.png', name)));
+            % saveas(gcf, fullfile(sessionpath, sprintf('Summary-collison-water.pdf', name)));
+            saveFigures(gcf,'Summary-collison-water',sessionpath,savePDF=true,savePNG=false);
         end
     end  
 end

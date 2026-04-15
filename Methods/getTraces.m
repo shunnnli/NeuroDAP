@@ -20,6 +20,10 @@ end
 
 %% Check inputs
 
+if strcmpi(options.eventSystem, options.signalSystem)
+    options.sameSystem = true;
+end
+
 if options.sameSystem 
     if isnan(options.signalFs)
         warning('getTraces: did not provide signalFs but selected sameSystem, set signalFs = 50');

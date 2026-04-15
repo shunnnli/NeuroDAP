@@ -17,7 +17,7 @@ arguments
     options.yPortionNoise double = 0.1
 end
 
-%% Caculate significance
+%% Calculate significance
 if strcmpi(options.testType,'kstest')
     [~,pvalue,~] = kstest2(data1,data2);
 elseif strcmpi(options.testType,'ranksum')

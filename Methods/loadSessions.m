@@ -609,6 +609,31 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
         end
     end
 
+    % Process clamp control signal if necessary
+    if contains(options.NISetup,'clamp',IgnoreCase=true)
+        % Store params
+        timeSeries(i).name = 'blueClamp';
+        timeSeries(i).data = blueClamp;
+        timeSeries(i).finalFs = params.sync.behaviorFs;
+        timeSeries(i).system = 'NI';
+        timeSeries(i).time_offset = 0;
+        timeSeries(i).demux = false;
+        timeSeries(i).demux_freq = NaN;
+        timeSeries(i).detrend = false;
+        disp('Finished: store blue clamping command');
+
+        % Store params
+        timeSeries(i+1).name = 'redClamp';
+        timeSeries(i+1).data = redClamp;
+        timeSeries(i+1).finalFs = params.sync.behaviorFs;
+        timeSeries(i+1).system = 'NI';
+        timeSeries(i+1).time_offset = 0;
+        timeSeries(i+1).demux = false;
+        timeSeries(i+1).demux_freq = NaN;
+        timeSeries(i+1).detrend = false;
+        disp('Finished: store red clamping command');
+    end
+
     %% Plot signals and save channels
 
     if options.plotPhotometry

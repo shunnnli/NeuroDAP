@@ -223,7 +223,87 @@ if ~isempty(answer)
     disp(['Finished: saved summary.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
 end
 
-%% Plot excitation vs water
+%% Plot excitation vs water (across all powers)
+
+% waterColor = [.34, .76, .87];
+% 
+% animal = 'all';
+% 
+% initializeFig(0.5,0.5);
+% % combined = combineTraces(summary,timeRange=[-0.5,3],...
+% %                             eventRange='water',...
+% %                             animalRange=animal,...
+% %                             taskRange='random',...
+% %                             combineStats=false);
+% % plotTraces(combined.data{1},combined.timestamp,color=waterColor);
+% 
+% durationList = [0.1, 0.5, 1];
+% stimColor = 'red';
+% ev  = string({summary.event});
+% dur = [summary.duration];
+% alphas = linspace(0.2, 1, length(durationList));
+% legendList = cell(length(durationList),1);
+% 
+% for d = length(durationList):-1:1
+%     mask = startsWith(ev,stimColor) & abs(dur - durationList(d)) < 1e-9;
+%     eventRange = unique(ev(mask));
+%     combined = combineTraces(summary,timeRange=[-0.5,3],...
+%                             eventRange=eventRange,...
+%                             animalRange=animal,...
+%                             taskRange='random',...
+%                             combineStats=false);
+%     durationColor = addOpacity(bluePurpleRed(500,:),alphas(d));
+%     plotTraces(combined.data{1},combined.timestamp,color=durationColor);
+%     legendList{d} = [num2str(durationList(d)),'s stim (n=',num2str(size(combined.data{1},1)),')'];
+% end
+% 
+% plotEvent('Stim',0,color=bluePurpleRed(500,:));
+% xlabel('Time (s)'); ylabel('z-score');
+% legend(legendList);
+% 
+% saveFigures(gcf,'Summary-red-duration',resultspath,savePDF=true,savePNG=false);
+
+%% Plot inhibition vs airpuff (across all powers)
+
+% airpuffColor = [.7, .7, .7];
+% 
+% animal = 'all';
+% 
+% initializeFig(0.5,0.5);
+% % combined = combineTraces(summary,timeRange=[-0.5,3],...
+% %                             eventRange='airpuff',...
+% %                             animalRange=animal,...
+% %                             taskRange='random',...
+% %                             combineStats=false);
+% % plotTraces(combined.data{1},combined.timestamp,color=airpuffColor);
+% 
+% durationList = [0.1, 0.5, 1];
+% stimColor = 'blue';
+% ev  = string({summary.event});
+% dur = [summary.duration];
+% alphas = linspace(0.2, 1, length(durationList));
+% legendList = cell(length(durationList),1);
+% 
+% for d = length(durationList):-1:1
+%     mask = startsWith(ev,stimColor) & abs(dur - durationList(d)) < 1e-9;
+%     eventRange = unique(ev(mask));
+%     combined = combineTraces(summary,timeRange=[-0.5,3],...
+%                             eventRange=eventRange,...
+%                             animalRange=animal,...
+%                             taskRange='random',...
+%                             combineStats=false);
+%     durationColor = addOpacity(bluePurpleRed(1,:),alphas(d));
+%     plotTraces(combined.data{1},combined.timestamp,color=durationColor);
+%     legendList{d} = [num2str(durationList(d)),'s stim (n=',num2str(size(combined.data{1},1)),')'];
+% end
+% 
+% plotEvent('Stim',0,color=bluePurpleRed(500,:));
+% xlabel('Time (s)'); ylabel('z-score');
+% legend(legendList);
+% 
+% saveFigures(gcf,'Summary-blue-duration',resultspath,savePDF=true,savePNG=false);
+
+%% Plot excitation vs water (at highest power)
 
 waterColor = [.34, .76, .87];
 
@@ -241,10 +321,16 @@ durationList = [0.1, 0.5, 1];
 stimColor = 'red';
 ev  = string({summary.event});
 dur = [summary.duration];
+pwm = [summary.pwm];
+typ = string({summary.type});
+
+maxPower = max(pwm(typ == stimColor));
+
 alphas = linspace(0.2, 1, length(durationList));
+legendList = cell(length(durationList),1);
 
 for d = length(durationList):-1:1
-    mask = startsWith(ev,stimColor) & abs(dur - durationList(d)) < 1e-9;
+    mask = typ == stimColor & pwm == maxPower & abs(dur - durationList(d)) < 1e-9;
     eventRange = unique(ev(mask));
     combined = combineTraces(summary,timeRange=[-0.5,3],...
                             eventRange=eventRange,...
@@ -253,12 +339,16 @@ for d = length(durationList):-1:1
                             combineStats=false);
     durationColor = addOpacity(bluePurpleRed(500,:),alphas(d));
     plotTraces(combined.data{1},combined.timestamp,color=durationColor);
+    legendList{d} = [num2str(durationList(d)),'s stim (n=',num2str(size(combined.data{1},1)),')'];
 end
 
 plotEvent('Stim',0,color=bluePurpleRed(500,:));
 xlabel('Time (s)'); ylabel('z-score');
+legend(legendList);
 
-%% Plot inhibition vs airpuff
+% saveFigures(gcf,'Summary-red-duration-maxPower',resultspath,savePDF=true,savePNG=false);
+
+%% Plot inhibition vs airpuff (at highest power)
 
 airpuffColor = [.7, .7, .7];
 
@@ -276,10 +366,16 @@ durationList = [0.1, 0.5, 1];
 stimColor = 'blue';
 ev  = string({summary.event});
 dur = [summary.duration];
+pwm = [summary.pwm];
+typ = string({summary.type});
+
+maxPower = max(pwm(typ == stimColor));
+
 alphas = linspace(0.2, 1, length(durationList));
+legendList = cell(length(durationList),1);
 
 for d = length(durationList):-1:1
-    mask = startsWith(ev,stimColor) & abs(dur - durationList(d)) < 1e-9;
+    mask = typ == stimColor & pwm == maxPower & abs(dur - durationList(d)) < 1e-9;
     eventRange = unique(ev(mask));
     combined = combineTraces(summary,timeRange=[-0.5,3],...
                             eventRange=eventRange,...
@@ -288,16 +384,111 @@ for d = length(durationList):-1:1
                             combineStats=false);
     durationColor = addOpacity(bluePurpleRed(1,:),alphas(d));
     plotTraces(combined.data{1},combined.timestamp,color=durationColor);
+    legendList{d} = [num2str(durationList(d)),'s stim (n=',num2str(size(combined.data{1},1)),')'];
+end
+
+plotEvent('Stim',0,color=bluePurpleRed(1,:));
+xlabel('Time (s)'); ylabel('z-score');
+legend(legendList);
+
+saveFigures(gcf,'Summary-blue-duration-maxPower',resultspath,savePDF=true,savePNG=false);
+
+
+%% Plot excitation vs water (separate by power, only 0.5 s duration)
+
+waterColor = [.34, .76, .87];
+animal = 'all';
+
+initializeFig(0.5,0.5);
+
+targetDuration = 0.5;
+stimColor = 'red';
+
+ev  = string({summary.event});
+dur = [summary.duration];
+pwm = [summary.pwm];
+typ = string({summary.type});
+
+powerList = unique(pwm(typ == stimColor & abs(dur - targetDuration) < 1e-9));
+alphas = linspace(0.2, 1, length(powerList));
+legendList = cell(length(powerList),1);
+
+for p = length(powerList):-1:1
+    mask = typ == stimColor & pwm == powerList(p) & abs(dur - targetDuration) < 1e-9;
+    eventRange = unique(ev(mask));
+
+    combined = combineTraces(summary,timeRange=[-0.5,3],...
+                            eventRange=eventRange,...
+                            animalRange=animal,...
+                            taskRange='random',...
+                            combineStats=false);
+
+    powerColor = addOpacity(bluePurpleRed(500,:), alphas(p));
+    plotTraces(combined.data{1}, combined.timestamp, color=powerColor);
+
+    legendList{p} = [num2str(powerList(p)), ...
+                     ' power, 0.5s stim (n=', ...
+                     num2str(size(combined.data{1},1)), ')'];
 end
 
 plotEvent('Stim',0,color=bluePurpleRed(500,:));
-xlabel('Time (s)'); ylabel('z-score');
+xlabel('Time (s)');
+ylabel('z-score');
+legend(legendList);
+
+saveFigures(gcf,'Summary-red-power-0p5s',resultspath,savePDF=true,savePNG=false);
+
+
+%% Plot excitation vs water (separate by power, only 0.5 s duration)
+
+waterColor = [.34, .76, .87];
+animal = 'all';
+
+initializeFig(0.5,0.5);
+
+targetDuration = 0.5;
+stimColor = 'blue';
+
+ev  = string({summary.event});
+dur = [summary.duration];
+pwm = [summary.pwm];
+typ = string({summary.type});
+
+powerList = unique(pwm(typ == stimColor & abs(dur - targetDuration) < 1e-9));
+alphas = linspace(0.2, 1, length(powerList));
+legendList = cell(length(powerList),1);
+
+for p = length(powerList):-1:1
+    mask = typ == stimColor & pwm == powerList(p) & abs(dur - targetDuration) < 1e-9;
+    eventRange = unique(ev(mask));
+
+    combined = combineTraces(summary,timeRange=[-0.5,3],...
+                            eventRange=eventRange,...
+                            animalRange=animal,...
+                            taskRange='random',...
+                            combineStats=false);
+
+    powerColor = addOpacity(bluePurpleRed(1,:), alphas(p));
+    plotTraces(combined.data{1}, combined.timestamp, color=powerColor);
+
+    legendList{p} = [num2str(powerList(p)), ...
+                     ' power, 0.5s stim (n=', ...
+                     num2str(size(combined.data{1},1)), ')'];
+end
+
+plotEvent('Stim',0,color=bluePurpleRed(500,:));
+xlabel('Time (s)');
+ylabel('z-score');
+legend(legendList);
+
+saveFigures(gcf,'Summary-blue-power-0p5s',resultspath,savePDF=true,savePNG=false);
 
 
 %% Plot water collision
 
 animal = 'all';
 waterColor = bluePurpleRed(1,:);
+legendList = cell(2,1);
 
 initializeFig(0.5,0.5);
 combined = combineTraces(summary,timeRange=[-0.5,3],...
@@ -306,6 +497,7 @@ combined = combineTraces(summary,timeRange=[-0.5,3],...
                             taskRange='combine',...
                             combineStats=false);
 plotTraces(combined.data{1},combined.timestamp,color=waterColor);
+legendList{1} = ['Water (n=',num2str(size(combined.data{1},1)),')'];
 
 combined = combineTraces(summary,timeRange=[-0.5,3],...
                             eventRange='water (laser)',...
@@ -313,16 +505,19 @@ combined = combineTraces(summary,timeRange=[-0.5,3],...
                             taskRange='combine',...
                             combineStats=false);
 plotTraces(combined.data{1},combined.timestamp,color=addOpacity(waterColor,0.5));
+legendList{2} = ['Water+inhi (n=',num2str(size(combined.data{1},1)),')'];
 
 plotEvent('Water',0,color=bluePurpleRed(1,:));
 xlabel('Time (s)'); ylabel('z-score');
-legend({'Water (ctrl)','Water (laser)'});
+legend(legendList);
+
+saveFigures(gcf,'Summary-water-collision',resultspath,savePDF=true,savePNG=false);
 
 
 %% Show sample excitation and inhibition
 
 sessionName = '20250918-W-BiPOLES-DAT-2_g0';
-rootPath    = '/Volumes/MICROSCOPE/Shun/Project clamping/Recordings/202509-BiPOLES/';
+rootPath    = '/Volumes/Neurobio/MICROSCOPE/Shun/Project clamping/Recordings/202509-BiPOLES/';
 dataPath    = fullfile(rootPath, sessionName, "data_" + sessionName + ".mat");
 load(dataPath);
 
@@ -377,11 +572,13 @@ plot(t, DA(idx), color=[.2 .8 .3], LineWidth=3, DisplayName='Dopamine')
 xlim([0,range(t)]); xlabel('time (s)'); 
 ylabel('dopamine');
 
+saveFigures(gcf,'Example-DAT-2',resultspath,savePNG=false,savePDF=true);
+
 
 %% Show sample collision test with water
 
 sessionName = '20250918-W-BiPOLES-DAT-2-combine_g0';
-rootPath    = '/Volumes/MICROSCOPE/Shun/Project clamping/Recordings/202509-BiPOLES/';
+rootPath    = '/Volumes/Neurobio/MICROSCOPE/Shun/Project clamping/Recordings/202509-BiPOLES/';
 dataPath    = fullfile(rootPath, sessionName, "data_" + sessionName + ".mat");
 load(dataPath);
 
@@ -450,6 +647,8 @@ yyaxis right
 plot(t, DA(idx), color=[.2 .8 .3], LineWidth=3, DisplayName='Dopamine')
 xlim([0,range(t)]); 
 xlabel('time (s)'); ylabel('Dopamine');
+
+saveFigures(gcf,'Example-water-collision',resultspath,savePDF=true,savePNG=false);
 
 
 

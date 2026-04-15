@@ -1,4 +1,4 @@
-function analyzeSessions_optoPair(sessionpath,options)
+function analyzeSessions_clamp(sessionpath,options)
 
 arguments
     sessionpath string
@@ -6,11 +6,8 @@ arguments
     options.task
     options.outputName string %name of the output file in subfolder of the session
     
-    options.laserSource string = 'original'
-    options.redStim logical = true
-    options.redStimPattern cell
-    options.blueStimPattern cell
-    options.includeOtherStim logical = false % consider stim in other color as a single trials
+    options.laserSource string = 'clamp'
+    options.intervalThreshold double = 20 % max interval of both clamps are off to be consider as clamp ON, in ms
 
     options.pavlovian logical = false
     options.reactionTime double = 1
@@ -32,18 +29,14 @@ arguments
 end
 
 %% Notes
-% Shun_analyzeBehavior_optoPair
-% Shun Li, 11/8/2022
-% 02/14/2023: tidied up code, renamed to analyzeBehavior_optoPair
-% 2023/07/28: packaged trial table into a function
-% 2023/09/02: added camera plotting
-% 2023/09/05: changed baselineIdx to selecting baseline licks 
-% 2023/10/23: changed how to plot photometry signal, assume everything
-% recorded in labjack
+% Shun_analyzeBehavior_clamp
+% Shun Li, 4/15/2026
 
 %% Load data
 
 [~,~,~,~,~,~,bluePurpleRed] = loadColors;
+clampColor = [.232 .76 .58];
+unclampColor = [217, 237, 223]./255;
              
 % 1. Select session via uigetdir
 dirsplit = strsplit(sessionpath,filesep); 
@@ -84,69 +77,6 @@ end
 disp(['Finished: Session ',options.outputName,' loaded']);
 
 %% Load behaivor params
-
-% Load stim patterns
-
-% For old recordings (SL060-068)
-% if ~options.redo && isfield(params,'stim')
-%     params.stim.pulseFreq_red = params.stim.pulseFreq; 
-%     params.stim.pulseDuration_red = params.stim.pulseDuration; 
-%     params.stim.stimDuration_red = params.stim.stimDuration;
-%     params.stim.nPulsesPerStim_red = params.stim.nPulsesPerStim;
-%     params.stim.pulseInterval_red = params.stim.pulseInterval;
-%     params.stim.pulseFreq_blue = 30; 
-%     params.stim.pulseDuration_blue = 10; 
-%     params.stim.stimDuration_blue = 500;
-%     params.stim.nPulsesPerStim_blue = (params.stim.stimDuration_blue/1000) * params.stim.pulseFreq_blue;
-%     params.stim.pulseInterval_blue = (1000/params.stim.pulseFreq_blue) - params.stim.pulseDuration_blue;
-% end
-
-if isfield(options,'redStimPattern') && (options.redo || ~isfield(params,'stim'))
-    params.stim.pulseFreq_red = str2double(options.redStimPattern{1}); 
-    params.stim.pulseDuration_red = str2double(options.redStimPattern{2}); 
-    params.stim.stimDuration_red = str2double(options.redStimPattern{3});
-    params.stim.nPulsesPerStim_red = (params.stim.stimDuration_red/1000) * params.stim.pulseFreq_red;
-    params.stim.pulseInterval_red = (1/params.stim.pulseFreq_red) - params.stim.pulseDuration_red;
-elseif ~isfield(options,'redStimPattern') && ~isfield(params,'stim') 
-    params.stim.pulseFreq_red = 50; 
-    params.stim.pulseDuration_red = 5; 
-    params.stim.stimDuration_red = 500;
-    params.stim.nPulsesPerStim_red = (params.stim.stimDuration_red/1000) * params.stim.pulseFreq_red;
-    params.stim.pulseInterval_red = (1000/params.stim.pulseFreq_red) - params.stim.pulseDuration_red;
-end
-
-fn = fieldnames(params.stim); hasBlue = any(contains(fn, 'blue')); 
-if isfield(options,'blueStimPattern') && (options.redo || ~hasBlue)
-    params.stim.pulseFreq_blue = str2double(options.blueStimPattern{1}); 
-    params.stim.pulseDuration_blue = str2double(options.blueStimPattern{2}); 
-    params.stim.stimDuration_blue = str2double(options.blueStimPattern{3});
-    params.stim.nPulsesPerStim_blue = (params.stim.stimDuration_blue/1000) * params.stim.pulseFreq_blue;
-    params.stim.pulseInterval_blue = (1/params.stim.pulseFreq_blue) - params.stim.pulseDuration_blue;
-elseif ~isfield(options,'blueStimPattern') && ~isfield(params,'stim') 
-    params.stim.pulseFreq_blue = 30; 
-    params.stim.pulseDuration_blue = 10; 
-    params.stim.stimDuration_blue = 500;
-    params.stim.nPulsesPerStim_blue = (params.stim.stimDuration_blue/1000) * params.stim.pulseFreq_blue;
-    params.stim.pulseInterval_blue = (1000/params.stim.pulseFreq_blue) - params.stim.pulseDuration_blue;
-end
-
-if options.redStim
-    params.stim.color = 'red';
-    disp(['Stim params: color = ', params.stim.color]);
-    disp(['Stim params: pulseFreq = ',num2str(params.stim.pulseFreq_red)]);
-    disp(['Stim params: pulseDuration = ',num2str(params.stim.pulseDuration_red)]);
-    disp(['Stim params: stimDuration = ',num2str(params.stim.stimDuration_red)]);
-    disp(['Stim params: nPulsesPerStim = ',num2str(params.stim.nPulsesPerStim_red)]);
-    disp(['Stim params: pulseInterval = ',num2str(params.stim.pulseInterval_red)]);
-else
-    params.stim.color = 'blue'; 
-    disp(['Stim params: color = ', params.stim.color]);
-    disp(['Stim params: pulseFreq = ',num2str(params.stim.pulseFreq_blue)]);
-    disp(['Stim params: pulseDuration = ',num2str(params.stim.pulseDuration_blue)]);
-    disp(['Stim params: stimDuration = ',num2str(params.stim.stimDuration_blue)]);
-    disp(['Stim params: nPulsesPerStim = ',num2str(params.stim.nPulsesPerStim_blue)]);
-    disp(['Stim params: pulseInterval = ',num2str(params.stim.pulseInterval_blue)]);
-end
 
 % Load task
 if ~isfield(params.session,'task') && isfield(options,'task')
@@ -240,64 +170,6 @@ else
 end
 
 
-% Find start of opto cue
-if strcmpi(options.laserSource,'clamp')
-    blueLaser = blueClamp;
-    redLaser = redClamp;
-
-else
-    blueStimIdx = find(blueLaser);
-    redStimIdx = find(redLaser);
-    
-    if strcmpi(params.stim.color,'red')
-        cueStimPulses = redStimIdx; 
-        nPulsesPerStim_cue = params.stim.nPulsesPerStim_red;
-        stimDuration_cue = params.stim.stimDuration_red;
-        otherStimPulses = blueStimIdx;
-        nPulsesPerStim_other = params.stim.nPulsesPerStim_blue;
-        stimDuration_other = params.stim.stimDuration_blue;
-    elseif strcmpi(params.stim.color,'blue')
-        cueStimPulses = blueStimIdx; 
-        nPulsesPerStim_cue = params.stim.nPulsesPerStim_blue;
-        stimDuration_cue = params.stim.stimDuration_blue;
-        otherStimPulses = redStimIdx;
-        nPulsesPerStim_other = params.stim.nPulsesPerStim_red;
-        stimDuration_other = params.stim.stimDuration_red;
-    end
-        
-    if ~exist('optoStim1','var') || options.redo
-        if  ~isempty(find(cueStimPulses, 1))
-            if nPulsesPerStim_cue > 1
-                % Save first pulse data for stim
-                intervalThreshold = 10000;
-                temp_interval = [100000,diff(cueStimPulses)];
-                optoStim1 = cueStimPulses(temp_interval > intervalThreshold);
-                save(strcat(sessionpath,filesep,'timeseries_',options.outputName),"optoStim1",'-append');
-            else
-                optoStim1 = cueStimPulses;
-            end
-        else
-            optoStim1 = [];
-        end
-    
-        if  ~isempty(find(otherStimPulses, 1))
-            if nPulsesPerStim_other > 1
-                % Save first pulse data for other color stim
-                intervalThreshold = 10000;
-                temp_interval = [100000,diff(otherStimPulses)];
-                optoStim2 = otherStimPulses(temp_interval > intervalThreshold);
-                save(strcat(sessionpath,filesep,'timeseries_',options.outputName),"optoStim2",'-append');
-            else
-                optoStim2 = otherStimPulses;
-            end
-        else
-            optoStim2 = [];
-        end
-        save(strcat(sessionpath,filesep,'timeseries_',options.outputName),"optoStim1","optoStim2",'-append');
-    end
-end
-
-
 % Find start of lick bout
 rightLickON = find(rightLick);
 if ~exist('lickBout','var') || options.redo
@@ -306,42 +178,53 @@ if ~exist('lickBout','var') || options.redo
     save(strcat(sessionpath,filesep,'timeseries_',options.outputName),"lickBout",'-append');
 end
 
-% Combine stim&tone to form trial start
+% Define trial start
 waterIdx = find(rightSolenoid_rounded);  
 airpuffIdx = find(airpuff_rounded);
 
 if ~exist('trials','var') || options.redo
     if strcmp(options.task,'random')
-        if options.includeOtherStim
-            [allTrials,~] = getTrials(find(leftTone),optoStim1,optoStim2,...
+        [allTrials,~] = getTrials(find(leftTone),...
                                  waterIdx,airpuffIdx); % add rightLickON if only baseline licks
-        else
-            [allTrials,~] = getTrials(find(leftTone),optoStim1,...
-                                 waterIdx,airpuffIdx); % add rightLickON if only baseline licks
-        end
     elseif contains(options.task,'punish')
-        if options.includeOtherStim
-            [allTrials,~] = getTrials(find(leftTone),optoStim1,optoStim2,waterIdx);
-        else
-            [allTrials,~] = getTrials(find(leftTone),optoStim1,waterIdx);
-        end
+        [allTrials,~] = getTrials(find(leftTone),waterIdx);
     else
-        if options.includeOtherStim
-            [allTrials,~] = getTrials(find(leftTone),optoStim1,optoStim2);
-        else
-            [allTrials,~] = getTrials(find(leftTone),optoStim1);
-        end
+        [allTrials,~] = getTrials(find(leftTone));
     end
     save(strcat(sessionpath,filesep,'timeseries_',options.outputName),"allTrials",'-append');
 end
 
 % Find water lick (first lick in response to water)
 waterLickIdx = nan(size(waterIdx));
-for i = 1:length(waterIdx)
-    nextLick = rightLickON(find(rightLickON>=waterIdx(i),1));
-    if ~isempty(nextLick); waterLickIdx(i) = nextLick; end
+for e = 1:length(waterIdx)
+    nextLick = rightLickON(find(rightLickON>=waterIdx(e),1));
+    if ~isempty(nextLick); waterLickIdx(e) = nextLick; end
 end
 waterLickIdx = rmmissing(waterLickIdx);
+
+
+% Find clamp ON time
+gap_ms = options.intervalThreshold;                 % fill OFF gaps shorter than this
+noiseThresholdPct = 1;
+smooth_ms = 3;               % small smoothing window for noise resistance
+blueOn = analogToLogical(blueClamp, params.sync.behaviorFs, noiseThresholdPct=noiseThresholdPct, smooth_ms=smooth_ms);
+redOn  = analogToLogical(redClamp,  params.sync.behaviorFs, noiseThresholdPct=noiseThresholdPct, smooth_ms=smooth_ms);
+clampON = blueOn | redOn; % Combine channels
+% Fill short OFF gaps
+maxGapSamples = round(gap_ms/1000 * params.sync.behaviorFs);
+offRuns = ~clampON;
+d = diff([false; offRuns(:); false]);
+runStarts = find(d == 1);
+runEnds   = find(d == -1) - 1;
+for k = 1:numel(runStarts)
+    runLen = runEnds(k) - runStarts(k) + 1;
+    % fill only internal OFF gaps shorter than threshold
+    if runLen <= maxGapSamples && runStarts(k) > 1 && runEnds(k) < numel(clampON)
+        clampON(runStarts(k):runEnds(k)) = true;
+    end
+end
+clampON = reshape(clampON, size(blueClamp));
+save(strcat(sessionpath,filesep,'data_',options.outputName),'clampON','-append');
 
 disp('Finished: preprocess outcome and opto data');
 
@@ -352,11 +235,12 @@ if (~exist('trials','var') || options.redo)
     disp('Ongoing: making trial table');
     events{1} = allTrials;      events{2} = airpuffIdx;
     events{3} = waterIdx;       events{4} = rightLickON;
-    events{5} = find(leftTone); events{6} = optoStim1; 
-    events{7} = optoStim2;
+    events{5} = find(leftTone); events{6} = find(clampON);
 
     trials = getTrialTable(options.task,events,rightSolenoid_rounded,airpuff_rounded,...
-                pavlovian=options.pavlovian,reactionTime=options.reactionTime);
+                pavlovian=options.pavlovian,reactionTime=options.reactionTime,...
+                withClamp=true);
+
     % Calculate performance cutoff
     if contains(options.task,'reward'); [trials,cutoff_sample] = getSessionCutoff(trials,"->reward");
     elseif contains(options.task,'punish'); [trials,cutoff_sample] = getSessionCutoff(trials,"->punish");
@@ -395,7 +279,7 @@ end
 if strcmp(options.task,'random')
     
     % Select event idxs
-    toneIdx = find(leftTone); stimIdx = optoStim1;
+    toneIdx = find(leftTone);
 
     % Select baseline idx (align to each baseline lick)
     % baselineLicks = cell2mat(trials{~cellfun(@isempty,trials{1:end-1,'BaselineLicks'}),'BaselineLicks'});
@@ -407,15 +291,11 @@ if strcmp(options.task,'random')
     
     % Create task legend
     stageTime = [-2,0;0,2];
-    analysisEvents = {waterIdx,waterLickIdx,airpuffIdx,toneIdx,stimIdx,baselineIdx,optoStim2};
+    analysisEvents = {waterIdx,waterLickIdx,airpuffIdx,toneIdx,baselineIdx};
     eventTrialNum = {findTrials(waterIdx,trials),findTrials(waterLickIdx,trials),...
                         findTrials(airpuffIdx,trials),findTrials(toneIdx,trials),...
-                        findTrials(stimIdx,trials),findTrials(baselineIdx,trials),findTrials(optoStim2,trials)};
-    if strcmp(params.stim.color,'red')
-        analysisLabels = {'Water','Rewarded licks','Airpuff','Tone','Stim','Baseline','Blue stim'};
-    else
-        analysisLabels = {'Water','Rewarded licks','Airpuff','Tone','Stim','Baseline','Red stim'};
-    end
+                        findTrials(baselineIdx,trials)};
+    analysisLabels = {'Water','Rewarded licks','Airpuff','Tone','Baseline'};
     taskLegend = getLegend(analysisEvents,analysisLabels);
 
     stageColors = {[.75 .75 .75],bluePurpleRed(1,:)};
@@ -440,104 +320,76 @@ else
 
     if options.combineOmission
         if options.performing
-            stimTrials = trials{trials.isTone == 0 & trials.isStim == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            pairTrials = trials{trials.isTone == 1 & trials.isStim == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            toneTrials = trials{trials.isTone == 1 & trials.isStim == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            stimIdx = stimTrials(:,2);
-            pairIdx = pairTrials(:,2);
-            toneIdx = toneTrials(:,2);
-            stimOmissionIdx = []; pairOmissionIdx = []; toneOmissionIdx = [];
+            clampTrials = trials{trials.isTone == 1 & trials.isClamp == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+            unclampTrials = trials{trials.isTone == 1 & trials.isClamp == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+            clampIdx = clampTrials(:,2);
+            unclampIdx = unclampTrials(:,2);
+            clampOmissionIdx = []; unclampOmissionIdx = [];
         else
-            stimTrials = trials{trials.isTone == 0 & trials.isStim == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            pairTrials = trials{trials.isTone == 1 & trials.isStim == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            toneTrials = trials{trials.isTone == 1 & trials.isStim == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-            stimIdx = stimTrials(:,2);
-            pairIdx = pairTrials(:,2);
-            toneIdx = toneTrials(:,2);
-            stimOmissionIdx = []; pairOmissionIdx = []; toneOmissionIdx = [];
+            clampTrials = trials{trials.isTone == 1 & trials.isClamp == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+            unclampTrials = trials{trials.isTone == 1 & trials.isClamp == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+            clampIdx = clampTrials(:,2);
+            unclampIdx = unclampTrials(:,2);
+            clampOmissionIdx = []; unclampOmissionIdx = [];
         end
     else
         if contains(options.task,'reward')
             if options.performing
-                stimTrials = trials{trials.isTone == 0 & trials.isStim == 1 ...
+                clampTrials = trials{trials.isTone == 0 & trials.isClamp == 1 ...
                     & trials.isReward == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                stimOmissionTrials = trials{trials.isTone == 0 & trials.isStim == 1 ...
+                clampOmissionTrials = trials{trials.isTone == 0 & trials.isClamp == 1 ...
                     & trials.isReward == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                pairTrials = trials{trials.isTone == 1 & trials.isStim == 1 ...
+                unclampTrials = trials{trials.isTone == 1 & trials.isClamp == 1 ...
                     & trials.isReward == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                pairOmissionTrials = trials{trials.isTone == 1 & trials.isStim == 1 ...
+                unclampOmissionTrials = trials{trials.isTone == 1 & trials.isClamp == 1 ...
                     & trials.isReward == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                toneTrials = trials{trials.isTone == 1 & trials.isStim == 0 ...
-                    & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                stimIdx = stimTrials(:,2);
-                stimOmissionIdx = stimOmissionTrials(:,2);
-                pairIdx = pairTrials(:,2);
-                pairOmissionIdx = pairOmissionTrials(:,2);
-                toneIdx = toneTrials(:,2);
+                clampIdx = clampTrials(:,2);
+                clampOmissionIdx = clampOmissionTrials(:,2);
+                unclampIdx = unclampTrials(:,2);
+                unclampOmissionIdx = unclampOmissionTrials(:,2);
             else
-                stimTrials = trials{trials.isTone == 0 & trials.isStim == 1 & trials.isReward == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                stimOmissionTrials = trials{trials.isTone == 0 & trials.isStim == 1 & trials.isReward == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                pairTrials = trials{trials.isTone == 1 & trials.isStim == 1 & trials.isReward == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                pairOmissionTrials = trials{trials.isTone == 1 & trials.isStim == 1 & trials.isReward == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                toneTrials = trials{trials.isTone == 1 & trials.isStim == 0 & trials.isReward == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                toneOmissionTrials = trials{trials.isTone == 1 & trials.isStim == 0 & trials.isReward == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                if isempty(toneTrials) && ~isempty(toneOmissionTrials)
-                    toneTrials = toneOmissionTrials;
-                end
-                stimIdx = stimTrials(:,2);
-                stimOmissionIdx = stimOmissionTrials(:,2);
-                pairIdx = pairTrials(:,2);
-                pairOmissionIdx = pairOmissionTrials(:,2);
-                toneIdx = toneTrials(:,2);
-                toneOmissionIdx = toneOmissionTrials(:,2);
+                clampTrials = trials{trials.isTone == 0 & trials.isClamp == 1 & trials.isReward == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                clampOmissionTrials = trials{trials.isTone == 0 & trials.isClamp == 1 & trials.isReward == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                unclampTrials = trials{trials.isTone == 1 & trials.isClamp == 1 & trials.isReward == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                unclampOmissionTrials = trials{trials.isTone == 1 & trials.isClamp == 1 & trials.isReward == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                clampIdx = clampTrials(:,2);
+                clampOmissionIdx = clampOmissionTrials(:,2);
+                unclampIdx = unclampTrials(:,2);
+                unclampOmissionIdx = unclampOmissionTrials(:,2);
             end
         elseif contains(options.task,'punish')
             if options.performing
-                stimTrials = trials{trials.isTone == 0 & trials.isStim == 1 ...
-                    & trials.isPunishment == 1 & trials.performing == 1, ["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                stimOmissionTrials = trials{trials.isTone == 0 & trials.isStim == 1 ...
-                    & trials.isPunishment == 0 & trials.performing == 1, ["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                pairTrials = trials{trials.isTone == 1 & trials.isStim == 1 ...
-                    & trials.isPunishment == 1 & trials.performing == 1, ["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                pairOmissionTrials = trials{trials.isTone == 1 & trials.isStim == 1 ...
-                    & trials.isPunishment == 0 & trials.performing == 1, ["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                toneTrials = trials{trials.isTone == 1 & trials.isStim == 0 ...
-                    & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                stimIdx = stimTrials(:,2);
-                stimOmissionIdx = stimOmissionTrials(:,2);
-                pairIdx = pairTrials(:,2);
-                pairOmissionIdx = pairOmissionTrials(:,2);
-                toneIdx = toneTrials(:,2);
+                clampTrials = trials{trials.isTone == 0 & trials.isClamp == 1 ...
+                    & trials.isPunishment == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                clampOmissionTrials = trials{trials.isTone == 0 & trials.isClamp == 1 ...
+                    & trials.isPunishment == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                unclampTrials = trials{trials.isTone == 1 & trials.isClamp == 1 ...
+                    & trials.isPunishment == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                unclampOmissionTrials = trials{trials.isTone == 1 & trials.isClamp == 1 ...
+                    & trials.isPunishment == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                clampIdx = clampTrials(:,2);
+                clampOmissionIdx = clampOmissionTrials(:,2);
+                unclampIdx = unclampTrials(:,2);
+                unclampOmissionIdx = unclampOmissionTrials(:,2);
             else
-                stimTrials = trials{trials.isTone == 0 & trials.isStim == 1 & trials.isPunishment == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                stimOmissionTrials = trials{trials.isTone == 0 & trials.isStim == 1 & trials.isPunishment == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                pairTrials = trials{trials.isTone == 1 & trials.isStim == 1 & trials.isPunishment == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                pairOmissionTrials = trials{trials.isTone == 1 & trials.isStim == 1 & trials.isPunishment == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                toneTrials = trials{trials.isTone == 1 & trials.isStim == 0 & trials.isPunishment == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                toneOmissionTrials = trials{trials.isTone == 1 & trials.isStim == 0 & trials.isPunishment == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                if isempty(toneTrials) && ~isempty(toneOmissionTrials)
-                    toneTrials = toneOmissionTrials;
-                end
-                stimIdx = stimTrials(:,2);
-                stimOmissionIdx = stimOmissionTrials(:,2);
-                pairIdx = pairTrials(:,2);
-                pairOmissionIdx = pairOmissionTrials(:,2);
-                toneIdx = toneTrials(:,2);
-                toneOmissionIdx = toneOmissionTrials(:,2);
+                clampTrials = trials{trials.isTone == 0 & trials.isClamp == 1 & trials.isPunishment == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                clampOmissionTrials = trials{trials.isTone == 0 & trials.isClamp == 1 & trials.isPunishment == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                unclampTrials = trials{trials.isTone == 1 & trials.isClamp == 1 & trials.isPunishment == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                unclampOmissionTrials = trials{trials.isTone == 1 & trials.isClamp == 1 & trials.isPunishment == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                clampIdx = clampTrials(:,2);
+                clampOmissionIdx = clampOmissionTrials(:,2);
+                unclampIdx = unclampTrials(:,2);
+                unclampOmissionIdx = unclampOmissionTrials(:,2);
             end
         end
     end
 
     stageTime = [-2,0;0,0.5;0.5,5];
-    analysisEvents = {waterIdx,waterLickIdx,toneIdx,stimIdx,pairIdx,airpuffIdx,baselineIdx,optoStim2};
+    analysisEvents = {waterIdx,waterLickIdx,clampIdx,unclampIdx,airpuffIdx,baselineIdx};
     eventTrialNum = {findTrials(waterIdx,trials),findTrials(waterLickIdx,trials),...
-                    toneTrials(:,1),stimTrials(:,1),pairTrials(:,1),...
-                    findTrials(airpuffIdx,trials),findTrials(baselineIdx,trials),findTrials(optoStim2,trials)};
-    if strcmp(params.stim.color,'red')
-        analysisLabels = {'Water','Rewarded licks','Tone only','Stim only','Pair','Airpuff','Baseline','Blue stim'};
-    else
-        analysisLabels = {'Water','Rewarded licks','Tone only','Stim only','Pair','Airpuff','Baseline','Red stim'};
-    end
+                    clampTrials(:,1),unclampTrials(:,1),...
+                    findTrials(airpuffIdx,trials),findTrials(baselineIdx,trials)};
+    analysisLabels = {'Water','Rewarded licks','Clamp','Unclamp','Airpuff','Baseline'};
     taskLegend = getLegend(analysisEvents,analysisLabels);
 
     stageColors = {[.75 .75 .75],bluePurpleRed(end,:),bluePurpleRed(1,:)};
@@ -553,8 +405,8 @@ else
 
     % Save idx to behavior.mat
     save(strcat(sessionpath,filesep,'behavior_',options.outputName),'allTrials',...
-        'waterIdx','waterLickIdx','airpuffIdx','toneIdx','stimIdx','pairIdx',...
-        'baselineIdx','stimTrials','pairTrials','toneTrials',...
+        'waterIdx','waterLickIdx','airpuffIdx','clampIdx','unclampIdx',...
+        'baselineIdx','clampTrials','unclampTrials',...
         '-append');
 end
 
@@ -597,7 +449,7 @@ if options.plotPhotometry && exist('timeSeries','var')
     end
     
     % Save figure
-    saveas(gcf,strcat(sessionpath,filesep,'Summary_photometry_distribution.png'));
+    saveas(gcf,strcat(sessionpath,filesep,'Summary_photometry_distribution.pdf'));
 
     %% Loop through timeSeries struct
     for photometry = 1:nSignals
@@ -628,11 +480,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                         signalFs=finalFs,signalSystem=system);
             [~,~] = plotTraces(toneIdx,timeRange,signal,bluePurpleRed(350,:),params,...
                         signalFs=finalFs,signalSystem=system);
-            [~,~] = plotTraces(stimIdx,timeRange,signal,bluePurpleRed(end,:),params,...
-                        signalFs=finalFs,signalSystem=system);
             [~,~] = plotTraces(baselineIdx,timeRange,signal,[.75 .75 .75],params,...
-                        signalFs=finalFs,signalSystem=system);
-            [~,~] = plotTraces(optoStim2,timeRange,signal,bluePurpleRed(100,:),params,...
                         signalFs=finalFs,signalSystem=system);
             plotEvent('',0);
             xlabel('Time (s)'); ylabel([name,' z-score']);
@@ -643,9 +491,7 @@ if options.plotPhotometry && exist('timeSeries','var')
             plotLicks(waterLickIdx,timeRange,options.lick_binSize,bluePurpleRed(1,:),[],rightLick,params);
             plotLicks(airpuffIdx,timeRange,options.lick_binSize,[0.2, 0.2, 0.2],[],rightLick,params);
             plotLicks(toneIdx,timeRange,options.lick_binSize,bluePurpleRed(350,:),[],rightLick,params);
-            plotLicks(stimIdx,timeRange,options.lick_binSize,bluePurpleRed(end,:),[],rightLick,params);
             plotLicks(baselineIdx,timeRange,options.lick_binSize,[.75 .75 .75],[],rightLick,params);
-            plotLicks(optoStim2,timeRange,options.lick_binSize,bluePurpleRed(100,:),[],rightLick,params);
             plotEvent('',0);
             xlabel('Time (s)'); ylabel('Licks/s'); 
             legend(taskLegend(2:end),'Location','best');
@@ -656,9 +502,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                 [~,~] = plotTraces(waterLickIdx,timeRange,eyeArea_detrend,bluePurpleRed(1,:),params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(airpuffIdx,timeRange,eyeArea_detrend,[0.2, 0.2, 0.2],params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(toneIdx,timeRange,eyeArea_detrend,bluePurpleRed(350,:),params,signalSystem='camera',smooth=15);
-                [~,~] = plotTraces(stimIdx,timeRange,eyeArea_detrend,bluePurpleRed(end,:),params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(baselineIdx,timeRange,eyeArea_detrend,[.75 .75 .75],params,signalSystem='camera',smooth=15);
-                [~,~] = plotTraces(optoStim2,timeRange,eyeArea_detrend,bluePurpleRed(100,:),params,signalSystem='camera',smooth=15);
                 plotEvent('',0);
                 xlabel('Time (s)'); ylabel('Eye area (z-score)');
                 legend(taskLegend(2:end),'Location','northeast');
@@ -668,9 +512,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                 [~,~] = plotTraces(waterLickIdx,timeRange,pupilArea_detrend,bluePurpleRed(1,:),params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(airpuffIdx,timeRange,pupilArea_detrend,[0.2, 0.2, 0.2],params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(toneIdx,timeRange,pupilArea_detrend,bluePurpleRed(350,:),params,signalSystem='camera',smooth=15);
-                [~,~] = plotTraces(stimIdx,timeRange,pupilArea_detrend,bluePurpleRed(end,:),params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(baselineIdx,timeRange,pupilArea_detrend,[.75 .75 .75],params,signalSystem='camera',smooth=15);
-                [~,~] = plotTraces(optoStim2,timeRange,pupilArea_detrend,bluePurpleRed(100,:),params,signalSystem='camera',smooth=15);
                 plotEvent('',0);
                 xlabel('Time (s)'); ylabel('Pupil area (z-score)');
                 legend(taskLegend(2:end),'Location','northeast');
@@ -681,17 +523,13 @@ if options.plotPhotometry && exist('timeSeries','var')
             nexttile
             [~,~] = plotTraces(waterLickIdx,timeRange,signal,bluePurpleRed(1,:),params,...
                         signalFs=finalFs,signalSystem=system);
-            [~,~] = plotTraces(toneIdx,timeRange,signal,bluePurpleRed(350,:),params,...
+            [~,~] = plotTraces(clampIdx,timeRange,signal,clampColor,params,...
                         signalFs=finalFs,signalSystem=system);
-            [~,~] = plotTraces(stimIdx,timeRange,signal,bluePurpleRed(end,:),params,...
-                        signalFs=finalFs,signalSystem=system);
-            [~,~] = plotTraces(pairIdx,timeRange,signal,bluePurpleRed(150,:),params,...
+            [~,~] = plotTraces(unclampIdx,timeRange,signal,unclampColor,params,...
                         signalFs=finalFs,signalSystem=system);
             [~,~] = plotTraces(airpuffIdx,timeRange,signal,[0.2, 0.2, 0.2],params,...
                         signalFs=finalFs,signalSystem=system);
             [~,~] = plotTraces(baselineIdx,timeRange,signal,[.75 .75 .75],params,...
-                        signalFs=finalFs,signalSystem=system);
-            [~,~] = plotTraces(optoStim2,timeRange,signal,bluePurpleRed(100,:),params,...
                         signalFs=finalFs,signalSystem=system);
             plotEvent('',0);
             xlabel('Time (s)'); ylabel([name,' z-score']);
@@ -700,12 +538,10 @@ if options.plotPhotometry && exist('timeSeries','var')
             % 2.2 Plot lick traces
             nexttile
             plotLicks(waterLickIdx,timeRange,options.lick_binSize,bluePurpleRed(1,:),[],rightLick,params);
-            plotLicks(toneIdx,timeRange,options.lick_binSize,bluePurpleRed(350,:),[],rightLick,params);
-            plotLicks(stimIdx,timeRange,options.lick_binSize,bluePurpleRed(end,:),[],rightLick,params);
-            plotLicks(pairIdx,timeRange,options.lick_binSize,bluePurpleRed(150,:),[],rightLick,params);
+            plotLicks(clampIdx,timeRange,options.lick_binSize,clampColor,[],rightLick,params);
+            plotLicks(unclampIdx,timeRange,options.lick_binSize,unclampColor,[],rightLick,params);
             plotLicks(airpuffIdx,timeRange,options.lick_binSize,[0.2, 0.2, 0.2],[],rightLick,params);
             plotLicks(baselineIdx,timeRange,options.lick_binSize,[.75 .75 .75],[],rightLick,params);
-            plotLicks(optoStim2,timeRange,options.lick_binSize,bluePurpleRed(100,:),[],rightLick,params);
             plotEvent('',0);
             xlabel('Time (s)'); ylabel('Licks/s'); 
             legend(taskLegend(2:end),'Location','best');
@@ -714,12 +550,10 @@ if options.plotPhotometry && exist('timeSeries','var')
                 % 2.3 Plot eye area traces
                 nexttile
                 [~,~] = plotTraces(waterLickIdx,timeRange,eyeArea_detrend,bluePurpleRed(1,:),params,signalSystem='camera',smooth=15);
-                [~,~] = plotTraces(toneIdx,timeRange,eyeArea_detrend,bluePurpleRed(350,:),params,signalSystem='camera',smooth=15);
-                [~,~] = plotTraces(stimIdx,timeRange,eyeArea_detrend,bluePurpleRed(end,:),params,signalSystem='camera',smooth=15);
-                [~,~] = plotTraces(pairIdx,timeRange,eyeArea_detrend,bluePurpleRed(150,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(clampIdx,timeRange,eyeArea_detrend,clampColor,params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(unclampIdx,timeRange,eyeArea_detrend,unclampColor,params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(airpuffIdx,timeRange,eyeArea_detrend,[0.2, 0.2, 0.2],params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(baselineIdx,timeRange,eyeArea_detrend,[.75 .75 .75],params,signalSystem='camera',smooth=15);
-                [~,~] = plotTraces(optoStim2,timeRange,eyeArea_detrend,bluePurpleRed(100,:),params,signalSystem='camera',smooth=15);
                 plotEvent('',0);
                 xlabel('Time (s)'); ylabel('Eye area (z-score)');
                 legend(taskLegend(2:end),'Location','northeast');
@@ -727,36 +561,25 @@ if options.plotPhotometry && exist('timeSeries','var')
                 % 2.4 Plot pupil area traces
                 nexttile
                 [~,~] = plotTraces(waterLickIdx,timeRange,pupilArea_detrend,bluePurpleRed(1,:),params,signalSystem='camera',smooth=15);
-                [~,~] = plotTraces(toneIdx,timeRange,pupilArea_detrend,bluePurpleRed(350,:),params,signalSystem='camera',smooth=15);
-                [~,~] = plotTraces(stimIdx,timeRange,pupilArea_detrend,bluePurpleRed(end,:),params,signalSystem='camera',smooth=15);
-                [~,~] = plotTraces(pairIdx,timeRange,pupilArea_detrend,bluePurpleRed(150,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(clampIdx,timeRange,pupilArea_detrend,clampColor,params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(unclampIdx,timeRange,pupilArea_detrend,unclampColor,params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(airpuffIdx,timeRange,pupilArea_detrend,[0.2, 0.2, 0.2],params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(baselineIdx,timeRange,pupilArea_detrend,[.75 .75 .75],params,signalSystem='camera',smooth=15);
-                [~,~] = plotTraces(optoStim2,timeRange,pupilArea_detrend,bluePurpleRed(100,:),params,signalSystem='camera',smooth=15);
                 plotEvent('',0);
                 xlabel('Time (s)'); ylabel('Pupil area (z-score)');
                 legend(taskLegend(2:end),'Location','northeast');
             end
         end 
-        saveas(gcf,strcat(sessionpath,filesep,'Summary_events_',timeSeries(path).name,'.png'));
+        saveas(gcf,strcat(sessionpath,filesep,'Summary_events_',timeSeries(path).name,'.pdf'));
 
         %% Plot single stimulus PSTH
         if strcmp(options.task,'random')
-            if strcmp(params.stim.color,'red')
-                eventIdxes = {stimIdx,waterLickIdx,toneIdx,airpuffIdx,optoStim2};
-                labels = {'Stim','Water','Tone','Airpuff','Blue stim'};
-                eventDurations = [stimDuration_cue/1000,0,0.5,0.02,stimDuration_other/1000];
-                groupSizes = [20,30,10,30,20];
-                longTimeRange = options.longTimeRange;
-                shortTimeRange = options.shortTimeRange; 
-            else
-                eventIdxes = {stimIdx,waterLickIdx,toneIdx,airpuffIdx,redStimIdx};
-                labels = {'Stim','Water','Tone','Airpuff','Red stim'};
-                eventDurations = [stimDuration_cue/1000,0,0.5,0.02,stimDuration_other/1000];
-                groupSizes = [30,30,10,30,10];
-                longTimeRange = options.longTimeRange;
-                shortTimeRange = options.shortTimeRange; 
-            end
+            eventIdxes = {waterLickIdx,toneIdx,airpuffIdx};
+            labels = {'Water','Tone','Airpuff'};
+            eventDurations = [0,0.25,0.02];
+            groupSizes = [30,10,30];
+            longTimeRange = options.longTimeRange;
+            shortTimeRange = options.shortTimeRange; 
             
             for event = 1:length(eventIdxes)
                 eventIdx = eventIdxes{event};
@@ -805,26 +628,16 @@ if options.plotPhotometry && exist('timeSeries','var')
                 xlabel('Time (s)'); ylabel([name,' z-score']);
                 legend(legendList);
                 
-                saveas(gcf,strcat(sessionpath,filesep,'Events_',timeSeries(path).name,'_',label,'.png'));
+                saveas(gcf,strcat(sessionpath,filesep,'Events_',timeSeries(path).name,'_',label,'.pdf'));
             end
         else
-            if strcmp(params.stim.color,'red')
-                eventIdxes = {stimIdx,pairIdx,toneIdx,waterLickIdx,airpuffIdx,optoStim2};
-                omissionIdxes = {stimOmissionIdx, pairOmissionIdx,toneOmissionIdx,[],[],[]};
-                labels = {'Stim','Pair','Tone','Water','Airpuff','Blue stim'};
-                eventDurations = [stimDuration_cue/1000,0.5,0.5,0,0.02,stimDuration_other/1000];
-                groupSizes = [10,10,10,30,30,20];
-                longTimeRange = options.longTimeRange;
-                shortTimeRange = options.shortTimeRange; 
-            else
-                eventIdxes = {stimIdx,pairIdx,toneIdx,waterLickIdx,airpuffIdx,optoStim2};
-                omissionIdxes = {stimOmissionIdx, pairOmissionIdx,toneOmissionIdx,[],[],[]};
-                labels = {'Stim','Pair','Tone','Water','Airpuff','Red stim'};
-                eventDurations = [stimDuration_cue/1000,0.5,0.5,0,0.02,stimDuration_other/1000];
-                groupSizes = [10,10,10,30,30,10];
-                longTimeRange = options.longTimeRange;
-                shortTimeRange = options.shortTimeRange;
-            end
+            eventIdxes = {clampIdx,unclampIdx,waterLickIdx,airpuffIdx};
+            omissionIdxes = {clampOmissionIdx, unclampOmissionIdx,[],[],[]};
+            labels = {'Clamp','Unclamp','Water','Airpuff'};
+            eventDurations = [0.25,0.25,0,0.02];
+            groupSizes = [10,10,30,30];
+            longTimeRange = options.longTimeRange;
+            shortTimeRange = options.shortTimeRange;
             
             for event = 1:length(eventIdxes)
                 eventIdx = eventIdxes{event};
@@ -846,7 +659,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                 plotEvent(label,eventDuration);
                 xlabel('Time (s)'); ylabel([name,' z-score']);
                 legend({[label,' (n=',num2str(length(eventIdx)),')'],...
-                        [label,' omission (n=',num2str(length(omissionIdxes)),')']},...
+                        [label,' omission (n=',num2str(length(omissionIdx)),')']},...
                         'Location','northeast');
                 
                 nexttile(7,[1 2]);
@@ -871,7 +684,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                 plotEvent(label,eventDuration);
                 xlabel('Time (s)'); ylabel([name,' z-score']);
                 legend({[label,' (n=',num2str(length(eventIdx)),')'],...
-                        [label,' omission (n=',num2str(length(omissionIdxes)),')']},...
+                        [label,' omission (n=',num2str(length(omissionIdx)),')']},...
                         'Location','northeast');
                 
                 nexttile(15,[1 2]);
@@ -880,7 +693,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                 xlabel('Time (s)'); ylabel([name,' z-score']);
                 legend(legendList);
 
-                saveas(gcf,strcat(sessionpath,filesep,'Events_',timeSeries(path).name,'_',label,'.png'));
+                saveas(gcf,strcat(sessionpath,filesep,'Events_',timeSeries(path).name,'_',label,'.pdf'));
             end
         end
     end
@@ -924,7 +737,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                 xlabel('Slope distribution (bootstrapped)'); ylabel('Count'); box off
             end
             % Save
-            saveas(gcf,strcat(sessionpath,filesep,'Analysis_',cur_signal,'_subtrial_average.png'));
+            saveas(gcf,strcat(sessionpath,filesep,'Analysis_',cur_signal,'_subtrial_average.pdf'));
         end
     
         %% Plot subtrial peak trend for baseline, CS, US
@@ -964,7 +777,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                 xlabel('Slope distribution (bootstrapped)'); ylabel('Count'); box off
             end
             % Save
-            saveas(gcf,strcat(sessionpath,filesep,'Analysis_',cur_signal,'_subtrial_peak.png'));
+            saveas(gcf,strcat(sessionpath,filesep,'Analysis_',cur_signal,'_subtrial_peak.pdf'));
         end
     
         %% Plot subtrial trough trend for baseline, CS, US
@@ -1004,7 +817,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                 xlabel('Slope distribution (bootstrapped)'); ylabel('Count'); box off
             end
             % Save
-            saveas(gcf,strcat(sessionpath,filesep,'Analysis_',cur_signal,'_subtrial_trough.png'));
+            saveas(gcf,strcat(sessionpath,filesep,'Analysis_',cur_signal,'_subtrial_trough.pdf'));
         end
 
         %% Plot subtrial area trend for baseline, CS, US
@@ -1044,7 +857,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                 xlabel('Slope distribution (bootstrapped)'); ylabel('Count'); box off
             end
             % Save
-            saveas(gcf,strcat(sessionpath,filesep,'Analysis_',cur_signal,'_subtrial_area.png'));
+            saveas(gcf,strcat(sessionpath,filesep,'Analysis_',cur_signal,'_subtrial_area.pdf'));
         end
     end
 end
@@ -1085,7 +898,7 @@ if options.plotBehavior
     % plot(trials{1:end-1,'TrialNumber'},trials{1:end-1,'nLicks'},'Color',bluePurpleRed(1,:),LineWidth=2);
     % xlabel('Trials'); ylabel('Licks per trial'); box off
 
-    saveas(gcf,strcat(sessionpath,filesep,'Behavior_ITI&LickBout.png'));
+    saveas(gcf,strcat(sessionpath,filesep,'Behavior_ITI&LickBout.pdf'));
 end
 
 
@@ -1096,41 +909,34 @@ if options.plotBehavior && contains(options.task,'pairing')
     timeRange = [-3,5];
 
     % Get event time and number by trial type
-    stimTrials(:,3) = stimTrials(:,3)./params.sync.behaviorFs;
-    toneTrials(:,3) = toneTrials(:,3)./params.sync.behaviorFs;
-    pairTrials(:,3) = pairTrials(:,3)./params.sync.behaviorFs;
+    clampTrials(:,3) = clampTrials(:,3)./params.sync.behaviorFs;
+    unclampTrials(:,3) = unclampTrials(:,3)./params.sync.behaviorFs;
 
     % getLicks by trial type
-    [stimLickRate,~,stimLicks] = getLicks(timeRange,stimIdx,options.lick_binSize,[],rightLick,...
+    [clampLickRate,~,clampLicks] = getLicks(timeRange,clampIdx,options.lick_binSize,[],rightLick,...
                                 params.sync.behaviorFs,params.sync.timeNI);
-    [pairLickRate,~,pairLicks] = getLicks(timeRange,pairIdx,options.lick_binSize,[],rightLick,...
-                                params.sync.behaviorFs,params.sync.timeNI);
-    [toneLickRate,~,toneLicks] = getLicks(timeRange,toneIdx,options.lick_binSize,[],rightLick,...
+    [unclampLickRate,~,unclampLicks] = getLicks(timeRange,unclampIdx,options.lick_binSize,[],rightLick,...
                                 params.sync.behaviorFs,params.sync.timeNI);
 
     % 1. Plot lick raster and trace
     initializeFig(0.67,0.67); tiledlayout(3,2);
     % 1.1 Plot lick raster plot for session
-    nexttile([3,1]);
-    for i = 1:size(stimLicks,1)
-        scatter(stimLicks{i},stimTrials(i,1),markerSize,'filled','MarkerFaceColor',bluePurpleRed(end,:)); hold on
-        scatter(stimTrials(i,3),stimTrials(i,1),markerSize+20,bluePurpleRed(1,:),'pentagram','filled'); hold on
+    nexttile([2,1]);
+    for i = 1:size(clampLicks,1)
+        scatter(clampLicks{i},clampTrials(i,1),markerSize,'filled','MarkerFaceColor',clampColor); hold on
+        scatter(clampTrials(i,3),clampTrials(i,1),markerSize+20,bluePurpleRed(1,:),'pentagram','filled'); hold on
     end
-    for i = 1:size(toneLicks,1)
-        scatter(toneLicks{i},toneTrials(i,1),markerSize,'filled','MarkerFaceColor',bluePurpleRed(350,:)); hold on
-        scatter(toneTrials(i,3),toneTrials(i,1),markerSize+20,bluePurpleRed(1,:),'pentagram','filled'); hold on
-    end
-    for i = 1:size(pairLicks,1)
-        scatter(pairLicks{i},pairTrials(i,1),markerSize,'filled','MarkerFaceColor',bluePurpleRed(150,:)); hold on
-        scatter(pairTrials(i,3),pairTrials(i,1),markerSize+20,bluePurpleRed(1,:),'pentagram','filled'); hold on
+    for i = 1:size(unclampLicks,1)
+        scatter(unclampLicks{i},unclampTrials(i,1),markerSize,'filled','MarkerFaceColor',unclampColor); hold on
+        scatter(unclampTrials(i,3),unclampTrials(i,1),markerSize+20,bluePurpleRed(1,:),'pentagram','filled'); hold on
     end
     xlabel('Time (s)'); xlim([timeRange(1),timeRange(2)]);
     ylabel('Trial'); ylim([0,size(trials,1)]);
     plotEvent("",0.5);
     % 1.2 Plot lick traces across session
-    traces = {stimLickRate,pairLickRate,toneLickRate};
-    labels = {'Stim','Pair','Tone'};
-    groupSizes = [20, 20, 10];
+    traces = {clampLickRate,unclampLickRate};
+    labels = {'Clamp','Unclamp'};
+    groupSizes = [20, 20];
     for event = 1:length(traces)
         trace = traces{event};
         label = labels{event};
@@ -1147,18 +953,18 @@ if options.plotBehavior && contains(options.task,'pairing')
             plotSEM(t,trace(startTrial:endTrial,:),bluePurpleRed(nColors(i),:));
             legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial)];
         end
-        plotEvent(label,0.5);
+        plotEvent(label,0.25);
         xlabel('Time (s)'); ylabel('Licks/s');
         legend(legendList);
     end
-    saveFigures(gcf,'Behavior_LickOverview',sessionpath,savePNG=true,savePDF=false);
+    saveFigures(gcf,'Behavior_LickOverview',sessionpath,savePDF=true);
     
     %% Plot session overview for eye
     if params.session.withCamera && params.session.withEyeTracking
-        initializeFig(0.67,0.67); tiledlayout(3,4); 
+        initializeFig(0.67,0.67); tiledlayout(2,4); 
 
         % Plot eye trace heatmap
-        nexttile([3 2]);
+        nexttile([2 2]);
         [allEyeTraces,t_cam] = plotTraces(trials{1:end-1,"CueTime"},cameraTimeRange,eyeArea_detrend,[0,0,0],params,plot=false,signalSystem='camera'); 
         plotHeatmap(allEyeTraces,t_cam);
         set(gca,'YDir','normal');
@@ -1167,17 +973,15 @@ if options.plotBehavior && contains(options.task,'pairing')
         xlabel('Time (s)'); ylabel('Trials');
 
         % get camera trace by trial type
-        [stimEyeArea,t_cam] = plotTraces(stimIdx,cameraTimeRange,eyeArea_detrend,[0,0,0],params,plot=false,signalSystem='camera');
-        [pairEyeArea,~] = plotTraces(pairIdx,cameraTimeRange,eyeArea_detrend,[0,0,0],params,plot=false,signalSystem='camera');
-        [toneEyeArea,~] = plotTraces(toneIdx,cameraTimeRange,eyeArea_detrend,[0,0,0],params,plot=false,signalSystem='camera');
-        [stimPupilArea,~] = plotTraces(stimIdx,cameraTimeRange,pupilArea_detrend,[0,0,0],params,plot=false,signalSystem='camera');
-        [pairPupilArea,~] = plotTraces(pairIdx,cameraTimeRange,pupilArea_detrend,[0,0,0],params,plot=false,signalSystem='camera');
-        [tonePupilArea,~] = plotTraces(toneIdx,cameraTimeRange,pupilArea_detrend,[0,0,0],params,plot=false,signalSystem='camera');
+        [clampEyeArea,t_cam] = plotTraces(clampIdx,cameraTimeRange,eyeArea_detrend,[0,0,0],params,plot=false,signalSystem='camera');
+        [unclampEyeArea,~] = plotTraces(unclampIdx,cameraTimeRange,eyeArea_detrend,[0,0,0],params,plot=false,signalSystem='camera');
+        [clampPupilArea,~] = plotTraces(clampIdx,cameraTimeRange,pupilArea_detrend,[0,0,0],params,plot=false,signalSystem='camera');
+        [unclampPupilArea,~] = plotTraces(unclampIdx,cameraTimeRange,pupilArea_detrend,[0,0,0],params,plot=false,signalSystem='camera');
 
         % Plot eye area across session
-        traces = {stimEyeArea,pairEyeArea,toneEyeArea};
-        labels = {'Stim','Pair','Tone'};
-        groupSizes = [20, 20, 10];
+        traces = {clampEyeArea,unclampEyeArea};
+        labels = {'Clamp','Unclamp'};
+        groupSizes = [20, 20];
         for event = 1:length(traces)
             trace = traces{event};
             label = labels{event};
@@ -1193,15 +997,15 @@ if options.plotBehavior && contains(options.task,'pairing')
                 plotSEM(t_cam,trace(startTrial:endTrial,:),bluePurpleRed(nColors(i),:),smooth=15);
                 legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial)];
             end
-            plotEvent(label,0.5);
+            plotEvent(label,0.25);
             xlabel('Time (s)'); ylabel('Eye area (z-score)');
             legend(legendList);
         end
     
         % Plot pupil area across session
-        traces = {stimPupilArea,pairPupilArea,tonePupilArea};
-        labels = {'Stim','Pair','Tone'};
-        groupSizes = [20, 20, 10];
+        traces = {clampPupilArea,unclampPupilArea};
+        labels = {'Clamp','Unclamp'};
+        groupSizes = [20, 20];
         for event = 1:length(traces)
             trace = traces{event};
             label = labels{event};
@@ -1217,33 +1021,31 @@ if options.plotBehavior && contains(options.task,'pairing')
                 plotSEM(t_cam,trace(startTrial:endTrial,:),bluePurpleRed(nColors(i),:),smooth=15);
                 legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial)];
             end
-            plotEvent(label,0.5);
+            plotEvent(label,0.25);
             xlabel('Time (s)'); ylabel('Pupil area (z-score)');
             legend(legendList);
         end
-        saveas(gcf,strcat(sessionpath,filesep,'Behavior_EyeOverview.png'));
+        saveas(gcf,strcat(sessionpath,filesep,'Behavior_EyeOverview.pdf'));
     end
 
     %% Plot ENL aligned lick trace
     % Bin trials based on ENL length, plot lick trace aligning to ENL start
     % should not smear if animal lick specifically to the cue
 
-    initializeFig(0.67,0.67); tiledlayout(3,3);
+    initializeFig(0.67,0.67); tiledlayout(2,3);
     timeRangeENL = [0,10];
-    [stimLickRateENL,~,~] = getLicks(timeRangeENL,stimIdx-stimTrials(:,4),options.lick_binSize,[],rightLick,...
+    [clampLickRateENL,~,~] = getLicks(timeRangeENL,clampIdx-clampTrials(:,4),options.lick_binSize,[],rightLick,...
                                     params.sync.behaviorFs,params.sync.timeNI);
-    [pairLickRateENL,~,~] = getLicks(timeRangeENL,pairIdx-pairTrials(:,4),options.lick_binSize,[],rightLick,...
-                                params.sync.behaviorFs,params.sync.timeNI);
-    [toneLickRateENL,~,~] = getLicks(timeRangeENL,toneIdx-toneTrials(:,4),options.lick_binSize,[],rightLick,...
+    [unclampLickRateENL,~,~] = getLicks(timeRangeENL,unclampIdx-unclampTrials(:,4),options.lick_binSize,[],rightLick,...
                                 params.sync.behaviorFs,params.sync.timeNI);
 
     nENLBins = [2,3,4];
     for i = 1:length(nENLBins)
 
         % 1.1 Sort trials based on ENL duration
-        % For stim only
+        % For clamp
         nexttile;
-        trialIdx = stimTrials; traces = stimLickRateENL;
+        trialIdx = clampTrials; traces = clampLickRateENL;
         [~,sortIdx] = sortrows(trialIdx,4); 
         nModTrials = mod(height(trialIdx),nENLBins(i));
         ENLsortIdx = mat2cell(reshape(sortIdx(1:end-nModTrials),[],nENLBins(i))',ones(1,nENLBins(i)));
@@ -1260,28 +1062,9 @@ if options.plotBehavior && contains(options.task,'pairing')
         xlabel('Time from ENL start (s)'); ylabel('Licks/s');
         legend(legendList);
 
-        % For pair
+        % For unclamp
         nexttile;
-        trialIdx = pairTrials; traces = pairLickRateENL;
-        [~,sortIdx] = sortrows(trialIdx,4); 
-        nModTrials = mod(height(trialIdx),nENLBins(i));
-        ENLsortIdx = mat2cell(reshape(sortIdx(1:end-nModTrials),[],nENLBins(i))',ones(1,nENLBins(i)));
-        ENLsortIdx{end} = [ENLsortIdx{end}, sortIdx(end-nModTrials+1:end)'];
-
-        t = linspace(timeRangeENL(1),timeRangeENL(2),size(traces,2));
-        legendList = cell(nENLBins(i),1);
-        nColors = round(linspace(1,size(bluePurpleRed,1),nENLBins(i)));
-        % 1.2 Plot lick trace
-        for j = 1:nENLBins(i)
-            plotSEM(t,traces(ENLsortIdx{j},:),bluePurpleRed(nColors(j),:));
-            legendList{j} = ['ENL bin ', num2str(j),' (n=',num2str(length(ENLsortIdx{j})),')'];
-        end
-        xlabel('Time from ENL start (s)'); ylabel('Licks/s');
-        legend(legendList);
-
-        % For tone only
-        nexttile;
-        trialIdx = toneTrials; traces = toneLickRateENL;
+        trialIdx = unclampTrials; traces = unclampLickRateENL;
         [~,sortIdx] = sortrows(trialIdx,4); 
         nModTrials = mod(height(trialIdx),nENLBins(i));
         ENLsortIdx = mat2cell(reshape(sortIdx(1:end-nModTrials),[],nENLBins(i))',ones(1,nENLBins(i)));
@@ -1298,12 +1081,12 @@ if options.plotBehavior && contains(options.task,'pairing')
         xlabel('Time from ENL start (s)'); ylabel('Licks/s');
         legend(legendList);
     end
-    saveas(gcf,strcat(sessionpath,filesep,'Behavior_ENLAlignedLick.png'));
+    saveas(gcf,strcat(sessionpath,filesep,'Behavior_ENLAlignedLick.pdf'));
 
     %% Plot distributions
     initializeFig(1,1);
-    tiledlayout(4,4);
-
+    tiledlayout(5,3);
+    
     % 1. Distribution of baseline licks
     % Find out baseline period (eg 5s-10s after reward), bootstrap and
     % compare with stim onset
@@ -1313,15 +1096,12 @@ if options.plotBehavior && contains(options.task,'pairing')
     nboot = 100000; nBins = 50;
     [~,allLicksBaseline,~] = getLicks(timeRangeBaseline,trials{1:end-1,'CueTime'}-trials{1:end-1,"ENL"},...
         options.lick_binSize,[],rightLick,params.sync.behaviorFs,params.sync.timeNI);
-    [~,reactionLicks,~] = getLicks(timeRangeReaction,pairIdx,...
+    [~,reactionLicks,~] = getLicks(timeRangeReaction,unclampIdx,...
         options.lick_binSize,[],rightLick,params.sync.behaviorFs,params.sync.timeNI);
-    al_pair = sum(reactionLicks,2);
-    [~,reactionLicks,~] = getLicks(timeRangeReaction,stimIdx,...
+    al_unclamp = sum(reactionLicks,2);
+    [~,reactionLicks,~] = getLicks(timeRangeReaction,clampIdx,...
         options.lick_binSize,[],rightLick,params.sync.behaviorFs,params.sync.timeNI);
-    al_stim = sum(reactionLicks,2);
-    [~,reactionLicks,~] = getLicks(timeRangeReaction,toneIdx,...
-        options.lick_binSize,[],rightLick,params.sync.behaviorFs,params.sync.timeNI);
-    al_tone = sum(reactionLicks,2);
+    al_clamp = sum(reactionLicks,2);
     if options.pavlovian
         % Bootstrap baseline licking
         lickCountBaseline = zeros(size(trials,1),nboot);
@@ -1332,40 +1112,29 @@ if options.plotBehavior && contains(options.task,'pairing')
             baselineSamples = datasample(allLicksBaseline,windowInBin,2,'Replace',true); 
             lickCountBaseline(:,i) = sum(baselineSamples,2);
         end
-        % Plot pair trials anticipatory distribution
-        nexttile; events = al_pair; nboot_event = round(size(trials,1)*nboot/size(events,1));
+        % Plot unclamp trials anticipatory distribution
+        nexttile; events = al_unclamp; nboot_event = round(size(trials,1)*nboot/size(events,1));
         h = histogram(lickCountBaseline,nBins); 
         h.FaceColor = [0.75,0.75,0.75]; h.EdgeColor = [0.75,0.75,0.75]; hold on
         [~,bootsam] = bootstrp(nboot_event,[],events);
         h = histogram(events(bootsam),nBins);
-        h.FaceColor = bluePurpleRed(150,:); h.EdgeColor = bluePurpleRed(150,:);
+        h.FaceColor = unclampColor; h.EdgeColor = unclampColor;
         % xline(options.minLicks,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
-        xline(mean(events),'-r',{'Averge anticipatory licks','(pair trials)'},'LineWidth',3,'LabelOrientation','horizontal');
+        xline(mean(events),'-r',{'Averge anticipatory licks','(unclamp trials)'},'LineWidth',3,'LabelOrientation','horizontal');
         xlabel('Anticipatory licks'); ylabel ('Count'); box off
-        title("Baseline licks vs anticipatory licks (pair trials)");
-        % Plot stim trials anticipatory distribution
-        nexttile; events = al_stim; nboot_event = round(size(trials,1)*nboot/size(events,1));
+        title("Baseline licks vs anticipatory licks (unclamp trials)");
+        % Plot clamp trials anticipatory distribution
+        nexttile; events = al_clamp; nboot_event = round(size(trials,1)*nboot/size(events,1));
         h = histogram(lickCountBaseline,nBins); 
         h.FaceColor = [0.75,0.75,0.75]; h.EdgeColor = [0.75,0.75,0.75]; hold on
         [~,bootsam] = bootstrp(nboot_event,[],events);
         h = histogram(events(bootsam),nBins);
-        h.FaceColor = bluePurpleRed(end,:); h.EdgeColor = bluePurpleRed(end,:);
+        h.FaceColor = clampColor; h.EdgeColor = clampColor;
         % xline(options.minLicks,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
-        xline(mean(events),'-r',{'Averge anticipatory licks','(stim only trials)'},'LineWidth',3,'LabelOrientation','horizontal');
+        xline(mean(events),'-r',{'Averge anticipatory licks','(clamp only trials)'},'LineWidth',3,'LabelOrientation','horizontal');
         xlabel('Anticipatory licks'); ylabel ('Count'); box off
-        title("Baseline licks vs anticipatory licks (stim trials)");
-        % Plot tone trials anticipatory distribution
-        nexttile; events = al_tone; nboot_event = round(size(trials,1)*nboot/size(events,1));
-        h = histogram(lickCountBaseline,nBins); 
-        h.FaceColor = [0.75,0.75,0.75]; h.EdgeColor = [0.75,0.75,0.75]; hold on
-        [~,bootsam] = bootstrp(nboot_event,[],events);
-        h = histogram(events(bootsam),nBins);
-        h.FaceColor = bluePurpleRed(350,:); h.EdgeColor = bluePurpleRed(350,:);
-        % xline(options.minLicks,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
-        xline(mean(events),'-r',{'Averge anticipatory licks','(tone only trials)'},'LineWidth',3,'LabelOrientation','horizontal');
-        xlabel('Anticipatory licks'); ylabel ('Count'); box off
-        title("Baseline licks vs anticipatory licks (tone trials)");
-
+        title("Baseline licks vs anticipatory licks (clamp trials)");
+    
     else
         % Bootstrap baseline licking success rate
         hitPercentBaseline = zeros(nboot,1);
@@ -1377,286 +1146,255 @@ if options.plotBehavior && contains(options.task,'pairing')
             hitPercentBaseline(i) = sum(sum(baselineSamples,2) >= options.minLicks)/size(baselineSamples,1);
         end
     
-        % For pair
+        % For unclamp
         % Calculate cue window success rate
-        hitPercentCue = length(find(trials.isTone == 1 & trials.isStim == 1 & trials.nAnticipatoryLicks >= options.minLicks))/size(pairIdx,1);
+        hitPercentCue = length(find(trials.isTone == 1 & trials.isClamp == 0 & trials.nAnticipatoryLicks >= options.minLicks))/size(unclampIdx,1);
         pval = sum(hitPercentBaseline>=hitPercentCue)/nboot;
         % Plot distribution
         nexttile; 
         h = histogram(hitPercentBaseline,nBins); 
-        h.FaceColor = bluePurpleRed(150,:); h.EdgeColor = bluePurpleRed(150,:);
+        h.FaceColor = unclampColor; h.EdgeColor = unclampColor;
         hold on
         xline(hitPercentCue,'-r',{'Hit rate',['p=',num2str(pval)]},...
             'LineWidth',3,...
             'LabelOrientation','horizontal');
         xlim([0,1]); xlabel('Hit rate'); ylabel ('Count'); box off
-        title("Baseline licks (pair trials)");
+        title("Baseline licks (unclamp trials)");
     
-        % For stim only
+        % For clamp only
         % Calculate cue window success rate
-        hitPercentCue = length(find(trials.isTone == 0 & trials.isStim == 1 & trials.nAnticipatoryLicks >= options.minLicks))/size(stimIdx,1);
+        hitPercentCue = length(find(trials.isTone == 1 & trials.isClamp == 1 & trials.nAnticipatoryLicks >= options.minLicks))/size(clampIdx,1);
         pval = sum(hitPercentBaseline>=hitPercentCue)/nboot;
         % Plot distribution
         nexttile; 
         h = histogram(hitPercentBaseline,nBins);
-        h.FaceColor = bluePurpleRed(end,:); h.EdgeColor = bluePurpleRed(end,:);
+        h.FaceColor = clampColor; h.EdgeColor = clampColor;
         hold on
         xline(hitPercentCue,'-r',{'Hit rate',['p=',num2str(pval)]},...
             'LineWidth',3,...
             'LabelOrientation','horizontal');
         xlim([0,1]); xlabel('Hit rate'); ylabel('Count'); box off
-        title("Baseline licks (stim only trials)");
-    
-        % For tone only
-        % Calculate cue window success rate
-        hitPercentCue = length(find(trials.isTone == 1 & trials.isStim == 0 & trials.nAnticipatoryLicks >= options.minLicks))/size(toneIdx,1);
-        pval = sum(hitPercentBaseline>=hitPercentCue)/nboot;
-        % Plot distribution
-        nexttile; 
-        h = histogram(hitPercentBaseline,nBins);
-        h.FaceColor = bluePurpleRed(350,:); h.EdgeColor = bluePurpleRed(350,:);
-        hold on
-        xline(hitPercentCue,'-r',{'Hit rate',['p=',num2str(pval)]},...
-            'LineWidth',3,...
-            'LabelOrientation','horizontal');
-        xlim([0,1]); xlabel('Hit rate'); ylabel('Count'); box off
-        title("Baseline licks (tone only trials)");
+        title("Baseline licks (clamp only trials)");
     end
-
+    
     % Plot trend
     nexttile;
     plot(trials{1:end-1,"TrialNumber"},trials{1:end-1,"nBaselineLicks"},Color=[0.75,0.75,0.75],LineWidth=2); hold on
-    scatter(pairTrials(:,1),trials{pairTrials(:,1),"nBaselineLicks"},100,bluePurpleRed(150,:),'filled'); hold on
-    scatter(stimTrials(:,1),trials{stimTrials(:,1),"nBaselineLicks"},100,bluePurpleRed(end,:),'filled'); hold on
-    scatter(toneTrials(:,1),trials{toneTrials(:,1),"nBaselineLicks"},100,bluePurpleRed(350,:),'filled'); hold on
+    scatter(unclampTrials(:,1),trials{unclampTrials(:,1),"nBaselineLicks"},100,unclampColor,'filled'); hold on
+    scatter(clampTrials(:,1),trials{clampTrials(:,1),"nBaselineLicks"},100,clampColor,'filled'); hold on
     xlabel("Trials"); ylabel("Baseline licks"); box off
     title("Baseline licks (all trials)");
-
-
+    
+    
     stageCutoff = linspace(1,size(trials,1),4);
     stageCutoff = stageCutoff(2:3);
     
     % 2. Distribution of first lick reaction time
-    rt_pair = trials{pairTrials(:,1),["TrialNumber","ReactionTime"]};
-    rt_stim = trials{stimTrials(:,1),["TrialNumber","ReactionTime"]};
-    rt_tone = trials{toneTrials(:,1),["TrialNumber","ReactionTime"]};
-    rt_pair_early = rt_pair(rt_pair(:,1)<stageCutoff(1),2);
-    rt_stim_early = rt_stim(rt_stim(:,1)<stageCutoff(1),2);
-    rt_tone_early = rt_tone(rt_tone(:,1)<stageCutoff(1),2);
-    rt_pair_mid = rt_pair(rt_pair(:,1)>=stageCutoff(1) & rt_pair(:,1)<stageCutoff(2),2);
-    rt_stim_mid = rt_stim(rt_stim(:,1)>=stageCutoff(1) & rt_stim(:,1)<stageCutoff(2),2);
-    rt_tone_mid = rt_tone(rt_tone(:,1)>=stageCutoff(1) & rt_tone(:,1)<stageCutoff(2),2);
-    rt_pair_late = rt_pair(rt_pair(:,1)<=stageCutoff(2),2);
-    rt_stim_late = rt_stim(rt_stim(:,1)<=stageCutoff(2),2);
-    rt_tone_late = rt_tone(rt_tone(:,1)<=stageCutoff(2),2);
+    rt_unclamp = trials{unclampTrials(:,1),["TrialNumber","ReactionTime"]};
+    rt_clamp = trials{clampTrials(:,1),["TrialNumber","ReactionTime"]};
+    rt_unclamp_early = rt_unclamp(rt_unclamp(:,1)<stageCutoff(1),2);
+    rt_clamp_early = rt_clamp(rt_clamp(:,1)<stageCutoff(1),2);
+    rt_unclamp_mid = rt_unclamp(rt_unclamp(:,1)>=stageCutoff(1) & rt_unclamp(:,1)<stageCutoff(2),2);
+    rt_clamp_mid = rt_clamp(rt_clamp(:,1)>=stageCutoff(1) & rt_clamp(:,1)<stageCutoff(2),2);
+    rt_unclamp_late = rt_unclamp(rt_unclamp(:,1)<=stageCutoff(2),2);
+    rt_clamp_late = rt_clamp(rt_clamp(:,1)<=stageCutoff(2),2);
     
-
+    
     % For early stage of session
     % Calculate bootstrap distribution
-    stages = {rt_pair_early;rt_stim_early;rt_tone_early};
-    colors = [bluePurpleRed(150,:);bluePurpleRed(end,:);bluePurpleRed(350,:)];
+    stages = {rt_unclamp_early;rt_clamp_early};
+    colors = [unclampColor;clampColor];
     nexttile;
     for s = 1:size(stages,1)
-        if isempty(stages{s}) || numel(stages{s})==1; continue; end
+        if isempty(stages{s}) || isscalar(stages{s}); continue; end
         [~,bootsam] = bootstrp(nboot,[],stages{s});
         bs = stages{s}(bootsam) / params.sync.behaviorFs;
-
+    
         h = histogram(bs,nBins); 
         h.FaceColor = colors(s,:); h.EdgeColor = colors(s,:); hold on
     end
     xlabel('First lick reaction time (s)'); ylabel('Count'); box off
     title("First lick reaction time (early stage)");
-
+    
     % For middle stage of session
     % Calculate bootstrap distribution
-    stages = {rt_pair_mid;rt_stim_mid;rt_tone_mid};
-    colors = [bluePurpleRed(150,:);bluePurpleRed(end,:);bluePurpleRed(350,:)];
+    stages = {rt_unclamp_mid;rt_clamp_mid};
+    colors = [unclampColor;clampColor];
     nexttile;
     for s = 1:size(stages,1)
-        if isempty(stages{s}) || numel(stages{s})==1; continue; end
+        if isempty(stages{s}) || isscalar(stages{s}); continue; end
         [~,bootsam] = bootstrp(nboot,[],stages{s});
         bs = stages{s}(bootsam) / params.sync.behaviorFs;
-
+    
         h = histogram(bs,nBins); 
         h.FaceColor = colors(s,:); h.EdgeColor = colors(s,:); hold on
     end
     xlabel('First lick reaction time (s)'); ylabel('Count'); box off
     title("First lick reaction time (middle stage)");
-
+    
     % For late stage of session
     % Calculate bootstrap distribution
-    stages = {rt_pair_late;rt_stim_late;rt_tone_late};
-    colors = [bluePurpleRed(150,:);bluePurpleRed(end,:);bluePurpleRed(350,:)];
+    stages = {rt_unclamp_late;rt_clamp_late};
+    colors = [unclampColor;clampColor];
     nexttile;
     for s = 1:size(stages,1)
-        if isempty(stages{s}) || numel(stages{s})==1; continue; end
+        if isempty(stages{s}) || isscalar(stages{s}); continue; end
         [~,bootsam] = bootstrp(nboot,[],stages{s});
         bs = stages{s}(bootsam) / params.sync.behaviorFs;
-
+    
         h = histogram(bs,nBins); 
         h.FaceColor = colors(s,:); h.EdgeColor = colors(s,:); hold on
     end
     xlabel('First lick reaction time (s)'); ylabel('Count'); box off
     title("First lick reaction time (late stage)");
-
+    
     % Plot trend
     nexttile;
     plot(trials{1:end-1,"TrialNumber"},trials{1:end-1,"ReactionTime"}/params.sync.behaviorFs,Color=[0.75,0.75,0.75],LineWidth=2); hold on
-    scatter(pairTrials(:,1),trials{pairTrials(:,1),"ReactionTime"}/params.sync.behaviorFs,100,bluePurpleRed(150,:),'filled'); hold on
-    scatter(stimTrials(:,1),trials{stimTrials(:,1),"ReactionTime"}/params.sync.behaviorFs,100,bluePurpleRed(end,:),'filled'); hold on
-    scatter(toneTrials(:,1),trials{toneTrials(:,1),"ReactionTime"}/params.sync.behaviorFs,100,bluePurpleRed(350,:),'filled'); hold on
+    scatter(unclampTrials(:,1),trials{unclampTrials(:,1),"ReactionTime"}/params.sync.behaviorFs,100,unclampColor,'filled'); hold on
+    scatter(clampTrials(:,1),trials{clampTrials(:,1),"ReactionTime"}/params.sync.behaviorFs,100,clampColor,'filled'); hold on
     xlabel("Trials"); ylabel("Reaction time (s)"); box off
     title("First lick reaction time (all trials)");
-
-
+    
+    
     % 3. Distribution of anticipatory licks
-    al_pair = trials{pairTrials(:,1),["TrialNumber","nAnticipatoryLicks"]};
-    al_stim = trials{stimTrials(:,1),["TrialNumber","nAnticipatoryLicks"]};
-    al_tone = trials{toneTrials(:,1),["TrialNumber","nAnticipatoryLicks"]};
-    al_pair_early = al_pair(al_pair(:,1)<stageCutoff(1),2);
-    al_stim_early = al_stim(al_stim(:,1)<stageCutoff(1),2);
-    al_tone_early = al_tone(al_tone(:,1)<stageCutoff(1),2);
-    al_pair_mid = al_pair(al_pair(:,1)>=stageCutoff(1) & al_pair(:,1)<stageCutoff(2),2);
-    al_stim_mid = al_stim(al_stim(:,1)>=stageCutoff(1) & al_stim(:,1)<stageCutoff(2),2);
-    al_tone_mid = al_tone(al_tone(:,1)>=stageCutoff(1) & al_tone(:,1)<stageCutoff(2),2);
-    al_pair_late = al_pair(al_pair(:,1)<=stageCutoff(2),2);
-    al_stim_late = al_stim(al_stim(:,1)<=stageCutoff(2),2);
-    al_tone_late = al_tone(al_tone(:,1)<=stageCutoff(2),2);
-
+    al_unclamp = trials{unclampTrials(:,1),["TrialNumber","nAnticipatoryLicks"]};
+    al_clamp = trials{clampTrials(:,1),["TrialNumber","nAnticipatoryLicks"]};
+    al_unclamp_early = al_unclamp(al_unclamp(:,1)<stageCutoff(1),2);
+    al_clamp_early = al_clamp(al_clamp(:,1)<stageCutoff(1),2);
+    al_unclamp_mid = al_unclamp(al_unclamp(:,1)>=stageCutoff(1) & al_unclamp(:,1)<stageCutoff(2),2);
+    al_clamp_mid = al_clamp(al_clamp(:,1)>=stageCutoff(1) & al_clamp(:,1)<stageCutoff(2),2);
+    al_unclamp_late = al_unclamp(al_unclamp(:,1)<=stageCutoff(2),2);
+    al_clamp_late = al_clamp(al_clamp(:,1)<=stageCutoff(2),2);
+    
     % For early stage of session
     % Calculate bootstrap distribution
-    stages = {al_pair_early;al_stim_early;al_tone_early};
-    colors = [bluePurpleRed(150,:);bluePurpleRed(end,:);bluePurpleRed(350,:)];
+    stages = {al_unclamp_early;al_clamp_early};
+    colors = [unclampColor;clampColor];
     nexttile;
     for s = 1:size(stages,1)
-        if isempty(stages{s}) || numel(stages{s})==1; continue; end
+        if isempty(stages{s}) || isscalar(stages{s}); continue; end
         [~,bootsam] = bootstrp(nboot,[],stages{s});
         bs = stages{s}(bootsam);
-
+    
         h = histogram(bs,nBins); 
         h.FaceColor = colors(s,:); h.EdgeColor = colors(s,:); hold on
     end
     % xline(options.minLicks,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
     xlabel('Anticipatory licks'); ylabel('Count'); box off
     title("Anticipatory licks (early stage)");
-
+    
     % For middle stage of session
     % Calculate bootstrap distribution
-    stages = {al_pair_mid;al_stim_mid;al_tone_mid};
-    colors = [bluePurpleRed(150,:);bluePurpleRed(end,:);bluePurpleRed(350,:)];
+    stages = {al_unclamp_mid;al_clamp_mid};
+    colors = [unclampColor;clampColor];
     nexttile;
     for s = 1:size(stages,1)
-        if isempty(stages{s}) || numel(stages{s})==1; continue; end
+        if isempty(stages{s}) || isscalar(stages{s}); continue; end
         [~,bootsam] = bootstrp(nboot,[],stages{s});
         bs = stages{s}(bootsam);
-
+    
         h = histogram(bs,nBins); 
         h.FaceColor = colors(s,:); h.EdgeColor = colors(s,:); hold on
     end
     % xline(options.minLicks,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
     xlabel('Anticipatory licks'); ylabel('Count'); box off
     title("Anticipatory licks (middle stage)");
-
+    
     % For late stage of session
     % Calculate bootstrap distribution
-    stages = {al_pair_late;al_stim_late;al_tone_late};
-    colors = [bluePurpleRed(150,:);bluePurpleRed(end,:);bluePurpleRed(350,:)];
+    stages = {al_unclamp_late;al_clamp_late};
+    colors = [unclampColor;clampColor];
     nexttile;
     for s = 1:size(stages,1)
-        if isempty(stages{s}) || numel(stages{s})==1; continue; end
+        if isempty(stages{s}) || isscalar(stages{s}); continue; end
         [~,bootsam] = bootstrp(nboot,[],stages{s});
         bs = stages{s}(bootsam);
-
+    
         h = histogram(bs,nBins); 
         h.FaceColor = colors(s,:); h.EdgeColor = colors(s,:); hold on
     end
     % xline(options.minLicks,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
     xlabel('Anticipatory licks'); ylabel('Count'); box off
     title("Anticipatory licks (late stage)");
-
+    
     % Plot trend
     nexttile;
     yline(options.minLicks,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal'); hold on
     plot(trials{1:end-1,"TrialNumber"},trials{1:end-1,"nAnticipatoryLicks"},Color=[0.75,0.75,0.75],LineWidth=2); hold on
-    scatter(pairTrials(:,1),trials{pairTrials(:,1),"nAnticipatoryLicks"},100,bluePurpleRed(150,:),'filled'); hold on
-    scatter(stimTrials(:,1),trials{stimTrials(:,1),"nAnticipatoryLicks"},100,bluePurpleRed(end,:),'filled'); hold on
-    scatter(toneTrials(:,1),trials{toneTrials(:,1),"nAnticipatoryLicks"},100,bluePurpleRed(350,:),'filled'); hold on
+    scatter(unclampTrials(:,1),trials{unclampTrials(:,1),"nAnticipatoryLicks"},100,unclampColor,'filled'); hold on
+    scatter(clampTrials(:,1),trials{clampTrials(:,1),"nAnticipatoryLicks"},100,clampColor,'filled'); hold on
     xlabel("Trials"); ylabel("Anticipatory licks"); box off
     title("Anticipatory licks (all trials)");
-
-
+    
+    
     % 4. Distribution of reward rection time
-    ort_pair = trials{pairTrials(:,1),["TrialNumber","OutcomeReactionTime"]};
-    ort_stim = trials{stimTrials(:,1),["TrialNumber","OutcomeReactionTime"]};
-    ort_tone = trials{toneTrials(:,1),["TrialNumber","OutcomeReactionTime"]};
-    ort_pair_early = ort_pair(ort_pair(:,1)<stageCutoff(1),2);
-    ort_stim_early = ort_stim(ort_stim(:,1)<stageCutoff(1),2);
-    ort_tone_early = ort_tone(ort_tone(:,1)<stageCutoff(1),2);
-    ort_pair_mid = ort_pair(ort_pair(:,1)>=stageCutoff(1) & ort_pair(:,1)<stageCutoff(2),2);
-    ort_stim_mid = ort_stim(ort_stim(:,1)>=stageCutoff(1) & ort_stim(:,1)<stageCutoff(2),2);
-    ort_tone_mid = ort_tone(ort_tone(:,1)>=stageCutoff(1) & ort_tone(:,1)<stageCutoff(2),2);
-    ort_pair_late = ort_pair(ort_pair(:,1)<=stageCutoff(2),2);
-    ort_stim_late = ort_stim(ort_stim(:,1)<=stageCutoff(2),2);
-    ort_tone_late = ort_tone(ort_tone(:,1)<=stageCutoff(2),2);
-
+    ort_unclamp = trials{unclampTrials(:,1),["TrialNumber","OutcomeReactionTime"]};
+    ort_clamp = trials{clampTrials(:,1),["TrialNumber","OutcomeReactionTime"]};
+    ort_unclamp_early = ort_unclamp(ort_unclamp(:,1)<stageCutoff(1),2);
+    ort_clamp_early = ort_clamp(ort_clamp(:,1)<stageCutoff(1),2);
+    ort_unclamp_mid = ort_unclamp(ort_unclamp(:,1)>=stageCutoff(1) & ort_unclamp(:,1)<stageCutoff(2),2);
+    ort_clamp_mid = ort_clamp(ort_clamp(:,1)>=stageCutoff(1) & ort_clamp(:,1)<stageCutoff(2),2);
+    ort_unclamp_late = ort_unclamp(ort_unclamp(:,1)<=stageCutoff(2),2);
+    ort_clamp_late = ort_clamp(ort_clamp(:,1)<=stageCutoff(2),2);
+    
     % For early stage of session
     % Calculate bootstrap distribution
-    stages = {ort_pair_early;ort_stim_early;ort_tone_early};
-    colors = [bluePurpleRed(150,:);bluePurpleRed(end,:);bluePurpleRed(350,:)];
+    stages = {ort_unclamp_early;ort_clamp_early};
+    colors = [unclampColor;clampColor];
     nexttile;
     for s = 1:size(stages,1)
-        if isempty(stages{s}) || numel(stages{s})==1; continue; end
+        if isempty(stages{s}) || isscalar(stages{s}); continue; end
         [~,bootsam] = bootstrp(nboot,[],stages{s});
         bs = stages{s}(bootsam) / params.sync.behaviorFs;
-
+    
         h = histogram(bs,nBins); 
         h.FaceColor = colors(s,:); h.EdgeColor = colors(s,:); hold on
     end
     xlabel('Outcome reaction time (s)'); ylabel('Count'); box off
     title("Outcome reaction time (early stage)");
-
+    
     % For middle stage of session
     % Calculate bootstrap distribution
-    stages = {ort_pair_mid;ort_stim_mid;ort_tone_mid};
-    colors = [bluePurpleRed(150,:);bluePurpleRed(end,:);bluePurpleRed(350,:)];
+    stages = {ort_unclamp_mid;ort_clamp_mid};
+    colors = [unclampColor;clampColor];
     nexttile;
     for s = 1:size(stages,1)
-        if isempty(stages{s}) || numel(stages{s})==1; continue; end
+        if isempty(stages{s}) || isscalar(stages{s}); continue; end
         [~,bootsam] = bootstrp(nboot,[],stages{s});
         bs = stages{s}(bootsam) / params.sync.behaviorFs;
-
+    
         h = histogram(bs,nBins); 
         h.FaceColor = colors(s,:); h.EdgeColor = colors(s,:); hold on
     end
     xlabel('Outcome reaction time (s)'); ylabel('Count'); box off
     title("Outcome reaction time (middle stage)");
-
+    
     % For late stage of session
     % Calculate bootstrap distribution
-    stages = {ort_pair_late;ort_stim_late;ort_tone_late};
-    colors = [bluePurpleRed(150,:);bluePurpleRed(end,:);bluePurpleRed(350,:)];
+    stages = {ort_unclamp_late;ort_clamp_late};
+    colors = [unclampColor;clampColor];
     nexttile;
     for s = 1:size(stages,1)
-        if isempty(stages{s}) || numel(stages{s})==1; continue; end
+        if isempty(stages{s}) || isscalar(stages{s}); continue; end
         [~,bootsam] = bootstrp(nboot,[],stages{s});
         bs = stages{s}(bootsam) / params.sync.behaviorFs;
-
+    
         h = histogram(bs,nBins); 
         h.FaceColor = colors(s,:); h.EdgeColor = colors(s,:); hold on
     end
     xlabel('Outcome reaction time (s)'); ylabel('Count'); box off
     title("Outcome reaction time (late stage)");
-
+    
     % Plot trend
     nexttile;
     plot(trials{1:end-1,"TrialNumber"},trials{1:end-1,"OutcomeReactionTime"}/params.sync.behaviorFs,Color=[0.75,0.75,0.75],LineWidth=2); hold on
-    scatter(pairTrials(:,1),trials{pairTrials(:,1),"OutcomeReactionTime"}/params.sync.behaviorFs,100,bluePurpleRed(150,:),'filled'); hold on
-    scatter(stimTrials(:,1),trials{stimTrials(:,1),"OutcomeReactionTime"}/params.sync.behaviorFs,100,bluePurpleRed(end,:),'filled'); hold on
-    scatter(toneTrials(:,1),trials{toneTrials(:,1),"OutcomeReactionTime"}/params.sync.behaviorFs,100,bluePurpleRed(350,:),'filled'); hold on
+    scatter(unclampTrials(:,1),trials{unclampTrials(:,1),"OutcomeReactionTime"}/params.sync.behaviorFs,100,unclampColor,'filled'); hold on
+    scatter(clampTrials(:,1),trials{clampTrials(:,1),"OutcomeReactionTime"}/params.sync.behaviorFs,100,clampColor,'filled'); hold on
     xlabel("Trials"); ylabel("Outcome reaction time (s)"); box off
     title("Outcome reaction time (all trials)");
     
-    saveas(gcf,strcat(sessionpath,filesep,'Summary_distributions.png'));
+    saveas(gcf,strcat(sessionpath,filesep,'Summary_distributions.pdf'));
 
 end
 disp('Finished: all plots and struct are plotted and saved!');

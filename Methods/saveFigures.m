@@ -6,8 +6,8 @@ arguments
     path
 
     options.resolution double = 300
-    options.savePNG logical = true
-    options.savePDF logical = false
+    options.savePNG logical = false
+    options.savePDF logical = true
     options.saveFIG logical = false
 end
 
