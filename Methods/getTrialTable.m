@@ -23,6 +23,9 @@ toneON = events{5};
 if options.withClamp
     clampOnset = events{6};
 
+    % If allTrials is empty, clampON count as events
+    if isempty(allTrials); allTrials = clampOnset; end
+
     % Initialize trial table
     % Selection time: time of last choice lick (before outcome)
     % Reaction time: time of first lick
@@ -205,6 +208,13 @@ for i=1:length(allTrials)
 end
 
 % Add a row for outside events
+if isempty(trials)
+    trials(1,:) = {0,0,0,0,0,0,0,0,...
+                 0,0,0,0,0,0,0,0,...
+                 0,0,0,0,0,0,...
+                 {},{},{},{}};
+    return; 
+end
 trials(i+1,:) = {0,0,0,0,0,0,0,0,...
                  0,0,0,0,0,0,0,0,...
                  0,0,0,0,0,0,...

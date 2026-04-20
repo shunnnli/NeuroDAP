@@ -13,7 +13,7 @@ end
 combined = sort(horzcat(varargin{:}));
 diff_combined = [5*options.behaviorFs, diff(combined)];
 
-if isempty(combined); allTrials = []; return; end
+if isempty(combined); allTrials = []; pairIdx = []; return; end
 
 % Combine stim and tone that are sufficiently close to each other
 allTrials = combined(diff_combined > options.threshold*options.behaviorFs);

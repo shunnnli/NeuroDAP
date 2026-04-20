@@ -5,6 +5,7 @@ arguments
 
    % Record params
    options.NISetup string = 'clamp'
+   options.withClamp logical = false
    options.withPhotometryNI logical = false
    options.photometryNI_mod logical = false
    options.photometryNI_modFreq double = 0
@@ -490,11 +491,20 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
             else
                 disp("Ongoing: Process unmodulated photometry data");
                 % Downsample
-                processed = downsampleSignal(labjack.raw(i,:),...
-                            targetFs=options.downsampleFs,...
-                            originalFs=params.sync.labjackFs,...
-                            rollingZ=true,rollingWindowTime=options.rollingWindowTime,...
-                            dsMethod='resample');
+                if options.withClamp
+                    processed = downsampleSignal(labjack.raw(i,:),...
+                                targetFs=options.downsampleFs,...
+                                originalFs=params.sync.labjackFs,...
+                                rollingZ=false, dff=true,...
+                                rollingWindowTime=options.rollingWindowTime,...
+                                dsMethod=options.dsMethod);
+                else
+                    processed = downsampleSignal(labjack.raw(i,:),...
+                                targetFs=options.downsampleFs,...
+                                originalFs=params.sync.labjackFs,...
+                                rollingZ=true,rollingWindowTime=options.rollingWindowTime,...
+                                dsMethod=options.dsMethod);
+                end
                 
                 % Check final Fs
                 finalFs = length(processed.dsData) / totalDuration_LJ;
@@ -513,9 +523,15 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
                 timeSeries(i).time_offset = NaN;
                 timeSeries(i).demux = true;
                 timeSeries(i).demux_freq = NaN;
-                timeSeries(i).detrend = true;
-                timeSeries(i).detrend_type = 'rolling-z';
-                timeSeries(i).detrend_window = processed.options.rollingWindowTime;
+                if options.withClamp
+                    timeSeries(i).detrend = true;
+                    timeSeries(i).detrend_type = 'dff';
+                    timeSeries(i).detrend_window = processed.options.rollingWindowTime;
+                else
+                    timeSeries(i).detrend = true;
+                    timeSeries(i).detrend_type = 'rolling-z';
+                    timeSeries(i).detrend_window = processed.options.rollingWindowTime;
+                end
                 timeSeries(i).options = processed.options;
                 disp("Finished: no modulation, skip demodulation and downsampled");
             
@@ -579,10 +595,18 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
 
         else
             % Downsample
-            processed = downsampleSignal(photometry_raw,...
-                                targetFs=options.downsampleFs,originalFs=nidq.Fs,...
-                                rollingWindowTime=options.rollingWindowTime,...
-                                dsMethod=options.dsMethod);
+            if options.withClamp
+                processed = downsampleSignal(photometry_raw,...
+                                    targetFs=options.downsampleFs,originalFs=nidq.Fs,...
+                                    rollingZ=false, dff=true,...
+                                    rollingWindowTime=options.rollingWindowTime,...
+                                    dsMethod=options.dsMethod);
+            else
+                processed = downsampleSignal(photometry_raw,...
+                                    targetFs=options.downsampleFs,originalFs=nidq.Fs,...
+                                    rollingWindowTime=options.rollingWindowTime,...
+                                    dsMethod=options.dsMethod);
+            end
 
             % Check final Fs
             finalFs = length(processed.dsData) / totalDuration_NI;
@@ -601,9 +625,15 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
             timeSeries(i).time_offset = 0;
             timeSeries(i).demux = false;
             timeSeries(i).demux_freq = NaN;
-            timeSeries(i).detrend = true;
-            timeSeries(i).detrend_type = 'rolling-z';
-            timeSeries(i).detrend_window = processed.options.rollingWindowTime;
+            if options.withClamp
+                timeSeries(i).detrend = true;
+                timeSeries(i).detrend_type = 'dff';
+                timeSeries(i).detrend_window = processed.options.rollingWindowTime;
+            else
+                timeSeries(i).detrend = true;
+                timeSeries(i).detrend_type = 'rolling-z';
+                timeSeries(i).detrend_window = processed.options.rollingWindowTime;
+            end
             timeSeries(i).options = processed.options;
             disp('Finished: NI photometry downsampling');
         end
@@ -611,26 +641,54 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
 
     % Process clamp control signal if necessary
     if contains(options.NISetup,'clamp',IgnoreCase=true)
+        % Downsample
+        processed = downsampleSignal(blueClamp,...
+                            targetFs=options.downsampleFs,originalFs=nidq.Fs,...
+                            rollingZ=false);
+
+        % Check final Fs
+        finalFs = length(processed.dsData) / totalDuration_NI;
+        if options.downsampleFs ~= finalFs
+            disp(['finalFs: ',num2str(finalFs)]);
+            disp(['targetFs: ',num2str(options.downsampleFs)]);
+            warning("blueClamp: Desired downsampleFs is different from calculated Fs! Used calculated Fs instead!");
+        end
+
         % Store params
         timeSeries(i).name = 'blueClamp';
-        timeSeries(i).data = blueClamp;
-        timeSeries(i).finalFs = params.sync.behaviorFs;
+        timeSeries(i).data = processed.dsData;
+        timeSeries(i).finalFs = finalFs;
         timeSeries(i).system = 'NI';
         timeSeries(i).time_offset = 0;
         timeSeries(i).demux = false;
         timeSeries(i).demux_freq = NaN;
         timeSeries(i).detrend = false;
+        timeSeries(i).options = processed.options;
         disp('Finished: store blue clamping command');
+
+        % Downsample
+        processed = downsampleSignal(redClamp,...
+                            targetFs=options.downsampleFs,originalFs=nidq.Fs,...
+                            rollingZ=false);
+
+        % Check final Fs
+        finalFs = length(processed.dsData) / totalDuration_NI;
+        if options.downsampleFs ~= finalFs
+            disp(['finalFs: ',num2str(finalFs)]);
+            disp(['targetFs: ',num2str(options.downsampleFs)]);
+            warning("blueClamp: Desired downsampleFs is different from calculated Fs! Used calculated Fs instead!");
+        end
 
         % Store params
         timeSeries(i+1).name = 'redClamp';
-        timeSeries(i+1).data = redClamp;
-        timeSeries(i+1).finalFs = params.sync.behaviorFs;
+        timeSeries(i+1).data = processed.dsData;
+        timeSeries(i+1).finalFs = finalFs;
         timeSeries(i+1).system = 'NI';
         timeSeries(i+1).time_offset = 0;
         timeSeries(i+1).demux = false;
         timeSeries(i+1).demux_freq = NaN;
         timeSeries(i+1).detrend = false;
+        timeSeries(i+1).options = processed.options;
         disp('Finished: store red clamping command');
     end
 
@@ -754,11 +812,20 @@ if withCamera && (options.reloadAll || options.reloadCam)
             traces = {pupilArea; eyeArea; eyePixelIntensity};
             trace_names = {'pupilArea';'eyeArea';'eyePixelIntensity'};
             for i = 1:size(traces,1)
-                processed_cam = downsampleSignal(traces{i},...
+                if options.withClamp
+                    processed_cam = downsampleSignal(traces{i},...
+                                    targetFs=options.downsampleFs,...
+                                    originalFs=params.sync.camFs,...
+                                    rollingZ=false, dff=true,...
+                                    rollingWindowTime=options.rollingWindowTime,...
+                                    dsMethod='cloestInteger');
+                else
+                    processed_cam = downsampleSignal(traces{i},...
                                 targetFs=options.downsampleFs,...
                                 originalFs=params.sync.camFs,...
                                 rollingZ=true,rollingWindowTime=options.rollingWindowTime,...
                                 dsMethod='cloestInteger');
+                end
 
                 % Save to timeseries struct
                 if exist('timeSeries','var'); row = size(timeSeries,2) + 1;
@@ -770,9 +837,15 @@ if withCamera && (options.reloadAll || options.reloadCam)
                 timeSeries(row).time_offset = 0;
                 timeSeries(row).demux = false;
                 timeSeries(row).demux_freq = NaN;
-                timeSeries(row).detrend = true;
-                timeSeries(row).detrend_type = 'rolling-z';
-                timeSeries(row).detrend_window = processed_cam.options.rollingWindowTime;
+                if options.withClamp
+                    timeSeries(row).detrend = true;
+                    timeSeries(row).detrend_type = 'dff';
+                    timeSeries(row).detrend_window = processed_cam.options.rollingWindowTime;
+                else
+                    timeSeries(row).detrend = true;
+                    timeSeries(row).detrend_type = 'rolling-z';
+                    timeSeries(row).detrend_window = processed_cam.options.rollingWindowTime;
+                end
                 timeSeries(row).options = processed_cam.options;
             end
             disp("Finished: detrend eye, pupil area");
@@ -839,11 +912,20 @@ if withCamera && (options.reloadAll || options.reloadCam)
             traces = {pupilArea; eyeArea};
             trace_names = {'pupilArea';'eyeArea'};
             for i = 1:size(traces,1)
-                processed_cam = downsampleSignal(traces{i},...
-                                targetFs=options.downsampleFs,...
-                                originalFs=params.sync.camFs,...
-                                rollingZ=true,rollingWindowTime=options.rollingWindowTime,...
-                                dsMethod='cloestInteger');
+                if options.withClamp
+                    processed_cam = downsampleSignal(traces{i},...
+                                    targetFs=options.downsampleFs,...
+                                    originalFs=params.sync.camFs,...
+                                    rollingZ=false, dff=true,...
+                                    rollingWindowTime=options.rollingWindowTime,...
+                                    dsMethod='cloestInteger');
+                else
+                    processed_cam = downsampleSignal(traces{i},...
+                                    targetFs=options.downsampleFs,...
+                                    originalFs=params.sync.camFs,...
+                                    rollingZ=true,rollingWindowTime=options.rollingWindowTime,...
+                                    dsMethod='cloestInteger');
+                end
 
                 % Save to timeseries struct
                 row = size(timeSeries,2) + 1;
@@ -854,9 +936,15 @@ if withCamera && (options.reloadAll || options.reloadCam)
                 timeSeries(row).time_offset = 0;
                 timeSeries(row).demux = false;
                 timeSeries(row).demux_freq = NaN;
-                timeSeries(row).detrend = true;
-                timeSeries(row).detrend_type = 'rolling-z';
-                timeSeries(row).detrend_window = processed_cam.options.rollingWindowTime;
+                if options.withClamp
+                    timeSeries(row).detrend = true;
+                    timeSeries(row).detrend_type = 'dff';
+                    timeSeries(row).detrend_window = processed_cam.options.rollingWindowTime;
+                else
+                    timeSeries(row).detrend = true;
+                    timeSeries(row).detrend_type = 'rolling-z';
+                    timeSeries(row).detrend_window = processed_cam.options.rollingWindowTime;
+                end
                 timeSeries(row).options = processed_cam.options;
             end
             disp("Finished: detrend eye, pupil area");

@@ -7,7 +7,7 @@ arguments
     options.outputName string %name of the output file in subfolder of the session
     
     options.laserSource string = 'clamp'
-    options.intervalThreshold double = 20 % max interval of both clamps are off to be consider as clamp ON, in ms
+    options.intervalThreshold double = 50 % max interval of both clamps are off to be consider as clamp ON, in ms
 
     options.pavlovian logical = false
     options.reactionTime double = 1
@@ -203,13 +203,15 @@ end
 waterLickIdx = rmmissing(waterLickIdx);
 
 
-% Find clamp ON time
+%% Find clamp ON time
+
 gap_ms = options.intervalThreshold;                 % fill OFF gaps shorter than this
-noiseThresholdPct = 1;
+noiseThresholdPct = 5;
 smooth_ms = 3;               % small smoothing window for noise resistance
 blueOn = analogToLogical(blueClamp, params.sync.behaviorFs, noiseThresholdPct=noiseThresholdPct, smooth_ms=smooth_ms);
 redOn  = analogToLogical(redClamp,  params.sync.behaviorFs, noiseThresholdPct=noiseThresholdPct, smooth_ms=smooth_ms);
 clampON = blueOn | redOn; % Combine channels
+
 % Fill short OFF gaps
 maxGapSamples = round(gap_ms/1000 * params.sync.behaviorFs);
 offRuns = ~clampON;
@@ -224,7 +226,22 @@ for k = 1:numel(runStarts)
     end
 end
 clampON = reshape(clampON, size(blueClamp));
-save(strcat(sessionpath,filesep,'data_',options.outputName),'clampON','-append');
+% Find rising edge of clampON
+clampOnset = find(diff(clampON > 0.5) > 0) + 1;
+
+% %Code to check 
+% sampleStart = 105000; %3030000;
+% sampleWindow = sampleStart:sampleStart+300*params.sync.behaviorFs;
+% close all; initializeFig(0.8,0.4); tiledlayout(2,1);
+% 
+% nexttile;
+% plot(blueClamp(sampleWindow)); hold on;
+% plot(redClamp(sampleWindow)); hold on;
+% nexttile;
+% % plot(blueOn(sampleWindow)); hold on;
+% % plot(redOn(sampleWindow)); hold on;
+% plot(clampON(sampleWindow));
+save(strcat(sessionpath,filesep,'data_',options.outputName),'clampON','clampOnset','-append');
 
 disp('Finished: preprocess outcome and opto data');
 
@@ -235,7 +252,7 @@ if (~exist('trials','var') || options.redo)
     disp('Ongoing: making trial table');
     events{1} = allTrials;      events{2} = airpuffIdx;
     events{3} = waterIdx;       events{4} = rightLickON;
-    events{5} = find(leftTone); events{6} = find(clampON);
+    events{5} = find(leftTone); events{6} = clampOnset;
 
     trials = getTrialTable(options.task,events,rightSolenoid_rounded,airpuff_rounded,...
                 pavlovian=options.pavlovian,reactionTime=options.reactionTime,...
@@ -257,19 +274,20 @@ if (~exist('trials','var') || options.redo)
     trialTable.block = ones(size(trials,1),1);
     trialTable.session_position = (1:size(trials,1))';
     trialTable = replaceNaN(trialTable,-1);
-    parquetwrite(strcat(sessionpath,filesep,'trialTable.parquet'),trialTable);
-    % eventTable
-    eventTable = getEventTable(events,params);
-    parquetwrite(strcat(sessionpath,filesep,'eventTable.parquet'),eventTable);
-    % blockTable
-    firstTrial = 1; lastTrial = size(trials,1);
-    blockTable = table(firstTrial,lastTrial);
-    parquetwrite(strcat(sessionpath,filesep,'blockTable.parquet'),blockTable);
+    % parquetwrite(strcat(sessionpath,filesep,'trialTable.parquet'),trialTable);
+    % % eventTable
+    % eventTable = getEventTable(events,params);
+    % parquetwrite(strcat(sessionpath,filesep,'eventTable.parquet'),eventTable);
+    % % blockTable
+    % firstTrial = 1; lastTrial = size(trials,1);
+    % blockTable = table(firstTrial,lastTrial);
+    % parquetwrite(strcat(sessionpath,filesep,'blockTable.parquet'),blockTable);
     
 
     % Save to behavior_.mat
-    save(strcat(sessionpath,filesep,'behavior_',options.outputName),'trials',...
-        'eventTable','trialTable','blockTable','-append');
+    % save(strcat(sessionpath,filesep,'behavior_',options.outputName),'trials',...
+    %     'eventTable','trialTable','blockTable','-append');
+    save(strcat(sessionpath,filesep,'behavior_',options.outputName),'trials','trialTable','-append');
     disp('Finished: trial table saved');
 end
 
@@ -280,6 +298,7 @@ if strcmp(options.task,'random')
     
     % Select event idxs
     toneIdx = find(leftTone);
+    clampIdx = clampOnset;
 
     % Select baseline idx (align to each baseline lick)
     % baselineLicks = cell2mat(trials{~cellfun(@isempty,trials{1:end-1,'BaselineLicks'}),'BaselineLicks'});
@@ -291,11 +310,11 @@ if strcmp(options.task,'random')
     
     % Create task legend
     stageTime = [-2,0;0,2];
-    analysisEvents = {waterIdx,waterLickIdx,airpuffIdx,toneIdx,baselineIdx};
+    analysisEvents = {waterIdx,waterLickIdx,airpuffIdx,toneIdx, clampIdx, baselineIdx};
     eventTrialNum = {findTrials(waterIdx,trials),findTrials(waterLickIdx,trials),...
                         findTrials(airpuffIdx,trials),findTrials(toneIdx,trials),...
-                        findTrials(baselineIdx,trials)};
-    analysisLabels = {'Water','Rewarded licks','Airpuff','Tone','Baseline'};
+                        findTrials(clampIdx,trials),findTrials(baselineIdx,trials)};
+    analysisLabels = {'Water','Rewarded licks','Airpuff','Tone','Clamp','Baseline'};
     taskLegend = getLegend(analysisEvents,analysisLabels);
 
     stageColors = {[.75 .75 .75],bluePurpleRed(1,:)};
@@ -308,6 +327,10 @@ if strcmp(options.task,'random')
     for i = 1:length(analysisEvents)
         disp(['Total ',analysisLabels{i},': ',num2str(length(analysisEvents{i}))]);
     end
+
+    save(strcat(sessionpath,filesep,'behavior_',options.outputName),'allTrials',...
+        'waterIdx','waterLickIdx','airpuffIdx','clampIdx',...
+        '-append');
 
 else
     % Select baseline idx (align to each baseline lick)
@@ -389,7 +412,7 @@ else
     eventTrialNum = {findTrials(waterIdx,trials),findTrials(waterLickIdx,trials),...
                     clampTrials(:,1),unclampTrials(:,1),...
                     findTrials(airpuffIdx,trials),findTrials(baselineIdx,trials)};
-    analysisLabels = {'Water','Rewarded licks','Clamp','Unclamp','Airpuff','Baseline'};
+    analysisLabels = {'Water','Rewarded licks','Tone (clamp)','Tone (unclamp)','Airpuff','Baseline'};
     taskLegend = getLegend(analysisEvents,analysisLabels);
 
     stageColors = {[.75 .75 .75],bluePurpleRed(end,:),bluePurpleRed(1,:)};
@@ -442,14 +465,14 @@ if options.plotPhotometry && exist('timeSeries','var')
 
         skew_lj = skewness(timeSeries(path).data); 
         kur_lj = kurtosis(timeSeries(path).data);
-        xlabel('z-score'); ylabel('Count'); legend({'Normal distribution',timeSeries(path).name});
+        xlabel('\DeltaF/F'); ylabel('Count'); legend({'Normal distribution',timeSeries(path).name});
         
         title(timeSeries(path).name);
         subtitle(strcat("Skewness: ",num2str(skew_lj),", Kurtosis: ",num2str(kur_lj)));
     end
     
     % Save figure
-    saveas(gcf,strcat(sessionpath,filesep,'Summary_photometry_distribution.pdf'));
+    saveFigures(gcf,'Summary_photometry_distribution',sessionpath,savePDF=true);
 
     %% Loop through timeSeries struct
     for photometry = 1:nSignals
@@ -480,10 +503,12 @@ if options.plotPhotometry && exist('timeSeries','var')
                         signalFs=finalFs,signalSystem=system);
             [~,~] = plotTraces(toneIdx,timeRange,signal,bluePurpleRed(350,:),params,...
                         signalFs=finalFs,signalSystem=system);
+            [~,~] = plotTraces(clampIdx,timeRange,signal,clampColor,params,...
+                        signalFs=finalFs,signalSystem=system);
             [~,~] = plotTraces(baselineIdx,timeRange,signal,[.75 .75 .75],params,...
                         signalFs=finalFs,signalSystem=system);
             plotEvent('',0);
-            xlabel('Time (s)'); ylabel([name,' z-score']);
+            xlabel('Time (s)'); ylabel([name,' \DeltaF/F']);
             legend(taskLegend(2:end),'Location','northeast');
             
             % 2.2 Plot lick traces
@@ -491,6 +516,7 @@ if options.plotPhotometry && exist('timeSeries','var')
             plotLicks(waterLickIdx,timeRange,options.lick_binSize,bluePurpleRed(1,:),[],rightLick,params);
             plotLicks(airpuffIdx,timeRange,options.lick_binSize,[0.2, 0.2, 0.2],[],rightLick,params);
             plotLicks(toneIdx,timeRange,options.lick_binSize,bluePurpleRed(350,:),[],rightLick,params);
+            plotLicks(clampIdx,timeRange,options.lick_binSize,clampColor,[],rightLick,params);
             plotLicks(baselineIdx,timeRange,options.lick_binSize,[.75 .75 .75],[],rightLick,params);
             plotEvent('',0);
             xlabel('Time (s)'); ylabel('Licks/s'); 
@@ -502,9 +528,10 @@ if options.plotPhotometry && exist('timeSeries','var')
                 [~,~] = plotTraces(waterLickIdx,timeRange,eyeArea_detrend,bluePurpleRed(1,:),params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(airpuffIdx,timeRange,eyeArea_detrend,[0.2, 0.2, 0.2],params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(toneIdx,timeRange,eyeArea_detrend,bluePurpleRed(350,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(clampIdx,timeRange,eyeArea_detrend,clampColor,params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(baselineIdx,timeRange,eyeArea_detrend,[.75 .75 .75],params,signalSystem='camera',smooth=15);
                 plotEvent('',0);
-                xlabel('Time (s)'); ylabel('Eye area (z-score)');
+                xlabel('Time (s)'); ylabel('Eye area (a.u.)');
                 legend(taskLegend(2:end),'Location','northeast');
     
                 % 2.4 Plot pupil area traces
@@ -512,9 +539,10 @@ if options.plotPhotometry && exist('timeSeries','var')
                 [~,~] = plotTraces(waterLickIdx,timeRange,pupilArea_detrend,bluePurpleRed(1,:),params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(airpuffIdx,timeRange,pupilArea_detrend,[0.2, 0.2, 0.2],params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(toneIdx,timeRange,pupilArea_detrend,bluePurpleRed(350,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(clampIdx,timeRange,pupilArea_detrend,clampColor,params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(baselineIdx,timeRange,pupilArea_detrend,[.75 .75 .75],params,signalSystem='camera',smooth=15);
                 plotEvent('',0);
-                xlabel('Time (s)'); ylabel('Pupil area (z-score)');
+                xlabel('Time (s)'); ylabel('Pupil area (a.u.)');
                 legend(taskLegend(2:end),'Location','northeast');
             end
     
@@ -532,7 +560,7 @@ if options.plotPhotometry && exist('timeSeries','var')
             [~,~] = plotTraces(baselineIdx,timeRange,signal,[.75 .75 .75],params,...
                         signalFs=finalFs,signalSystem=system);
             plotEvent('',0);
-            xlabel('Time (s)'); ylabel([name,' z-score']);
+            xlabel('Time (s)'); ylabel([name,' \DeltaF/F']);
             legend(taskLegend(2:end),'Location','northeast');
             
             % 2.2 Plot lick traces
@@ -555,7 +583,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                 [~,~] = plotTraces(airpuffIdx,timeRange,eyeArea_detrend,[0.2, 0.2, 0.2],params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(baselineIdx,timeRange,eyeArea_detrend,[.75 .75 .75],params,signalSystem='camera',smooth=15);
                 plotEvent('',0);
-                xlabel('Time (s)'); ylabel('Eye area (z-score)');
+                xlabel('Time (s)'); ylabel('Eye area (a.u.)');
                 legend(taskLegend(2:end),'Location','northeast');
     
                 % 2.4 Plot pupil area traces
@@ -566,18 +594,18 @@ if options.plotPhotometry && exist('timeSeries','var')
                 [~,~] = plotTraces(airpuffIdx,timeRange,pupilArea_detrend,[0.2, 0.2, 0.2],params,signalSystem='camera',smooth=15);
                 [~,~] = plotTraces(baselineIdx,timeRange,pupilArea_detrend,[.75 .75 .75],params,signalSystem='camera',smooth=15);
                 plotEvent('',0);
-                xlabel('Time (s)'); ylabel('Pupil area (z-score)');
+                xlabel('Time (s)'); ylabel('Pupil area (a.u.)');
                 legend(taskLegend(2:end),'Location','northeast');
             end
         end 
-        saveas(gcf,strcat(sessionpath,filesep,'Summary_events_',timeSeries(path).name,'.pdf'));
+        saveFigures(gcf,strcat('Summary_events_',timeSeries(path).name),sessionpath,savePDF=true);
 
         %% Plot single stimulus PSTH
         if strcmp(options.task,'random')
-            eventIdxes = {waterLickIdx,toneIdx,airpuffIdx};
-            labels = {'Water','Tone','Airpuff'};
-            eventDurations = [0,0.25,0.02];
-            groupSizes = [30,10,30];
+            eventIdxes = {waterLickIdx,toneIdx,airpuffIdx,clampIdx};
+            labels = {'Water','Tone','Airpuff','Clamp'};
+            eventDurations = [0,0.25,0.02,5];
+            groupSizes = [30,10,30,10];
             longTimeRange = options.longTimeRange;
             shortTimeRange = options.shortTimeRange; 
             
@@ -595,19 +623,19 @@ if options.plotPhotometry && exist('timeSeries','var')
                                 signalFs=finalFs,signalSystem=system,...
                                 plotIndividual=true);
                 plotEvent(label,eventDuration); 
-                xlabel('Time (s)'); ylabel([name,' z-score']);
+                xlabel('Time (s)'); ylabel([name,' \DeltaF/F']);
                 legend({[label,' (n=',num2str(length(eventIdx)),')']},...
                         'Location','northeast');
                 
                 nexttile(7,[1 2]);
                 legendList = plotGroupTraces(traces,t,bluePurpleRed,groupSize=groupSize);
                 plotEvent(label,eventDuration);
-                xlabel('Time (s)'); ylabel([name,' z-score']);
+                xlabel('Time (s)'); ylabel([name,' \DeltaF/F']);
                 legend(legendList);
 
                 % Plot heatmap
                 nexttile(1,[4 2]);
-                plotHeatmap(traces,t);
+                plotHeatmap(traces,t,centerColorMap=false);
                 plotEvent(label,eventDuration);
                 xlabel('Time (s)'); ylabel('Trials');
 
@@ -618,22 +646,22 @@ if options.plotPhotometry && exist('timeSeries','var')
                                 signalFs=finalFs,signalSystem=system,...
                                 plotIndividual=true);
                 plotEvent(label,eventDuration);
-                xlabel('Time (s)'); ylabel([name,' z-score']);
+                xlabel('Time (s)'); ylabel([name,' \DeltaF/F']);
                 legend({[label,' (n=',num2str(length(eventIdx)),')']},...
                         'Location','northeast');
                 
                 nexttile(15,[1 2]);
                 legendList = plotGroupTraces(traces,t,bluePurpleRed,groupSize=groupSize);
                 plotEvent(label,eventDuration);
-                xlabel('Time (s)'); ylabel([name,' z-score']);
+                xlabel('Time (s)'); ylabel([name,' \DeltaF/F']);
                 legend(legendList);
                 
-                saveas(gcf,strcat(sessionpath,filesep,'Events_',timeSeries(path).name,'_',label,'.pdf'));
+                saveFigures(gcf,strcat('Events_',timeSeries(path).name,'_',label),sessionpath,savePDF=true);
             end
         else
             eventIdxes = {clampIdx,unclampIdx,waterLickIdx,airpuffIdx};
             omissionIdxes = {clampOmissionIdx, unclampOmissionIdx,[],[],[]};
-            labels = {'Clamp','Unclamp','Water','Airpuff'};
+            labels = {'Tone (clamp)','Tone (unclamp)','Water','Airpuff'};
             eventDurations = [0.25,0.25,0,0.02];
             groupSizes = [10,10,30,30];
             longTimeRange = options.longTimeRange;
@@ -657,7 +685,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                 [~,~] = plotTraces(omissionIdx,shortTimeRange,signal,[0.3, 0.3, 0.3],params,...
                                 signalFs=finalFs,signalSystem=system);
                 plotEvent(label,eventDuration);
-                xlabel('Time (s)'); ylabel([name,' z-score']);
+                xlabel('Time (s)'); ylabel([name,' \DeltaF/F']);
                 legend({[label,' (n=',num2str(length(eventIdx)),')'],...
                         [label,' omission (n=',num2str(length(omissionIdx)),')']},...
                         'Location','northeast');
@@ -665,12 +693,12 @@ if options.plotPhotometry && exist('timeSeries','var')
                 nexttile(7,[1 2]);
                 legendList = plotGroupTraces(traces,t,bluePurpleRed,groupSize=groupSize);
                 plotEvent(label,eventDuration);
-                xlabel('Time (s)'); ylabel([name,' z-score']);
+                xlabel('Time (s)'); ylabel([name,' \DeltaF/F']);
                 legend(legendList);
 
                 % Plot heatmap
                 nexttile(1,[4 2]);
-                plotHeatmap(traces,t);
+                plotHeatmap(traces,t,centerColorMap=false);
                 plotEvent(label,eventDuration);
                 xlabel('Time (s)'); ylabel('Trials');
 
@@ -682,7 +710,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                 [~,~] = plotTraces(omissionIdx,longTimeRange,signal,[0.2, 0.2, 0.2],params,...
                                 signalFs=finalFs,signalSystem=system);
                 plotEvent(label,eventDuration);
-                xlabel('Time (s)'); ylabel([name,' z-score']);
+                xlabel('Time (s)'); ylabel([name,' \DeltaF/F']);
                 legend({[label,' (n=',num2str(length(eventIdx)),')'],...
                         [label,' omission (n=',num2str(length(omissionIdx)),')']},...
                         'Location','northeast');
@@ -690,10 +718,10 @@ if options.plotPhotometry && exist('timeSeries','var')
                 nexttile(15,[1 2]);
                 legendList = plotGroupTraces(traces,t,bluePurpleRed,groupSize=groupSize);
                 plotEvent(label,eventDuration);
-                xlabel('Time (s)'); ylabel([name,' z-score']);
+                xlabel('Time (s)'); ylabel([name,' \DeltaF/F']);
                 legend(legendList);
 
-                saveas(gcf,strcat(sessionpath,filesep,'Events_',timeSeries(path).name,'_',label,'.pdf'));
+                saveFigures(gcf,strcat('Events_',timeSeries(path).name,'_',label),sessionpath,savePDF=true);
             end
         end
     end
@@ -719,7 +747,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                     plot(x,polyval(p,x),Color=stageColors{stage},lineWidth=5);
                 end
                 title(analysis(row).event);
-                xlabel('Trials'); ylabel([analysis(row).name,' signal average (z-score)']);
+                xlabel('Trials'); ylabel([analysis(row).name,' signal average (\DeltaF/F)']);
                 legend(stageLegend); box off
     
                 nexttile(eventPlotted+length(analysisEvents));
@@ -737,7 +765,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                 xlabel('Slope distribution (bootstrapped)'); ylabel('Count'); box off
             end
             % Save
-            saveas(gcf,strcat(sessionpath,filesep,'Analysis_',cur_signal,'_subtrial_average.pdf'));
+            saveFigures(gcf,strcat('Analysis_',cur_signal,'_subtrial_average'),sessionpath,savePDF=true);
         end
     
         %% Plot subtrial peak trend for baseline, CS, US
@@ -759,7 +787,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                     plot(x,polyval(p,x),Color=stageColors{stage},lineWidth=5);
                 end
                 title(analysis(row).event);
-                xlabel('Trials'); ylabel([analysis(row).name,' signal peak (z-score)']);
+                xlabel('Trials'); ylabel([analysis(row).name,' signal peak (\DeltaF/F)']);
                 legend(stageLegend); box off
     
                 nexttile(eventPlotted+length(analysisEvents));
@@ -777,7 +805,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                 xlabel('Slope distribution (bootstrapped)'); ylabel('Count'); box off
             end
             % Save
-            saveas(gcf,strcat(sessionpath,filesep,'Analysis_',cur_signal,'_subtrial_peak.pdf'));
+            saveFigures(gcf,strcat('Analysis_',cur_signal,'_subtrial_peak'),sessionpath,savePDF=true);
         end
     
         %% Plot subtrial trough trend for baseline, CS, US
@@ -799,7 +827,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                     plot(x,polyval(p,x),Color=stageColors{stage},lineWidth=5);
                 end
                 title(analysis(row).event);
-                xlabel('Trials'); ylabel([analysis(row).name,' signal trough (z-score)']);
+                xlabel('Trials'); ylabel([analysis(row).name,' signal trough (\DeltaF/F)']);
                 legend(stageLegend); box off
     
                 nexttile(eventPlotted+length(analysisEvents));
@@ -817,7 +845,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                 xlabel('Slope distribution (bootstrapped)'); ylabel('Count'); box off
             end
             % Save
-            saveas(gcf,strcat(sessionpath,filesep,'Analysis_',cur_signal,'_subtrial_trough.pdf'));
+            saveFigures(gcf,strcat('Analysis_',cur_signal,'_subtrial_trough'),sessionpath,savePDF=true);
         end
 
         %% Plot subtrial area trend for baseline, CS, US
@@ -839,7 +867,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                     plot(x,polyval(p,x),Color=stageColors{stage},lineWidth=5);
                 end
                 title(analysis(row).event);
-                xlabel('Trials'); ylabel([analysis(row).name,' signal area (z-score)']);
+                xlabel('Trials'); ylabel([analysis(row).name,' signal area (\DeltaF/F)']);
                 legend(stageLegend); box off
     
                 nexttile(eventPlotted+length(analysisEvents));
@@ -857,7 +885,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                 xlabel('Slope distribution (bootstrapped)'); ylabel('Count'); box off
             end
             % Save
-            saveas(gcf,strcat(sessionpath,filesep,'Analysis_',cur_signal,'_subtrial_area.pdf'));
+            saveFigures(gcf,strcat('Analysis_',cur_signal,'_subtrial_area'),sessionpath,savePDF=true);
         end
     end
 end
@@ -898,7 +926,7 @@ if options.plotBehavior
     % plot(trials{1:end-1,'TrialNumber'},trials{1:end-1,'nLicks'},'Color',bluePurpleRed(1,:),LineWidth=2);
     % xlabel('Trials'); ylabel('Licks per trial'); box off
 
-    saveas(gcf,strcat(sessionpath,filesep,'Behavior_ITI&LickBout.pdf'));
+    saveFigures(gcf,'Behavior_ITI&LickBout',sessionpath,savePDF=true);
 end
 
 
@@ -966,7 +994,7 @@ if options.plotBehavior && contains(options.task,'pairing')
         % Plot eye trace heatmap
         nexttile([2 2]);
         [allEyeTraces,t_cam] = plotTraces(trials{1:end-1,"CueTime"},cameraTimeRange,eyeArea_detrend,[0,0,0],params,plot=false,signalSystem='camera'); 
-        plotHeatmap(allEyeTraces,t_cam);
+        plotHeatmap(allEyeTraces,t_cam,centerColorMap=false);
         set(gca,'YDir','normal');
         colorbar; box off
         plotEvent('Cue',0.5);
@@ -998,7 +1026,7 @@ if options.plotBehavior && contains(options.task,'pairing')
                 legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial)];
             end
             plotEvent(label,0.25);
-            xlabel('Time (s)'); ylabel('Eye area (z-score)');
+            xlabel('Time (s)'); ylabel('Eye area (a.u.)');
             legend(legendList);
         end
     
@@ -1022,10 +1050,10 @@ if options.plotBehavior && contains(options.task,'pairing')
                 legendList{i} = ['Trial ', num2str(startTrial),'-',num2str(endTrial)];
             end
             plotEvent(label,0.25);
-            xlabel('Time (s)'); ylabel('Pupil area (z-score)');
+            xlabel('Time (s)'); ylabel('Pupil area (a.u.)');
             legend(legendList);
         end
-        saveas(gcf,strcat(sessionpath,filesep,'Behavior_EyeOverview.pdf'));
+        saveFigures(gcf,'Behavior_EyeOverview',sessionpath,savePDF=true);
     end
 
     %% Plot ENL aligned lick trace
@@ -1081,7 +1109,7 @@ if options.plotBehavior && contains(options.task,'pairing')
         xlabel('Time from ENL start (s)'); ylabel('Licks/s');
         legend(legendList);
     end
-    saveas(gcf,strcat(sessionpath,filesep,'Behavior_ENLAlignedLick.pdf'));
+    saveFigures(gcf,'Behavior_ENLAlignedLick',sessionpath,savePDF=true);
 
     %% Plot distributions
     initializeFig(1,1);
@@ -1104,10 +1132,10 @@ if options.plotBehavior && contains(options.task,'pairing')
     al_clamp = sum(reactionLicks,2);
     if options.pavlovian
         % Bootstrap baseline licking
-        lickCountBaseline = zeros(size(trials,1),nboot);
+        nBaselineTrials = size(allLicksBaseline,1);
+        lickCountBaseline = zeros(nBaselineTrials,nboot);
+        
         for i = 1:nboot
-            % Randomly select timepoints (columns) correspond to
-            % reactionTime window
             windowInBin = round(options.reactionTime / options.lick_binSize);
             baselineSamples = datasample(allLicksBaseline,windowInBin,2,'Replace',true); 
             lickCountBaseline(:,i) = sum(baselineSamples,2);
@@ -1394,7 +1422,7 @@ if options.plotBehavior && contains(options.task,'pairing')
     xlabel("Trials"); ylabel("Outcome reaction time (s)"); box off
     title("Outcome reaction time (all trials)");
     
-    saveas(gcf,strcat(sessionpath,filesep,'Summary_distributions.pdf'));
+    saveFigures(gcf,'Summary_distributions',sessionpath,savePDF=true);
 
 end
 disp('Finished: all plots and struct are plotted and saved!');

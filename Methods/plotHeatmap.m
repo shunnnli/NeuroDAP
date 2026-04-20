@@ -10,6 +10,8 @@ arguments
     options.flipYAxis logical = false
 
     options.plotColorBar logical = true
+    options.centerColorMap logical = true
+
     options.colorlim double
     options.colorBarLabel string
     options.colormap
@@ -23,7 +25,16 @@ end
 % Define colormap
 if ~isfield(options,'colormap')
     [~,~,~,~,blueWhiteRed,~,~] = loadColors;
-    options.colormap = blueWhiteRed;
+
+    if options.centerColorMap
+        options.colormap = blueWhiteRed;
+    else
+        % Use only the blue half by default, reversed so:
+        % small values -> white, large values -> blue
+        nHalf = ceil(size(blueWhiteRed,1)/2);
+        blueHalf = blueWhiteRed(1:nHalf,:);
+        options.colormap = flipud(blueHalf);
+    end
 end
 
 % Define color bar label
@@ -31,9 +42,14 @@ if ~isfield(options,'colorBarLabel')
     options.colorBarLabel = "Value";
 end
 
+% Define color limits
 if ~isfield(options,'colorlim')
-    climit = max(abs(data),[],"all");
-    options.colorlim = [-climit, climit];
+    if options.centerColorMap
+        climit = max(abs(data),[],"all");
+        options.colorlim = [-climit, climit];
+    else
+        options.colorlim = [min(data,[],"all"), max(data,[],"all")];
+    end
 end
 
 %% Plot heatmap
@@ -44,9 +60,8 @@ if strcmpi(options.dataType,'trials')
         set(gca,'YDir','normal');
     end
 
-    % Apply shared color limits + colormap HERE
     if ~isempty(options.colorlim)
-        clim(gca, options.colorlim);           % or: caxis(gca, options.colorlim)
+        clim(gca, options.colorlim);
     end
     colormap(gca, options.colormap);
 
@@ -57,6 +72,7 @@ if strcmpi(options.dataType,'trials')
 
     box off
     return;
+    
 elseif strcmpi(options.dataType,'heatmap')
     if isfield(options,'tile') 
         h = imagesc(options.tile,data); hold on; box off; 
@@ -92,9 +108,7 @@ elseif strcmpi(options.dataType,'heatmap')
     colormap(options.colormap);
 
     % Set NaN to transparent
-    % Create an alpha mask: 1 for non-NaN, 0 for NaN
     alphaMask = ~isnan(data);
-    % Apply the alpha mask to the image
     set(h, 'AlphaData', alphaMask);
 end
 

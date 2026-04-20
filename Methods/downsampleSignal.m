@@ -10,6 +10,7 @@ arguments
     options.movingAverageWindowSize double = 2
 
     options.rollingZ logical = true
+    options.dff logical = false
     options.rollingWindowTime double = 180
 
     % Ways to downsample if targetFs and originalFs aren't divided by an
@@ -81,6 +82,20 @@ if options.rollingZ
     % Rolling zscore for demodGreen and demodRed
     options.signalDetrendWindow = floor(options.rollingWindowTime*options.targetFs);
     downsampled.dsData = rollingZ(downsampled.dsData,options.signalDetrendWindow);
+
+elseif options.dff
+    % Rolling dF/F using rollingWindowTime
+    options.signalDetrendWindow = floor(options.rollingWindowTime*options.targetFs);
+    signalDetrendWindow = max(1, options.signalDetrendWindow);
+
+    % Use rolling median as local baseline F0
+    F0 = movmedian(downsampled.dsData, signalDetrendWindow, 'Endpoints','shrink');
+
+    % Avoid divide-by-zero
+    F0(abs(F0) < eps) = eps;
+
+    % dF/F = (F - F0) / F0
+    downsampled.dsData = (downsampled.dsData - F0) ./ F0;
 end
 
 downsampled.options = options;
