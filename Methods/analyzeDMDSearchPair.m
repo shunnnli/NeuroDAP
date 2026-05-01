@@ -170,6 +170,12 @@ Ithres = curCell.Stats{1}.Ithres; %2 * noise_all.sigma;
 % depthfilename = strcat(curSearch,'_depth*.mat');
 % spotsList = dir(fullfile(cellResultsPath,depthfilename));
 
+% Build informative pair folder name
+depthStr = strjoin(string(commonDepth), ',');
+pairFolderName = ['Pair ',num2str(searchPair(1)),'-',num2str(searchPair(2)),...
+    '_Vhold',num2str(round(search1_vhold)),'&',num2str(round(search2_vhold)),'mV',...
+    '_Depth',char(depthStr)];
+
 %% Generate a summary figure for each search
 
 for d = 1:length(commonDepth)
@@ -667,11 +673,9 @@ for d = 1:length(commonDepth)
     %% Save figure
     filename = ['spots_cell',num2str(curCell.Cell),'_depth',num2str(curDepth)];
     if diffVhold
-        filepath = fullfile(options.saveDataPath,['cell',num2str(curCell.Cell)],'Diff Vhold pairs',...
-                    ['Pair ',num2str(searchPair(1)),'-',num2str(searchPair(2))]);
+        filepath = fullfile(options.saveDataPath,['cell',num2str(curCell.Cell)],'Diff Vhold pairs',pairFolderName);
     else
-        filepath = fullfile(options.saveDataPath,['cell',num2str(curCell.Cell)],'Same Vhold pairs',...
-                    ['Pair ',num2str(searchPair(1)),'-',num2str(searchPair(2))]);
+        filepath = fullfile(options.saveDataPath,['cell',num2str(curCell.Cell)],'Same Vhold pairs',pairFolderName);
     end
     saveFigures(gcf,[filename,'_',curCell.Options{1}.feature],filepath,...
                 savePNG=options.savePNG,savePDF=options.savePDF,saveFIG=options.saveFIG);
