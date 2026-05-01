@@ -141,7 +141,7 @@ for i = 1:length(analysisEvents)
 end
 
 % Save
-save(strcat(params.session.path,filesep,'analysis_',params.session.name),'analysis','-append');
+save(strcat(osPathSwitch(params.session.path),filesep,'analysis_',params.session.name),'analysis','-append');
 disp('Finished: analysis struct created and saved');
 
 end

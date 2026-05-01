@@ -7,12 +7,12 @@ arguments
     options.outputName string %name of the output file in subfolder of the session
     
     options.laserSource string = 'clamp'
-    options.intervalThreshold double = 50 % max interval of both clamps are off to be consider as clamp ON, in ms
+    options.intervalThreshold double = 100 % max interval of both clamps are off to be consider as clamp ON, in ms
 
     options.pavlovian logical = false
     options.reactionTime double = 1
     options.minLicks double = 2 % min licks to get reward
-    options.combineOmission logical = true % combine omission trials
+    options.combineOmission logical = false % combine omission trials
 
     options.analyzeTraces logical = true
 
@@ -205,44 +205,59 @@ waterLickIdx = rmmissing(waterLickIdx);
 
 %% Find clamp ON time
 
-gap_ms = options.intervalThreshold;                 % fill OFF gaps shorter than this
-noiseThresholdPct = 5;
-smooth_ms = 3;               % small smoothing window for noise resistance
-blueOn = analogToLogical(blueClamp, params.sync.behaviorFs, noiseThresholdPct=noiseThresholdPct, smooth_ms=smooth_ms);
-redOn  = analogToLogical(redClamp,  params.sync.behaviorFs, noiseThresholdPct=noiseThresholdPct, smooth_ms=smooth_ms);
-clampON = blueOn | redOn; % Combine channels
+if ~exist('clampON','var') || options.redo
+    gap_ms = options.intervalThreshold;   % fill OFF gaps shorter than this
+    noiseThresholdPct = 20;
+    smooth_ms = 3;               % small smoothing window for noise resistance
+    onPct = 99;
+    offPct = 5;
 
-% Fill short OFF gaps
-maxGapSamples = round(gap_ms/1000 * params.sync.behaviorFs);
-offRuns = ~clampON;
-d = diff([false; offRuns(:); false]);
-runStarts = find(d == 1);
-runEnds   = find(d == -1) - 1;
-for k = 1:numel(runStarts)
-    runLen = runEnds(k) - runStarts(k) + 1;
-    % fill only internal OFF gaps shorter than threshold
-    if runLen <= maxGapSamples && runStarts(k) > 1 && runEnds(k) < numel(clampON)
-        clampON(runStarts(k):runEnds(k)) = true;
+    blueOn = analogToLogical(blueClamp, params.sync.behaviorFs, ...
+                                onPct=onPct, offPct=offPct,...
+                                noiseThresholdPct=noiseThresholdPct, smooth_ms=smooth_ms);
+    redOn  = analogToLogical(redClamp,  params.sync.behaviorFs, ...
+                                onPct=onPct, offPct=offPct,...
+                                noiseThresholdPct=noiseThresholdPct, smooth_ms=smooth_ms);
+    clampON = blueOn | redOn; % Combine channels
+    
+    % Fill short OFF gaps
+    maxGapSamples = round(gap_ms/1000 * params.sync.behaviorFs);
+    offRuns = ~clampON;
+    d = diff([false; offRuns(:); false]);
+    runStarts = find(d == 1);
+    runEnds   = find(d == -1) - 1;
+    for k = 1:numel(runStarts)
+        runLen = runEnds(k) - runStarts(k) + 1;
+        % fill only internal OFF gaps shorter than threshold
+        if runLen <= maxGapSamples && runStarts(k) > 1 && runEnds(k) < numel(clampON)
+            clampON(runStarts(k):runEnds(k)) = true;
+        end
     end
+    clampON = reshape(clampON, size(blueClamp));
+    % Find rising edge of clampON
+    clampOnset = find(diff(clampON > 0.5) > 0) + 1;
+
+    %% Code to check 
+    % sampleStart_sec = 96;
+    % sampleWindow_sec = 4;
+    % 
+    % sampleStart = sampleStart_sec*params.sync.behaviorFs;
+    % sampleWindow = sampleStart : sampleStart+sampleWindow_sec*params.sync.behaviorFs;
+    % sampleTime = sampleWindow ./ params.sync.behaviorFs;
+    % close all; initializeFig(0.8,0.4); tiledlayout(2,1);
+    % 
+    % nexttile;
+    % plot(sampleTime, blueClamp(sampleWindow)); hold on;
+    % plot(sampleTime, redClamp(sampleWindow)); hold on;
+    % nexttile;
+    % % plot(sampleTime, blueOn(sampleWindow)); hold on;
+    % % plot(sampleTime, redOn(sampleWindow)); hold on;
+    % plot(sampleTime, clampON(sampleWindow));
+    % xlabel('time (s)');
+    
+    %%
+    save(strcat(sessionpath,filesep,'data_',options.outputName),'clampON','clampOnset','-append');
 end
-clampON = reshape(clampON, size(blueClamp));
-% Find rising edge of clampON
-clampOnset = find(diff(clampON > 0.5) > 0) + 1;
-
-% %Code to check 
-% sampleStart = 105000; %3030000;
-% sampleWindow = sampleStart:sampleStart+300*params.sync.behaviorFs;
-% close all; initializeFig(0.8,0.4); tiledlayout(2,1);
-% 
-% nexttile;
-% plot(blueClamp(sampleWindow)); hold on;
-% plot(redClamp(sampleWindow)); hold on;
-% nexttile;
-% % plot(blueOn(sampleWindow)); hold on;
-% % plot(redOn(sampleWindow)); hold on;
-% plot(clampON(sampleWindow));
-save(strcat(sessionpath,filesep,'data_',options.outputName),'clampON','clampOnset','-append');
-
 disp('Finished: preprocess outcome and opto data');
 
 %% Generate trial and event table
@@ -252,7 +267,7 @@ if (~exist('trials','var') || options.redo)
     disp('Ongoing: making trial table');
     events{1} = allTrials;      events{2} = airpuffIdx;
     events{3} = waterIdx;       events{4} = rightLickON;
-    events{5} = find(leftTone); events{6} = clampOnset;
+    events{5} = find(leftTone); events{6} = clampON;
 
     trials = getTrialTable(options.task,events,rightSolenoid_rounded,airpuff_rounded,...
                 pavlovian=options.pavlovian,reactionTime=options.reactionTime,...
@@ -358,23 +373,23 @@ else
     else
         if contains(options.task,'reward')
             if options.performing
-                clampTrials = trials{trials.isTone == 0 & trials.isClamp == 1 ...
+                clampTrials = trials{trials.isTone == 1 & trials.isClamp == 1 ...
                     & trials.isReward == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
                 clampOmissionTrials = trials{trials.isTone == 0 & trials.isClamp == 1 ...
                     & trials.isReward == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                unclampTrials = trials{trials.isTone == 1 & trials.isClamp == 1 ...
+                unclampTrials = trials{trials.isTone == 1 & trials.isClamp == 0 ...
                     & trials.isReward == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                unclampOmissionTrials = trials{trials.isTone == 1 & trials.isClamp == 1 ...
+                unclampOmissionTrials = trials{trials.isTone == 1 & trials.isClamp == 0 ...
                     & trials.isReward == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
                 clampIdx = clampTrials(:,2);
                 clampOmissionIdx = clampOmissionTrials(:,2);
                 unclampIdx = unclampTrials(:,2);
                 unclampOmissionIdx = unclampOmissionTrials(:,2);
             else
-                clampTrials = trials{trials.isTone == 0 & trials.isClamp == 1 & trials.isReward == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                clampOmissionTrials = trials{trials.isTone == 0 & trials.isClamp == 1 & trials.isReward == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                unclampTrials = trials{trials.isTone == 1 & trials.isClamp == 1 & trials.isReward == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                unclampOmissionTrials = trials{trials.isTone == 1 & trials.isClamp == 1 & trials.isReward == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                clampTrials = trials{trials.isTone == 1 & trials.isClamp == 1 & trials.isReward == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                clampOmissionTrials = trials{trials.isTone == 1 & trials.isClamp == 1 & trials.isReward == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                unclampTrials = trials{trials.isTone == 1 & trials.isClamp == 0 & trials.isReward == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                unclampOmissionTrials = trials{trials.isTone == 1 & trials.isClamp == 0 & trials.isReward == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
                 clampIdx = clampTrials(:,2);
                 clampOmissionIdx = clampOmissionTrials(:,2);
                 unclampIdx = unclampTrials(:,2);
@@ -382,23 +397,23 @@ else
             end
         elseif contains(options.task,'punish')
             if options.performing
-                clampTrials = trials{trials.isTone == 0 & trials.isClamp == 1 ...
+                clampTrials = trials{trials.isTone == 1 & trials.isClamp == 1 ...
                     & trials.isPunishment == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                clampOmissionTrials = trials{trials.isTone == 0 & trials.isClamp == 1 ...
+                clampOmissionTrials = trials{trials.isTone == 1 & trials.isClamp == 1 ...
                     & trials.isPunishment == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                unclampTrials = trials{trials.isTone == 1 & trials.isClamp == 1 ...
+                unclampTrials = trials{trials.isTone == 1 & trials.isClamp == 0 ...
                     & trials.isPunishment == 1 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                unclampOmissionTrials = trials{trials.isTone == 1 & trials.isClamp == 1 ...
+                unclampOmissionTrials = trials{trials.isTone == 1 & trials.isClamp == 0 ...
                     & trials.isPunishment == 0 & trials.performing == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
                 clampIdx = clampTrials(:,2);
                 clampOmissionIdx = clampOmissionTrials(:,2);
                 unclampIdx = unclampTrials(:,2);
                 unclampOmissionIdx = unclampOmissionTrials(:,2);
             else
-                clampTrials = trials{trials.isTone == 0 & trials.isClamp == 1 & trials.isPunishment == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                clampOmissionTrials = trials{trials.isTone == 0 & trials.isClamp == 1 & trials.isPunishment == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                unclampTrials = trials{trials.isTone == 1 & trials.isClamp == 1 & trials.isPunishment == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
-                unclampOmissionTrials = trials{trials.isTone == 1 & trials.isClamp == 1 & trials.isPunishment == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                clampTrials = trials{trials.isTone == 1 & trials.isClamp == 1 & trials.isPunishment == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                clampOmissionTrials = trials{trials.isTone == 1 & trials.isClamp == 1 & trials.isPunishment == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                unclampTrials = trials{trials.isTone == 1 & trials.isClamp == 0 & trials.isPunishment == 1,["TrialNumber","CueTime","OutcomeTime","ENL"]};
+                unclampOmissionTrials = trials{trials.isTone == 1 & trials.isClamp == 0 & trials.isPunishment == 0,["TrialNumber","CueTime","OutcomeTime","ENL"]};
                 clampIdx = clampTrials(:,2);
                 clampOmissionIdx = clampOmissionTrials(:,2);
                 unclampIdx = unclampTrials(:,2);
@@ -508,7 +523,12 @@ if options.plotPhotometry && exist('timeSeries','var')
             [~,~] = plotTraces(baselineIdx,timeRange,signal,[.75 .75 .75],params,...
                         signalFs=finalFs,signalSystem=system);
             plotEvent('',0);
-            xlabel('Time (s)'); ylabel([name,' \DeltaF/F']);
+            xlabel('Time (s)'); 
+            if contains(name,'clamp',IgnoreCase=true)
+                ylabel([name,' (%)']);
+            else
+                ylabel([name,' \DeltaF/F']);
+            end
             legend(taskLegend(2:end),'Location','northeast');
             
             % 2.2 Plot lick traces
@@ -560,7 +580,12 @@ if options.plotPhotometry && exist('timeSeries','var')
             [~,~] = plotTraces(baselineIdx,timeRange,signal,[.75 .75 .75],params,...
                         signalFs=finalFs,signalSystem=system);
             plotEvent('',0);
-            xlabel('Time (s)'); ylabel([name,' \DeltaF/F']);
+            xlabel('Time (s)'); 
+            if contains(name,'clamp',IgnoreCase=true)
+                ylabel([name,' (%)']);
+            else
+                ylabel([name,' \DeltaF/F']);
+            end
             legend(taskLegend(2:end),'Location','northeast');
             
             % 2.2 Plot lick traces
@@ -623,14 +648,24 @@ if options.plotPhotometry && exist('timeSeries','var')
                                 signalFs=finalFs,signalSystem=system,...
                                 plotIndividual=true);
                 plotEvent(label,eventDuration); 
-                xlabel('Time (s)'); ylabel([name,' \DeltaF/F']);
+                xlabel('Time (s)');
+                if contains(name,'clamp',IgnoreCase=true)
+                    ylabel([name,' (%)']);
+                else
+                    ylabel([name,' \DeltaF/F']);
+                end
                 legend({[label,' (n=',num2str(length(eventIdx)),')']},...
                         'Location','northeast');
                 
                 nexttile(7,[1 2]);
                 legendList = plotGroupTraces(traces,t,bluePurpleRed,groupSize=groupSize);
                 plotEvent(label,eventDuration);
-                xlabel('Time (s)'); ylabel([name,' \DeltaF/F']);
+                xlabel('Time (s)'); 
+                if contains(name,'clamp',IgnoreCase=true)
+                    ylabel([name,' (%)']);
+                else
+                    ylabel([name,' \DeltaF/F']);
+                end
                 legend(legendList);
 
                 % Plot heatmap
@@ -646,14 +681,24 @@ if options.plotPhotometry && exist('timeSeries','var')
                                 signalFs=finalFs,signalSystem=system,...
                                 plotIndividual=true);
                 plotEvent(label,eventDuration);
-                xlabel('Time (s)'); ylabel([name,' \DeltaF/F']);
+                xlabel('Time (s)');
+                if contains(name,'clamp',IgnoreCase=true)
+                    ylabel([name,' (%)']);
+                else
+                    ylabel([name,' \DeltaF/F']);
+                end
                 legend({[label,' (n=',num2str(length(eventIdx)),')']},...
                         'Location','northeast');
                 
                 nexttile(15,[1 2]);
                 legendList = plotGroupTraces(traces,t,bluePurpleRed,groupSize=groupSize);
                 plotEvent(label,eventDuration);
-                xlabel('Time (s)'); ylabel([name,' \DeltaF/F']);
+                xlabel('Time (s)');
+                if contains(name,'clamp',IgnoreCase=true)
+                    ylabel([name,' (%)']);
+                else
+                    ylabel([name,' \DeltaF/F']);
+                end
                 legend(legendList);
                 
                 saveFigures(gcf,strcat('Events_',timeSeries(path).name,'_',label),sessionpath,savePDF=true);
@@ -682,10 +727,15 @@ if options.plotPhotometry && exist('timeSeries','var')
                 [traces,t] = plotTraces(eventIdx,shortTimeRange,signal,bluePurpleRed(1,:),params,...
                                 signalFs=finalFs,signalSystem=system,...
                                 plotIndividual=true);
-                [~,~] = plotTraces(omissionIdx,shortTimeRange,signal,[0.3, 0.3, 0.3],params,...
+                [~,~] = plotTraces(omissionIdx,shortTimeRange,signal,[0.6, 0.6, 0.6],params,...
                                 signalFs=finalFs,signalSystem=system);
                 plotEvent(label,eventDuration);
-                xlabel('Time (s)'); ylabel([name,' \DeltaF/F']);
+                xlabel('Time (s)');
+                if contains(name,'clamp',IgnoreCase=true)
+                    ylabel([name,' (%)']);
+                else
+                    ylabel([name,' \DeltaF/F']);
+                end
                 legend({[label,' (n=',num2str(length(eventIdx)),')'],...
                         [label,' omission (n=',num2str(length(omissionIdx)),')']},...
                         'Location','northeast');
@@ -693,7 +743,12 @@ if options.plotPhotometry && exist('timeSeries','var')
                 nexttile(7,[1 2]);
                 legendList = plotGroupTraces(traces,t,bluePurpleRed,groupSize=groupSize);
                 plotEvent(label,eventDuration);
-                xlabel('Time (s)'); ylabel([name,' \DeltaF/F']);
+                xlabel('Time (s)'); 
+                if contains(name,'clamp',IgnoreCase=true)
+                    ylabel([name,' (%)']);
+                else
+                    ylabel([name,' \DeltaF/F']);
+                end
                 legend(legendList);
 
                 % Plot heatmap
@@ -707,10 +762,15 @@ if options.plotPhotometry && exist('timeSeries','var')
                 [traces,t] = plotTraces(eventIdx,longTimeRange,signal,bluePurpleRed(1,:),params,...
                                 signalFs=finalFs,signalSystem=system,...
                                 plotIndividual=true);
-                [~,~] = plotTraces(omissionIdx,longTimeRange,signal,[0.2, 0.2, 0.2],params,...
+                [~,~] = plotTraces(omissionIdx,longTimeRange,signal,[0.6, 0.6, 0.6],params,...
                                 signalFs=finalFs,signalSystem=system);
                 plotEvent(label,eventDuration);
-                xlabel('Time (s)'); ylabel([name,' \DeltaF/F']);
+                xlabel('Time (s)');
+                if contains(name,'clamp',IgnoreCase=true)
+                    ylabel([name,' (%)']);
+                else
+                    ylabel([name,' \DeltaF/F']);
+                end
                 legend({[label,' (n=',num2str(length(eventIdx)),')'],...
                         [label,' omission (n=',num2str(length(omissionIdx)),')']},...
                         'Location','northeast');
@@ -718,7 +778,12 @@ if options.plotPhotometry && exist('timeSeries','var')
                 nexttile(15,[1 2]);
                 legendList = plotGroupTraces(traces,t,bluePurpleRed,groupSize=groupSize);
                 plotEvent(label,eventDuration);
-                xlabel('Time (s)'); ylabel([name,' \DeltaF/F']);
+                xlabel('Time (s)'); 
+                if contains(name,'clamp',IgnoreCase=true)
+                    ylabel([name,' (%)']);
+                else
+                    ylabel([name,' \DeltaF/F']);
+                end
                 legend(legendList);
 
                 saveFigures(gcf,strcat('Events_',timeSeries(path).name,'_',label),sessionpath,savePDF=true);
@@ -1141,22 +1206,34 @@ if options.plotBehavior && contains(options.task,'pairing')
             lickCountBaseline(:,i) = sum(baselineSamples,2);
         end
         % Plot unclamp trials anticipatory distribution
-        nexttile; events = al_unclamp; nboot_event = round(size(trials,1)*nboot/size(events,1));
-        h = histogram(lickCountBaseline,nBins); 
-        h.FaceColor = [0.75,0.75,0.75]; h.EdgeColor = [0.75,0.75,0.75]; hold on
-        [~,bootsam] = bootstrp(nboot_event,[],events);
-        h = histogram(events(bootsam),nBins);
+        nexttile; 
+        h = histogram(lickCountBaseline,nBins); h.FaceColor = [0.75,0.75,0.75]; h.EdgeColor = [0.75,0.75,0.75]; hold on
+        events = al_unclamp(:);   % or al_clamp(:)
+        if numel(events) < 2
+            warning('Not enough events for bootstrap: n=%d', numel(events));
+            h = histogram(events, nBins);   % or just skip plotting
+        else
+            nboot_event = round(size(trials,1) * nboot / numel(events));
+            [~, bootsam] = bootstrp(nboot_event, [], events);
+            h = histogram(events(bootsam), nBins);
+        end
         h.FaceColor = unclampColor; h.EdgeColor = unclampColor;
         % xline(options.minLicks,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
         xline(mean(events),'-r',{'Averge anticipatory licks','(unclamp trials)'},'LineWidth',3,'LabelOrientation','horizontal');
         xlabel('Anticipatory licks'); ylabel ('Count'); box off
         title("Baseline licks vs anticipatory licks (unclamp trials)");
         % Plot clamp trials anticipatory distribution
-        nexttile; events = al_clamp; nboot_event = round(size(trials,1)*nboot/size(events,1));
-        h = histogram(lickCountBaseline,nBins); 
-        h.FaceColor = [0.75,0.75,0.75]; h.EdgeColor = [0.75,0.75,0.75]; hold on
-        [~,bootsam] = bootstrp(nboot_event,[],events);
-        h = histogram(events(bootsam),nBins);
+        nexttile; 
+        h = histogram(lickCountBaseline,nBins); h.FaceColor = [0.75,0.75,0.75]; h.EdgeColor = [0.75,0.75,0.75]; hold on
+        events = al_clamp;
+        if numel(events) < 2
+            warning('Not enough events for bootstrap: n=%d', numel(events));
+            h = histogram(events, nBins);   % or just skip plotting
+        else
+            nboot_event = round(size(trials,1) * nboot / numel(events));
+            [~, bootsam] = bootstrp(nboot_event, [], events);
+            h = histogram(events(bootsam), nBins);
+        end
         h.FaceColor = clampColor; h.EdgeColor = clampColor;
         % xline(options.minLicks,'-.','Big reward cutoff','LineWidth',3,'LabelOrientation','horizontal');
         xline(mean(events),'-r',{'Averge anticipatory licks','(clamp only trials)'},'LineWidth',3,'LabelOrientation','horizontal');

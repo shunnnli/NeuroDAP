@@ -6,6 +6,8 @@ arguments
 
     options.noiseThresholdPct double = 1   % threshold as % of signal range above OFF level
     options.smooth_ms double = 3
+    options.onPct double = 99
+    options.offPct double = 5
 end
 
     x = x(:);
@@ -15,8 +17,8 @@ end
     xSmooth = movmedian(x, win);
 
     % 2) Estimate OFF and ON levels robustly from the signal itself
-    xOff = prctile(xSmooth, 5);
-    xOn  = prctile(xSmooth, 95);
+    xOff = prctile(xSmooth, options.offPct);
+    xOn  = prctile(xSmooth, options.onPct);
 
     % If signal has almost no dynamic range, return all false
     if (xOn - xOff) < eps

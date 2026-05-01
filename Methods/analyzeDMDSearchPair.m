@@ -13,9 +13,9 @@ arguments
     options.color
 
     options.save logical = true
-    options.savePNG logical = true
+    options.savePNG logical = false
     options.savePDF logical = true
-    options.saveFIG logical = true
+    options.saveFIG logical = false
 
     options.outputFs double = 10000
     options.timeRange double = [-1,50] % in ms

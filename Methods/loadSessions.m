@@ -9,6 +9,10 @@ arguments
    options.withPhotometryNI logical = false
    options.photometryNI_mod logical = false
    options.photometryNI_modFreq double = 0
+
+   % Clamp options
+   options.blueClampRange double = [800, 1500]
+   options.redClampRange double  = [25,  600]
    
    % Labjack concat options
    options.labjackSetup string = 'Shun'
@@ -641,8 +645,12 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
 
     % Process clamp control signal if necessary
     if contains(options.NISetup,'clamp',IgnoreCase=true)
+        % Convert blueClamp/redClamp to percentage
+        blueClamp_pct = voltage2percent(blueClamp,options.blueClampRange);
+        redClamp_pct  = voltage2percent(redClamp, options.redClampRange);
+
         % Downsample
-        processed = downsampleSignal(blueClamp,...
+        processed = downsampleSignal(blueClamp_pct,...
                             targetFs=options.downsampleFs,originalFs=nidq.Fs,...
                             rollingZ=false);
 
@@ -667,7 +675,7 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
         disp('Finished: store blue clamping command');
 
         % Downsample
-        processed = downsampleSignal(redClamp,...
+        processed = downsampleSignal(redClamp_pct,...
                             targetFs=options.downsampleFs,originalFs=nidq.Fs,...
                             rollingZ=false);
 

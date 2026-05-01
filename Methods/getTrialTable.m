@@ -21,10 +21,10 @@ rightLickON = events{4};
 toneON = events{5};
 
 if options.withClamp
-    clampOnset = events{6};
+    clampON = events{6};
 
-    % If allTrials is empty, clampON count as events
-    if isempty(allTrials); allTrials = clampOnset; end
+    % If allTrials is empty, clamp onset count as events
+    if isempty(allTrials); allTrials = find(clampON); end
 
     % Initialize trial table
     % Selection time: time of last choice lick (before outcome)
@@ -71,6 +71,7 @@ end
 
 % Define session related params
 gracePeriod = floor(0.2 * options.behaviorFs);
+end_gracePeriod = 2*options.behaviorFs;
 reactionTimeSamp = options.reactionTime * options.behaviorFs;
 
 % Loop over all trials
@@ -84,25 +85,32 @@ for i=1:length(allTrials)
     outcome = nan; choice = nan; outcomeReactionTime = nan;
 
     % Trial cue/stim
-    toneTime = toneON(toneON >= cur_cue-gracePeriod & toneON < next_cue-gracePeriod) - cur_cue;
+    toneTime = toneON(toneON >= cur_cue-gracePeriod & toneON < next_cue-end_gracePeriod) - cur_cue;
     isTone = ~isempty(toneTime);
 
     if options.withClamp
-        clampTime = clampOnset(clampOnset >= cur_cue-gracePeriod & clampOnset < next_cue-gracePeriod) - cur_cue;
-        isClamp = ~isempty(clampTime);
+        startIdx = max(1, round(cur_cue - gracePeriod));
+        
+        if i < length(allTrials)
+            endIdx = min(numel(clampON), round(next_cue - end_gracePeriod) - 1);
+        else
+            endIdx = numel(clampON);
+        end
+    
+        isClamp = startIdx <= endIdx && any(clampON(startIdx:endIdx));
     else
-        stimTime = stimON(stimON >= cur_cue-gracePeriod & stimON < next_cue-gracePeriod) - cur_cue;
+        stimTime = stimON(stimON >= cur_cue-gracePeriod & stimON < next_cue-end_gracePeriod) - cur_cue;
         isStim = ~isempty(stimTime);
-        stim2Time = stim2ON(stim2ON >= cur_cue-gracePeriod & stim2ON < next_cue-gracePeriod) - cur_cue;
+        stim2Time = stim2ON(stim2ON >= cur_cue-gracePeriod & stim2ON < next_cue-end_gracePeriod) - cur_cue;
         isStim2 = ~isempty(stim2Time);
     end
 
     % Trial outcome
-    rewardTime = rightSolenoidON(rightSolenoidON>=cur_cue-gracePeriod & rightSolenoidON<next_cue-gracePeriod) - cur_cue;
+    rewardTime = rightSolenoidON(rightSolenoidON>=cur_cue-gracePeriod & rightSolenoidON<next_cue-end_gracePeriod) - cur_cue;
     isReward = ~isempty(rewardTime);
     if isReward; rewardSize = sum(rightSolenoid_rounded(rewardTime + cur_cue));
     else; rewardSize = 0; rewardTime = reactionTimeSamp; end
-    punishTime = airpuffON(airpuffON>=cur_cue-gracePeriod & airpuffON<next_cue-gracePeriod) - cur_cue;
+    punishTime = airpuffON(airpuffON>=cur_cue-gracePeriod & airpuffON<next_cue-end_gracePeriod) - cur_cue;
     isPunishment = ~isempty(punishTime);
     if isPunishment; punishSize = sum(airpuff_rounded(punishTime + cur_cue));
     else; punishSize = 0; punishTime = reactionTimeSamp; end
