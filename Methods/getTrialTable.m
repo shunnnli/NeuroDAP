@@ -18,13 +18,14 @@ allTrials = events{1};
 airpuffON = events{2};
 rightSolenoidON = events{3};
 rightLickON = events{4};
-toneON = events{5};
+leftToneON = events{5};
 
 if options.withClamp
-    clampON = events{6};
+    rightToneON = events{6};
+    clampON = events{7};
 
     % If allTrials is empty, clamp onset count as events
-    if isempty(allTrials); allTrials = find(clampON); end
+    if isempty(allTrials); allTrials = find(diff(clampON > 0.5) > 0) + 1; end
 
     % Initialize trial table
     % Selection time: time of last choice lick (before outcome)
@@ -36,7 +37,7 @@ if options.withClamp
                 'double','double','double','double','double','double',...
                 'cell','cell','cell','cell'};
     varNames = {'TrialNumber','Choice','Outcome',...
-                'isTone','isClamp','isReward','isPunishment','isStim',...
+                'isTone','isLeftTone','isClamp','isReward','isPunishment',...
                 'CueTime','NextCue','ENL','ITI','ReactionTime','OutcomeTime','OutcomeReactionTime','LastLickTime',...
                 'RewardSize','PunishSize','nLicks','nAnticipatoryLicks','nOutcomeLicks','nBaselineLicks',...
                 'TrialLicks','AnticipatoryLicks','OutcomeLicks','BaselineLicks'};
@@ -85,8 +86,13 @@ for i=1:length(allTrials)
     outcome = nan; choice = nan; outcomeReactionTime = nan;
 
     % Trial cue/stim
-    toneTime = toneON(toneON >= cur_cue-gracePeriod & toneON < next_cue-end_gracePeriod) - cur_cue;
+    leftToneTime = leftToneON(leftToneON >= cur_cue-gracePeriod & leftToneON < next_cue-end_gracePeriod) - cur_cue;
+    rightToneTime = rightToneON(rightToneON >= cur_cue-gracePeriod & rightToneON < next_cue-end_gracePeriod) - cur_cue;
+    allToneTimes = [leftToneTime(:); rightToneTime(:)];
+    toneTime = NaN;
+    if ~isempty(allToneTimes), toneTime = min(allToneTimes); end
     isTone = ~isempty(toneTime);
+    isLeftTone = ~isempty(leftToneTime);
 
     if options.withClamp
         startIdx = max(1, round(cur_cue - gracePeriod));
@@ -202,7 +208,7 @@ for i=1:length(allTrials)
     % Trial table
     if options.withClamp
         trials(i,:) = {i,choice,outcome,...
-            isTone,isClamp,isReward,isPunishment,false,...
+            isTone,isLeftTone,isClamp,isReward,isPunishment,...
             cur_cue,next_cue,ENL,ITI,reactionTime,outcomeTime,outcomeReactionTime,lastLickTime,...
             rewardSize,punishSize,nLicks,nAnticipatoryLicks,size(outcomeLicks,1),size(baselineLicks,1),...
             num2cell(trialLicks,[1 2]),num2cell(choiceLicks+cur_cue,[1 2]),num2cell(outcomeLicks+cur_cue,[1 2]),num2cell(baselineLicks+cur_cue,[1 2])};

@@ -82,9 +82,11 @@ elseif strcmpi('clamp',options.user)
     % Convert other analog signals to digital 
     % Rising edge: temp == 1
     % Falling edge: temp == -1
-    leftLick = (analogNI(1,:)> (max(analogNI(1,:))/2));
-    temp = [false, diff(leftLick)];
-    leftLick = (temp==-1);
+
+    % leftLick = (analogNI(1,:)> (max(analogNI(1,:))/2));
+    % temp = [false, diff(leftLick)];
+    % leftLick = (temp==-1);
+    clampTarget = analogNI(1,:);
     
     rightLick = (analogNI(2,:)> (max(analogNI(2,:))/2));
     temp = [false, diff(rightLick)];
@@ -136,7 +138,7 @@ elseif strcmpi('clamp',options.user)
     syncNI = digitalNI(2,:); % Save sync channel from NIDAQ data separately
 
     % Set output
-    channels{1} = leftLick; channels{2} = rightLick;
+    channels{1} = clampTarget; channels{2} = rightLick;
     channels{3} = blueClamp; channels{4} = redClamp; channels{5} = photometry_raw;
 
     channels{6} = airpuff; channels{7} = leftSolenoid; channels{8} = rightSolenoid;

@@ -6,7 +6,7 @@ arguments
     options.redStim logical = true
     options.pavlovian logical = false
     options.reactionTime double = 2
-    options.minLicks double = 2
+    options.minLicks double = 4
 
     options.optoTriggered logical = false
     options.optoInverted logical = true

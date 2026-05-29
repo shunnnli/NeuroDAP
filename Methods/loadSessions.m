@@ -221,6 +221,7 @@ if withNI
     if options.reloadAll || options.reloadNI
         channels = assignNIDAQChannel(analogNI, digitalNI,user=options.NISetup,...
             invertStim=options.invertStim,getConsecutive=options.getConsecutive);
+        totalDuration_NI = length(channels{1}) / params.sync.behaviorFs;
         
         % Save assigned channels separately for later analysis
         if strcmpi(options.NISetup,'Shun')
@@ -243,7 +244,7 @@ if withNI
             end
 
         elseif strcmpi(options.NISetup,'clamp')
-            leftLick = channels{1}; rightLick = channels{2};
+            clampTarget = channels{1}; rightLick = channels{2};
             blueClamp = channels{3}; redClamp = channels{4}; photometry_raw = channels{5};
 
             airpuff = channels{6}; allTones = channels{13};
@@ -251,6 +252,10 @@ if withNI
             leftTone = channels{9}; rightTone = channels{10};
             redLaser = channels{11}; blueLaser = channels{12};
             syncNI = channels{14};
+
+            % Convert blueClamp/redClamp to percentage
+            blueClamp_pct = voltage2percent(blueClamp,options.blueClampRange);
+            redClamp_pct  = voltage2percent(redClamp, options.redClampRange);
             
             if options.saveDigitalNI
                 if ~isfield(options,'saveDigitalNIChannelIdx')
@@ -295,13 +300,15 @@ if withNI
         elseif strcmpi(options.NISetup,'clamp')
             if options.withPhotometryNI || options.noSyncPulse
                 save(dataOutputName,...
-                    'airpuff','leftLick','rightLick','leftTone','rightTone',....
-                    'leftSolenoid','rightSolenoid','allTones','blueClamp','redClamp',...
+                    'airpuff','clampTarget','rightLick','leftTone','rightTone',....
+                    'leftSolenoid','rightSolenoid','allTones',...
+                    'blueClamp','redClamp','blueClamp_pct','redClamp_pct',...
                     'photometry_raw','blueLaser','redLaser','savedDigitalNI','-append');
             else
                 save(dataOutputName,...
-                    'airpuff','leftLick','rightLick','leftTone','rightTone',....
-                    'leftSolenoid','rightSolenoid','allTones','blueClamp','redClamp',...
+                    'airpuff','clampTarget','rightLick','leftTone','rightTone',....
+                    'leftSolenoid','rightSolenoid','allTones',...
+                    'blueClamp','redClamp','blueClamp_pct','redClamp_pct',...
                     'blueLaser','redLaser','savedDigitalNI','-append');
             end
         elseif strcmpi(options.NISetup,'Kevin')
@@ -558,7 +565,6 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
     % Process NIDAQ photometry data
     if options.withPhotometryNI == true
         params.sync.ni_photometryFs = [];
-        totalDuration_NI = length(photometry_raw) / params.sync.behaviorFs;
         disp("Ongoing: Process NI photometry data");
 
         % Find row to store
@@ -645,10 +651,6 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
 
     % Process clamp control signal if necessary
     if contains(options.NISetup,'clamp',IgnoreCase=true)
-        % Convert blueClamp/redClamp to percentage
-        blueClamp_pct = voltage2percent(blueClamp,options.blueClampRange);
-        redClamp_pct  = voltage2percent(redClamp, options.redClampRange);
-
         % Downsample
         processed = downsampleSignal(blueClamp_pct,...
                             targetFs=options.downsampleFs,originalFs=nidq.Fs,...
@@ -698,6 +700,31 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
         timeSeries(i+1).detrend = false;
         timeSeries(i+1).options = processed.options;
         disp('Finished: store red clamping command');
+
+        % % Downsample
+        % processed = downsampleSignal(clampTarget,...
+        %                     targetFs=options.downsampleFs,originalFs=nidq.Fs,...
+        %                     rollingZ=false);
+        % 
+        % % Check final Fs
+        % finalFs = length(processed.dsData) / totalDuration_NI;
+        % if options.downsampleFs ~= finalFs
+        %     disp(['finalFs: ',num2str(finalFs)]);
+        %     disp(['targetFs: ',num2str(options.downsampleFs)]);
+        %     warning("blueClamp: Desired downsampleFs is different from calculated Fs! Used calculated Fs instead!");
+        % end
+        % 
+        % % Store params
+        % timeSeries(i+1).name = 'clampTarget';
+        % timeSeries(i+1).data = processed.dsData;
+        % timeSeries(i+1).finalFs = finalFs;
+        % timeSeries(i+1).system = 'NI';
+        % timeSeries(i+1).time_offset = 0;
+        % timeSeries(i+1).demux = false;
+        % timeSeries(i+1).demux_freq = NaN;
+        % timeSeries(i+1).detrend = false;
+        % timeSeries(i+1).options = processed.options;
+        % disp('Finished: store clampTarget command');
     end
 
     %% Plot signals and save channels

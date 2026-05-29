@@ -18,6 +18,8 @@ arguments
     
     options.plot logical = true
     options.markerSize double = 20
+    options.LineStyle (1,1) string = "-"
+    options.LineWidth (1,1) {mustBeNumeric} = 2
 end
 
 if strcmpi(params.session.baselineSystem,'lj')
@@ -46,11 +48,11 @@ if options.plot
         % draw lick rate traces
         if all(options.side == [1 1])
             t = linspace(timeRange(1),timeRange(2),size(lickRate{1},2));
-            plotSEM(t,lickRate{1},color{1});
-            plotSEM(t,lickRate{2},color{2});
+            plotSEM(t,lickRate{1},color{1},LineStyle=options.LineStyle,LineWidth=options.LineWidth);
+            plotSEM(t,lickRate{2},color{2},LineStyle=options.LineStyle,LineWidth=options.LineWidth);
         else
             t = linspace(timeRange(1),timeRange(2),size(lickRate,2));
-            plotSEM(t,lickRate,color);
+            plotSEM(t,lickRate,color,LineStyle=options.LineStyle,LineWidth=options.LineWidth);
         end
     
     elseif strcmp(options.mode,'raster')
