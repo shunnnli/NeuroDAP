@@ -10,6 +10,7 @@ arguments
     options.movingAverageWindowSize double = 2
 
     options.rollingZ logical = true
+    options.dff logical = false
     options.rollingWindowTime double = 180
 
     % Ways to downsample if targetFs and originalFs aren't divided by an
@@ -30,7 +31,7 @@ if mod(nSampPerBin,1) == 0
     for k = 1:length(photometry_downsample)
         firstBinTime = floor(nSampPerBin*(k-1)+1);
         lastBinTime = floor(nSampPerBin*k);
-        photometry_downsample(k) = sum(rawTraces(floor(firstBinTime:lastBinTime)));
+        photometry_downsample(k) = mean(rawTraces(floor(firstBinTime:lastBinTime)));
 
         % if k==length(photometry_downsample) && lastBinTime < length(rawTraces)
         %     firstBinTime = lastBinTime + 1;
@@ -57,7 +58,7 @@ else
         for k = 1:length(photometry_downsample)
             firstBinTime = floor(nSampPerBin*(k-1)+1);
             lastBinTime = floor(nSampPerBin*k);
-            photometry_downsample(k) = sum(rawTraces(floor(firstBinTime:lastBinTime)));
+            photometry_downsample(k) = mean(rawTraces(floor(firstBinTime:lastBinTime)));
         end
         clear nSampPerBin firstBinTime lastBinTime
 
@@ -81,6 +82,20 @@ if options.rollingZ
     % Rolling zscore for demodGreen and demodRed
     options.signalDetrendWindow = floor(options.rollingWindowTime*options.targetFs);
     downsampled.dsData = rollingZ(downsampled.dsData,options.signalDetrendWindow);
+
+elseif options.dff
+    % Rolling dF/F using rollingWindowTime
+    options.signalDetrendWindow = floor(options.rollingWindowTime*options.targetFs);
+    signalDetrendWindow = max(1, options.signalDetrendWindow);
+
+    % Use rolling median as local baseline F0
+    F0 = movmedian(downsampled.dsData, signalDetrendWindow, 'Endpoints','shrink');
+
+    % Avoid divide-by-zero
+    F0(abs(F0) < eps) = eps;
+
+    % dF/F = (F - F0) / F0
+    downsampled.dsData = (downsampled.dsData - F0) ./ F0;
 end
 
 downsampled.options = options;

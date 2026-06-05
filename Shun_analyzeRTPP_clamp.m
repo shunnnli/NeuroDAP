@@ -19,7 +19,7 @@
 
 %% Load
 clear; close all;
-addpath(genpath(osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
+loadNeuroDAP;
 [~,~,~,~,~,~,bluePurpleRed] = loadColors;
 
 %% Pick animal folders
@@ -257,7 +257,7 @@ for animalIdx = 1:nAnimals
             plot(X(Y <  yMidpoint), Y(Y <  yMidpoint), 'Color', leftColor,  'LineWidth', 2);
             legend({'Right', 'Left'}, 'Location', 'northeast');
         else
-            if contains(options.box,'clamp',IgnoreCase=true)
+            if contains(box,'clamp',IgnoreCase=true)
                 if sessions(sessionIdx).stimSideFromFolder == "right"
                     plot(X(Y <  yMidpoint), Y(Y <  yMidpoint), 'Color', stimColor, 'LineWidth', 2);
                     plot(X(Y >= yMidpoint), Y(Y >= yMidpoint), 'Color', ctrlColor, 'LineWidth', 2);
