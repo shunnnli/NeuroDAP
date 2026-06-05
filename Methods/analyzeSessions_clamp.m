@@ -84,6 +84,11 @@ disp(['Finished: Session ',options.outputName,' loaded']);
 
 % Load task
 if ~isfield(params.session,'task') && isfield(options,'task')
+    if contains(sessionName,'stepTest',IgnoreCase=true)
+        options.task = 'step';
+    elseif contains(sessionName,'rampTest',IgnoreCase=true)
+        options.task = 'ramp';
+    end
     params.session.task = options.task; 
 elseif isfield(params.session,'task') && isfield(options,'task')
     if ~strcmpi(options.task,params.session.task)
@@ -91,9 +96,21 @@ elseif isfield(params.session,'task') && isfield(options,'task')
         params.session.task = options.task;
         disp('Finished: options.task not provided or differed, use the original one');
     end
+    if contains(sessionName,'stepTest',IgnoreCase=true)
+        options.task = 'step';
+    elseif contains(sessionName,'rampTest',IgnoreCase=true)
+        options.task = 'ramp';
+    end
+    params.session.task = options.task;
 elseif ~isfield(params.session,'task') && ~isfield(options,'task')
     if contains(sessionTask,["Random","H"],IgnoreCase=false)
-        options.task = 'random';
+        if contains(sessionName,'stepTest',IgnoreCase=true)
+            options.task = 'step';
+        elseif contains(sessionName,'rampTest',IgnoreCase=true)
+            options.task = 'ramp';
+        else
+            options.task = 'random';
+        end
         params.session.task = options.task;
     elseif contains(sessionTask,["P","PP","Punish"],IgnoreCase=false)
         options.task = 'punish pairing';
@@ -113,6 +130,11 @@ elseif ~isfield(params.session,'task') && ~isfield(options,'task')
     disp(['Finished: parsing session task as ',options.task]);
 elseif isfield(params.session,'task') && ~isfield(options,'task')
     options.task = params.session.task;
+    if contains(sessionName,'stepTest',IgnoreCase=true)
+        options.task = 'step';
+    elseif contains(sessionName,'rampTest',IgnoreCase=true)
+        options.task = 'ramp';
+    end
 end
 
 % Define baselineSystem
@@ -207,36 +229,6 @@ end
 waterLickIdx = rmmissing(waterLickIdx);
 
 
-%% Process clampTarget
-
-% % detect whether clampTarget is flat across session, if yes skip
-% % processing
-% if max(abs(clampTarget)) < 0.01
-%     % convert to df/f target
-%     anchor = mode(round(clampTarget,3));
-%     clampTarget_dff    = clampTarget / anchor - 1;
-% 
-%     % Step onsets: where dff jumps away from 0
-%     clampStepOnsets = find(diff(abs(dff) > 0.01) == 1) + 1;
-%     save(strcat(sessionpath,filesep,'data_',options.outputName),'clampTarget_dff','clampStepOnsets','-append');
-% end
-% 
-% % Extract clampEvents if neccessary (step/ramp)
-% STEP_AMPS = [-0.20, -0.10, 0.10, 0.20, 0.50, 0.80];
-% RAMP_AMPS = [0.20, -0.20, 0.10, -0.10];
-% 
-% TARGET_DFF_THRESHOLD = 0.035;
-% AMP_MATCH_TOL = 0.04;
-% 
-% if contains(options.task,'ramp')
-%     step_ramp_events = findStepEvents( ...
-%     clampTarget_dff, params.sync.behaviorFs, STEP_AMPS, TARGET_DFF_THRESHOLD, AMP_MATCH_TOL);
-% elseif contains(options.task,'step')
-%     step_ramp_events = findRampEvents( ...
-%     clampTarget_dff, params.sync.behaviorFs, RAMP_AMPS, TARGET_DFF_THRESHOLD, AMP_MATCH_TOL);
-% end
-
-
 %% Find clamp ON time
 if ~exist('clampON','var') || options.redo
     % Get clamp trace pct if needed
@@ -250,18 +242,7 @@ if ~exist('clampON','var') || options.redo
     % Convert to logical
     Fs = params.sync.behaviorFs;
     gap_ms = options.intervalThreshold;   % fill OFF gaps shorter than this
-    
     offPctBlue = 1; offPctRed = 1;
-
-    % noiseThresholdPct = 5;
-    % smooth_ms = 3;               % small smoothing window for noise resistance
-    % onPct = 99;
-    % blueOn = analogToLogical(blueClamp_pct, Fs, ...
-    %                             onPct=onPct, offPct=offPctBlue,...
-    %                             noiseThresholdPct=noiseThresholdPct, smooth_ms=smooth_ms);
-    % redOn  = analogToLogical(redClamp_pct,  Fs, ...
-    %                             onPct=onPct, offPct=offPctRed,...
-    %                             noiseThresholdPct=noiseThresholdPct, smooth_ms=smooth_ms);
 
     blueOn = blueClamp_pct >= offPctBlue;
     redOn  = redClamp_pct >= offPctRed;
@@ -282,7 +263,8 @@ if ~exist('clampON','var') || options.redo
     end
     clampON = reshape(clampON, size(blueClamp_pct));
     % Find rising edge of clampON
-    clampOnset = find(diff(clampON > 0.5) > 0) + 1;
+    clampOnset = (find(diff(clampON > 0.5) > 0) + 1)';
+    clampOffset = (find(diff(clampON > 0.5) < 0) + 1)';
 
     %% Code to check 
     sampleStart_sec = 1112;
@@ -304,8 +286,102 @@ if ~exist('clampON','var') || options.redo
     saveFigures(gcf,'Sample-clamp-detection',sessionpath,savePNG=true,savePDF=false);
     
     %%
-    save(strcat(sessionpath,filesep,'data_',options.outputName),'clampON','clampOnset','-append');
+    save(strcat(sessionpath,filesep,'data_',options.outputName),'clampON','clampOnset','clampOffset','-append');
 end
+
+%% Process clampTarget
+
+if ~exist('clampTarget_dff','var') || options.redo
+    bumplessOnDuration = 150 / 1000; % in sec
+    bumplessOnSamples = Fs *  bumplessOnDuration;
+    
+    stableBaselineDuration = 200 / 1000; % in sec
+    stableBaselineSamples = Fs * stableBaselineDuration;
+    
+    % Convert clampON portion of clampTarget to dff
+    clampTarget_dff = clampTarget;
+    
+    if length(clampOnset) > 1
+        for i = 1:length(clampOnset)
+            baselineStartSample = clampOnset(i)+bumplessOnSamples;
+            baselineEndSample = clampOnset(i)+bumplessOnSamples+stableBaselineSamples;
+            baselineWindow = baselineStartSample : baselineEndSample;
+            F0 = median(clampTarget(baselineWindow));
+        
+            clampWindow = clampOnset(i):clampOffset(i);
+            clampTarget_dff(clampWindow) = (clampTarget(clampWindow) - F0) ./ F0;
+        end
+    else
+        F0 = mode(clampTarget);
+        clampTarget_dff = (clampTarget - F0) ./ F0;
+    end
+
+    %% Plot to check clampTarget_dff
+    if length(clampOnset) > 1
+        i = 26;
+        baselineStartSample = clampOnset(i)+bumplessOnSamples;
+        baselineEndSample = clampOnset(i)+bumplessOnSamples+stableBaselineSamples;
+        baselineWindow = baselineStartSample : baselineEndSample;
+        F0 = median(clampTarget(baselineWindow));
+        baselineStartTime = baselineStartSample / Fs;
+        baselineEndTime = baselineEndSample / Fs;
+        
+        sampleWindow = clampOnset(i)+1000:clampOffset(i)-1000;
+        sampleTime = sampleWindow ./ Fs;
+    
+    
+        close all; initializeFig(0.8,0.4); tiledlayout(2,1);
+    
+        nexttile;
+        plot(sampleTime, clampTarget(sampleWindow)); hold on;
+        scatter(baselineStartTime, F0, 50, 'red', 'filled'); hold on;
+        scatter(baselineEndTime, F0, 50, 'red', 'filled'); hold on;
+        nexttile;
+        plot(sampleTime, clampTarget_dff(sampleWindow));
+        xlabel('time (s)');
+    else
+        sampleStart_sec = 1112;
+        sampleWindow_sec = 60;
+    
+        sampleStart = sampleStart_sec*Fs;
+        sampleWindow = sampleStart : sampleStart+sampleWindow_sec*Fs;
+        sampleTime = sampleWindow ./ Fs;
+        close all; initializeFig(0.8,0.4); tiledlayout(2,1);
+    
+        nexttile;
+        plot(sampleTime, clampTarget(sampleWindow)); hold on;
+        nexttile;
+        plot(sampleTime, clampTarget_dff(sampleWindow));
+        xlabel('time (s)');
+    end
+    saveFigures(gcf,'Sample-clampTarget_dff-conversion',sessionpath,savePNG=true,savePDF=false);
+
+    %%
+    save(strcat(sessionpath,filesep,'data_',options.outputName),'clampTarget_dff','-append');
+end
+
+%% Extract clampEvents if neccessary (step/ramp)
+
+if contains(options.task,'step') || contains(options.task,'ramp')
+    STEP_AMPS = [-0.20, -0.10, 0.10, 0.20, 0.50, 0.80];
+    RAMP_AMPS = [0.20, -0.20, 0.10, -0.10];
+    
+    TARGET_DFF_THRESHOLD = 0.01;
+    AMP_MATCH_TOL = 0.05;
+    
+    if contains(options.task,'step')
+        AMPS = STEP_AMPS;
+        step_ramp_events = findStepEvents( ...
+        clampTarget_dff, params.sync.behaviorFs, AMPS, TARGET_DFF_THRESHOLD, AMP_MATCH_TOL);
+    elseif contains(options.task,'ramp')
+        AMPS = RAMP_AMPS;
+        step_ramp_events = findRampEvents( ...
+        clampTarget_dff, params.sync.behaviorFs, AMPS, TARGET_DFF_THRESHOLD, AMP_MATCH_TOL);
+    end
+
+    save(strcat(sessionpath,filesep,'behavior_',options.outputName),'step_ramp_events','-append');
+end
+
 disp('Finished: preprocess outcome and opto data');
 
 %% Generate trial and event table
@@ -316,7 +392,12 @@ if (~exist('trials','var') || options.redo)
     events{1} = allTrials;      events{2} = airpuffIdx;
     events{3} = waterIdx;       events{4} = rightLickON;
     events{5} = find(leftTone); events{6} = find(rightTone);
-    events{7} = clampON;
+
+    if contains(options.task,'step') || contains(options.task,'ramp')
+        events{7} = step_ramp_events.start_idx;
+    else
+        events{7} = clampON;
+    end
 
     trials = getTrialTable(options.task,events,rightSolenoid_rounded,airpuff_rounded,...
                 pavlovian=options.pavlovian,reactionTime=options.reactionTime,...
@@ -358,7 +439,7 @@ end
 
 %% Task specific params
 
-if strcmp(options.task,'random')
+if strcmp(options.task,'random') || strcmp(options.task,'step') || strcmp(options.task,'ramp')
     
     % Select event idxs
     toneIdx = find(leftTone);
@@ -373,30 +454,44 @@ if strcmp(options.task,'random')
     baselineIdx = randi([randomMinSample,randomMaxSample],100,1); % changed to rightLickON if only baseline licks
     
     % Create task legend
-    stageTime = [-2,0;0,2];
-    analysisEvents = {waterIdx,waterLickIdx,airpuffIdx,toneIdx, clampIdx, baselineIdx};
-    eventTrialNum = {findTrials(waterIdx,trials),findTrials(waterLickIdx,trials),...
-                        findTrials(airpuffIdx,trials),findTrials(toneIdx,trials),...
-                        findTrials(clampIdx,trials),findTrials(baselineIdx,trials)};
-    analysisLabels = {'Water','Rewarded licks','Airpuff','Tone','Clamp','Baseline'};
-    taskLegend = getLegend(analysisEvents,analysisLabels);
+    if contains(options.task,'step') || contains(options.task,'ramp')
+        stageTime = [-2,0;0,10];
+        analysisEvents = cell(numel(AMPS), 1);
+        eventTrialNum  = cell(numel(AMPS), 1);
+        analysisLabels = cell(numel(AMPS), 1);
 
-    stageColors = {[.75 .75 .75],bluePurpleRed(1,:)};
-    stageLegend = {'Baseline','US'};
+        for i = 1:numel(AMPS)
+            idx = step_ramp_events.amp == AMPS(i);
+            analysisEvents{i} = step_ramp_events.start_idx(idx);
+            eventTrialNum{i}  = step_ramp_events.trial(idx);
+            analysisLabels{i} = sprintf('amp=%.2g', AMPS(i));
+        end
+    else
+        stageTime = [-2,0;0,2];
+        analysisEvents = {waterIdx,waterLickIdx,airpuffIdx,toneIdx,clampIdx,baselineIdx};
+        eventTrialNum = {findTrials(waterIdx,trials),findTrials(waterLickIdx,trials),...
+                            findTrials(airpuffIdx,trials),findTrials(toneIdx,trials),...
+                            findTrials(clampIdx,trials),findTrials(baselineIdx,trials)};
+        analysisLabels = {'Water','Rewarded licks','Airpuff','Tone','Clamp','Baseline'};
+        taskLegend = getLegend(analysisEvents,analysisLabels);
     
-    eventTrialNum = eventTrialNum(~cellfun('isempty',analysisEvents));
-    analysisLabels = analysisLabels(~cellfun('isempty',analysisEvents));
-    analysisEvents = analysisEvents(~cellfun('isempty',analysisEvents));
+        stageColors = {[.75 .75 .75],bluePurpleRed(1,:)};
+        stageLegend = {'Baseline','US'};
+        
+        eventTrialNum = eventTrialNum(~cellfun('isempty',analysisEvents));
+        analysisLabels = analysisLabels(~cellfun('isempty',analysisEvents));
+        analysisEvents = analysisEvents(~cellfun('isempty',analysisEvents));
+        
+        for i = 1:length(analysisEvents)
+            disp(['Total ',analysisLabels{i},': ',num2str(length(analysisEvents{i}))]);
+        end
     
-    for i = 1:length(analysisEvents)
-        disp(['Total ',analysisLabels{i},': ',num2str(length(analysisEvents{i}))]);
+        save(strcat(sessionpath,filesep,'behavior_',options.outputName),'allTrials',...
+            'waterIdx','waterLickIdx','airpuffIdx','clampIdx',...
+            '-append');
     end
 
-    save(strcat(sessionpath,filesep,'behavior_',options.outputName),'allTrials',...
-        'waterIdx','waterLickIdx','airpuffIdx','clampIdx',...
-        '-append');
-
-else
+elseif contains(options.task,'reward') || contains(options.task,'punish')
     % Select baseline idx (align to each baseline lick)
     % baselineLicks = cell2mat(trials{~cellfun(@isempty,trials{1:end-1,'BaselineLicks'}),'BaselineLicks'});
     % if isempty(baselineLicks); baselineIdx = round((trials{2:end,"CueTime"} - trials{2:end,"ENL"}) - 5*params.sync.behaviorFs);
@@ -492,12 +587,12 @@ else
     end
 
     stageTime = [-2,0;0,0.5;0.5,5];
-    analysisEvents = {waterIdx,waterLickIdx,clampIdx,unclampIdx,airpuffIdx,baselineIdx,clampOmissionIdx,unclampOmissionIdx};
+    analysisEvents = {waterIdx,waterLickIdx,clampIdx,unclampIdx,clampOmissionIdx,unclampOmissionIdx,airpuffIdx,baselineIdx};
     eventTrialNum = {findTrials(waterIdx,trials),findTrials(waterLickIdx,trials),...
                     clampTrials(:,1),unclampTrials(:,1),...
-                    findTrials(airpuffIdx,trials),findTrials(baselineIdx,trials),...
-                    clampOmissionTrials(:,1),unclampOmissionTrials(:,1)};
-    analysisLabels = {'Water','Rewarded licks','Tone (clamp)','Tone (unclamp)','Airpuff','Baseline','Tone (clamp omission)','Tone (unclamp omission)'};
+                    clampOmissionTrials(:,1),unclampOmissionTrials(:,1),...
+                    findTrials(airpuffIdx,trials),findTrials(baselineIdx,trials)};
+    analysisLabels = {'Water','Rewarded licks','Tone (clamp)','Tone (unclamp)','Tone (clamp omission)','Tone (unclamp omission)','Airpuff','Baseline',};
     taskLegend = getLegend(analysisEvents,analysisLabels);
 
     stageColors = {[.75 .75 .75],bluePurpleRed(end,:),bluePurpleRed(1,:)};
@@ -524,9 +619,10 @@ if options.analyzeTraces
     if ~exist('timeSeries','var')
         timeSeries = struct([]);
     end
+
     analysis = analyzeTraces(timeSeries,rightLick,analysisEvents,analysisLabels,params,...
-                         stageTime=stageTime,...
-                         trialNumber=eventTrialNum,trialTable=trials);
+                     stageTime=stageTime,...
+                     trialNumber=eventTrialNum,trialTable=trials);
 end
 
 %% Plot photometry summary plots
@@ -557,7 +653,7 @@ if options.plotPhotometry && exist('timeSeries','var')
     end
     
     % Save figure
-    saveFigures(gcf,'Summary_photometry_distribution',sessionpath,savePDF=true);
+    saveFigures(gcf,'Summary_photometry_distribution',sessionpath,savePDF=false, savePNG=true);
 
     %% Loop through timeSeries struct
     for photometry = 1:nSignals
@@ -577,6 +673,53 @@ if options.plotPhotometry && exist('timeSeries','var')
             initializeFig(0.5, 1); tiledlayout(4,1);
         else
             initializeFig(0.5,0.5); tiledlayout(2,1);
+        end
+
+        % For stepTest & rampTest, plot analysis
+        if contains(options.task,'step') || contains(options.task,'ramp')
+            initializeFig(0.67,0.8); tiledlayout(1,2);
+        
+            pos_amps = AMPS(AMPS > 0); pos_legend = compose("amp=%.2g", pos_amps); 
+            neg_amps = AMPS(AMPS < 0); neg_legend = compose("amp=%.2g", neg_amps); 
+            pos_colorIdx = round(linspace(1,500,length(pos_amps)));
+            neg_colorIdx = round(linspace(1,500,length(neg_amps)));
+            
+            % Plot positive-going events
+            nexttile;
+            for i = 1:length(pos_amps)
+                idx = step_ramp_events.amp == pos_amps(i);
+                start_idx = step_ramp_events.start_idx(idx);
+                [~,~] = plotTraces(start_idx,options.longTimeRange,signal,bluePurpleRed(pos_colorIdx(i),:),params,...
+                                signalFs=finalFs,signalSystem=system);
+                xlabel('Time (s)'); 
+                if contains(name,'clamp',IgnoreCase=true)
+                    ylabel([name,' (%)']);
+                else
+                    ylabel([name,' \DeltaF/F']);
+                end
+                legend(pos_legend,'Location','northeast');
+            end
+        
+            % Plot negative-going events
+            nexttile;
+            for i = 1:length(neg_amps)
+                idx = step_ramp_events.amp == neg_amps(i);
+                start_idx = step_ramp_events.start_idx(idx);
+                [~,~] = plotTraces(start_idx,options.longTimeRange,signal,bluePurpleRed(neg_colorIdx(i),:),params,...
+                                signalFs=finalFs,signalSystem=system);
+                xlabel('Time (s)'); 
+                if contains(name,'clamp',IgnoreCase=true)
+                    ylabel([name,' (%)']);
+                else
+                    ylabel([name,' \DeltaF/F']);
+                end
+                legend(neg_legend,'Location','northeast');
+            end
+
+            saveFigures(gcf,strcat('Summary_events_',timeSeries(path).name),sessionpath,savePDF=true);
+        
+            if photometry == nSignals; return
+            else; continue; end
         end
 
         if strcmp(options.task,'random')

@@ -45,7 +45,7 @@ end
 
 
 % Run each session
-for s = 2:length(sessionList)
+for s = 1:length(sessionList)
     close all;
     clearvars -except s sessionList errorSessionIdx analysisParams sessionParams taskList redStimPatternList blueStimPatternList withPhotometryNI plotPhotometry reloadAll
     
@@ -234,18 +234,6 @@ return
 
 
 
-
-
-
-
-
-
-
-
-
-
-%% EP LHb pair
-
 %% Single session analysis for BrainClamp
 
 clear; close all;
@@ -257,7 +245,7 @@ errorSessionIdx = [];
 
 % Select anlaysis params
 [analysisParams,canceled] = inputAnalysisParams(sessionList,...
-                                reloadAll=false,...
+                                reloadAll=true,...
                                 recordLJ='[1 1 0]',...
                                 plotPhotometry=true,...
                                 plotBehavior=true,...
@@ -269,7 +257,7 @@ for s = 1:length(sessionList)
 end 
 % Select session params
 [sessionParams,canceled] = inputSessionParams(sessionList,...
-                                paradigm=2,...
+                                paradigm=1,...
                                 pavlovian=true,...
                                 reactionTime=1.5);
 if canceled; return; end
@@ -304,7 +292,8 @@ for s = 1:length(sessionList)
             withPhotometryNI=analysisParams(idx).withPhotometryNI,photometryNI_mod=false,...
             recordLJ=analysisParams(idx).recordLJ,...
             rollingWindowTime=analysisParams(idx).rollingWindowTime,...
-            followOriginal=false);
+            followOriginal=false,...
+            inspectSyncROI=true);
         analyzeSessions_clamp(sessionList{idx},...
             task=taskList{idx},...
             redo=true,round=false,performing=false,...
@@ -325,3 +314,4 @@ for s = 1:length(sessionList)
 end
 close all
 return
+

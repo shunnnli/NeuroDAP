@@ -25,7 +25,11 @@ if options.withClamp
     clampON = events{7};
 
     % If allTrials is empty, clamp onset count as events
-    if isempty(allTrials); allTrials = find(diff(clampON > 0.5) > 0) + 1; end
+    if length(clampON) > 1000
+        if isempty(allTrials); allTrials = find(diff(clampON > 0.5) > 0) + 1; end
+    else
+        allTrials = clampON;
+    end
 
     % Initialize trial table
     % Selection time: time of last choice lick (before outcome)

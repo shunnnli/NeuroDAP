@@ -348,10 +348,16 @@ if options.reloadCells
         
                     % Save spot responses
                     responses.raw = raw_trace(plotWindow);
-                    responses.processed = processed_trace(plotWindow);
-                    responses.control = processed_trace(controlWindow);
                     responses.rawTrace = raw_trace;
-                    responses.processedTrace = processed_trace;
+
+                    % Per-spot local baseline: median of control window before this spot
+                    spotBaseline = median(processed_trace(controlWindow), 'omitnan');
+                    stats.response.localBaseline = spotBaseline;
+                    spotProcessedTrace = processed_trace - spotBaseline;
+
+                    responses.processed = spotProcessedTrace(plotWindow);
+                    responses.control = spotProcessedTrace(controlWindow);
+                    responses.processedTrace = spotProcessedTrace;
         
                     %% Identify putative hotspots
     
@@ -387,10 +393,10 @@ if options.reloadCells
                     if ~responses.hotspot; nullSpotData = [nullSpotData, responses.processed]; end
     
                     %% Calculate statistics
-    
+
                     % Find auc
                     stats.response.auc = sum(responses.processed(analysisWindow)) / options.outputFs;
-                    stats.baseline.auc = sum(processed_trace(controlWindow)) / options.outputFs;
+                    stats.baseline.auc = sum(responses.control) / options.outputFs;
         
                     % Find min and max value for stim response
                     trace = responses.processed(analysisWindow);
@@ -409,7 +415,7 @@ if options.reloadCells
                     end
         
                     % Find min and max for control baseline
-                    trace = processed_trace(controlWindow);
+                    trace = responses.control;
                     [~,maxIdx] = max(trace); [~,minIdx] = min(trace);
                     % Average around max/min idx to get final value
                     maxWindowStart = max(1,maxIdx-peakWindowWidth);
@@ -467,6 +473,10 @@ if options.reloadCells
     
                 % Save spots.mat for a specific depth
                 % If not, spots are too big and matlab can't load later
+
+                if ~ismember('sweepStage', fullSearchTable.Properties.VariableNames)
+                    fullSearchTable.sweepStage = repmat("search", height(fullSearchTable), 1);
+                end
                 searchRowsCount = sum(strcmp(fullSearchTable.sweepStage, 'search'));
                 if ~isHotspotSweep && (k == length(sweepAcq) || prevDepth ~= protocol.depth || curFSRow == searchRowsCount)
                     if options.save

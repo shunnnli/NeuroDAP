@@ -1,77 +1,37 @@
 function events = findRampEvents(target_dff, fs, expected_amps, threshold, amp_tol)
-    slope_threshold_per_s = 0.015;
+    active = abs(target_dff) > threshold;
+    segments = contiguousRegions(active);
+    segments = mergeCloseSegments(segments, round(0.15 * fs));
 
-    y = target_dff(:);
-    smooth_win = max(3, round(0.05 * fs));
-    y_smooth = movmedian(y, smooth_win, "omitnan");
-
-    slope = gradient(y_smooth) * fs;
-    slope_mask = abs(slope) > slope_threshold_per_s;
-
-    segments = contiguousRegions(slope_mask);
-    segments = mergeCloseSegments(segments, round(0.30 * fs));
-
-    min_samples = round(0.5 * fs);
-    max_samples = round(4.0 * fs);
-    level_win = max(1, round(0.25 * fs));
-
+    min_samples = round(1.0 * fs);
+    trim = round(0.2 * fs);
     rows = [];
 
     for i = 1:size(segments, 1)
         start_idx = segments(i, 1);
         end_idx = segments(i, 2);
-        n_samples = end_idx - start_idx + 1;
 
-        if n_samples < min_samples || n_samples > max_samples
+        if end_idx - start_idx + 1 < min_samples
             continue
         end
 
-        pre_idx = max(1, start_idx - level_win):(start_idx - 1);
-        post_idx = (end_idx + 1):min(numel(y), end_idx + level_win);
+        lo = min(end_idx, start_idx + trim);
+        hi = max(lo, end_idx - trim);
+        inner = target_dff(lo:hi);
 
-        if isempty(pre_idx)
-            start_level = y_smooth(start_idx);
-        else
-            start_level = median(y(pre_idx), "omitnan");
-        end
-
-        if isempty(post_idx)
-            end_level = y_smooth(end_idx);
-        else
-            end_level = median(y(post_idx), "omitnan");
-        end
-
-        delta = end_level - start_level;
-
-        if abs(delta) < threshold
-            continue
-        end
-
-        if abs(start_level) <= abs(end_level)
-            ramp_phase = "away_from_baseline";
-            amp_raw = end_level;
-        else
-            ramp_phase = "return_to_baseline";
-            amp_raw = start_level;
-        end
-
+        amp_raw = median(inner, "omitnan");
         amp = nearestProtocolAmp(amp_raw, expected_amps, amp_tol);
 
-        rows = [rows; struct( ...
-            "session_type", "ramp", ...
-            "kind", "ramp", ...
-            "ramp_phase", ramp_phase, ...
-            "trial", floor(numel(rows) / 2) + 1, ...
+        rows = [rows; struct(...
+            "kind", "step", ...
+            "trial", numel(rows) + 1, ...
             "amp", amp, ...
             "amp_raw", amp_raw, ...
-            "start_level", start_level, ...
-            "end_level", end_level, ...
-            "delta", delta, ...
             "start_idx", start_idx, ...
             "end_idx", end_idx, ...
             "start_s", (start_idx - 1) / fs, ...
             "end_s", (end_idx - 1) / fs, ...
-            "duration_s", n_samples / fs)];
+            "duration_s", (end_idx - start_idx + 1) / fs)];
     end
 
     events = struct2table(rows);

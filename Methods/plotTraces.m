@@ -53,6 +53,9 @@ arguments
     options.print logical = false % print progress message
     options.ylabel string = 'z-score'
     options.xlabel string = 'Time (s)'
+
+    options.opacity double = 1
+    options.label string = ''
 end
 
 %% Parse required inputs
@@ -260,9 +263,11 @@ if options.plot
 
     % 4.3 Plot SEM
     plotSEM(timestamp,traces,options.color,smooth=smoothWindow,smoothMethod=options.smoothMethod,...
-        LineStyle=options.LineStyle,LineWidth=options.LineWidth,...
-        plotIndividual=options.plotIndividual,individualColor=options.individualColor,...
-        plotStyle=options.plotStyle,plotPatch=options.plotPatch);
+            LineStyle=options.LineStyle,LineWidth=options.LineWidth,...
+            opacity=options.opacity,label=options.label,...
+            plotIndividual=options.plotIndividual,individualColor=options.individualColor,...
+            individualAlpha=options.individualAlpha,...
+            plotStyle=options.plotStyle,plotPatch=options.plotPatch);
     
     xlabel(options.xlabel); 
     ylabel(options.ylabel); 

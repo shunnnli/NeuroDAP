@@ -509,7 +509,7 @@ for d = 1:nDepth
 
     %% Save figure
     filename = strcat(curCell.Epochs{1}{searchIdx},'_depth',num2str(curDepth));
-    filepath = fullfile(options.saveDataPath,['cell',num2str(curCell.Cell)],'Search summary',curCell.Epochs{1}{searchIdx});
+    filepath = fullfile(options.saveDataPath,['cell',num2str(curCell.Cell)],'Search summary');
     saveFigures(gcf,[filename,'_',curCell.Options{1}.feature],filepath,...
                 savePNG=options.savePNG,savePDF=options.savePDF,saveFIG=options.saveFIG);
     disp(['Finished: saving summary figure for search: ', curSearch,' at depth ',num2str(curDepth)]);

@@ -32,11 +32,10 @@ if ischar(animalPaths); animalPaths = {animalPaths}; end
 nAnimals = numel(animalPaths);
 
 %% Parameters
-box = 'large';                         % 'large' or 'small'
-defaultStimSide = "right";             % fallback only if a session type has no stimulated session
+box = 'clamp';                         % 'large' or 'small'
+defaultStimSide = "left";             % fallback only if a session type has no stimulated session
 removeStaticPeriods = false;
 noMovementThreshold = 20;
-Fs = 20;                               % used only as fallback for duration
 
 %% Arena and binning
 switch lower(box)
@@ -46,12 +45,21 @@ switch lower(box)
         yLimits = [0, 700];
         nXBins = 30;
         nYBins = 60;
+        Fs = 20;                               % used only as fallback for duration
+    case 'clamp'
+        yMidpoint = 234;
+        xLimits = [50, 250];
+        yLimits = [0, 470];
+        nXBins = 20;
+        nYBins = 40;
+        Fs = 30;                               % used only as fallback for duration
     otherwise
         yMidpoint = 140;
         xLimits = [420, 520];
         yLimits = [15, 280];
         nXBins = 16;
         nYBins = 20;
+        Fs = 20;                               % used only as fallback for duration
 end
 
 xEdges = linspace(xLimits(1), xLimits(2), nXBins + 1);
@@ -72,7 +80,6 @@ heatmapAccumulator = containers.Map('KeyType', 'char', 'ValueType', 'any');
 
 allSessionSummaryTable = table();
 animalTypeSummaryTable = table();
-allSignalZoneSummaryTable = table();
 
 %% ========================== PER-ANIMAL LOOP ==========================
 for animalIdx = 1:nAnimals
@@ -90,52 +97,118 @@ for animalIdx = 1:nAnimals
     end
 
     %% Per-session storage
-    sessions = struct([]);
-    signalZoneSummaryTable = table();
+    sessions = repmat(struct( ...
+        'name', "", ...
+        'path', "", ...
+        'sessionType', "", ...
+        'condition', "", ...                 % "Baseline" or "Stimulated"
+        'stimSideFromFolder', "", ...        % "left", "right", or ""
+        'referenceStimSide', "", ...         % what side was used to define stim-side metrics
+        'baselineWeightLeft', NaN, ...
+        'baselineWeightRight', NaN, ...
+        'durationMin', NaN, ...
+        'nFramesRaw', NaN, ...
+        'nFramesAnalyzed', NaN, ...
+        'timePctIfStimRight', NaN, ...
+        'timePctIfStimLeft', NaN, ...
+        'distStimIfRight', NaN, ...
+        'distCtrlIfRight', NaN, ...
+        'distStimIfLeft', NaN, ...
+        'distCtrlIfLeft', NaN, ...
+        'timePctStimSide', NaN, ...
+        'distStimSide', NaN, ...
+        'distCtrlSide', NaN, ...
+        'dataClean', table()), nSessions, 1);
 
     %% ---------- Load and preprocess each session ----------
     for sessionIdx = 1:nSessions
         sessionName = string(sessionFolders(sessionIdx).name);
         sessionPath = fullfile(sessionFolders(sessionIdx).folder, sessionFolders(sessionIdx).name);
 
-        try
-            sessionResult = analyzeSession_RTPP(sessionPath, "side", ...
-                yMidpoint = yMidpoint, ...
-                removeStaticPeriods = removeStaticPeriods, ...
-                noMovementThreshold = noMovementThreshold, ...
-                Fs = Fs);
-        catch ME
-            warning('Skipping %s: %s', sessionPath, ME.message);
-            continue
-        end
+        [sessions, heatmapAccumulator] = analyzeSession_RTPP(sessionPath, box=box,...
+                                            sessions=sessions,sessionIdx=sessionIdx,...
+                                            heatmapAccumulator=heatmapAccumulator,...
+                                            Fs=Fs,removeStaticPeriods=removeStaticPeriods,noMovementThreshold=noMovementThreshold);
 
-        sessions(end+1, 1) = sessionResult; %#ok<AGROW>
-
-        % Accumulate heatmap by SessionType + Condition
-        X = sessionResult.dataClean.X;
-        Y = sessionResult.dataClean.Y;
-        heatKey = makeHeatmapKey(sessionResult.sessionType, sessionResult.condition);
-        H = histcounts2(Y, X, yEdges, xEdges);
-
-        if isKey(heatmapAccumulator, heatKey)
-            heatmapAccumulator(heatKey) = heatmapAccumulator(heatKey) + H;
-        else
-            heatmapAccumulator(heatKey) = H;
-        end
-
-        if ~isempty(sessionResult.signalZoneStats)
-            curSignalStats = sessionResult.signalZoneStats;
-            curSignalStats = addvars(curSignalStats, ...
-                repmat(string(animalName), height(curSignalStats), 1), ...
-                'Before', 1, 'NewVariableNames', 'Animal');
-            signalZoneSummaryTable = [signalZoneSummaryTable; curSignalStats]; %#ok<AGROW>
-        end
-    end
-
-    nSessions = numel(sessions);
-    if nSessions == 0
-        warning('No valid RTPP sessions found for animal: %s', animalName);
-        continue;
+        % csvFiles = dir(fullfile(sessionPath, 'times-*.csv'));
+        % assert(~isempty(csvFiles), 'No times-*.csv found in %s', sessionPath);
+        % 
+        % csvPath = fullfile(csvFiles(1).folder, csvFiles(1).name);
+        % T = readtable(csvPath);
+        % 
+        % % Parse session name
+        % [sessionType, condition, stimSideFromFolder] = parseSessionFolderName(sessionName);
+        % 
+        % % Parse time
+        % T.Item1 = datetime(T.Item1, ...
+        %     'InputFormat', 'yyyy-MM-dd''T''HH:mm:ss.SSSSSSSZ', ...
+        %     'TimeZone', 'UTC');
+        % t0 = T.Item1(1);
+        % T.timeMin = minutes(T.Item1 - t0);
+        % T = T(T.timeMin >= 0, :);
+        % 
+        % % Store metadata
+        % sessions(sessionIdx).name = sessionName;
+        % sessions(sessionIdx).path = string(sessionPath);
+        % sessions(sessionIdx).sessionType = sessionType;
+        % sessions(sessionIdx).condition = condition;
+        % sessions(sessionIdx).stimSideFromFolder = stimSideFromFolder;
+        % sessions(sessionIdx).nFramesRaw = height(T);
+        % 
+        % % Session duration for weighting
+        % sessionDurationMin = max(T.timeMin) - min(T.timeMin);
+        % if sessionDurationMin <= 0
+        %     sessionDurationMin = height(T) / Fs / 60;
+        % end
+        % sessions(sessionIdx).durationMin = sessionDurationMin;
+        % 
+        % % Remove static periods if requested
+        % rawX = T.Item2_X;
+        % rawY = T.Item2_Y;
+        % 
+        % if removeStaticPeriods
+        %     staticMask = getStaticPeriod(rawX, rawY, ...
+        %         noMovementThreshold = noMovementThreshold, ...
+        %         windowDuration = 30);
+        %     keepMask = ~staticMask;
+        % else
+        %     keepMask = true(size(rawX));
+        % end
+        % 
+        % xClean = rawX(keepMask);
+        % yClean = rawY(keepMask);
+        % tClean = T.timeMin(keepMask);
+        % 
+        % sessions(sessionIdx).nFramesAnalyzed = numel(xClean);
+        % sessions(sessionIdx).dataClean = table(tClean, xClean, yClean, ...
+        %     'VariableNames', {'timeMin', 'X', 'Y'});
+        % 
+        % % Compute metrics under both possible definitions of "stimulated side"
+        % rightSideMask = (yClean >= yMidpoint);
+        % leftSideMask  = (yClean <  yMidpoint);
+        % 
+        % rightIdx = find(rightSideMask);
+        % leftIdx  = find(leftSideMask);
+        % 
+        % % If right is the stimulated side
+        % sessions(sessionIdx).timePctIfStimRight = 100 * nnz(rightSideMask) / max(1, numel(yClean));
+        % sessions(sessionIdx).distStimIfRight    = safeTrajectoryDistance(xClean, yClean, rightIdx);
+        % sessions(sessionIdx).distCtrlIfRight    = safeTrajectoryDistance(xClean, yClean, leftIdx);
+        % 
+        % % If left is the stimulated side
+        % sessions(sessionIdx).timePctIfStimLeft = 100 * nnz(leftSideMask) / max(1, numel(yClean));
+        % sessions(sessionIdx).distStimIfLeft    = safeTrajectoryDistance(xClean, yClean, leftIdx);
+        % sessions(sessionIdx).distCtrlIfLeft    = safeTrajectoryDistance(xClean, yClean, rightIdx);
+        % 
+        % % Accumulate heatmap by SessionType + Condition
+        % heatKey = makeHeatmapKey(sessionType, condition);
+        % H = histcounts2(yClean, xClean, yEdges, xEdges);
+        % 
+        % if isKey(heatmapAccumulator, heatKey)
+        %     heatmapAccumulator(heatKey) = heatmapAccumulator(heatKey) + H;
+        % else
+        %     heatmapAccumulator(heatKey) = H;
+        % end
     end
 
     %% ---------- Finalize metrics within each session type ----------
@@ -309,12 +382,7 @@ for animalIdx = 1:nAnimals
     title(tl, sprintf('%s - Summary', animalName), 'Interpreter', 'none');
 
     % Save per-animal figure
-    animalSummaryPNG = fullfile(animalFolder, sprintf('%s_summary.pdf', animalName));
-    try
-        exportgraphics(gcf, animalSummaryPNG, 'Resolution', 300);
-    catch
-        saveas(gcf, animalSummaryPNG);
-    end
+    saveFigures(gcf,[animalName,'-summary'],animalFolder);
     close(gcf);
 
     %% ---------- Save per-animal session summary CSV ----------
@@ -332,8 +400,6 @@ for animalIdx = 1:nAnimals
         [sessions.durationMin]', ...
         [sessions.nFramesRaw]', ...
         [sessions.nFramesAnalyzed]', ...
-        [sessions.hasTimeSeries]', ...
-        arrayfun(@(s) height(s.signalZoneStats), sessions)', ...
         [sessions.timePctStimSide]', ...
         [sessions.distStimSide]', ...
         [sessions.distCtrlSide]', ...
@@ -349,8 +415,6 @@ for animalIdx = 1:nAnimals
             'SessionDurationMin', ...
             'RawFrameCount', ...
             'AnalyzedFrameCount', ...
-            'HasTimeSeries', ...
-            'NSignalsInZoneSummary', ...
             'TimePctStimulatedSide', ...
             'DistanceStimulatedSide_pixels', ...
             'DistanceControlSide_pixels'});
@@ -358,14 +422,10 @@ for animalIdx = 1:nAnimals
     animalSummaryCSV = fullfile(animalFolder, sprintf('%s_sessionSummary.csv', animalName));
     writetable(sessionSummaryTable, animalSummaryCSV);
 
-    if ~isempty(signalZoneSummaryTable)
-        animalSignalZoneCSV = fullfile(animalFolder, sprintf('%s_signalZoneSummary.csv', animalName));
-        writetable(signalZoneSummaryTable, animalSignalZoneCSV);
-        allSignalZoneSummaryTable = [allSignalZoneSummaryTable; signalZoneSummaryTable]; %#ok<AGROW>
-    end
-
     allSessionSummaryTable = [allSessionSummaryTable; sessionSummaryTable];
 end
+
+return
 
 %% ========================== GROUP SUMMARY FIGURE ==========================
 if isempty(allSessionSummaryTable)
@@ -610,25 +670,13 @@ legend({'Control side', 'Stimulated side'}, 'Location', 'best');
 
 title(tl, sprintf('RTPP Group Summary (n = %d animals)', nAnimals));
 
-groupSummaryPNG = fullfile(groupOutputFolder, 'AcrossAnimals_summary_bySessionType.pdf');
-try
-    exportgraphics(gcf, groupSummaryPNG, 'Resolution', 300);
-catch
-    saveas(gcf, groupSummaryPNG);
-end
-
+saveFigures(gcf,'AcrossAnimals_summary_bySessionType',groupOutputFolder);
 disp(['Saved group summary: ' groupSummaryPNG]);
 
 %% Optional: save the per-animal weighted session-type summary table
 groupSummaryCSV = fullfile(groupOutputFolder, 'AcrossAnimals_summary_bySessionType.csv');
 writetable(animalTypeSummaryTable, groupSummaryCSV);
 disp(['Saved group summary CSV: ' groupSummaryCSV]);
-
-if ~isempty(allSignalZoneSummaryTable)
-    signalZoneSummaryCSV = fullfile(groupOutputFolder, 'AcrossAnimals_signalZoneSummary.csv');
-    writetable(allSignalZoneSummaryTable, signalZoneSummaryCSV);
-    disp(['Saved signal zone summary CSV: ' signalZoneSummaryCSV]);
-end
 
 %% Optional: pick corresponding recording sessions before RTPP
 
@@ -742,36 +790,36 @@ end
 
 %% ========================== LOCAL FUNCTIONS ==========================
 
-function [sessionType, condition, stimSideFromFolder] = parseSessionFolderName(sessionName)
-    % Expected format:
-    %   YYYYMMDD-SessionType-Baseline
-    %   YYYYMMDD-SessionType-Left
-    %   YYYYMMDD-SessionType-Right
-
-    parts = split(string(sessionName), "-");
-
-    if numel(parts) < 3
-        error('Session folder name "%s" does not match expected format YYYYMMDD-SessionType-Condition', sessionName);
-    end
-
-    sessionType = string(parts(2));
-    lastToken = lower(string(parts(end)));
-
-    switch lastToken
-        case "baseline"
-            condition = "Baseline";
-            stimSideFromFolder = "";
-        case "left"
-            condition = "Stimulated";
-            stimSideFromFolder = "left";
-        case "right"
-            condition = "Stimulated";
-            stimSideFromFolder = "right";
-        otherwise
-            error('Unrecognized last token "%s" in session folder "%s". Expected Baseline, Left, or Right.', ...
-                lastToken, sessionName);
-    end
-end
+% function [sessionType, condition, stimSideFromFolder] = parseSessionFolderName(sessionName)
+%     % Expected format:
+%     %   YYYYMMDD-SessionType-Baseline
+%     %   YYYYMMDD-SessionType-Left
+%     %   YYYYMMDD-SessionType-Right
+% 
+%     parts = split(string(sessionName), "-");
+% 
+%     if numel(parts) < 3
+%         error('Session folder name "%s" does not match expected format YYYYMMDD-SessionType-Condition', sessionName);
+%     end
+% 
+%     sessionType = string(parts(2));
+%     lastToken = lower(string(parts(end)));
+% 
+%     switch lastToken
+%         case "baseline"
+%             condition = "Baseline";
+%             stimSideFromFolder = "";
+%         case "left"
+%             condition = "Stimulated";
+%             stimSideFromFolder = "left";
+%         case "right"
+%             condition = "Stimulated";
+%             stimSideFromFolder = "right";
+%         otherwise
+%             error('Unrecognized last token "%s" in session folder "%s". Expected Baseline, Left, or Right.', ...
+%                 lastToken, sessionName);
+%     end
+% end
 
 function key = makeHeatmapKey(sessionType, condition)
     key = sprintf('%s__%s', char(sessionType), char(condition));

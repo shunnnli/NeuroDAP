@@ -220,25 +220,23 @@ for i = 1:size(animals,2)
     animals(i).stageAmp = struct('data', getAmplitude(stageMax, stageMin));
 end
 
-%% Change window to 0.5s post stim
+
+%% Remove baseline for CoChR dLight
 
 for i = 1:length(animals)
     if strcmpi(animals(i).event,'CoChR')
-        if strcmpi(animals(i).name,'Lick')
-            continue
-        else
+        if strcmpi(animals(i).name,'dLight')
             stimTrace = animals(i).data;
-            stats = analyzeStages(stimTrace,[-2,0;0,1],finalFs=50);
+            baseline = median(stimTrace(:,725:750), 2);
+            stimTrace = stimTrace - baseline;
+            animals(i).data = stimTrace;
 
-            % Store results
-            animals(i).stageAvg.data = stats.stageAvg.data;
-            animals(i).stageMax.data = stats.stageMax.data;
-            animals(i).stageMin.data = stats.stageMin.data;
-            animals(i).stageArea.data = stats.stageArea.data;
-
-            stageMax = animals(i).stageMax.data;
-            stageMin = animals(i).stageMin.data;
-            animals(i).stageAmp.data = getAmplitude(stageMax, stageMin);
+            % Get max and min
+            stageMax = [max(stimTrace(:,725:750), [], 2), max(stimTrace(:,750:775), [], 2)];
+            stageMin = [min(stimTrace(:,725:750), [], 2), min(stimTrace(:,750:775), [], 2)];
+            animals(i).stageMax.data = stageMax;
+            animals(i).stageMin.data = stageMin;
+            animals(i).stageAmp.data = stageMin;
         end
     end
 end 
@@ -263,12 +261,12 @@ end
 %% Test: Plot traces from summary/animals struct
 
 event = 'CoChR';
-animal = 'all';
+animal = 'SL424';
 task = 'Reward';
 signal = 'dLight';
 session = 'all';
 
-initializeFig(0.5,0.5);
+initializeFig(0.3,0.5);
 combined = combineTraces(animals,timeRange=[-0.5,3],...
                             eventRange=event,...
                             animalRange=animal,...
@@ -278,7 +276,7 @@ combined = combineTraces(animals,timeRange=[-0.5,3],...
                             signalRange=signal,...
                             sessionRange=session);
 
-% plotTraces(combined.data{1},combined.timestamp,color=bluePurpleRed(500,:));
+% plotTraces(combined.data{1},combined.timestamp,color=bluePurpleRed(500,:),plotIndividual=false);
 legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,...
                         groupby='sessions',startIdx=combined.options.startIdx,remaining='include');
 
@@ -394,9 +392,9 @@ initializeFig(.7,.7); tiledlayout('flow');
 results = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,plotCommonTrials=false,...
         color=colorList,xlimIdx=3,xlim=[0,150],ylim=ylimit);
 
-% saveFigures(gcf,'Summary_CSvsTrialsGrouped_dLight',...
-%         strcat(resultspath),...
-%         saveFIG=true,savePDF=true);
+saveFigures(gcf,'Summary_CSvsTrialsGrouped_dLight',...
+        strcat(resultspath),...
+        saveFIG=false,savePDF=true);
 
 %% Plot bar plot of DA slopes
 initializeFig(.7,.7); tiledlayout('flow');

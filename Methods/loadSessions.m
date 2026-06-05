@@ -20,6 +20,7 @@ arguments
 
    % Camera setup options
    options.cameraSetup string = 'Shun'
+   options.inspectSyncROI logical = false;
 
    % Neuropixel recording options
    options.noSyncPulse logical = false
@@ -97,7 +98,7 @@ session.sessionTask = sessionTask;
 
 withNI = ~isempty(dir(fullfile(session.path,'*.nidq.bin')));
 withRecording = ~isempty(dir(fullfile(session.path,'*_imec0')));
-withCamera = ~isempty(dir(fullfile(session.path,'times_cam1*.csv')));
+withCamera = ~isempty(dir(fullfile(session.path,'times*.csv')));
 withPhotometry = isfolder(fullfile(session.path,'Photometry'));
 withLFP = false;
 session.nSystems = sum([withRecording,withCamera,withPhotometry,withNI]);
@@ -128,7 +129,7 @@ end
 
 % Check whether there's multiple recordings in a session
 if withCamera
-    camerapath = dir(fullfile(session.path,'times_cam1*.csv'));
+    camerapath = dir(fullfile(session.path,'times*.csv'));
     if size(camerapath,1) > 1
         warning('More than 1 camera recording found. Skipped!');
         withCamera = 0;
@@ -650,7 +651,7 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
     end
 
     % Process clamp control signal if necessary
-    if contains(options.NISetup,'clamp',IgnoreCase=true)
+    if contains(options.NISetup,'clamp',IgnoreCase=true) && withNI
         % Downsample
         processed = downsampleSignal(blueClamp_pct,...
                             targetFs=options.downsampleFs,originalFs=nidq.Fs,...
@@ -781,13 +782,16 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
         saveas(gcf,strcat(options.outputPath,filesep,'Summary_photometry_processing.png')); 
         % saveas(gcf,strcat(options.outputPath,filesep,'Summary_photometry_processing.fig'));
     end
-    disp("Finished: processed and saved photometry data in data_.mat");
+    disp("Finished: processed and saved photometry data in data_.mat"); close all;
 end
 
 %% Read camera data
 if withCamera && (options.reloadAll || options.reloadCam)
-    camerapath = dir(fullfile(session.path,'times_cam1*.csv'));
-    csvpath = [camerapath.folder,filesep,camerapath.name];
+    timespath = dir(fullfile(session.path,'times*.csv'));
+    csvpath = [timespath.folder,filesep,timespath.name];
+
+    camerapath = dir(fullfile(session.path,'cam*.avi'));
+    camerapath = fullfile(camerapath.folder,camerapath.name);
 
     % Read camera table
     opts = detectImportOptions(csvpath);
@@ -993,15 +997,20 @@ if withCamera && (options.reloadAll || options.reloadCam)
             withCamera = 0;
         end
 
-    elseif length(opts.VariableNames) == 4
+         
+    elseif length(opts.VariableNames) == 4 % clamp RTPP rig
         session.withEyeTracking = false;
-        opts.VariableNames = {'Sync','FrameCounter','Time','Date'};
-        opts.VariableTypes{4} = 'datetime';
-        opts.VariableOptions(1,4).DatetimeFormat = 'yyyy-MM-dd''T''HH:mm:ss.SSSSSSS';
-        opts.VariableOptions(1,4).InputFormat = 'yyyy-MM-dd''T''HH:mm:ss.SSSSSSS';
-        opts.VariableOptions(1,4).TimeZone = 'America/New_York';
+        opts.VariableNames = {'Date','X','Y','ClampON'};
+        opts = setvartype(opts, 1, 'datetime');
+        opts = setvaropts(opts, 1, ...
+            'InputFormat', "yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX", ...
+            'DatetimeFormat', "yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX", ...
+            'TimeZone', "America/New_York");
     
         camera = readtable(csvpath,opts);
+        camera.Properties.VariableNames = {'Date','X','Y','ClampON'};
+
+        camera = addvars(camera, zeros(height(camera),1), 'Before', 1, 'NewVariableNames', 'Sync');
         camera{:,end+1} = zeros(size(camera,1),1);
         camera.Properties.VariableNames{end} = 'SkippedFrame';
         disp("Finished: read camera csv file");
@@ -1035,6 +1044,12 @@ if withCamera && (options.reloadAll || options.reloadCam)
                 disp(['Found ', num2str(length(skipped_frame)), ' skipped frames after filling!']);
             end
         end
+
+        [camera.Sync,~] = extractSyncFromCamera(camerapath,inspectROI=options.inspectSyncROI);
+        cameraCsvPath = fullfile(sessionpath, 'camera-processed','times-processed.csv');
+        writetable(camera, cameraCsvPath);
+        disp("Finished: save processed camera csv file");
+
 
     elseif length(opts.VariableNames) == 3 % sally's setup
         session.withEyeTracking = false;
@@ -1075,6 +1090,7 @@ if withCamera && (options.reloadAll || options.reloadCam)
             end
         end
     end
+    disp('Finished: loading camera data');
 end
 
 %% (Ver5) Sync data using xcorr
