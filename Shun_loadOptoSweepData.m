@@ -5,10 +5,10 @@
 %% Single session analysis
 
 clear; close all;
-addpath(genpath(osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
+addpath(genpath('\\research.files.med.harvard.edu\neurobio\MICROSCOPE\Shun\Analysis\NeuroDAP\Methods'));
 
 % Select sessions via uipickfiles
-sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project clamping/Recordings'))';
+sessionList = uipickfiles('FilterSpec','\\research.files.med.harvard.edu\neurobio\MICROSCOPE\Shun\Project clamping\Recordings')';
 errorSessionIdx = [];
 
 % Select anlaysis params

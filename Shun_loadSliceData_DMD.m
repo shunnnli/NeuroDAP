@@ -4,11 +4,10 @@
 
 %% Load sessions
 clear; close all;
-addpath(genpath(osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
+addpath(genpath('\\research.files.med.harvard.edu\neurobio\MICROSCOPE\Shun\Analysis\NeuroDAP\Methods'));
 
 % Select sessions for analysis
-% parentPath = osPathSwitch('/Volumes/Neurobio/MICROSCOPE/wengang/Exp_withShun/');
-parentPath = osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Patch/');
+parentPath = osPathSwitch('\\research.files.med.harvard.edu\neurobio\MICROSCOPE\Shun\Project valence\Patch\');
 expPath = uipickfiles('FilterSpec',parentPath,'Prompt','Select experiment folders');
 saveDataPath = 'default';
 
@@ -34,11 +33,10 @@ expPath = expPath{1};
 % separately in later (see below).
 
 % sessionParams.calculateQC = true;
-epochs = loadSlices(expPath,reload=sessionParams.reload,...
+epochs = loadSlices(expPath,reload=true,...
                     reloadCell=false,...
                     animal=sessionParams.Animal,task=task,...
                     timeRange=timeRange,...
-                    vholdChannel='AD1',...
                     filterSignal=false,filterSweeps=true,...
                     calculateQC=sessionParams.calculateQC,...
                     nArtifactSamples=nArtifactSamples,...
@@ -53,8 +51,10 @@ epochs = loadSlices(expPath,reload=sessionParams.reload,...
 % params and also responses, QC, and statistics of that search depth
 close all;
 
-% loadSlicesDMD(epochs,reload=false,reloadCells=true,reloadCellAnalysis=true);
-loadSlicesDMD(epochs,reload=true);
+% loadSlicesDMD(epochs,reload=false,reloadCells=true,reloadCellAnalysis=true,...
+%               vholdChannel='AD1');
+loadSlicesDMD(epochs,reload=true,...
+                vholdChannel='AD1');
 
 %% Plot DMD results
 % Plot results for all searches in this session
@@ -69,25 +69,20 @@ return
 %% Plot search summary
 % Just plot results for a specific search in a session
 
-cellNum = 4; searchIdx = 2; pairIdx = 1; close all;
-
-disp(['Ongoing: plotting searches for cell',num2str(cellNum)]);
-curCell = cells(cells.Cell == cellNum,:);
-searchPerCell = length(curCell.Epochs{1});
+cellIdx = 4; searchIdx = 4; pairIdx = 1; close all;
+disp(['Ongoing: plotting searches for cell',num2str(c)]);
+curCell = cells(cells.Cell == cellIdx,:);
+searchPerCell = length(curCell.Vhold{1});
 
 traceColor = [127 182 227]./255;
 whiteBlue = getColormap([238 240 241],[48 154 209],500,midCol=[150 198 227]);
 
-if isnan(searchIdx) || ~isnumeric(searchIdx)
-    for searchIdx = 1:searchPerCell
-        analyzeDMDSearch(curCell,searchIdx,...
-                     redStim=true,...
-                     savePNG=false,savePDF=true,saveFIG=false);
-    end 
-else
-    analyzeDMDSearch(curCell, searchIdx, ...
-                     redStim=true,...
-                     savePNG=false, savePDF=true, saveFIG=false);
+for searchIdx = 1:searchPerCell
+    analyzeDMDSearch(curCell,searchIdx,...
+                 redStim=false,...
+                 color=traceColor,...
+                 colormap=whiteBlue,...
+                 savePNG=false,savePDF=true,saveFIG=false);
 end
 
 % analyzeDMDSearchPair(curCell,pairIdx,...
