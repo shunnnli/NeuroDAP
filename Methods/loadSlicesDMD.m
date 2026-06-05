@@ -107,9 +107,9 @@ if options.reloadCells
     % within each element, theres a 3-dim matrix (xRange,yRange,depth)
     
     varTypes = {'string','string','string','double','cell','cell','cell',...
-                'cell','cell','cell','cell'};
+                'cell','cell','cell','cell','cell'};
     varNames = {'Session','Animal','Task','Cell','Epochs','Vhold','Protocol',...
-                'Response map','Difference map','Stats','Options'};
+                'Response map','Difference map','Stats','QC','Options'};
     cells = table('Size',[max(exp{:,'Cell'}),length(varNames)],...
         'VariableTypes',varTypes,'VariableNames',varNames);
     
@@ -123,7 +123,7 @@ if options.reloadCells
     cellMaxResponse = {}; cellMinResponse = {};
     cellMaxTime = {};cellMinTime = {};
     cellAUC = {}; cellEIindex = {};
-    cellBaselineAUC = {}; cellBaselineSTD = {};
+    cellBaselineAUC = {}; cellBaselineSTD = {}; cellQC = {};
     cellSpotLocation = {};
 
     %% Iterate & analyze individual epoch
@@ -558,6 +558,7 @@ if options.reloadCells
                 cells{curCell,'Protocol'} = {cellProtocols'};
                 cells{curCell,'Response map'} = {responseMap};
                 cells{curCell,'Stats'} = {cellStats};
+                cells{curCell,'QC'} = {cellQC'};
                 cells{curCell,'Options'} = {options};
 
                 % Save noise data for this cell
@@ -577,7 +578,7 @@ if options.reloadCells
                 cellMaxResponse = {}; cellMinResponse = {};
                 cellMaxTime = {};cellMinTime = {};
                 cellAUC = {}; cellEIindex = {};
-                cellBaselineAUC = {}; cellBaselineSTD = {};
+                cellBaselineAUC = {}; cellBaselineSTD = {}; cellQC = {};
                 cellSpotLocation = {};
             end
             continue;
@@ -623,6 +624,7 @@ if options.reloadCells
             searchEIindex = cell(nDepth,1);
             searchBaselineAUC = cell(nDepth,1);
             searchBaselineSTD = cell(nDepth,1);
+            searchQC = cell(nDepth,1);
     
             % Loop through depth
             for depthIdx = 1:nDepth
@@ -633,6 +635,7 @@ if options.reloadCells
                 d = spotsAtDepth{1,'Depth'};
                 % Get search protocol
                 searchProtocols{depthIdx} = spotsAtDepth{1,'Protocol'}{1};
+                searchQC{depthIdx} = localSummarizeDMDQC(spotsAtDepth);
                 % Get search total spots
                 totalSpots = totalSpots + size(spotsAtDepth,1);
 
@@ -792,6 +795,7 @@ if options.reloadCells
             cellEIindex{end+1} = searchEIindex;
             cellBaselineAUC{end+1} = searchBaselineAUC;
             cellBaselineSTD{end+1} = searchBaselineSTD;
+            cellQC{end+1} = searchQC;
     
             % Save to cell
             curCell = spotsAtDepth{1,'Cell'};
@@ -834,6 +838,7 @@ if options.reloadCells
             cells{curCell,'Protocol'} = {cellProtocols'};
             cells{curCell,'Response map'} = {responseMap};
             cells{curCell,'Stats'} = {cellStats};
+            cells{curCell,'QC'} = {cellQC'};
             cells{curCell,'Options'} = {options};
     
             % Save noise data for this cell
@@ -853,7 +858,7 @@ if options.reloadCells
             cellMaxResponse = {}; cellMinResponse = {};
             cellMaxTime = {};cellMinTime = {};
             cellAUC = {}; cellEIindex = {};
-            cellBaselineAUC = {}; cellBaselineSTD = {};
+            cellBaselineAUC = {}; cellBaselineSTD = {}; cellQC = {};
             cellSpotLocation = {};
         end
     end
@@ -1057,6 +1062,58 @@ end
 
 
 %% ==================== Helper functions ====================
+
+function qcSummary = localSummarizeDMDQC(spotsAtDepth)
+    metricNames = {'Rs','Rm','Cm','tau','Verror','Ibaseline','Ibaseline_std','Ibaseline_var',...
+                   'Rs_headerString','Rm_headerString','Cm_headerString'};
+    varNames = [{'Sweep','Depth','Repetition','Vhold','included','reconstructed'}, metricNames];
+    varTypes = [{'string','double','double','double','double','double'}, repmat({'double'},1,numel(metricNames))];
+    qcSummary = table('Size',[0,numel(varNames)], ...
+                      'VariableTypes',varTypes, ...
+                      'VariableNames',varNames);
+
+    if isempty(spotsAtDepth) || ~ismember('QC',spotsAtDepth.Properties.VariableNames)
+        return
+    end
+
+    [~, uniqueSweepRows] = unique(spotsAtDepth.Sweep,'stable');
+    for i = 1:numel(uniqueSweepRows)
+        row = uniqueSweepRows(i);
+        qc = spotsAtDepth{row,'QC'}{1};
+        if isempty(qc) || ~isstruct(qc)
+            qc = struct();
+        end
+
+        qcSummary{i,'Sweep'} = string(spotsAtDepth{row,'Sweep'});
+        qcSummary{i,'Depth'} = spotsAtDepth{row,'Depth'};
+        qcSummary{i,'Repetition'} = spotsAtDepth{row,'Repetition'};
+        qcSummary{i,'Vhold'} = spotsAtDepth{row,'Vhold'};
+        qcSummary{i,'included'} = localGetQCValue(qc,'included');
+        qcSummary{i,'reconstructed'} = localGetQCValue(qc,'reconstructed');
+
+        for m = 1:numel(metricNames)
+            qcSummary{i,metricNames{m}} = localGetQCValue(qc,metricNames{m});
+        end
+    end
+end
+
+function value = localGetQCValue(qc, fieldName)
+    value = nan;
+    if ~isfield(qc,fieldName)
+        return
+    end
+
+    rawValue = qc.(fieldName);
+    if isempty(rawValue)
+        return
+    elseif isnumeric(rawValue) || islogical(rawValue)
+        value = double(rawValue(1));
+    elseif isstring(rawValue)
+        value = str2double(rawValue(1));
+    elseif ischar(rawValue)
+        value = str2double(rawValue);
+    end
+end
 
 function [hotspotsByDepth, depths] = localLoadHotspots(epochPath, epochNumber)
     % Load hotspot geometry tables into a map keyed by depth.

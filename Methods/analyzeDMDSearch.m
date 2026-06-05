@@ -9,6 +9,8 @@ arguments
     options.redStim logical = true
     options.depthLineWidth = 'scale' %[3,2.5,2,1.5,1.1,1,0.5];
     options.depthLineWidthAlpha double = 0.3
+    options.plotQC logical = true
+    options.QCMetrics string = ["Rs","Cm","Rm","Verror","Ibaseline","Ibaseline_std"]
 
     options.color
     options.colormap
@@ -513,6 +515,16 @@ for d = 1:nDepth
     saveFigures(gcf,[filename,'_',curCell.Options{1}.feature],filepath,...
                 savePNG=options.savePNG,savePDF=options.savePDF,saveFIG=options.saveFIG);
     disp(['Finished: saving summary figure for search: ', curSearch,' at depth ',num2str(curDepth)]);
+end
+
+if options.plotQC
+    plotDMDSearchQC(curCell, searchIdx, ...
+                    metrics=options.QCMetrics, ...
+                    save=options.save, ...
+                    savePNG=false, ...
+                    savePDF=options.savePDF, ...
+                    saveFIG=false, ...
+                    saveDataPath=options.saveDataPath);
 end
 
 disp(['Finished: analysis finished for search: ', curSearch]);
