@@ -3,8 +3,8 @@
 % Load and analyze DMD slice data (single session)
 
 %% Load sessions
-clear; close all;
-addpath(genpath('\\research.files.med.harvard.edu\neurobio\MICROSCOPE\Shun\Analysis\NeuroDAP\Methods'));
+clear; close all; loadNeuroDAP;
+% addpath(genpath('\\research.files.med.harvard.edu\neurobio\MICROSCOPE\Shun\Analysis\NeuroDAP\Methods'));
 
 % Select sessions for analysis
 parentPath = osPathSwitch('\\research.files.med.harvard.edu\neurobio\MICROSCOPE\Shun\Project valence\Patch\');
