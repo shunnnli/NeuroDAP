@@ -74,8 +74,9 @@ if isfield(options,'baselineWindow')
     Ibaseline_std = std(options.data(options.baselineWindow));
     Ibaseline_var = var(options.data(options.baselineWindow));
 else
-    rcBaselineStart = round((rcStartT - 100)/pulsedt);
-    options.baselineWindow = rcBaselineStart:rcStartT;
+    baselineSamples = min(round(100/pulsedt), max(1,rcStartT-1));
+    rcBaselineStart = max(1, rcStartT - baselineSamples);
+    options.baselineWindow = rcBaselineStart:max(1,rcStartT-1);
     Ibaseline = median(options.data(options.baselineWindow)); % baseline current before RC
     Ibaseline_std = std(options.data(options.baselineWindow));
     Ibaseline_var = var(options.data(options.baselineWindow));

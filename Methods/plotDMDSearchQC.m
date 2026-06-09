@@ -54,6 +54,7 @@ depthColors = lines(max(1,numel(depths)));
 for m = 1:numel(metrics)
     metric = char(metrics(m));
     nexttile; hold on; box off; grid on;
+    metricData = qcTable{:,metric};
 
     for d = 1:numel(depths)
         depthRows = qcTable.Depth == depths(d);
@@ -65,6 +66,13 @@ for m = 1:numel(metrics)
              'MarkerSize', 4, ...
              'LineWidth', 1.2, ...
              'DisplayName', ['Depth ',num2str(depths(d))]);
+    end
+
+    if all(isnan(metricData))
+        text(0.5,0.5,'All values are NaN', ...
+             'Units','normalized', ...
+             'HorizontalAlignment','center', ...
+             'Color',[0.5 0.5 0.5]);
     end
 
     threshold = localGetThreshold(options.QCThreshold, metric);

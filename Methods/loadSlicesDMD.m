@@ -295,7 +295,8 @@ if options.reloadCells
     
         
                 % Extract quality metrics from header string
-                qc = getCellQC(headerString,calculate=options.calculateQC,data=raw_trace);
+                qc = getCellQC(headerString,calculate=options.calculateQC,...
+                               data=raw_trace,baselineWindow=baselineWindow);
                 % Rs = qc.Rs; Rm = qc.Rm; Cm = qc.Cm;
 
 
