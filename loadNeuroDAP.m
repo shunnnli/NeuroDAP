@@ -5,7 +5,9 @@ function neuroDAPDir = loadNeuroDAP()
 %
 %   This function automatically finds the main NeuroDAP folder by starting
 %   from the folder of the script/function that called loadNeuroDAP, then
-%   walking upward until it finds a folder that contains "Methods".
+%   walking upward until it finds a folder that contains "Methods". If MATLAB
+%   runs the caller from a temporary Editor_* folder, it also tries the folder
+%   containing loadNeuroDAP.m and the current working folder.
 %
 %   This avoids hard-coded paths such as:
 %       /Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods
@@ -22,40 +24,57 @@ function neuroDAPDir = loadNeuroDAP()
 %   Output:
 %       neuroDAPDir - Full path to the detected main NeuroDAP folder.
 
-    %% Find the folder of the file that called loadNeuroDAP
+    %% Find candidate folders for the NeuroDAP root
     %
     % dbstack gives the current call stack.
     % stack(1) is this function: loadNeuroDAP
     % stack(2), if it exists, is the script/function that called loadNeuroDAP.
     stack = dbstack('-completenames');
 
+    candidateStartDirs = {};
+
     if numel(stack) >= 2
         % Called from a script or function
         callerPath = stack(2).file;
-        startDir = fileparts(callerPath);
-    else
-        % Called directly from the Command Window
-        startDir = pwd;
+        candidateStartDirs{end+1} = fileparts(callerPath);
     end
 
-    %% Walk upward until we find the NeuroDAP folder
-    %
-    % We define the NeuroDAP root as the nearest parent folder containing
-    % a subfolder named "Methods".
-    neuroDAPDir = startDir;
+    % MATLAB can run editor selections/sections from temporary Editor_*
+    % scripts. In that case the caller is outside the repository, so fall
+    % back to the folder containing this loader and then the Current Folder.
+    candidateStartDirs{end+1} = fileparts(mfilename('fullpath'));
+    candidateStartDirs{end+1} = pwd;
+    candidateStartDirs = unique(candidateStartDirs, 'stable');
 
-    while ~isfolder(fullfile(neuroDAPDir, 'Methods'))
+    %% Walk upward from each candidate until we find the NeuroDAP folder
+    neuroDAPDir = '';
 
-        parentDir = fileparts(neuroDAPDir);
+    for i = 1:numel(candidateStartDirs)
+        startDir = candidateStartDirs{i};
+        searchDir = startDir;
 
-        % If parentDir is the same as neuroDAPDir, we reached the filesystem
-        % root and did not find a Methods folder.
-        if strcmp(parentDir, neuroDAPDir)
-            error(['Could not find the NeuroDAP root folder. ', ...
-                   'Starting folder was: %s'], startDir);
+        while ~isfolder(fullfile(searchDir, 'Methods'))
+            parentDir = fileparts(searchDir);
+
+            % If parentDir is the same as searchDir, we reached the filesystem
+            % root and did not find a Methods folder.
+            if strcmp(parentDir, searchDir)
+                searchDir = '';
+                break
+            end
+
+            searchDir = parentDir;
         end
 
-        neuroDAPDir = parentDir;
+        if ~isempty(searchDir)
+            neuroDAPDir = searchDir;
+            break
+        end
+    end
+
+    if isempty(neuroDAPDir)
+        error(['Could not find the NeuroDAP root folder. ', ...
+               'Starting folders were: %s'], strjoin(candidateStartDirs, ', '));
     end
 
     %% Add NeuroDAP/Methods to MATLAB path
