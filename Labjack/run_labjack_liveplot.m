@@ -27,8 +27,8 @@ v3.0 Shun Li, Harvard Medical School
 
 % concatLabjack('C:\Shun\Recordings\20231107-test-25uW_g0',plot=true);
 
-clear; close all
-addpath(addpath(genpath('\\research.files.med.harvard.edu\neurobio\MICROSCOPE\Shun\Behavior setup\Matlab')));
+clear; close all; loadNeuroDAP;
+% addpath(addpath(genpath('\\research.files.med.harvard.edu\neurobio\MICROSCOPE\Shun\Behavior setup\Matlab')));
 root_path = 'C:\Shun\Recordings';
 % addpath(addpath(genpath('E:\Sally\Matlab')));
 % root_path = 'E:\Sally\Recordings';
@@ -52,15 +52,14 @@ plotUpdateSec = 0.1;    % seconds per update (~100 ms)
 % freqMod = true; spikeGLX = true;
 
 % % DA clamp setting
-% labjack.name = {'NAc-left','NAc-right','PMT'}; 
-% labjack.name = {'NAc-rightLS','NAc-right','PMT'}; 
-% labjack.record = [1,1,0];
-% freqMod = false; spikeGLX = true;
+labjack.name = {'NAc-left','NAc-right','PMT'}; 
+labjack.record = [1,1,0];
+freqMod = false; spikeGLX = true;
 
 % RTPP setting (no spikeGLX)
-labjack.name = {'NAc-right','NAc-left','PMT'}; 
-labjack.record = [1,1,0];
-freqMod = false; spikeGLX = false;
+% labjack.name = {'NAc-right','NAc-left','PMT'}; 
+% labjack.record = [1,1,0];
+% freqMod = false; spikeGLX = false;
 
 % LED power settings
 LEDpower1 = 0.8; %1.5;%0.5; % power to get 30uW

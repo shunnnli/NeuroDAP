@@ -1,8 +1,8 @@
 %% Concatenate Labjack files
 % Faster locally
 
-clear; close all
-addpath(addpath(genpath('\\research.files.med.harvard.edu\neurobio\MICROSCOPE\Shun\Analysis\NeuroDAP\Methods')));
+clear; close all; loadNeuroDAP;
+% addpath(addpath(genpath('\\research.files.med.harvard.edu\neurobio\MICROSCOPE\Shun\Analysis\NeuroDAP\Methods')));
 
 % Select sessions
 sessionList = uipickfiles('FilterSpec','C:\Shun\Recordings');

@@ -236,8 +236,8 @@ return
 
 %% Single session analysis for BrainClamp
 
-clear; close all;
-addpath(genpath(osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
+clear; close all; loadNeuroDAP;
+% addpath(genpath(osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
 
 % Select sessions via uipickfiles
 sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project clamping/Recordings'))';
