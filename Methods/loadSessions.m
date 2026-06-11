@@ -1045,7 +1045,18 @@ if withCamera && (options.reloadAll || options.reloadCam)
             end
         end
 
-        [camera.Sync,~] = extractSyncFromCamera(camerapath,inspectROI=options.inspectSyncROI);
+        [syncFromCamera,~] = extractSyncFromCamera(camerapath,inspectROI=options.inspectSyncROI);
+        syncFromCamera = syncFromCamera(:);
+        nExtraCamFrames = numel(syncFromCamera) - height(camera);
+        if nExtraCamFrames > 0
+            fill = repelem(camera(end,:), nExtraCamFrames, 1);
+            fill{:,'Sync'} = syncFromCamera(height(camera)+1:end);
+            fill{:,'SkippedFrame'} = 0;
+            fill{:,'Date'} = camera{:,'Date'}(end) + seconds((1:nExtraCamFrames)' ./ params.sync.camFs);
+            camera = [camera; fill];
+        end
+        nSyncFrames = min(numel(syncFromCamera), height(camera));
+        camera{1:nSyncFrames,'Sync'} = syncFromCamera(1:nSyncFrames);
         cameraCsvPath = fullfile(sessionpath, 'camera-processed','times-processed.csv');
         writetable(camera, cameraCsvPath);
         disp("Finished: save processed camera csv file");
