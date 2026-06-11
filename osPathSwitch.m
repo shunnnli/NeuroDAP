@@ -15,7 +15,7 @@ if isunix
     if isfolder('/Volumes/Neurobio/MICROSCOPE'); rootPath = '/Volumes/Neurobio/MICROSCOPE';
     elseif isfolder('/Volumes/MICROSCOPE'); rootPath = '/Volumes/MICROSCOPE';
     else
-        error('Did not contain root folder!');
+        error('Did not contain root folder! Check whether MICROSCOPE is loaded!');
     end
 elseif ispc
     rootPath = '\\research.files.med.harvard.edu\neurobio\MICROSCOPE';
