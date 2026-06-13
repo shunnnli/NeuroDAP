@@ -262,9 +262,12 @@ if ~exist('clampON','var') || options.redo
         end
     end
     clampON = reshape(clampON, size(blueClamp_pct));
-    % Find rising edge of clampON
-    clampOnset = (find(diff(clampON > 0.5) > 0) + 1)';
-    clampOffset = (find(diff(clampON > 0.5) < 0) + 1)';
+    % Padding catches clamps that start before the first sample or remain on
+    % through the last sample, keeping onset/offset paired.
+    clampState = clampON(:) > 0.5;
+    clampEdges = diff([false; clampState; false]);
+    clampOnset = find(clampEdges > 0)';
+    clampOffset = min(find(clampEdges < 0), numel(clampState))';
 
     %% Code to check 
     sampleStart_sec = 1112;
@@ -318,7 +321,7 @@ if ~exist('clampTarget_dff','var') || options.redo
 
     %% Plot to check clampTarget_dff
     if length(clampOnset) > 1
-        i = 26;
+        i = randi(length(clampOnset));
         baselineStartSample = clampOnset(i)+bumplessOnSamples;
         baselineEndSample = clampOnset(i)+bumplessOnSamples+stableBaselineSamples;
         baselineWindow = baselineStartSample : baselineEndSample;
