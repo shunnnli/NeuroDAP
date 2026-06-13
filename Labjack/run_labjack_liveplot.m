@@ -63,7 +63,7 @@ freqMod = false; spikeGLX = true;
 
 % LED power settings
 LEDpower1 = 0.8; %1.5;%0.5; % power to get 30uW
-LEDpower2 = 2.5; % 2.5=30uW
+LEDpower2 = 3; % 2.5=30uW
 LEDpower1Min = 0.3; %0.3 %0.5 % power to get minimal signal 
 LEDpower2Min = 0.2; % power to get minimal signal
 
