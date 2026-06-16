@@ -3,8 +3,7 @@
 
 %% Single session analysis
 
-clear; close all;
-addpath(genpath(osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
+clear; close all; loadNeuroDAP;
 
 % Select sessions via uipickfiles
 sessionList = uipickfiles('FilterSpec',osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project valence/Recordings'))';
