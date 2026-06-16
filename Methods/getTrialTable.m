@@ -87,7 +87,11 @@ for i=1:length(allTrials)
 
     % Trial cue/stim
     leftToneTime = leftToneON(leftToneON >= cur_cue-gracePeriod & leftToneON < next_cue-end_gracePeriod) - cur_cue;
-    rightToneTime = rightToneON(rightToneON >= cur_cue-gracePeriod & rightToneON < next_cue-end_gracePeriod) - cur_cue;
+    if options.withClamp
+        rightToneTime = rightToneON(rightToneON >= cur_cue-gracePeriod & rightToneON < next_cue-end_gracePeriod) - cur_cue;
+    else
+        rightToneTime = nan;
+    end
     allToneTimes = [leftToneTime(:); rightToneTime(:)];
     toneTime = NaN;
     if ~isempty(allToneTimes), toneTime = min(allToneTimes); end
