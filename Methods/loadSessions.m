@@ -651,7 +651,7 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
     end
 
     % Process clamp control signal if necessary
-    if contains(options.NISetup,'clamp',IgnoreCase=true) && withNI
+    if contains(options.NISetup,'clamp',IgnoreCase=true) && withNI && options.withClamp
         % Downsample
         processed = downsampleSignal(blueClamp_pct,...
                             targetFs=options.downsampleFs,originalFs=nidq.Fs,...

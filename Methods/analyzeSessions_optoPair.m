@@ -597,7 +597,7 @@ if options.plotPhotometry && exist('timeSeries','var')
     end
     
     % Save figure
-    saveas(gcf,strcat(sessionpath,filesep,'Summary_photometry_distribution.png'));
+    saveFigures(gcf,'Summary_photometry_distribution',sessionpath,savePDF=true);
 
     %% Loop through timeSeries struct
     for photometry = 1:nSignals
@@ -738,7 +738,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                 legend(taskLegend(2:end),'Location','northeast');
             end
         end 
-        saveas(gcf,strcat(sessionpath,filesep,'Summary_events_',timeSeries(path).name,'.png'));
+        saveFigures(gcf,strcat('Summary_events_',timeSeries(path).name),sessionpath,savePDF=true);
 
         %% Plot single stimulus PSTH
         if strcmp(options.task,'random')
@@ -805,7 +805,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                 xlabel('Time (s)'); ylabel([name,' z-score']);
                 legend(legendList);
                 
-                saveas(gcf,strcat(sessionpath,filesep,'Events_',timeSeries(path).name,'_',label,'.png'));
+                saveFigures(gcf,strcat('Events_',timeSeries(path).name,'_',label),sessionpath,savePDF=true);
             end
         else
             if strcmp(params.stim.color,'red')
@@ -880,7 +880,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                 xlabel('Time (s)'); ylabel([name,' z-score']);
                 legend(legendList);
 
-                saveas(gcf,strcat(sessionpath,filesep,'Events_',timeSeries(path).name,'_',label,'.png'));
+                saveFigures(gcf,strcat('Events_',timeSeries(path).name,'_',label),sessionpath,savePDF=true);
             end
         end
     end
@@ -924,7 +924,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                 xlabel('Slope distribution (bootstrapped)'); ylabel('Count'); box off
             end
             % Save
-            saveas(gcf,strcat(sessionpath,filesep,'Analysis_',cur_signal,'_subtrial_average.png'));
+            saveFigures(gcf,strcat('Analysis_',cur_signal,'_subtrial_average'),sessionpath,savePDF=true);
         end
     
         %% Plot subtrial peak trend for baseline, CS, US
@@ -964,7 +964,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                 xlabel('Slope distribution (bootstrapped)'); ylabel('Count'); box off
             end
             % Save
-            saveas(gcf,strcat(sessionpath,filesep,'Analysis_',cur_signal,'_subtrial_peak.png'));
+            saveFigures(gcf,strcat('Analysis_',cur_signal,'_subtrial_peak'),sessionpath,savePDF=true);
         end
     
         %% Plot subtrial trough trend for baseline, CS, US
@@ -1004,7 +1004,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                 xlabel('Slope distribution (bootstrapped)'); ylabel('Count'); box off
             end
             % Save
-            saveas(gcf,strcat(sessionpath,filesep,'Analysis_',cur_signal,'_subtrial_trough.png'));
+            saveFigures(gcf,strcat('Analysis_',cur_signal,'_subtrial_trough'),sessionpath,savePDF=true);
         end
 
         %% Plot subtrial area trend for baseline, CS, US
@@ -1044,7 +1044,7 @@ if options.plotPhotometry && exist('timeSeries','var')
                 xlabel('Slope distribution (bootstrapped)'); ylabel('Count'); box off
             end
             % Save
-            saveas(gcf,strcat(sessionpath,filesep,'Analysis_',cur_signal,'_subtrial_area.png'));
+            saveFigures(gcf,strcat('Analysis_',cur_signal,'_subtrial_area'),sessionpath,savePDF=true);
         end
     end
 end
@@ -1085,7 +1085,7 @@ if options.plotBehavior
     % plot(trials{1:end-1,'TrialNumber'},trials{1:end-1,'nLicks'},'Color',bluePurpleRed(1,:),LineWidth=2);
     % xlabel('Trials'); ylabel('Licks per trial'); box off
 
-    saveas(gcf,strcat(sessionpath,filesep,'Behavior_ITI&LickBout.png'));
+    saveFigures(gcf,'Behavior_ITI&LickBout',sessionpath,savePDF=true);
 end
 
 
@@ -1151,7 +1151,7 @@ if options.plotBehavior && contains(options.task,'pairing')
         xlabel('Time (s)'); ylabel('Licks/s');
         legend(legendList);
     end
-    saveFigures(gcf,'Behavior_LickOverview',sessionpath,savePNG=true,savePDF=false);
+    saveFigures(gcf,'Behavior_LickOverview',sessionpath,savePDF=true);
     
     %% Plot session overview for eye
     if params.session.withCamera && params.session.withEyeTracking
@@ -1221,7 +1221,7 @@ if options.plotBehavior && contains(options.task,'pairing')
             xlabel('Time (s)'); ylabel('Pupil area (z-score)');
             legend(legendList);
         end
-        saveas(gcf,strcat(sessionpath,filesep,'Behavior_EyeOverview.png'));
+        saveFigures(gcf,'Behavior_EyeOverview',sessionpath,savePDF=true);
     end
 
     %% Plot ENL aligned lick trace
@@ -1298,7 +1298,7 @@ if options.plotBehavior && contains(options.task,'pairing')
         xlabel('Time from ENL start (s)'); ylabel('Licks/s');
         legend(legendList);
     end
-    saveas(gcf,strcat(sessionpath,filesep,'Behavior_ENLAlignedLick.png'));
+    saveFigures(gcf,'Behavior_ENLAlignedLick',sessionpath,savePDF=true);
 
     %% Plot distributions
     initializeFig(1,1);
@@ -1656,7 +1656,7 @@ if options.plotBehavior && contains(options.task,'pairing')
     xlabel("Trials"); ylabel("Outcome reaction time (s)"); box off
     title("Outcome reaction time (all trials)");
     
-    saveas(gcf,strcat(sessionpath,filesep,'Summary_distributions.png'));
+    saveFigures(gcf,'Summary_distributions',sessionpath,savePDF=true);
 
 end
 disp('Finished: all plots and struct are plotted and saved!');
