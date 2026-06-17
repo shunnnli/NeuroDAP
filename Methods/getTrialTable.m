@@ -89,11 +89,11 @@ for i=1:length(allTrials)
     leftToneTime = leftToneON(leftToneON >= cur_cue-gracePeriod & leftToneON < next_cue-end_gracePeriod) - cur_cue;
     if options.withClamp
         rightToneTime = rightToneON(rightToneON >= cur_cue-gracePeriod & rightToneON < next_cue-end_gracePeriod) - cur_cue;
+        allToneTimes = [leftToneTime(:); rightToneTime(:)];
     else
-        rightToneTime = nan;
+        allToneTimes = leftToneTime(:);
     end
-    allToneTimes = [leftToneTime(:); rightToneTime(:)];
-    toneTime = NaN;
+    toneTime = [];
     if ~isempty(allToneTimes), toneTime = min(allToneTimes); end
     isTone = ~isempty(toneTime);
     isLeftTone = ~isempty(leftToneTime);
