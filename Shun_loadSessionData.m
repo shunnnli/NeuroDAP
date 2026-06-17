@@ -23,7 +23,7 @@ for s = 1:length(sessionList)
 end 
 % Select session params
 [sessionParams,canceled] = inputSessionParams(sessionList,...
-                                paradigm=1,...
+                                paradigm=2,...
                                 redStim=true,...
                                 reactionTime=2,minLicks=2,...
                                 redPulseFreq=50,redPulseDuration=5,redStimDuration=500,...
@@ -38,8 +38,18 @@ for s = 1:length(sessionList)
     taskList{s} = taskOptions{sessionParams(s).Paradigm};
     redStimPatternList{s} = {sessionParams(s).RedPulseFreq,sessionParams(s).RedPulseDuration,sessionParams(s).RedStimDuration};
     blueStimPatternList{s} = {sessionParams(s).BluePulseFreq,sessionParams(s).BluePulseDuration,sessionParams(s).BlueStimDuration};
-    sessionParams(s).ReactionTime = str2double(sessionParams(s).ReactionTime);
-    sessionParams(s).minLicks = str2double(sessionParams(s).minLicks);
+    
+    if isstring(sessionParams(s).ReactionTime)
+        sessionParams(s).ReactionTime = str2double(sessionParams(s).ReactionTime);
+    else
+        sessionParams(s).ReactionTime = sessionParams(s).ReactionTime;
+    end
+
+    if isstring(sessionParams(s).minLicks)
+        sessionParams(s).minLicks = str2double(sessionParams(s).minLicks);
+    else
+        sessionParams(s).minLicks = sessionParams(s).minLicks;
+    end
 end
 
 
