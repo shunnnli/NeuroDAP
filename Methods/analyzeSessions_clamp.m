@@ -270,7 +270,7 @@ if ~exist('clampON','var') || options.redo
     clampOffset = min(find(clampEdges < 0), numel(clampState))';
 
     %% Code to check 
-    sampleStart_sec = 1112;
+    sampleStart_sec = 112;
     sampleWindow_sec = 60;
 
     sampleStart = sampleStart_sec*Fs;
@@ -325,25 +325,22 @@ if ~exist('clampTarget_dff','var') || options.redo
         baselineStartSample = clampOnset(i)+bumplessOnSamples;
         baselineEndSample = clampOnset(i)+bumplessOnSamples+stableBaselineSamples;
         baselineWindow = baselineStartSample : baselineEndSample;
-        F0 = median(clampTarget(baselineWindow));
-        baselineStartTime = baselineStartSample / Fs;
-        baselineEndTime = baselineEndSample / Fs;
+        F0 = median(clampTarget(baselineWindow)); 
+        baselineTime = baselineWindow ./ Fs;
         
         sampleWindow = clampOnset(i)+1000:clampOffset(i)-1000;
         sampleTime = sampleWindow ./ Fs;
-    
     
         close all; initializeFig(0.8,0.4); tiledlayout(2,1);
     
         nexttile;
         plot(sampleTime, clampTarget(sampleWindow)); hold on;
-        scatter(baselineStartTime, F0, 50, 'red', 'filled'); hold on;
-        scatter(baselineEndTime, F0, 50, 'red', 'filled'); hold on;
+        plot([baselineTime(1) baselineTime(end)], [F0 F0], 'r-', 'LineWidth', 2);
         nexttile;
         plot(sampleTime, clampTarget_dff(sampleWindow));
         xlabel('time (s)');
     else
-        sampleStart_sec = 1112;
+        sampleStart_sec = 112;
         sampleWindow_sec = 60;
     
         sampleStart = sampleStart_sec*Fs;
@@ -361,6 +358,11 @@ if ~exist('clampTarget_dff','var') || options.redo
 
     %%
     save(strcat(sessionpath,filesep,'data_',options.outputName),'clampTarget_dff','-append');
+end
+
+%% Skip the rest if session is RTPP
+if contains(sessionName,'RTPP',IgnoreCase=true)
+    return
 end
 
 %% Extract clampEvents if neccessary (step/ramp)
