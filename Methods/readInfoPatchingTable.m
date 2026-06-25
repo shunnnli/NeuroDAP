@@ -21,8 +21,10 @@ end
 nVariables = numel(opts.VariableNames);
 
 if nVariables == 0
-    error("readInfoPatchingTable:NoVariables", ...
-          "No variables were detected in %s using row 25 as the header.", char(xlsxPath));
+    warning("readInfoPatchingTable:EmptyWorkbook", ...
+            "Skipping empty InfoPatching.xlsx: %s", char(xlsxPath));
+    infoTable = localEmptyInfoPatchingTable();
+    return
 end
 
 nSelected = min(maxVariables, nVariables);
@@ -38,4 +40,10 @@ if ~isempty(missingVariables)
           char(strjoin(missingVariables, ", ")));
 end
 
+end
+
+function infoTable = localEmptyInfoPatchingTable()
+infoTable = table('Size', [0, 4], ...
+                  'VariableTypes', {'double', 'double', 'double', 'double'}, ...
+                  'VariableNames', {'acq_', 'epoch', 'cyclePos', 'holding'});
 end
