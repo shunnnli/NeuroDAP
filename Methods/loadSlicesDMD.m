@@ -174,10 +174,7 @@ if options.reloadCells
             end
         
             % Read patching info csv file
-            csvOpts = detectImportOptions(fullfile(epochPath,'InfoPatching.xlsx'));
-            csvOpts.SelectedVariableNames = 1:9;
-            csvOpts.VariableNamesRange = 25;
-            patchInfo = readtable(fullfile(epochPath,'InfoPatching.xlsx'),csvOpts);
+            patchInfo = readInfoPatchingTable(fullfile(epochPath,'InfoPatching.xlsx'), 9);
             patchInfo = rmmissing(patchInfo,DataVariables="acq_");
             patchInfo = rmmissing(patchInfo,DataVariables="epoch");
             
@@ -2002,9 +1999,7 @@ function [reconOK, reconNoise] = reconstructFromResponseMap(epochPath, cellResul
         infoPatching = [];
         if strcmpi(options.vholdChannel, 'excel')
             try
-                csvOpts = detectImportOptions(fullfile(epochPath,'InfoPatching.xlsx'));
-                csvOpts.SelectedVariableNames = 1:9; csvOpts.VariableNamesRange = 25;
-                infoPatching = readtable(fullfile(epochPath,'InfoPatching.xlsx'), csvOpts);
+                infoPatching = readInfoPatchingTable(fullfile(epochPath,'InfoPatching.xlsx'), 9);
                 infoPatching = rmmissing(infoPatching, DataVariables="acq_");
                 if iscell(infoPatching.acq_); infoPatching.acq_ = str2double(infoPatching.acq_); end
                 if iscell(infoPatching.holding); infoPatching.holding = str2double(infoPatching.holding); end

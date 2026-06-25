@@ -334,10 +334,7 @@ if options.reload
         infoTable = [];
         xlsxPath = fullfile(grpFolder{row}, 'InfoPatching.xlsx');
         if exist(xlsxPath,'file')
-            csvOpts = detectImportOptions(xlsxPath);
-            csvOpts.SelectedVariableNames = 1:11;
-            csvOpts.VariableNamesRange = 25;
-            infoTable = readtable(xlsxPath, csvOpts);
+            infoTable = readInfoPatchingTable(xlsxPath, 11);
             infoTable = rmmissing(infoTable, DataVariables="acq_");
             infoTable = rmmissing(infoTable, DataVariables="epoch");
 
