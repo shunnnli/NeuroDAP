@@ -174,14 +174,18 @@ if options.reloadCells
             end
         
             % Read patching info csv file
-            patchInfo = readInfoPatchingTable(fullfile(epochPath,'InfoPatching.xlsx'), 9);
-            patchInfo = rmmissing(patchInfo,DataVariables="acq_");
-            patchInfo = rmmissing(patchInfo,DataVariables="epoch");
-            
-            if iscell(patchInfo.acq_);     patchInfo.acq_     = str2double(patchInfo.acq_); end
-            if iscell(patchInfo.epoch);    patchInfo.epoch    = str2double(patchInfo.epoch); end
-            if iscell(patchInfo.cyclePos); patchInfo.cyclePos = str2double(patchInfo.cyclePos); end
-            if iscell(patchInfo.holding);  patchInfo.holding  = str2double(patchInfo.holding); end
+            patchInfo = [];
+            xlsxPath = fullfile(epochPath,'InfoPatching.xlsx');
+            if exist(xlsxPath,'file')
+                patchInfo = readInfoPatchingTable(xlsxPath, 9);
+                patchInfo = rmmissing(patchInfo,DataVariables="acq_");
+                patchInfo = rmmissing(patchInfo,DataVariables="epoch");
+
+                if iscell(patchInfo.acq_);     patchInfo.acq_     = str2double(patchInfo.acq_); end
+                if iscell(patchInfo.epoch);    patchInfo.epoch    = str2double(patchInfo.epoch); end
+                if iscell(patchInfo.cyclePos); patchInfo.cyclePos = str2double(patchInfo.cyclePos); end
+                if iscell(patchInfo.holding);  patchInfo.holding  = str2double(patchInfo.holding); end
+            end
 
         
             %% Initialize spots table
@@ -1999,10 +2003,13 @@ function [reconOK, reconNoise] = reconstructFromResponseMap(epochPath, cellResul
         infoPatching = [];
         if strcmpi(options.vholdChannel, 'excel')
             try
-                infoPatching = readInfoPatchingTable(fullfile(epochPath,'InfoPatching.xlsx'), 9);
-                infoPatching = rmmissing(infoPatching, DataVariables="acq_");
-                if iscell(infoPatching.acq_); infoPatching.acq_ = str2double(infoPatching.acq_); end
-                if iscell(infoPatching.holding); infoPatching.holding = str2double(infoPatching.holding); end
+                xlsxPath = fullfile(epochPath,'InfoPatching.xlsx');
+                if exist(xlsxPath,'file')
+                    infoPatching = readInfoPatchingTable(xlsxPath, 9);
+                    infoPatching = rmmissing(infoPatching, DataVariables="acq_");
+                    if iscell(infoPatching.acq_); infoPatching.acq_ = str2double(infoPatching.acq_); end
+                    if iscell(infoPatching.holding); infoPatching.holding = str2double(infoPatching.holding); end
+                end
             catch
                 warning('Could not load InfoPatching.xlsx for reconstruction fallback.');
             end
