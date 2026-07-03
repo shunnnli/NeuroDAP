@@ -755,7 +755,7 @@ void sync() {
       TimerSync = millis();
       digitalWrite(Sync, HIGH);
       SyncNow = 1;
-      SyncPulseInterval = 50;
+      SyncPulseInterval = 100;
     }
   }
 }
