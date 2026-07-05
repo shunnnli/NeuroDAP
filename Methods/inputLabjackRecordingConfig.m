@@ -15,34 +15,39 @@ answer = [];
 okPressed = false;
 
 fig = dialog('Name','LabJack recording config','WindowStyle','modal', ...
-    'Units','pixels','Position',[100 100 520 300],'Resize','off');
+    'Units','pixels','Position',[100 100 560 335],'Resize','off');
 movegui(fig,'center');
 set(fig,'CloseRequestFcn',@cancelDialog);
 
+uicontrol(fig,'Style','text','String','Session name','HorizontalAlignment','left', ...
+    'Position',[25 295 90 20]);
+sessionEdit = uicontrol(fig,'Style','edit','HorizontalAlignment','left', ...
+    'Position',[120 292 145 26]);
+
 uicontrol(fig,'Style','text','String','Animal settings','HorizontalAlignment','left', ...
-    'Position',[25 260 110 20]);
+    'Position',[285 295 105 20]);
 animalPopup = uicontrol(fig,'Style','popupmenu','String',{configs.animal}, ...
-    'Position',[140 260 220 24],'Callback',@selectConfig);
+    'Position',[390 292 90 24],'Callback',@selectConfig);
 spikeCheck = uicontrol(fig,'Style','checkbox','String','SpikeGLX', ...
-    'Position',[390 260 90 24]);
+    'Position',[490 292 70 24]);
 
 uicontrol(fig,'Style','text','String','Channel','HorizontalAlignment','left', ...
-    'Position',[35 220 75 18]);
+    'Position',[35 250 75 18]);
 uicontrol(fig,'Style','text','String','Record','HorizontalAlignment','center', ...
-    'Position',[115 220 65 18]);
+    'Position',[115 250 65 18]);
 uicontrol(fig,'Style','text','String','Name','HorizontalAlignment','left', ...
-    'Position',[195 220 120 18]);
+    'Position',[195 250 120 18]);
 uicontrol(fig,'Style','text','String','Freq mod','HorizontalAlignment','center', ...
-    'Position',[335 220 65 18]);
+    'Position',[335 250 65 18]);
 uicontrol(fig,'Style','text','String','Display','HorizontalAlignment','center', ...
-    'Position',[420 220 65 18]);
+    'Position',[420 250 65 18]);
 
 recordCheck = gobjects(1,3);
 nameEdit = gobjects(1,3);
 freqCheck = gobjects(1,3);
 displayCheck = gobjects(1,3);
 for i = 1:3
-    y = 220 - i*45;
+    y = 250 - i*45;
     uicontrol(fig,'Style','text','String',sprintf('Channel %d',i), ...
         'HorizontalAlignment','left','Position',[35 y+4 75 20]);
     recordCheck(i) = uicontrol(fig,'Style','checkbox','Position',[137 y+4 24 24]);
@@ -101,6 +106,7 @@ livePlot.enable = ~isempty(livePlot.channelIdx);
     function okDialog(~,~)
         idx = get(animalPopup,'Value');
         cfg = configs(idx);
+        cfg.sessionName = strtrim(get(sessionEdit,'String'));
         for c = 1:3
             cfg.record(c) = logical(get(recordCheck(c),'Value'));
             cfg.channelNames{c} = strtrim(get(nameEdit(c),'String'));
@@ -108,6 +114,12 @@ livePlot.enable = ~isempty(livePlot.channelIdx);
             cfg.display(c) = logical(get(displayCheck(c),'Value'));
         end
         cfg.spikeGLX = logical(get(spikeCheck,'Value'));
+
+        if isempty(cfg.sessionName)
+            errordlg('Please enter a session name.', ...
+                'Missing session name','modal');
+            return
+        end
 
         if any(cellfun(@isempty,cfg.channelNames))
             errordlg('Please enter a name for all three channels.', ...
@@ -175,7 +187,7 @@ if isempty(cfg.animal); cfg.animal = 'Default'; end
 end
 
 function cfg = blankConfig()
-cfg = struct('animal','Default', ...
+cfg = struct('sessionName','','animal','Default', ...
     'channelNames',{{'NAc-left','NAc-right','PMT'}}, ...
     'freqMod',false(1,3),'display',false(1,3),'record',[true true false], ...
     'spikeGLX',true,'sourceFile','');
