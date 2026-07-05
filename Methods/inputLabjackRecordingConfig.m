@@ -19,10 +19,10 @@ fig = dialog('Name','LabJack recording config','WindowStyle','modal', ...
 movegui(fig,'center');
 set(fig,'CloseRequestFcn',@cancelDialog);
 
-labelX = 105;
+labelX = 75;
 labelW = 105;
-controlX = 220;
-rightEdge = 470;
+controlX = 190;
+rightEdge = 440;
 spikeW = 80;
 
 uicontrol(fig,'Style','text','String','Session name','HorizontalAlignment','right', ...
