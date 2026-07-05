@@ -1,13 +1,13 @@
-function [labjack, spikeGLX, livePlot, config] = inputLabjackRecordingConfig(samplerate, configDir)
+function [labjack, spikeGLX, livePlot, config] = inputLabjackRecordingConfig(samplerate, configPath)
 % inputLabjackRecordingConfig  Select and edit LabJack recording settings.
 
 if nargin < 1 || isempty(samplerate); samplerate = 2000; end
-if nargin < 2 || isempty(configDir)
+if nargin < 2 || isempty(configPath)
     neuroDAPDir = fileparts(fileparts(mfilename('fullpath')));
-    configDir = fullfile(neuroDAPDir,'Labjack','recording_configs');
+    configPath = fullfile(neuroDAPDir,'Labjack','labjack-configs.json');
 end
 
-configs = readConfigFiles(configDir);
+configs = readConfigFiles(configPath);
 if isempty(configs); configs = defaultConfigs(); end
 
 channelScanIdx = [1 2 5]; % AIN0, AIN1, AIN10 (PMT)
@@ -126,19 +126,24 @@ livePlot.enable = ~isempty(livePlot.channelIdx);
     end
 end
 
-function configs = readConfigFiles(configDir)
+function configs = readConfigFiles(configPath)
 items = {};
-if isfolder(configDir)
-    files = dir(fullfile(configDir,'*.json'));
-    for f = 1:numel(files)
-        filePath = fullfile(files(f).folder,files(f).name);
-        raw = jsondecode(fileread(filePath));
-        if isfield(raw,'configs'); raw = raw.configs; end
-        for i = 1:numel(raw)
-            cfg = normalizeConfig(raw(i));
-            cfg.sourceFile = filePath;
-            items{end+1} = cfg; %#ok<AGROW>
-        end
+if isfile(configPath)
+    files = dir(configPath);
+elseif isfolder(configPath)
+    files = dir(fullfile(configPath,'*.json'));
+else
+    files = [];
+end
+
+for f = 1:numel(files)
+    filePath = fullfile(files(f).folder,files(f).name);
+    raw = jsondecode(fileread(filePath));
+    if isfield(raw,'configs'); raw = raw.configs; end
+    for i = 1:numel(raw)
+        cfg = normalizeConfig(raw(i));
+        cfg.sourceFile = filePath;
+        items{end+1} = cfg; %#ok<AGROW>
     end
 end
 

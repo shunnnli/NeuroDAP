@@ -44,8 +44,8 @@ plotWindowSec = 10;     % seconds shown in rolling window
 plotUpdateSec = 0.1;    % seconds per update (~100 ms)
 
 % Load recording settings before asking for the session name.
-configDir = fullfile(fileparts(mfilename('fullpath')),'recording_configs');
-[labjack, spikeGLX, livePlot, recordingConfig] = inputLabjackRecordingConfig(samplerate,configDir);
+configFile = fullfile(fileparts(mfilename('fullpath')),'labjack-configs.json');
+[labjack, spikeGLX, livePlot, recordingConfig] = inputLabjackRecordingConfig(samplerate,configFile);
 if isempty(labjack); return; end
 
 % Select channels for live plotting from GUI display checkboxes.

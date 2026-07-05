@@ -1,0 +1,43 @@
+{
+  "configs": [
+    {
+      "animal": "SL453",
+      "spikeGLX": true,
+      "channels": [
+        {"name": "dLight", "freqMod": true, "display": false, "record": true},
+        {"name": "GCaMP8m", "freqMod": true, "display": false, "record": false},
+        {"name": "PMT", "freqMod": false, "display": false, "record": false}
+      ]
+    },
+
+    {
+      "animal": "BiPOLES2",
+      "spikeGLX": true,
+      "channels": [
+        {"name": "NAc-left", "freqMod": false, "display": false, "record": true},
+        {"name": "NAc-right", "freqMod": false, "display": false, "record": true},
+        {"name": "PMT", "freqMod": false, "display": false, "record": false}
+      ]
+    },
+
+    {
+      "animal": "M430",
+      "spikeGLX": false,
+      "channels": [
+        {"name": "NAc-right", "freqMod": false, "display": false, "record": true},
+        {"name": "NAc-left", "freqMod": false, "display": false, "record": true},
+        {"name": "PMT", "freqMod": false, "display": false, "record": false}
+      ]
+    },
+
+    {
+      "animal": "M431",
+      "spikeGLX": false,
+      "channels": [
+        {"name": "NAc-right", "freqMod": false, "display": false, "record": true},
+        {"name": "NAc-left", "freqMod": false, "display": false, "record": true},
+        {"name": "PMT", "freqMod": false, "display": false, "record": false}
+      ]
+    }
+  ]
+}
