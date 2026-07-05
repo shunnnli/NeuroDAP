@@ -132,7 +132,11 @@ for i=1:length(allTrials)
     % Initialize trial table value
     reactionTime = 0; lastLickTime = 0; 
     if ~isempty(trialLicks)
-        reactionTime = min([trialLicks(1,1),outcomeTime]); 
+        if isReward
+            reactionTime = min([trialLicks(1,1),next_cue]); 
+        else
+            reactionTime = min([trialLicks(1,1),outcomeTime]); 
+        end
         lastLickTime = trialLicks(end,1); 
     end
 

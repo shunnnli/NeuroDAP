@@ -40,26 +40,17 @@ samplerate = 2000;
 labjack.samplerate = samplerate;
 
 % Live plot (incoming photometry) settings
-enableLivePlot = false;
-plotChanIdx = 2;        % 1=AIN0 (photodiode green NAc), 2=AIN1 (photodiode green LHb), etc.
-% plotChanIdx = [1 2];  % uncomment to plot both AIN0 and AIN1
 plotWindowSec = 10;     % seconds shown in rolling window
 plotUpdateSec = 0.1;    % seconds per update (~100 ms)
 
-% EP LHb setting
-% labjack.name = {'dLight','GCaMP8m','PMT'}; 
-% labjack.record = [1,0,0];
-% freqMod = true; spikeGLX = true;
+% Load recording settings before asking for the session name.
+configDir = fullfile(fileparts(mfilename('fullpath')),'recording_configs');
+[labjack, spikeGLX, livePlot, recordingConfig] = inputLabjackRecordingConfig(samplerate,configDir);
+if isempty(labjack); return; end
 
-% % DA clamp setting
-labjack.name = {'NAc-left','NAc-right','PMT'}; 
-labjack.record = [1,1,0];
-freqMod = false; spikeGLX = true;
-
-% RTPP setting (no spikeGLX)
-% labjack.name = {'NAc-right','NAc-left','PMT'}; 
-% labjack.record = [1,1,0];
-% freqMod = false; spikeGLX = false;
+% Select channels for live plotting from GUI display checkboxes.
+enableLivePlot = livePlot.enable;
+plotChanIdx = livePlot.channelIdx; % 1=AIN0, 2=AIN1, 5=AIN10 (PMT)
 
 % LED power settings
 LEDpower1 = 0.8; %1.5;%0.5; % power to get 30uW
@@ -67,9 +58,7 @@ LEDpower2 = 3; % 2.5=30uW
 LEDpower1Min = 0.3; %0.3 %0.5 % power to get minimal signal 
 LEDpower2Min = 0.2; % power to get minimal signal
 
-% Define modulation params
-if freqMod; labjack.mod = [1,1,0]; 
-else; labjack.mod = [0,0,0]; end
+% Define modulation params. Frequencies and LED powers are tied to channels 1-2.
 labjack.modFreq = [200,250,nan]; % NAc green
 
 % Define mod frequency power
@@ -78,16 +67,21 @@ looplength = samplerate*ones(size(labjack.modFreq)) ./ labjack.modFreq; % 200, 2
 labjack.LEDpowers = [LEDpower1,LEDpower2];
 labjack.LEDpowersMin = [LEDpower1Min,LEDpower2Min];
 labjack.Modpowers1 = getModPower(200,2000,LEDpower1,LEDpower1Min);
-labjack.Modpowers2 = getModPower(250,2000,LEDpower2,LEDpower1Min);
+labjack.Modpowers2 = getModPower(250,2000,LEDpower2,LEDpower2Min);
 
 % Ask for confirmation
 names = sprintf(' %s,',labjack.name{:});
+if enableLivePlot; displayNames = strjoin(labjack.name(livePlot.display),', ');
+else; displayNames = 'none'; end
 quest = {'Please confirm the following labjack settings are correct. If not, click No/Cancel to exit and re-edit.',...
          '',...
+         ['animal: ', recordingConfig.animal],...
          [sprintf('labjack.name: %s', names(1:end-1))],...
          ['labjack.mod: ', num2str(labjack.mod)],...
          ['labjack.record: ', num2str(labjack.record)],...
-         ['labjeck.LEDpowers: ', num2str(labjack.LEDpowers)],...
+         ['live display: ', displayNames],...
+         ['spikeGLX: ', mat2str(spikeGLX)],...
+         ['labjack.LEDpowers: ', num2str(labjack.LEDpowers)],...
          ['labjack.LEDpowersMin: ', num2str(labjack.LEDpowersMin)]};
 answer = questdlg(quest,'Confirm labjack settings');
 
@@ -96,6 +90,7 @@ if ~strcmp(answer,'Yes'); return; end
 %% Save metadata
 % Choose folder to save photometry data
 session = inputdlg({'Enter session name'},"Session name",[1 40]);
+if isempty(session); return; end
 session = strcat(session{1},'_g0');
 session_path = strcat(root_path,'\',session,'\Photometry\');
 script_used = mfilename();
@@ -106,7 +101,7 @@ else
     error("Error: session_path already have recording!");
 end
 
-save(strcat(session_path,'info.mat'),'labjack','samplerate','looplength','script_used');
+save(strcat(session_path,'info.mat'),'labjack','samplerate','looplength','script_used','recordingConfig');
 
 %% Labjack initialization
 
@@ -144,40 +139,23 @@ LabJack.LJM.eWriteName(handle, 'STREAM_OUT1_BUFFER_SIZE', 512);
 LabJack.LJM.eWriteName(handle, 'STREAM_OUT1_ENABLE', 1);
 
 % Write values to the stream-out buffer
-if any(labjack.mod)
-    % OUT0
-    powers = labjack.Modpowers1;
-    LabJack.LJM.eWriteName(handle, 'STREAM_OUT0_LOOP_SIZE', looplength(1));
-    for n = 1:looplength(1)
-        LabJack.LJM.eWriteName(handle, 'STREAM_OUT0_BUFFER_F32', powers(n));
-    end
-    % OUT1 
-    powers = labjack.Modpowers2;
-    LabJack.LJM.eWriteName(handle, 'STREAM_OUT1_LOOP_SIZE', looplength(2));
-    for n = 1:looplength(2)
-        LabJack.LJM.eWriteName(handle, 'STREAM_OUT1_BUFFER_F32', powers(n));
+streamOutPowers = {labjack.Modpowers1, labjack.Modpowers2};
+streamOutConst = [LEDpower1, LEDpower2];
+for outIdx = 1:numAddressesOut
+    streamOutName = sprintf('STREAM_OUT%d',outIdx-1);
+    if labjack.mod(outIdx)
+        powers = streamOutPowers{outIdx};
+    else
+        powers = streamOutConst(outIdx) * ones(1,looplength(outIdx));
     end
 
-    LabJack.LJM.eWriteName(handle, 'STREAM_OUT0_SET_LOOP', 1);
-    LabJack.LJM.eWriteName(handle, 'STREAM_OUT1_SET_LOOP', 1);
-    [~, value] = LabJack.LJM.eReadName(handle, 'STREAM_OUT2_BUFFER_STATUS', 0);
-    disp(['STREAM_OUT2_BUFFER_STATUS = ' num2str(value)])
-else
-    % OUT0
-    LabJack.LJM.eWriteName(handle, 'STREAM_OUT0_LOOP_SIZE', looplength(1));
-    for n = 1:looplength(1)
-        LabJack.LJM.eWriteName(handle, 'STREAM_OUT0_BUFFER_F32', LEDpower1);
+    LabJack.LJM.eWriteName(handle, [streamOutName '_LOOP_SIZE'], looplength(outIdx));
+    for n = 1:looplength(outIdx)
+        LabJack.LJM.eWriteName(handle, [streamOutName '_BUFFER_F32'], powers(n));
     end
-    % OUT1
-    LabJack.LJM.eWriteName(handle, 'STREAM_OUT1_LOOP_SIZE', looplength(2));
-    for n = 1:looplength(2)
-        LabJack.LJM.eWriteName(handle, 'STREAM_OUT1_BUFFER_F32', LEDpower2);
-    end  
-
-    LabJack.LJM.eWriteName(handle, 'STREAM_OUT0_SET_LOOP', 1);
-    LabJack.LJM.eWriteName(handle, 'STREAM_OUT1_SET_LOOP', 1);
-    [~, value] = LabJack.LJM.eReadName(handle, 'STREAM_OUT2_BUFFER_STATUS', 0);
-    disp(['STREAM_OUT2_BUFFER_STATUS = ' num2str(value)])
+    LabJack.LJM.eWriteName(handle, [streamOutName '_SET_LOOP'], 1);
+    [~, value] = LabJack.LJM.eReadName(handle, [streamOutName '_BUFFER_STATUS'], 0);
+    disp([streamOutName '_BUFFER_STATUS = ' num2str(value)])
 end
 
     
