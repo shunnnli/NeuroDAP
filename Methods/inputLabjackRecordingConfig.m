@@ -15,21 +15,21 @@ answer = [];
 okPressed = false;
 
 fig = dialog('Name','LabJack recording config','WindowStyle','modal', ...
-    'Units','pixels','Position',[100 100 560 335],'Resize','off');
+    'Units','pixels','Position',[100 100 560 365],'Resize','off');
 movegui(fig,'center');
 set(fig,'CloseRequestFcn',@cancelDialog);
 
 uicontrol(fig,'Style','text','String','Session name','HorizontalAlignment','left', ...
-    'Position',[25 295 90 20]);
+    'Position',[145 325 90 20]);
 sessionEdit = uicontrol(fig,'Style','edit','HorizontalAlignment','left', ...
-    'Position',[120 292 145 26]);
+    'Position',[245 322 170 26]);
 
 uicontrol(fig,'Style','text','String','Animal settings','HorizontalAlignment','left', ...
-    'Position',[285 295 105 20]);
+    'Position',[105 290 105 20]);
 animalPopup = uicontrol(fig,'Style','popupmenu','String',{configs.animal}, ...
-    'Position',[390 292 90 24],'Callback',@selectConfig);
+    'Position',[220 287 150 24],'Callback',@selectConfig);
 spikeCheck = uicontrol(fig,'Style','checkbox','String','SpikeGLX', ...
-    'Position',[490 292 70 24]);
+    'Position',[390 287 80 24]);
 
 uicontrol(fig,'Style','text','String','Channel','HorizontalAlignment','left', ...
     'Position',[35 250 75 18]);
