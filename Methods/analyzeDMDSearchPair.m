@@ -144,19 +144,11 @@ if isfield(options,'color')
     color2 = 1 - 0.5*(1-options.color);
 else
     if diffVhold
-        if search1_vhold < -50; color1 = blueWhiteRed(end,:); 
-        elseif search1_vhold > -10; color1 = blueWhiteRed(1,:); 
-        else; color1 = purple; 
-        end
-        if search2_vhold < -50; color2 = blueWhiteRed(end,:); 
-        elseif search2_vhold > -10; color2 = blueWhiteRed(1,:); 
-        else; color2 = purple; 
-        end
+        color1 = localDMDVholdColor(search1_vhold, blueWhiteRed, purple, 1);
+        color2 = localDMDVholdColor(search2_vhold, blueWhiteRed, purple, 1);
     else
-        if search1_vhold < -50; color1 = blueWhiteRed(end,:);
-        else; color1 = blueWhiteRed(1,:); end
-        if search2_vhold < -50; color2 = blueWhiteRed(end-150,:);
-        else; color2 = blueWhiteRed(150,:); end
+        color1 = localDMDVholdColor(search1_vhold, blueWhiteRed, purple, 1);
+        color2 = localDMDVholdColor(search2_vhold, blueWhiteRed, purple, 2);
     end
 end
 
@@ -438,8 +430,8 @@ for d = 1:length(commonDepth)
         plotEvent('',stimDuration2,shadeOnly=true,color=color2,FaceAlpha=0.3,percentY=10,zeroValue=Ethres);
         % Plot thresholds
         threshold_lineWidth = max(0.01,LineWidth-1);
-        if any([search1_vhold,search2_vhold] > -10); yline(Ithres,'--',color=blue,Alpha=0.5,LineWidth=threshold_lineWidth);
-        elseif any([search1_vhold,search2_vhold] < -50); yline(Ethres,'--',color=red,Alpha=0.5,LineWidth=threshold_lineWidth);
+        if all([search1_vhold,search2_vhold] > -10); yline(Ithres,'--',color=blue,Alpha=0.5,LineWidth=threshold_lineWidth);
+        elseif all([search1_vhold,search2_vhold] < -50); yline(Ethres,'--',color=red,Alpha=0.5,LineWidth=threshold_lineWidth);
         else; yline(Ithres,'--',color=blue,Alpha=0.5,LineWidth=threshold_lineWidth); yline(Ethres,'--',color=red,Alpha=0.5,LineWidth=threshold_lineWidth);
         end
         % Plot axis at the bottom-left tile
@@ -685,6 +677,43 @@ end
 disp(['Finished: analysis finished for searches : ', num2str(searchPair)]);
 close all;
 end
+
+function color = localDMDVholdColor(vhold, blueWhiteRed, purple, variant)
+    if nargin < 4
+        variant = 1;
+    end
+
+    nColor = size(blueWhiteRed,1);
+    if isempty(vhold) || ~isfinite(vhold)
+        if variant == 1
+            color = purple;
+        else
+            color = 0.65 * purple + 0.35 * [1 1 1];
+        end
+        return
+    end
+
+    if vhold < -50
+        if variant == 1
+            color = blueWhiteRed(nColor,:);
+        else
+            color = blueWhiteRed(max(1,nColor-150),:);
+        end
+    elseif vhold > -10
+        if variant == 1
+            color = blueWhiteRed(1,:);
+        else
+            color = blueWhiteRed(min(nColor,150),:);
+        end
+    else
+        if variant == 1
+            color = purple;
+        else
+            color = 0.65 * purple + 0.35 * [1 1 1];
+        end
+    end
+end
+
 % ========================= CHANGE (Full grid for analysis) =========================
 function [curFull, baseFull, hotFull, locFull] = expandDepthToFullGrid(curMap, baseMap, hotMap, spotLoc, respMap, depth)
 % Expand sampled (possibly partial) per-depth maps into a full 2^depth x 2^depth grid (length 4^depth).

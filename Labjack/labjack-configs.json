@@ -15,14 +15,14 @@
       "spikeGLX": true,
       "channels": [
         {"name": "NAc-left", "freqMod": false, "display": false, "record": true},
-        {"name": "NAc-right", "freqMod": false, "display": false, "record": true},
+        {"name": "NAc-right", "freqMod": false, "display": false, "record": false},
         {"name": "PMT", "freqMod": false, "display": false, "record": false}
       ]
     },
 
     {
       "animal": "M430",
-      "spikeGLX": false,
+      "spikeGLX": true,
       "channels": [
         {"name": "NAc-right", "freqMod": false, "display": false, "record": true},
         {"name": "NAc-left", "freqMod": false, "display": false, "record": true},
@@ -32,9 +32,9 @@
 
     {
       "animal": "M431",
-      "spikeGLX": false,
+      "spikeGLX": true,
       "channels": [
-        {"name": "NAc-right", "freqMod": false, "display": false, "record": true},
+        {"name": "NAc-right", "freqMod": false, "display": false, "record": false},
         {"name": "NAc-left", "freqMod": false, "display": false, "record": true},
         {"name": "PMT", "freqMod": false, "display": false, "record": false}
       ]

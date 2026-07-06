@@ -412,9 +412,7 @@ if options.reloadCells
                     stats.response.min = mean(trace(minWindowStart:minWindowEnd));
                     stats.response.maxTime = maxIdx * 1000/options.outputFs;
                     stats.response.minTime = minIdx * 1000/options.outputFs;
-                    if vhold < -50; stats.response.peak = stats.response.min;
-                    elseif vhold > 10; stats.response.peak = stats.response.max; 
-                    end
+                    stats.response.peak = localSignedPeak(stats.response.min, stats.response.max, vhold);
         
                     % Find min and max for control baseline
                     trace = responses.control;
@@ -428,9 +426,7 @@ if options.reloadCells
                     stats.baseline.min = mean(trace(minWindowStart:minWindowEnd));
                     stats.baseline.maxTime = maxIdx * 1000/options.outputFs;
                     stats.baseline.minTime = minIdx * 1000/options.outputFs;
-                    if vhold < -50; stats.baseline.peak = stats.baseline.min;
-                    elseif vhold > 10; stats.baseline.peak = stats.baseline.max; 
-                    end
+                    stats.baseline.peak = localSignedPeak(stats.baseline.min, stats.baseline.max, vhold);
     
                     % Find E/I index
                     stats.response.EIindex = (abs(stats.response.max)-abs(stats.response.min)) / (abs(stats.response.max)+abs(stats.response.min));
@@ -1117,6 +1113,34 @@ function value = localGetQCValue(qc, fieldName)
     end
 end
 
+function peakValue = localSignedPeak(minValue, maxValue, vhold)
+    if ~isempty(vhold) && isfinite(vhold) && vhold < -50
+        peakValue = minValue;
+    elseif ~isempty(vhold) && isfinite(vhold) && vhold > -10
+        peakValue = maxValue;
+    elseif abs(minValue) >= abs(maxValue)
+        peakValue = minValue;
+    else
+        peakValue = maxValue;
+    end
+end
+
+function tag = localVholdTag(vhold)
+    if isempty(vhold) || ~isfinite(vhold)
+        tag = "vunknown";
+        return
+    end
+
+    roundedVhold = round(vhold);
+    if roundedVhold < 0
+        tag = "m" + string(abs(roundedVhold));
+    elseif roundedVhold > 0
+        tag = "p" + string(roundedVhold);
+    else
+        tag = "z0";
+    end
+end
+
 function [hotspotsByDepth, depths] = localLoadHotspots(epochPath, epochNumber)
     % Load hotspot geometry tables into a map keyed by depth.
     % Supports BOTH:
@@ -1676,7 +1700,7 @@ function saveSweepHotspots(hotspotSpots, cellResultsPath, cellNum, epochNum)
     % Save hotspot/extra sweeps as separate search keys so analyzeDMDSearch can plot them.
     % Files are saved as:
     %   spots_cellX_epochY_hotspot_<tag>_depthD.mat
-    % where tag is based on holding potential (m70 / p10 / other).
+    % where tag is based on hotspot stage or holding potential (exci / inhi / m35).
     
     if isempty(hotspotSpots); return; end
     if ~exist(cellResultsPath,'dir'); mkdir(cellResultsPath); end
@@ -1720,6 +1744,10 @@ function saveSweepHotspots(hotspotSpots, cellResultsPath, cellNum, epochNum)
     tag(tag=="") = "other";
     tag(tag=="other" & v < -50) = "exci";
     tag(tag=="other" & v > 0)   = "inhi";
+    otherIdx = find(tag=="other");
+    for ii = 1:numel(otherIdx)
+        tag(otherIdx(ii)) = localVholdTag(v(otherIdx(ii)));
+    end
     hotspotSpots.Tag = tag;
     hotspotSpots.Kind = kind;
 
@@ -2263,6 +2291,7 @@ function control = localMakeSyntheticControl(processed, plotWindowTime, ctrlLen)
     stats.response.min = mean(trace(nw),'omitnan');
     stats.response.maxTime = maxIdx*1000/Fs;
     stats.response.minTime = minIdx*1000/Fs;
+    stats.response.peak = localSignedPeak(stats.response.min, stats.response.max, vhold);
     
     den = abs(stats.response.max)+abs(stats.response.min);
     if den==0; stats.response.EIindex=0;
