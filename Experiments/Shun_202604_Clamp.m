@@ -161,7 +161,7 @@ end
 %% Optional: Create summary struct (only need to do this for initial loading)
 
 if groupSessions    
-    summary = concatAnalysis(sessionList);
+    summary = concatAnalysis(sessionList,skipCamera=true);
     trialTables = loadTrialTables(sessionList);
 end
 
@@ -206,15 +206,6 @@ for i = 1:length(summary)
             summary(i).task = 'Punish-clamp';
         end
     end
-
-    % ONOFF type
-    if str2double(cur_date) <= 20260418
-        summary(i).task = 'Raw';
-    elseif str2double(cur_date) == 20260421
-        summary(i).task = 'withBump';
-    elseif str2double(cur_date) >= 20260423
-        summary(i).task = 'Final';
-    end
 end
 
 % Remove some rows if needed
@@ -223,6 +214,24 @@ end
 % 
 % eventIdx = cellfun(@(x) contains(x,'PMT',IgnoreCase=true), {summary.name});
 % summary(eventIdx) = [];
+
+%% Optional: for learning sessions only
+
+% Change some names if needed
+for i = 1:length(summary)
+    cur_task = summary(i).task;
+    cur_event = summary(i).event;
+    cur_date = str2double(summary(i).date);
+    cur_session = summary(i).session;
+    cur_animal = summary(i).animal;
+    cur_name = summary(i).name;
+
+    if strcmpi(cur_animal,'SL438')
+        if strcmpi(cur_name,'NAc-left') || strcmpi(cur_name,'NAc-rightLS')
+            skip
+        end
+    end
+end
 
 
 %% Optional: for ONOFF sessions only
