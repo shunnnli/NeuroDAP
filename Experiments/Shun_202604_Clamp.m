@@ -392,46 +392,52 @@ for i = 1:length(eventRange)
             saveFIG=false,savePDF=true);
 end
 
+%% *********************** Learning stage code ***********************
+
+clampAnimals = {'SL431','SL432','SL433'};
+ctrlAnimals = {};
+
+if isempty(ctrlAnimals)
+    allAnimals = unique({animals.animal}, 'stable');
+    ctrlAnimals = setdiff(allAnimals, clampAnimals, 'stable'); 
+end
+
+animalRange = {clampAnimals; ctrlAnimals};
+animalTypes = {'Clamped','Ctrl'};
+
 %% Plot lick trace
 
 timeRange = [-0.5,3];
-eventRange = {'Stim','Pair','Tone'};
-animalRange = 'All';
+eventRange = {'Tone'};
 totalTrialRange = 'All';
 trialRange = 'All';
 signalRange = 'Lick';
 
-colorList = {bluePurpleRed(500,:),bluePurpleRed(300,:),bluePurpleRed(100,:)};
-groupSizeList = [30;30;30];
-nGroupsList = [5;5;5];
+colorList = bluePurpleRed(100,:);
+groupSizeList = 30;
+nGroupsList = 5;
 
-% Second part
-taskRange = {'Reward','Punish'};
-ylimList = [0,7; 0,3.5];
+initializeFig(.6,.5); tiledlayout('flow');
+for type = 1:length(animalRange)
+    nexttile;
+    combined = combineTraces(animals,timeRange=timeRange,...
+                                eventRange=eventRange,...
+                                animalRange=animalRange{type},...
+                                totalTrialRange=totalTrialRange,...
+                                trialRange=trialRange,...
+                                signalRange=signalRange);
+    legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,...
+                    groupSize=groupSizeList,nGroups=nGroupsList,...
+                    groupby='session',startIdx=combined.options.startIdx);
+    plotEvent(eventRange,.5,color=colorList);
 
-for task = 1:length(taskRange)
-    initializeFig(1,.5); tiledlayout('flow');
-    for event = 1:length(eventRange)
-        nexttile;
-        combined = combineTraces(animals,timeRange=timeRange,...
-                                    eventRange=eventRange{event},...
-                                    animalRange=animalRange,...
-                                    taskRange=taskRange{task},...
-                                    totalTrialRange=totalTrialRange,...
-                                    trialRange=trialRange,...
-                                    signalRange=signalRange);
-        legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,...
-                        groupSize=groupSizeList(event),nGroups=nGroupsList(event),...
-                        groupby='trials',startIdx=combined.options.startIdx);
-        ylim(ylimList(task,:));
-        plotEvent(eventRange{event},.5,color=colorList{event});
-        xlabel('Time (s)'); ylabel('Licks/s'); ylim([0 Inf]);
-        legend(legendList,'Location','northeast');
-    end
-    % saveFigures(gcf,['Summary_licking_',taskRange{task}],...
-    %     strcat(resultspath),...
-    %     saveFIG=true,savePDF=true);
+    title(animalTypes{type});
+    xlabel('Time (s)'); ylabel('Licks/s'); ylim([0 Inf]);
+    legend(legendList,'Location','northeast');
 end
+% saveFigures(gcf,['Summary_licking_',taskRange{task}],...
+%     strcat(resultspath),...
+%     saveFIG=true,savePDF=true);
 
 
 %% Plot grouped CS DA response (grouped across animal and 10 trials)
