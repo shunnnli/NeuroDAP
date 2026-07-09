@@ -3,6 +3,7 @@ function summary = concatAnalysis(sessionList, options)
 arguments
     sessionList cell
     options.columnLabels = {'animal','date','session','task','event','name','system'}
+    options.skipCamera logical = false
 end
 
 summary = struct([]);
@@ -20,7 +21,19 @@ for s = 1:length(sessionList)
 
     if exist('analysis','var')
         try
+            % Skip camera rows if requested
+            if options.skipCamera && ~isempty(analysis)
+                systems = strings(1,length(analysis));
+        
+                for row = 1:length(analysis)
+                    systems(row) = string(analysis(row).system);
+                end
+        
+                analysis = analysis(systems ~= "Cam");
+            end
+
             summary = [summary,analysis]; 
+
         catch e
             disp(strcat('  concatAnalysis: ', getReport(e)));
             errorSessions{end+1} = sessionList{s};

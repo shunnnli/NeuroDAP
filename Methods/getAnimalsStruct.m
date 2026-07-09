@@ -6,6 +6,7 @@ arguments
 end
 
 animals = struct([]);
+summary = sortSummaryByAnimalDate(summary);
 animalList = unique({summary.animal});
 disp('Finished: animal.mat not found, created a new one');
 
@@ -61,4 +62,26 @@ for a = 1:length(animalList)
 end
 
 disp('Finished: building animals struct');
+end
+
+function summary = sortSummaryByAnimalDate(summary)
+
+if isempty(summary); return; end
+
+sortTable = table(string({summary.animal})', getSortDate(summary), ...
+                  string({summary.session})', (1:length(summary))', ...
+                  'VariableNames', {'animal','date','session','originalRow'});
+[~,sortIdx] = sortrows(sortTable, {'animal','date','session','originalRow'});
+summary = summary(sortIdx);
+
+end
+
+function sortDate = getSortDate(summary)
+
+if isfield(summary,'date')
+    sortDate = str2double(string({summary.date})');
+else
+    sortDate = zeros(length(summary),1);
+end
+
 end

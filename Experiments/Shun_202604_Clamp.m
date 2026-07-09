@@ -109,7 +109,7 @@
 %% Setup
 
 clear; close all;
-addpath(genpath(osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
+loadNeuroDAP();
 [~,~,~,~,~,~,bluePurpleRed] = loadColors;
 clampColor = [.232 .76 .58];
 unclampColor = [217, 237, 223]./255;
