@@ -217,20 +217,29 @@ end
 
 %% Optional: for learning sessions only
 
+keepRows = true(1, length(summary));
+
+for i = 1:length(summary)
+
+    cur_animal = string(summary(i).animal);
+    cur_name   = string(summary(i).name);
+
+    skipGroup1 = any(strcmpi(cur_animal, ["SL438", "SL439"])) && ...
+                 any(strcmpi(cur_name, ["NAc-left", "NAc-rightLS"]));
+
+    skipGroup2 = any(strcmpi(cur_animal, ["SL446", "SL447", "SL443", "SL444", "SL445","SL438","SL439"])) && ...
+                 any(strcmpi(cur_name, ["blueClamp", "redClamp"]));
+
+    if skipGroup1 || skipGroup2
+        keepRows(i) = false;
+    end
+end
+
+summary = summary(keepRows);
+
 % Change some names if needed
 for i = 1:length(summary)
-    cur_task = summary(i).task;
-    cur_event = summary(i).event;
-    cur_date = str2double(summary(i).date);
-    cur_session = summary(i).session;
-    cur_animal = summary(i).animal;
-    cur_name = summary(i).name;
-
-    if strcmpi(cur_animal,'SL438')
-        if strcmpi(cur_name,'NAc-left') || strcmpi(cur_name,'NAc-rightLS')
-            skip
-        end
-    end
+    summary(i).task = 'Reward';
 end
 
 
