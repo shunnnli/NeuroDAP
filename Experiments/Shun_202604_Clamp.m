@@ -237,11 +237,52 @@ end
 
 summary = summary(keepRows);
 
-% Change some names if needed
+% Change task to reward
 for i = 1:length(summary)
     summary(i).task = 'Reward';
 end
 
+% Change / add more details to task
+for i = 1:length(summary)
+
+    cur_task    = summary(i).task;
+    cur_animal  = summary(i).animal;
+    cur_date    = str2double(summary(i).date);
+    cur_session = summary(i).session;
+
+    % Default for all non-clamp/control animals
+    if ~any(strcmpi(cur_animal, {'SL433','SL431','SL432'}))
+        summary(i).task = 'Reward-Ctrl';
+        continue
+    end
+
+    % SL433, SL431, SL432
+    if cur_date < 20260423
+        summary(i).task = 'Reward-Clamp-wholeTrial';
+
+    elseif cur_date == 20260423
+        summary(i).task = 'Reward-Clamp-delayReward';
+
+    % SL433-specific rules
+    elseif strcmpi(cur_animal, 'SL433') && cur_date >= 20260424 && cur_date <= 20260426
+        summary(i).task = 'Reward-Clamp-withRPE';
+
+    elseif strcmpi(cur_animal, 'SL433') && cur_date >= 20260427 && cur_date <= 20260428
+        summary(i).task = 'Reward-Unclamp';
+
+    % SL431-specific rules
+    elseif strcmpi(cur_animal, 'SL431') && cur_date >= 20260513 && cur_date <= 20260517
+        summary(i).task = 'Reward-Clamp-withRPE';
+
+    elseif strcmpi(cur_animal, 'SL431') && cur_date >= 20260518 && cur_date <= 20260520
+        summary(i).task = 'Reward-Unclamp';
+
+    else
+        % Clamp animal, but date does not match any rule.
+        % Keep the existing task unchanged.
+        summary(i).task = cur_task;
+    end
+end
 
 %% Optional: for ONOFF sessions only
 
@@ -253,7 +294,7 @@ for i = 1:length(summary)
     cur_session = summary(i).session;
 
     % ONOFF type
-    if cur_date == 20260418'
+    if cur_date == 20260418
         summary(i).task = 'Raw';
     elseif cur_date == 20260421 
         summary(i).task = 'withBump';
@@ -442,7 +483,7 @@ end
 
 %% Plot grouped CS DA response (grouped across animal and 10 trials)
 
-taskRange = {'Reward','Punish'};
+taskRange = {'Reward'};
 statsTypes = {'stageAmp','stageAmp'}; ylabelList = {'Amp DA response during cue','Amp DA response during cue'};
 ylimit = [-1,4; -1,5];
 
