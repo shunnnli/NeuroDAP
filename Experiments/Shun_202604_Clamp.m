@@ -217,26 +217,6 @@ end
 
 %% Optional: for learning sessions only
 
-keepRows = true(1, length(summary));
-
-for i = 1:length(summary)
-
-    cur_animal = string(summary(i).animal);
-    cur_name   = string(summary(i).name);
-
-    skipGroup1 = any(strcmpi(cur_animal, ["SL438", "SL439"])) && ...
-                 any(strcmpi(cur_name, ["NAc-left", "NAc-rightLS"]));
-
-    skipGroup2 = any(strcmpi(cur_animal, ["SL446", "SL447", "SL443", "SL444", "SL445","SL438","SL439"])) && ...
-                 any(strcmpi(cur_name, ["blueClamp", "redClamp"]));
-
-    if skipGroup1 || skipGroup2
-        keepRows(i) = false;
-    end
-end
-
-summary = summary(keepRows);
-
 % Change task to reward
 for i = 1:length(summary)
     summary(i).task = 'Reward';
@@ -244,7 +224,6 @@ end
 
 % Change / add more details to task
 for i = 1:length(summary)
-
     cur_task    = summary(i).task;
     cur_animal  = summary(i).animal;
     cur_date    = str2double(summary(i).date);
@@ -259,30 +238,55 @@ for i = 1:length(summary)
     % SL433, SL431, SL432
     if cur_date < 20260423
         summary(i).task = 'Reward-Clamp-wholeTrial';
-
     elseif cur_date == 20260423
         summary(i).task = 'Reward-Clamp-delayReward';
-
     % SL433-specific rules
     elseif strcmpi(cur_animal, 'SL433') && cur_date >= 20260424 && cur_date <= 20260426
         summary(i).task = 'Reward-Clamp-withRPE';
-
     elseif strcmpi(cur_animal, 'SL433') && cur_date >= 20260427 && cur_date <= 20260428
         summary(i).task = 'Reward-Unclamp';
-
     % SL431-specific rules
     elseif strcmpi(cur_animal, 'SL431') && cur_date >= 20260513 && cur_date <= 20260517
         summary(i).task = 'Reward-Clamp-withRPE';
-
     elseif strcmpi(cur_animal, 'SL431') && cur_date >= 20260518 && cur_date <= 20260520
         summary(i).task = 'Reward-Unclamp';
-
     else
         % Clamp animal, but date does not match any rule.
         % Keep the existing task unchanged.
         summary(i).task = cur_task;
     end
 end
+
+keepRows = true(1, length(summary));
+for i = 1:length(summary)
+
+    cur_animal = string(summary(i).animal);
+    cur_name   = string(summary(i).name);
+    cur_task   = string(summary(i).task);
+    cur_event  = string(summary(i).event);
+    cur_date   = string(summary(i).date);
+
+    skipGroup1 = any(strcmpi(cur_animal, ["SL438", "SL439"])) && ...
+                 any(strcmpi(cur_name, ["NAc-left", "NAc-rightLS"]));
+
+    skipGroup2 = any(strcmpi(cur_animal, ["SL446","SL447","SL443","SL444","SL445","SL438","SL439"])) && ...
+                 any(strcmpi(cur_name, ["blueClamp", "redClamp"]));
+
+    skipGroup3 = any(strcmpi(cur_animal, ["SL431", "SL432", "SL433"])) && ...
+                 any(strcmpi(cur_task, ["Reward-Clamp-wholeTrial", ...
+                                         "Reward-Clamp-delayReward", ...
+                                         "Reward-Clamp-withRPE"])) && ...
+                 strcmpi(cur_event, "Tone (unclamp)");
+
+    skipGroup4 = any(strcmpi(cur_animal, ["SL443", "SL444"])) && ...
+                 any(strcmpi(cur_name, ["NAc-right"])) && ...
+                 any(strcmpi(cur_date, ["20260613"]));
+
+    if skipGroup1 || skipGroup2 || skipGroup3 || skipGroup4
+        keepRows(i) = false;
+    end
+end
+summary = summary(keepRows);
 
 %% Optional: for ONOFF sessions only
 
@@ -434,8 +438,7 @@ for i = 1:length(eventRange)
 end
 
 %% *********************** Learning stage code ***********************
-
-clampAnimals = {'SL431','SL432','SL433'};
+clampAnimals = {'SL431'};
 ctrlAnimals = {};
 
 if isempty(ctrlAnimals)
@@ -450,9 +453,11 @@ animalTypes = {'Clamped','Ctrl'};
 
 timeRange = [-0.5,3];
 eventRange = {'Tone'};
+signalRange = 'Lick';
+taskRange = {'Reward-Clamp-wholeTrial'};
+
 totalTrialRange = 'All';
 trialRange = 'All';
-signalRange = 'Lick';
 
 colorList = bluePurpleRed(100,:);
 groupSizeList = 30;
@@ -461,8 +466,10 @@ nGroupsList = 5;
 initializeFig(.6,.5); tiledlayout('flow');
 for type = 1:length(animalRange)
     nexttile;
+    disp(animalRange{type});
     combined = combineTraces(animals,timeRange=timeRange,...
                                 eventRange=eventRange,...
+                                taskRange=taskRange,...
                                 animalRange=animalRange{type},...
                                 totalTrialRange=totalTrialRange,...
                                 trialRange=trialRange,...
