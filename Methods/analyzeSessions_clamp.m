@@ -472,27 +472,66 @@ if strcmp(options.task,'random') || strcmp(options.task,'step') || strcmp(option
             analysisLabels{i} = sprintf('amp=%.2g', AMPS(i));
         end
     else
+        % Random sessions: waterIdx,waterLickIdx,airpuffIdx,toneIdx,baselineIdx
+        % but separate whether that event is clamped or not
         stageTime = [-2,0;0,2];
-        analysisEvents = {waterIdx,waterLickIdx,airpuffIdx,toneIdx,clampIdx,baselineIdx};
-        eventTrialNum = {findTrials(waterIdx,trials),findTrials(waterLickIdx,trials),...
-                            findTrials(airpuffIdx,trials),findTrials(toneIdx,trials),...
-                            findTrials(clampIdx,trials),findTrials(baselineIdx,trials)};
-        analysisLabels = {'Water','Rewarded licks','Airpuff','Tone','Clamp','Baseline'};
+        isONOFF = contains(sessionName,'ONOFF',IgnoreCase=true);
+        clampON_event = movmax(double(clampON > 0.5),[0 round(3 * params.sync.behaviorFs)]) > 0;
+
+        waterIsClamp = clampON_event(waterIdx);
+        waterClampIdx = waterIdx(waterIsClamp);
+        waterUnclampIdx = waterIdx(~waterIsClamp);
+
+        waterLickIsClamp = clampON_event(waterLickIdx);
+        waterLickClampIdx = waterLickIdx(waterLickIsClamp);
+        waterLickUnclampIdx = waterLickIdx(~waterLickIsClamp);
+
+        airpuffIsClamp = clampON_event(airpuffIdx);
+        airpuffClampIdx = airpuffIdx(airpuffIsClamp);
+        airpuffUnclampIdx = airpuffIdx(~airpuffIsClamp);
+
+        toneIsClamp = clampON_event(toneIdx);
+        toneClampIdx = toneIdx(toneIsClamp);
+        toneUnclampIdx = toneIdx(~toneIsClamp);
+
+        analysisEvents = {waterClampIdx,waterUnclampIdx,waterLickClampIdx,waterLickUnclampIdx,...
+                          airpuffClampIdx,airpuffUnclampIdx,toneClampIdx,toneUnclampIdx,...
+                          baselineIdx};
+        eventTrialNum = {findTrials(waterClampIdx,trials),findTrials(waterUnclampIdx,trials),...
+                         findTrials(waterLickClampIdx,trials),findTrials(waterLickUnclampIdx,trials),...
+                         findTrials(airpuffClampIdx,trials),findTrials(airpuffUnclampIdx,trials),...
+                         findTrials(toneClampIdx,trials),findTrials(toneUnclampIdx,trials),...
+                         findTrials(baselineIdx,trials)};
+        analysisLabels = {'Water (clamp)','Water (unclamp)',...
+                          'Rewarded licks (clamp)','Rewarded licks (unclamp)',...
+                          'Airpuff (clamp)','Airpuff (unclamp)',...
+                          'Tone (clamp)','Tone (unclamp)',...
+                          'Baseline'};
+        if isONOFF
+            analysisEvents = [analysisEvents,{clampIdx}];
+            eventTrialNum = [eventTrialNum,{findTrials(clampIdx,trials)}];
+            analysisLabels = [analysisLabels,{'Clamp'}];
+        end
         taskLegend = getLegend(analysisEvents,analysisLabels);
-    
+
         stageColors = {[.75 .75 .75],bluePurpleRed(1,:)};
         stageLegend = {'Baseline','US'};
-        
-        eventTrialNum = eventTrialNum(~cellfun('isempty',analysisEvents));
-        analysisLabels = analysisLabels(~cellfun('isempty',analysisEvents));
-        analysisEvents = analysisEvents(~cellfun('isempty',analysisEvents));
-        
+
+        nonEmptyEvents = ~cellfun('isempty',analysisEvents);
+        eventTrialNum = eventTrialNum(nonEmptyEvents);
+        analysisLabels = analysisLabels(nonEmptyEvents);
+        analysisEvents = analysisEvents(nonEmptyEvents);
+
         for i = 1:length(analysisEvents)
             disp(['Total ',analysisLabels{i},': ',num2str(length(analysisEvents{i}))]);
         end
-    
+
         save(strcat(sessionpath,filesep,'behavior_',options.outputName),'allTrials',...
-            'waterIdx','waterLickIdx','airpuffIdx','clampIdx',...
+            'waterIdx','waterClampIdx','waterUnclampIdx',...
+            'waterLickIdx','waterLickClampIdx','waterLickUnclampIdx',...
+            'airpuffIdx','airpuffClampIdx','airpuffUnclampIdx',...
+            'toneIdx','toneClampIdx','toneUnclampIdx',...
+            'baselineIdx','clampIdx',...
             '-append');
     end
 
@@ -728,18 +767,40 @@ if options.plotPhotometry && exist('timeSeries','var')
         end
 
         if strcmp(options.task,'random')
+            summaryEvents = {waterLickClampIdx,waterLickUnclampIdx,...
+                             airpuffClampIdx,airpuffUnclampIdx,...
+                             toneClampIdx,toneUnclampIdx,...
+                             baselineIdx};
+            summaryLabels = {'Rewarded licks (clamp)','Rewarded licks (unclamp)',...
+                             'Airpuff (clamp)','Airpuff (unclamp)',...
+                             'Tone (clamp)','Tone (unclamp)',...
+                             'Baseline'};
+            if contains(sessionName,'ONOFF',IgnoreCase=true)
+                summaryEvents = [summaryEvents,{clampIdx}];
+                summaryLabels = [summaryLabels,{'Clamp'}];
+            end
+            summaryLegend = getLegend(summaryEvents,summaryLabels);
+
             % 2.1 Plot photometry traces
             nexttile
-            [~,~] = plotTraces(waterLickIdx,timeRange,signal,bluePurpleRed(1,:),params,...
+            [~,~] = plotTraces(waterLickClampIdx,timeRange,signal,bluePurpleRed(1,:),params,...
                         signalFs=finalFs,signalSystem=system);
-            [~,~] = plotTraces(airpuffIdx,timeRange,signal,[0.2, 0.2, 0.2],params,...
+            [~,~] = plotTraces(waterLickUnclampIdx,timeRange,signal,bluePurpleRed(1,:),params,...
+                        signalFs=finalFs,signalSystem=system,LineStyle='--');
+            [~,~] = plotTraces(airpuffClampIdx,timeRange,signal,[0.2, 0.2, 0.2],params,...
                         signalFs=finalFs,signalSystem=system);
-            [~,~] = plotTraces(toneIdx,timeRange,signal,bluePurpleRed(350,:),params,...
+            [~,~] = plotTraces(airpuffUnclampIdx,timeRange,signal,[0.2, 0.2, 0.2],params,...
+                        signalFs=finalFs,signalSystem=system,LineStyle='--');
+            [~,~] = plotTraces(toneClampIdx,timeRange,signal,bluePurpleRed(350,:),params,...
                         signalFs=finalFs,signalSystem=system);
-            [~,~] = plotTraces(clampIdx,timeRange,signal,clampColor,params,...
-                        signalFs=finalFs,signalSystem=system);
+            [~,~] = plotTraces(toneUnclampIdx,timeRange,signal,bluePurpleRed(350,:),params,...
+                        signalFs=finalFs,signalSystem=system,LineStyle='--');
             [~,~] = plotTraces(baselineIdx,timeRange,signal,[.75 .75 .75],params,...
                         signalFs=finalFs,signalSystem=system);
+            if contains(sessionName,'ONOFF',IgnoreCase=true)
+                [~,~] = plotTraces(clampIdx,timeRange,signal,clampColor,params,...
+                        signalFs=finalFs,signalSystem=system);
+            end
             plotEvent('',0);
             xlabel('Time (s)'); 
             if contains(name,'clamp',IgnoreCase=true)
@@ -747,43 +808,58 @@ if options.plotPhotometry && exist('timeSeries','var')
             else
                 ylabel([name,' \DeltaF/F']);
             end
-            legend(taskLegend(2:end),'Location','northeast');
-            
+            legend(summaryLegend,'Location','northeast');
+
             % 2.2 Plot lick traces
             nexttile
-            plotLicks(waterLickIdx,timeRange,options.lick_binSize,bluePurpleRed(1,:),[],rightLick,params);
-            plotLicks(airpuffIdx,timeRange,options.lick_binSize,[0.2, 0.2, 0.2],[],rightLick,params);
-            plotLicks(toneIdx,timeRange,options.lick_binSize,bluePurpleRed(350,:),[],rightLick,params);
-            plotLicks(clampIdx,timeRange,options.lick_binSize,clampColor,[],rightLick,params);
+            plotLicks(waterLickClampIdx,timeRange,options.lick_binSize,bluePurpleRed(1,:),[],rightLick,params);
+            plotLicks(waterLickUnclampIdx,timeRange,options.lick_binSize,bluePurpleRed(1,:),[],rightLick,params,LineStyle='--');
+            plotLicks(airpuffClampIdx,timeRange,options.lick_binSize,[0.2, 0.2, 0.2],[],rightLick,params);
+            plotLicks(airpuffUnclampIdx,timeRange,options.lick_binSize,[0.2, 0.2, 0.2],[],rightLick,params,LineStyle='--');
+            plotLicks(toneClampIdx,timeRange,options.lick_binSize,bluePurpleRed(350,:),[],rightLick,params);
+            plotLicks(toneUnclampIdx,timeRange,options.lick_binSize,bluePurpleRed(350,:),[],rightLick,params,LineStyle='--');
             plotLicks(baselineIdx,timeRange,options.lick_binSize,[.75 .75 .75],[],rightLick,params);
+            if contains(sessionName,'ONOFF',IgnoreCase=true)
+                plotLicks(clampIdx,timeRange,options.lick_binSize,clampColor,[],rightLick,params);
+            end
             plotEvent('',0);
             xlabel('Time (s)'); ylabel('Licks/s'); 
-            legend(taskLegend(2:end),'Location','best');
+            legend(summaryLegend,'Location','best');
 
             if params.session.withCamera && params.session.withEyeTracking
                 % 2.3 Plot eye area traces
                 nexttile
-                [~,~] = plotTraces(waterLickIdx,timeRange,eyeArea_detrend,bluePurpleRed(1,:),params,signalSystem='camera',smooth=15);
-                [~,~] = plotTraces(airpuffIdx,timeRange,eyeArea_detrend,[0.2, 0.2, 0.2],params,signalSystem='camera',smooth=15);
-                [~,~] = plotTraces(toneIdx,timeRange,eyeArea_detrend,bluePurpleRed(350,:),params,signalSystem='camera',smooth=15);
-                [~,~] = plotTraces(clampIdx,timeRange,eyeArea_detrend,clampColor,params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(waterLickClampIdx,timeRange,eyeArea_detrend,bluePurpleRed(1,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(waterLickUnclampIdx,timeRange,eyeArea_detrend,bluePurpleRed(1,:),params,signalSystem='camera',smooth=15,LineStyle='--');
+                [~,~] = plotTraces(airpuffClampIdx,timeRange,eyeArea_detrend,[0.2, 0.2, 0.2],params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(airpuffUnclampIdx,timeRange,eyeArea_detrend,[0.2, 0.2, 0.2],params,signalSystem='camera',smooth=15,LineStyle='--');
+                [~,~] = plotTraces(toneClampIdx,timeRange,eyeArea_detrend,bluePurpleRed(350,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(toneUnclampIdx,timeRange,eyeArea_detrend,bluePurpleRed(350,:),params,signalSystem='camera',smooth=15,LineStyle='--');
                 [~,~] = plotTraces(baselineIdx,timeRange,eyeArea_detrend,[.75 .75 .75],params,signalSystem='camera',smooth=15);
+                if contains(sessionName,'ONOFF',IgnoreCase=true)
+                    [~,~] = plotTraces(clampIdx,timeRange,eyeArea_detrend,clampColor,params,signalSystem='camera',smooth=15);
+                end
                 plotEvent('',0);
                 xlabel('Time (s)'); ylabel('Eye area (a.u.)');
-                legend(taskLegend(2:end),'Location','northeast');
-    
+                legend(summaryLegend,'Location','northeast');
+
                 % 2.4 Plot pupil area traces
                 nexttile
-                [~,~] = plotTraces(waterLickIdx,timeRange,pupilArea_detrend,bluePurpleRed(1,:),params,signalSystem='camera',smooth=15);
-                [~,~] = plotTraces(airpuffIdx,timeRange,pupilArea_detrend,[0.2, 0.2, 0.2],params,signalSystem='camera',smooth=15);
-                [~,~] = plotTraces(toneIdx,timeRange,pupilArea_detrend,bluePurpleRed(350,:),params,signalSystem='camera',smooth=15);
-                [~,~] = plotTraces(clampIdx,timeRange,pupilArea_detrend,clampColor,params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(waterLickClampIdx,timeRange,pupilArea_detrend,bluePurpleRed(1,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(waterLickUnclampIdx,timeRange,pupilArea_detrend,bluePurpleRed(1,:),params,signalSystem='camera',smooth=15,LineStyle='--');
+                [~,~] = plotTraces(airpuffClampIdx,timeRange,pupilArea_detrend,[0.2, 0.2, 0.2],params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(airpuffUnclampIdx,timeRange,pupilArea_detrend,[0.2, 0.2, 0.2],params,signalSystem='camera',smooth=15,LineStyle='--');
+                [~,~] = plotTraces(toneClampIdx,timeRange,pupilArea_detrend,bluePurpleRed(350,:),params,signalSystem='camera',smooth=15);
+                [~,~] = plotTraces(toneUnclampIdx,timeRange,pupilArea_detrend,bluePurpleRed(350,:),params,signalSystem='camera',smooth=15,LineStyle='--');
                 [~,~] = plotTraces(baselineIdx,timeRange,pupilArea_detrend,[.75 .75 .75],params,signalSystem='camera',smooth=15);
+                if contains(sessionName,'ONOFF',IgnoreCase=true)
+                    [~,~] = plotTraces(clampIdx,timeRange,pupilArea_detrend,clampColor,params,signalSystem='camera',smooth=15);
+                end
                 plotEvent('',0);
                 xlabel('Time (s)'); ylabel('Pupil area (a.u.)');
-                legend(taskLegend(2:end),'Location','northeast');
+                legend(summaryLegend,'Location','northeast');
             end
-    
+
         else
             % 2.1 Plot photometry traces
             nexttile
@@ -855,40 +931,64 @@ if options.plotPhotometry && exist('timeSeries','var')
 
         %% Plot single stimulus PSTH
         if strcmp(options.task,'random')
-            eventIdxes = {waterLickIdx,toneIdx,airpuffIdx,clampIdx};
-            labels = {'Water','Tone','Airpuff','Clamp'};
-            eventDurations = [0,0.5,0.02,5];
-            groupSizes = [30,10,30,10];
+            eventIdxes = {waterLickUnclampIdx,toneUnclampIdx,airpuffUnclampIdx}; % waterLickIdx etc
+            eventClampIdxes = {waterLickClampIdx,toneClampIdx,airpuffClampIdx}; % same event but clamped
+            labels = {'Water','Tone','Airpuff'};
+            eventLabels = {'Water (unclamp)','Tone (unclamp)','Airpuff (unclamp)'};
+            eventClampLabels = {'Water (clamp)','Tone (clamp)','Airpuff (clamp)'};
+            eventDurations = [0,0.5,0.02];
+            groupSizes = [30,10,30];
+            if contains(sessionName,'ONOFF',IgnoreCase=true)
+                eventIdxes = [eventIdxes,{[]}];
+                eventClampIdxes = [eventClampIdxes,{clampIdx}];
+                labels = [labels,{'Clamp'}];
+                eventLabels = [eventLabels,{''}];
+                eventClampLabels = [eventClampLabels,{'Clamp'}];
+                eventDurations = [eventDurations,5];
+                groupSizes = [groupSizes,10];
+            end
             longTimeRange = options.longTimeRange;
-            shortTimeRange = options.shortTimeRange; 
-            
+            shortTimeRange = options.shortTimeRange;
+
             for event = 1:length(eventIdxes)
                 eventIdx = eventIdxes{event};
-                if isempty(eventIdx); continue; end
+                eventClampIdx = eventClampIdxes{event};
+                eventCombineIdx = sort([eventIdx(:); eventClampIdx(:)]);
+                if isempty(eventCombineIdx); continue; end
                 label = labels{event}; eventDuration = eventDurations(event); 
                 groupSize = groupSizes(event); % num of trials to plot in one line
-                
+                eventLegend = getLegend({eventIdx,eventClampIdx},{eventLabels{event},eventClampLabels{event}});
+
                 initializeFig(0.67,1); tiledlayout(4,4);
-                
+
                 % Plot short timescale
                 nexttile(3,[1 2]);
-                [traces,t] = plotTraces(eventIdx,shortTimeRange,signal,bluePurpleRed(1,:),params,...
-                                signalFs=finalFs,signalSystem=system,...
-                                plotIndividual=true);
-                plotEvent(label,eventDuration); 
+                if ~isempty(eventIdx)
+                    [~,~] = plotTraces(eventIdx,shortTimeRange,signal,unclampColor,params,...
+                                    signalFs=finalFs,signalSystem=system,...
+                                    plotIndividual=true);
+                end
+                if ~isempty(eventClampIdx)
+                    [~,~] = plotTraces(eventClampIdx,shortTimeRange,signal,clampColor,params,...
+                                    signalFs=finalFs,signalSystem=system,...
+                                    plotIndividual=true);
+                end
+                plotEvent(label,eventDuration);
                 xlabel('Time (s)');
                 if contains(name,'clamp',IgnoreCase=true)
                     ylabel([name,' (%)']);
                 else
                     ylabel([name,' \DeltaF/F']);
                 end
-                legend({[label,' (n=',num2str(length(eventIdx)),')']},...
-                        'Location','northeast');
-                
+                legend(eventLegend,'Location','northeast');
+
+                [traces,t] = plotTraces(eventCombineIdx,shortTimeRange,signal,params,...
+                                signalFs=finalFs,signalSystem=system,...
+                                plot=false);
                 nexttile(7,[1 2]);
                 legendList = plotGroupTraces(traces,t,bluePurpleRed,groupSize=groupSize);
                 plotEvent(label,eventDuration);
-                xlabel('Time (s)'); 
+                xlabel('Time (s)');
                 if contains(name,'clamp',IgnoreCase=true)
                     ylabel([name,' (%)']);
                 else
@@ -905,9 +1005,16 @@ if options.plotPhotometry && exist('timeSeries','var')
 
                 % Plot long timescale
                 nexttile(11,[1 2]);
-                [traces,t] = plotTraces(eventIdx,longTimeRange,signal,bluePurpleRed(1,:),params,...
-                                signalFs=finalFs,signalSystem=system,...
-                                plotIndividual=true);
+                if ~isempty(eventIdx)
+                    [~,~] = plotTraces(eventIdx,longTimeRange,signal,unclampColor,params,...
+                                    signalFs=finalFs,signalSystem=system,...
+                                    plotIndividual=true);
+                end
+                if ~isempty(eventClampIdx)
+                    [~,~] = plotTraces(eventClampIdx,longTimeRange,signal,clampColor,params,...
+                                    signalFs=finalFs,signalSystem=system,...
+                                    plotIndividual=true);
+                end
                 plotEvent(label,eventDuration);
                 xlabel('Time (s)');
                 if contains(name,'clamp',IgnoreCase=true)
@@ -915,9 +1022,11 @@ if options.plotPhotometry && exist('timeSeries','var')
                 else
                     ylabel([name,' \DeltaF/F']);
                 end
-                legend({[label,' (n=',num2str(length(eventIdx)),')']},...
-                        'Location','northeast');
-                
+                legend(eventLegend,'Location','northeast');
+
+                [traces,t] = plotTraces(eventCombineIdx,longTimeRange,signal,params,...
+                                signalFs=finalFs,signalSystem=system,...
+                                plot=false);
                 nexttile(15,[1 2]);
                 legendList = plotGroupTraces(traces,t,bluePurpleRed,groupSize=groupSize);
                 plotEvent(label,eventDuration);
@@ -928,9 +1037,10 @@ if options.plotPhotometry && exist('timeSeries','var')
                     ylabel([name,' \DeltaF/F']);
                 end
                 legend(legendList);
-                
+
                 saveFigures(gcf,strcat('Events_',timeSeries(path).name,'_',label),sessionpath,savePDF=true);
             end
+
         else
             eventIdxes = {clampIdx,unclampIdx,waterLickIdx,airpuffIdx,clampOmissionIdx,unclampOmissionIdx};
             labels = {'Tone (clamp)','Tone (unclamp)','Water','Airpuff','Tone (clamp omission)','Tone (unclamp omission)'};
