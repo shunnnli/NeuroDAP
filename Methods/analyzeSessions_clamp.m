@@ -40,7 +40,7 @@ end
 
 [~,~,~,~,~,~,bluePurpleRed] = loadColors;
 clampColor = [.232 .76 .58];
-unclampColor = [217, 237, 223]./255;
+unclampColor = [179, 210, 196]./255;
              
 % 1. Select session via uigetdir
 dirsplit = strsplit(sessionpath,filesep); 

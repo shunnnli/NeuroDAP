@@ -112,7 +112,7 @@ clear; close all;
 loadNeuroDAP;
 [~,~,~,~,~,~,bluePurpleRed] = loadColors;
 clampColor = [.232 .76 .58];
-unclampColor = [217, 237, 223]./255;
+unclampColor = [165, 209, 178]./255;
 
 % Define result directory
 resultspath = osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project clamping/Results');
@@ -175,45 +175,6 @@ for i = 1:length(stringColumnsLabels)
     end
 end
 disp('Finished: summary struct and trialtables loaded');
-
-%% Optional: Make changes to summary for further analysis (first reward & punish sessions)
-
-% Change some names if needed
-for i = 1:length(summary)
-    cur_task = summary(i).task;
-    cur_event = summary(i).event;
-    cur_date = str2double(summary(i).date);
-    cur_session = summary(i).session;
-
-    if strcmp('random',cur_task)
-        if contains(cur_session,'ctrl',IgnoreCase=true)
-            summary(i).task = 'Random-ctrl';
-        elseif contains(cur_session,'clamp',IgnoreCase=true)
-            summary(i).task = 'Random-clamp';
-        else
-            summary(i).task = 'Random';
-        end
-    elseif contains('reward pairing',cur_task,IgnoreCase=true)
-        if contains(cur_session,'ctrl',IgnoreCase=true)
-            summary(i).task = 'Reward-ctrl';
-        elseif contains(cur_session,'clamp',IgnoreCase=true)
-            summary(i).task = 'Reward-clamp';
-        end
-    elseif contains('punish pairing',cur_task,IgnoreCase=true)
-        if contains(cur_session,'ctrl',IgnoreCase=true)
-            summary(i).task = 'Punish-ctrl';
-        elseif contains(cur_session,'clamp',IgnoreCase=true)
-            summary(i).task = 'Punish-clamp';
-        end
-    end
-end
-
-% Remove some rows if needed
-% eventIdx = cellfun(@(x) strcmp(x,'BiPOLES2'), {summary.aniaml});
-% summary(eventIdx) = [];
-% 
-% eventIdx = cellfun(@(x) contains(x,'PMT',IgnoreCase=true), {summary.name});
-% summary(eventIdx) = [];
 
 %% Optional: for learning sessions only
 
@@ -279,8 +240,8 @@ for i = 1:length(summary)
                  strcmpi(cur_event, "Tone (unclamp)");
 
     skipGroup4 = any(strcmpi(cur_animal, ["SL443", "SL444"])) && ...
-                 any(strcmpi(cur_name, ["NAc-right"])) && ...
-                 any(strcmpi(cur_date, ["20260613"]));
+                 any(strcmpi(cur_name, "NAc-right")) && ...
+                 any(strcmpi(cur_date, "20260613"));
 
     if skipGroup1 || skipGroup2 || skipGroup3 || skipGroup4
         keepRows(i) = false;
@@ -288,24 +249,7 @@ for i = 1:length(summary)
 end
 summary = summary(keepRows);
 
-%% Optional: for ONOFF sessions only
-
-% Change some names if needed
-for i = 1:length(summary)
-    cur_task = summary(i).task;
-    cur_event = summary(i).event;
-    cur_date = str2double(summary(i).date);
-    cur_session = summary(i).session;
-
-    % ONOFF type
-    if cur_date == 20260418
-        summary(i).task = 'Raw';
-    elseif cur_date == 20260421 
-        summary(i).task = 'withBump';
-    elseif cur_date >= 20260423
-        summary(i).task = 'Final';
-    end
-end
+% Make sure SL431 rightLS should be NAc-left
 
 %% Create animals struct
 
@@ -317,19 +261,6 @@ end
 for i = 1:size(animals,2)
     stageMax = animals(i).stageMax.data;
     stageMin = animals(i).stageMin.data;
-    
-    animals(i).stageAmp = struct('data', getAmplitude(stageMax, stageMin));
-end
-
-%% Optional: ONOFF only (remove artifact clamp commands)
-
-for i = 1:size(animals,2)
-    if contains('clamp',animals(i).name, IgnoreCase=true)
-        data = animals(i).data;
-        % data(:, [1:749, 1000:end]) = 0;
-        
-        % Remove trials where there's still clamp command after 6sec
-    end
     
     animals(i).stageAmp = struct('data', getAmplitude(stageMax, stageMin));
 end
@@ -349,96 +280,8 @@ if ~isempty(answer)
     disp(['Finished: saved animals.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
 end
 
-%% Random: clamp on vs clamp off
-
-timeRange = [-5,10];
-eventRange = {'Clamp'};
-taskRange = 'Final';
-animalRange = 'All'; %{'SL431','SL432','BiPOLES2'};
-
-trialRange = 'All'; % range of trials in each session
-totalTrialRange = 'All';
-signalRange = {'NAc-left','NAc-right'};
-% signalRange = {'blueClamp','redClamp'};
-trialConditions = 'trials.performing';
-
-eventDuration = 5;
-
-close all; 
-for i = 1:length(eventRange)
-    initializeFig(.5,.5); tiledlayout(1,length(signalRange));
-    for s = 1:length(signalRange)
-        nexttile;
-        combined = combineTraces(animals,timeRange=timeRange,...
-                                    eventRange=eventRange{i},...
-                                    animalRange=animalRange,...
-                                    taskRange=taskRange,...
-                                    totalTrialRange=totalTrialRange,...
-                                    trialRange=trialRange,...
-                                    signalRange=signalRange{s},...
-                                    trialConditions=trialConditions);
-        plotTraces(combined.data{1},combined.timestamp,color=clampColor,plotIndividual=true);
-        xlabel('Time (s)'); ylabel([signalRange{s},' (\DeltaF/F)']); 
-        ylim([-0.3,1.4]);
-        plotEvent(eventRange{i},eventDuration(i),color=clampColor);
-        legend({[eventRange{i},' (n=',num2str(size(combined.data{1},1)),')']},...
-                'Location','northeast');
-    end
-    saveFigures(gcf,strcat('Summary_DA_ONOFF_',taskRange),...
-            strcat(resultspath),...
-            saveFIG=false,savePDF=true);
-end
-
-%% Random: clamp vs unclamp
-timeRange = [-0.5,3];
-eventRange = {'Water','Airpuff','Tone'};
-animalRange = 'All';
-
-trialRange = 'All'; % range of trials in each session
-totalTrialRange = 'All';
-signalRange = {'NAc-left','NAc-right'};
-trialConditions = 'trials.performing';
-
-colorList = {bluePurpleRed(1,:),[.2,.2,.2],bluePurpleRed(500,:)};
-eventDuration = [0,.2,.5];
-
-close all; 
-for i = 1:length(eventRange)
-    initializeFig(.5,.5); tiledlayout(1,length(signalRange));
-    for s = 1:length(signalRange)
-        nexttile;
-        combined = combineTraces(animals,timeRange=timeRange,...
-                                    eventRange=eventRange{i},...
-                                    animalRange=animalRange,...
-                                    taskRange='Random-ctrl',...
-                                    totalTrialRange=totalTrialRange,...
-                                    trialRange=trialRange,...
-                                    signalRange=signalRange{s},...
-                                    trialConditions=trialConditions);
-        plotTraces(combined.data{1},combined.timestamp,color=unclampColor);
-
-        combined = combineTraces(animals,timeRange=timeRange,...
-                                    eventRange=eventRange{i},...
-                                    animalRange=animalRange,...
-                                    taskRange='Random-clamp',...
-                                    totalTrialRange=totalTrialRange,...
-                                    trialRange=trialRange,...
-                                    signalRange=signalRange{s},...
-                                    trialConditions=trialConditions);
-        plotTraces(combined.data{1},combined.timestamp,color=clampColor);
-        xlabel('Time (s)'); ylabel([signalRange{s},' (\DeltaF/F)']); 
-        ylim([-0.1,0.8]);
-        plotEvent(eventRange{i},eventDuration(i),color=colorList{i});
-        legend({[eventRange{i},' (n=',num2str(size(combined.data{1},1)),')']},...
-                'Location','northeast');
-    end
-    saveFigures(gcf,strcat('Summary_random_',eventRange{i}),...
-            strcat(resultspath),...
-            saveFIG=false,savePDF=true);
-end
-
 %% *********************** Learning stage code ***********************
-clampAnimals = {'SL431'};
+clampAnimals = {'SL431','SL432','SL433'};
 ctrlAnimals = {};
 
 if isempty(ctrlAnimals)
@@ -449,12 +292,28 @@ end
 animalRange = {clampAnimals; ctrlAnimals};
 animalTypes = {'Clamped','Ctrl'};
 
+% Session color
+clampColor_wholeTrial = clampColor;
+clampColor_delayReward = [0, 155, 112]./255;
+clampColor_withRPE = [0, 118, 77]./255;
+
+% TODO: make nSessions not hard coded
+nSessions = 9; 
+% TODO: make colormap change opacity within the same type of sessions
+sessionColormap_clamped = [
+    repmat(clampColor_wholeTrial, 3, 1)
+    clampColor_delayReward
+    repmat(clampColor_withRPE, 3, 1)
+    repmat(unclampColor, nSessions-7, 1)
+];
+sessionColormap_unclamped = getColormap(unclampColor,clampColor,500,'midCol',clampColor);
+
 %% Plot lick trace
 
 timeRange = [-0.5,3];
 eventRange = {'Tone'};
 signalRange = 'Lick';
-taskRange = {'Reward-Clamp-wholeTrial'};
+taskRange = {'Reward'};
 
 totalTrialRange = 'All';
 trialRange = 'All';
@@ -465,8 +324,10 @@ nGroupsList = 5;
 
 initializeFig(.6,.5); tiledlayout('flow');
 for type = 1:length(animalRange)
+    if type == 1; sessionColormap = sessionColormap_clamped;
+    else; sessionColormap = sessionColormap_unclamped; end
+
     nexttile;
-    disp(animalRange{type});
     combined = combineTraces(animals,timeRange=timeRange,...
                                 eventRange=eventRange,...
                                 taskRange=taskRange,...
@@ -474,7 +335,7 @@ for type = 1:length(animalRange)
                                 totalTrialRange=totalTrialRange,...
                                 trialRange=trialRange,...
                                 signalRange=signalRange);
-    legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,...
+    legendList = plotGroupTraces(combined.data{1},combined.timestamp,sessionColormap,...
                     groupSize=groupSizeList,nGroups=nGroupsList,...
                     groupby='session',startIdx=combined.options.startIdx);
     plotEvent(eventRange,.5,color=colorList);
@@ -487,39 +348,124 @@ end
 %     strcat(resultspath),...
 %     saveFIG=true,savePDF=true);
 
-
-%% Plot grouped CS DA response (grouped across animal and 10 trials)
+%% Plot grouped anticipatory lick changes
+% TODO: modify plotGroupedTrialsStats so that it can group based on
+% sessions
+% TODO: !!! check whether anticipatory licks are correct !!!
 
 taskRange = {'Reward'};
-statsTypes = {'stageAmp','stageAmp'}; ylabelList = {'Amp DA response during cue','Amp DA response during cue'};
-ylimit = [-1,4; -1,5];
+statsType = 'nAnticipatoryLicks';
 
-animalRange = 'All';
 conditionRange = 'All';
-signalRange = 'dLight';
-trialRange = 'All';
-trialConditions = 'trials.performing == 1';
+signalRange = 'Lick';
+trialConditions = 'trials.performing';
+eventRange = {'Tone'};
+groupSize = 20; % numbers of trials to calculate average
 
-eventRange = {'CoChR','Baseline','Stim','Pair'};
-colorList = {[.213 .543 .324],[0.8,0.8,0.8],bluePurpleRed(500,:),bluePurpleRed(300,:)};
+if strcmpi(statsType,'nAnticipatoryLicks')
+    ylabelList = 'Anticipatory licks';
+else
+    ylabelList = statsType;
+end
 
-combinedStats = getGroupedTrialStats(animals,statsTypes,...
+initializeFig(.3,.6); tiledlayout('flow');
+
+% Clamped animals
+combinedStats = getGroupedTrialStats(animals,statsType,...
                             eventRange=eventRange,...
-                            animalRange=animalRange,...
+                            animalRange=animalRange{1},...
                             taskRange=taskRange,...
-                            trialRange=trialRange,...
                             totalTrialRange=conditionRange,...
-                            signalRange=signalRange);
+                            signalRange=signalRange, ...
+                            trialConditions=trialConditions);
+results_clamped = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=groupSize,color=clampColor,...
+                                plotIndividual=false, plotCommonTrials=false);
+
+% Unclamp animals
+combinedStats = getGroupedTrialStats(animals,statsType,...
+                            eventRange=eventRange,...
+                            animalRange=animalRange{2},...
+                            taskRange=taskRange,...
+                            totalTrialRange=conditionRange,...
+                            signalRange=signalRange, ...
+                            trialConditions=trialConditions);
+results_unclamped = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=groupSize,color=unclampColor,...
+                                plotIndividual=false, plotCommonTrials=false, plotNextTile=false);
+
+% saveFigures(gcf,'Summary_CSvsTrialsGrouped_Lick',...
+%         strcat(resultspath),...
+%         saveFIG=true,savePDF=true);
+
+%% Plot bar plot of anticipatory lick slopes (unmodified)
 
 initializeFig(.7,.7); tiledlayout('flow');
-results = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=10,plotCommonTrials=false,...
-        color=colorList,xlimIdx=3,xlim=[0,150],ylim=ylimit);
+for task = 1:length(results.stats)
+    nexttile;
+    cur_stats = results.stats{task};
+    for event = 1:length(eventRange)
+        slopes = cur_stats{event}(:,1);
+        plotScatterBar(event,slopes,color=colorList{event},...
+                       style='bar',dotSize=200,LineWidth=2);
+
+        % Calculate significance
+        if event < length(eventRange)
+            for i = event+1:length(eventRange)
+                plotStats(slopes,cur_stats{i}(:,1),[event i],testType='kstest');
+            end
+        end
+    end
+
+    xticks(1:length(eventRange)); xticklabels(eventRange);
+    ylabel('Slope of DA amplitude during CS');
+end
+
+% saveFigures(gcf,'Summary_anticpatoryLicks_slopeBar',...
+%         strcat(resultspath),...
+%         saveFIG=true,savePDF=true);
+
+
+%% Plot grouped CS DA response (check correctness)
+
+taskRange = {'Reward'};
+statsTypes = {'stageAmp'}; ylabelList = {'Amp DA response during cue'};
+ylimit = [-1,4; -1,5];
+
+conditionRange = 'All';
+trialRange = 'All';
+trialConditions = 'trials.performing == 1';
+eventRange = {'Tone'};
+groupSize = 20;
+
+initializeFig(.3,.6); tiledlayout('flow');
+
+% Clamped animals
+combinedStats = getGroupedTrialStats(animals,statsType,...
+                            eventRange=eventRange,...
+                            animalRange=animalRange{1},...
+                            taskRange=taskRange,...
+                            totalTrialRange=conditionRange,...
+                            signalRange='NAc-left', ...
+                            trialConditions=trialConditions);
+results_clamped = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=groupSize,color=clampColor,...
+                                plotIndividual=false, plotCommonTrials=false);
+
+% Unclamp animals
+combinedStats = getGroupedTrialStats(animals,statsType,...
+                            eventRange=eventRange,...
+                            animalRange=animalRange{2},...
+                            taskRange=taskRange,...
+                            totalTrialRange=conditionRange,...
+                            signalRange='NAc-right', ...
+                            trialConditions=trialConditions);
+results_unclamped = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=groupSize,color=unclampColor,...
+                                plotIndividual=false, plotCommonTrials=false, plotNextTile=false);
 
 % saveFigures(gcf,'Summary_CSvsTrialsGrouped_dLight',...
 %         strcat(resultspath),...
 %         saveFIG=true,savePDF=true);
 
-%% Plot bar plot of DA slopes
+%% Plot bar plot of DA slopes (unmodified)
+
 initializeFig(.7,.7); tiledlayout('flow');
 for task = 1:length(results.stats)
     nexttile;
