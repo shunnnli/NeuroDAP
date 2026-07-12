@@ -393,7 +393,7 @@ conditionRange = 'All';
 signalRange = 'Lick';
 trialConditions = 'trials.performing';
 
-initializeFig(.6,.6); tiledlayout('flow');
+initializeFig(.2,.6); tiledlayout('flow');
 clean = @(x) x(~isnan(x));
 
 for s = 1:numel(statsType)
@@ -415,7 +415,6 @@ for s = 1:numel(statsType)
 
         Y = [clampData(:); unclampData(:)];
         isClamp = [true(numel(clampData),1); false(numel(unclampData),1)];
-
         X = categorical(repmat("Dist", size(Y)));
         X1 = X; X1(~isClamp) = missing;
         X2 = X; X2(isClamp) = missing;
@@ -424,8 +423,17 @@ for s = 1:numel(statsType)
         colororder([clampColor; unclampColor]);
         violinplot(table(X1,X2,Y), ["X1","X2"], "Y");
 
+        yl = ylim;
+        ylim([0 yl(2)*1.05]);
+        % [~,p] = kstest2(clampData, unclampData);
+        p = ranksum(clampData, unclampData);
+        text(0.5, 0.98, sprintf('p = %.3g', p), ...
+            Units='normalized', ...
+            HorizontalAlignment='center', ...
+            VerticalAlignment='top', ...
+            FontSize=11);
+
         xticklabels({'Clamp / Unclamp'});
-        ylim([0 Inf]);
         ylabel(curStat, Interpreter='none');
         title(taskRange{task}, Interpreter='none');
     end
