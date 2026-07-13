@@ -181,7 +181,18 @@ disp('Finished: summary struct and trialtables loaded');
 
 % Change task to reward
 for i = 1:length(summary)
-    summary(i).task = 'Reward';
+    cur_session = summary(i).session;
+    if contains(cur_session,["unclamp","ctrl"],IgnoreCase=true)
+        summary(i).task = 'Reward-Unclamp';
+    elseif contains(cur_session,"wholeTrial",IgnoreCase=true)
+        summary(i).task = 'Reward-Clamp-wholeTrial';
+    elseif contains(cur_session,"delayReward",IgnoreCase=true)
+        summary(i).task = 'Reward-Clamp-delayReward';
+    elseif contains(cur_session,"RPE",IgnoreCase=true)
+        summary(i).task = 'Reward-Clamp-withRPE';
+    else
+        summary(i).task = 'Reward';
+    end
 end
 
 % Change / add more details to task
@@ -192,7 +203,7 @@ for i = 1:length(summary)
     cur_session = summary(i).session;
 
     % Default for all non-clamp/control animals
-    if ~any(strcmpi(cur_animal, {'SL433','SL431','SL432'}))
+    if ~any(strcmpi(cur_animal, {'SL433','SL431','SL432','M431'}))
         summary(i).task = 'Reward-Ctrl';
         continue
     end
@@ -244,7 +255,10 @@ for i = 1:length(summary)
                  any(strcmpi(cur_name, "NAc-right")) && ...
                  any(strcmpi(cur_date, "20260613"));
 
-    if skipGroup1 || skipGroup2 || skipGroup3 || skipGroup4
+    skipGroup5 = any(strcmpi(cur_animal, "M431")) && ...
+                 any(strcmpi(cur_name, "NAc-right"));
+
+    if skipGroup1 || skipGroup2 || skipGroup3 || skipGroup4 || skipGroup5
         keepRows(i) = false;
     end
 end
@@ -282,7 +296,7 @@ if ~isempty(answer)
 end
 
 %% *********************** Learning stage code ***********************
-clampAnimals = {'SL431','SL432','SL433'};
+clampAnimals = {'SL431','SL432','SL433','M431'};
 ctrlAnimals = {};
 
 if isempty(ctrlAnimals)
