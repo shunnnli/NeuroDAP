@@ -26,6 +26,8 @@ elseif strcmpi(options.testType,'signrank')
     pvalue = signrank(data1,data2);
 elseif contains(options.testType,'ttest')
     [~,pvalue] = ttest2(data1,data2);
+else
+    error('Test not found! Please check!');
 end
 
 %% Plot significance bar

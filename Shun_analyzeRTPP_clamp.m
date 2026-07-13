@@ -335,6 +335,8 @@ for animalIdx = 1:nAnimals
         [sessions.timePctStimSide]', ...
         [sessions.distStimSide]', ...
         [sessions.distCtrlSide]', ...
+        [sessions.distStimSide]' ./ ([sessions.timePctStimSide]' / 100), ...
+        [sessions.distCtrlSide]' ./ ((100 - [sessions.timePctStimSide]') / 100), ...
         'VariableNames', { ...
             'Animal', ...
             'SessionName', ...
@@ -349,7 +351,9 @@ for animalIdx = 1:nAnimals
             'AnalyzedFrameCount', ...
             'TimePctStimulatedSide', ...
             'DistanceStimulatedSide_pixels', ...
-            'DistanceControlSide_pixels'});
+            'DistanceControlSide_pixels', ...
+            'DistanceStimulatedSide_pixelsPerSecond', ...
+            'DistanceControlSide_pixelsPerSecond'});
 
     animalSummaryCSV = fullfile(animalFolder, sprintf('%s_sessionSummary.csv', animalName));
     writetable(sessionSummaryTable, animalSummaryCSV);
@@ -357,7 +361,7 @@ for animalIdx = 1:nAnimals
     allSessionSummaryTable = [allSessionSummaryTable; sessionSummaryTable];
 end
 
-%% Optional: save the per-animal weighted session-type summary table
+%% Save the per-animal weighted session-type summary table
 
 [groupRoot, ~] = fileparts(animalPaths{1});
 groupOutputFolder = fullfile(groupRoot, 'GroupSummary');
@@ -375,6 +379,51 @@ disp(['Saved session summary CSV: ' sessionSummaryCSV]);
 
 return
 
+%% Plot scatter bar for baseline, clampLeft, clampRight, tonicHigh, tonicLow for each animal
+% Each point is one animal. When an animal has multiple sessions in a
+% condition, its value is the session-duration-weighted mean.
+
+T = allSessionSummaryTable;
+clampColor = [.232 .76 .58]; % 3BC294
+tonicLowColor = [102, 176, 255]./255;
+tonicHighColor = [17, 124, 204]./255;
+
+sessionTypes = ["Random","ClampLeft","ClampRight","TonicHigh","TonicLow"];
+metrics = ["TimePctStimulatedSide","DistanceStimulatedSide_pixelsPerSecond"];
+colors = [ctrlColor; clampColor; clampColor; tonicHighColor; tonicLowColor];
+
+% Extract RTPP session type from SessionName, e.g. "...-Random_g0"
+T.PlotSessionType = strings(height(T),1);
+for i = 1:numel(sessionTypes)
+    T.PlotSessionType(contains(T.SessionName, sessionTypes(i),IgnoreCase=true)) = sessionTypes(i);
+end
+T = T(T.PlotSessionType ~= "", :);
+
+% Average repeated sessions within each animal first
+animalAvg = groupsummary(T, ["Animal","PlotSessionType"], "mean", metrics);
+
+initializeFig(0.5,0.5);
+tiledlayout(1,numel(metrics), TileSpacing="compact", Padding="compact");
+
+for m = 1:numel(metrics)
+    nexttile; hold on;
+    yName = "mean_" + metrics(m);
+    for i = 1:numel(sessionTypes)
+        y = animalAvg.(yName)(animalAvg.PlotSessionType == sessionTypes(i));
+        plotScatterBar(i, y, Color=colors(i,:), style='bar', connectPairs=true);
+        if i == 1
+            yBaseline = y;
+        else
+            plotStats(yBaseline, y, [1,i], testType='kstest');
+        end
+    end
+    xticks(1:numel(sessionTypes));
+    xticklabels(sessionTypes);
+    ylabel(strrep(metrics(m),"_"," "));
+    xlim([0.5 numel(sessionTypes)+0.5]);
+end
+
+saveFigures(gcf,'RTPP-summary-animal',groupOutputFolder);
 
 %% ========================== LOCAL FUNCTIONS ==========================
 

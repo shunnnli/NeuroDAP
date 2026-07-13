@@ -113,6 +113,7 @@ loadNeuroDAP;
 [~,~,~,~,~,~,bluePurpleRed] = loadColors;
 clampColor = [.232 .76 .58];
 unclampColor = [165, 209, 178]./255;
+toneColor = bluePurpleRed(100,:);
 
 % Define result directory
 resultspath = osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project clamping/Results');
