@@ -111,7 +111,7 @@
 clear; close all;
 loadNeuroDAP;
 [~,~,~,~,~,~,bluePurpleRed] = loadColors;
-clampColor = [.232 .76 .58];
+clampColor = [.232 .76 .58]; % #3bc294
 unclampColor = [165, 209, 178]./255;
 toneColor = bluePurpleRed(100,:);
 
@@ -296,7 +296,7 @@ if ~isempty(answer)
 end
 
 %% *********************** Learning stage code ***********************
-clampAnimals = {'SL431','SL432','SL433','M431'};
+clampAnimals = {'SL431','SL432','SL433','M431'}; % 'SL431','SL432','SL433',
 ctrlAnimals = {};
 
 if isempty(ctrlAnimals)
@@ -309,56 +309,187 @@ animalTypes = {'Clamped','Ctrl'};
 
 % Session color
 clampColor_wholeTrial = clampColor;
-clampColor_delayReward = [0, 155, 112]./255;
+clampColor_delayReward = [169, 178, 82]./255; % a9b252
 clampColor_withRPE = [0, 118, 77]./255;
 
 % TODO: make nSessions not hard coded
-nSessions = 9; 
+nSessions = 12; 
 % TODO: make colormap change opacity within the same type of sessions
 sessionColormap_clamped = [
     repmat(clampColor_wholeTrial, 3, 1)
     clampColor_delayReward
     repmat(clampColor_withRPE, 3, 1)
-    repmat(unclampColor, nSessions-7, 1)
 ];
-sessionColormap_unclamped = getColormap(unclampColor,clampColor,500,'midCol',clampColor);
+sessionColormap_unclamped = getColormap(unclampColor*255,clampColor_withRPE*255,nSessions,'midCol',clampColor*255);
 
-%% Plot lick trace
+%% Plot DA trace aligned to Tone (unfinished)
 
 timeRange = [-0.5,3];
-eventRange = {'Tone'};
-signalRange = 'Lick';
-taskRange = {'Reward'};
+eventRange = {'Tone (clamp)','Tone (unclamp)'};
+signalRange = {'blueClamp','NAc'};
+taskRange = {'Reward-Clamp-wholeTrial','Reward-Ctrl'};
 
 totalTrialRange = 'All';
 trialRange = 'All';
-
-colorList = bluePurpleRed(100,:);
 groupSizeList = 30;
 nGroupsList = 5;
 
-initializeFig(.6,.5); tiledlayout('flow');
+initializeFig(.3,.5); tiledlayout('flow');
 for type = 1:length(animalRange)
     if type == 1; sessionColormap = sessionColormap_clamped;
     else; sessionColormap = sessionColormap_unclamped; end
 
     nexttile;
     combined = combineTraces(animals,timeRange=timeRange,...
-                                eventRange=eventRange,...
-                                taskRange=taskRange,...
+                                eventRange=eventRange{type},...
+                                taskRange=taskRange{type},...
                                 animalRange=animalRange{type},...
                                 totalTrialRange=totalTrialRange,...
                                 trialRange=trialRange,...
-                                signalRange=signalRange);
+                                signalRange=signalRange{type});
     legendList = plotGroupTraces(combined.data{1},combined.timestamp,sessionColormap,...
                     groupSize=groupSizeList,nGroups=nGroupsList,...
                     groupby='session',startIdx=combined.options.startIdx);
-    plotEvent(eventRange,.5,color=colorList);
 
     title(animalTypes{type});
-    xlabel('Time (s)'); ylabel('Licks/s'); ylim([0 Inf]);
+    xlabel('Time (s)'); ylabel('dff'); %ylim([-0.1,0.5]);
+    plotEvent('Tone',.5,color=toneColor);
     legend(legendList,'Location','northeast');
 end
+% saveFigures(gcf,['Summary_licking_',taskRange{task}],...
+%     strcat(resultspath),...
+%     saveFIG=true,savePDF=true);
+
+%% Get first 10 trials of DA response for Reward-Clamp-delayReward
+
+timeRange = [-0.5,3];
+first10Trials = 1:10;
+totalTrialRange = 'All';
+trialRange = 'All';
+ctrlSessionNum = 4;
+stackSpacingScale = 0.5; % smaller = tighter stacked trial rows
+
+initializeFig(.4,.6);
+tiledlayout(1,2,Padding='compact');
+
+combined_clamp = combineTraces(animals,timeRange=timeRange,...
+                                eventRange='Tone (clamp)',...
+                                taskRange='Reward-Clamp-delayReward',...
+                                animalRange=animalRange{1},...
+                                totalTrialRange=totalTrialRange,...
+                                trialRange=trialRange,...
+                                signalRange='NAc-left');
+
+combined_ctrl = combineTraces(animals,timeRange=timeRange,...
+                                eventRange='Tone (unclamp)',...
+                                taskRange='Reward-Ctrl',...
+                                animalRange=animalRange{2},...
+                                totalTrialRange=totalTrialRange,...
+                                trialRange=trialRange,...
+                                signalRange='NAc');
+
+finiteData = [combined_clamp.data{1}(isfinite(combined_clamp.data{1})); ...
+              combined_ctrl.data{1}(isfinite(combined_ctrl.data{1}))];
+stackSpacing = max((max(finiteData)-min(finiteData))*stackSpacingScale,0.1);
+
+% Clamp animals: first 10 trials
+nexttile;
+sessionStarts = combined_clamp.options.startIdx.session{1};
+nextSessionStarts = [sessionStarts(2:end); size(combined_clamp.data{1},1)+1];
+for trial = first10Trials
+    trialRows = sessionStarts + trial - 1;
+    validRows = trialRows < nextSessionStarts & trialRows <= size(combined_clamp.data{1},1);
+    plotSEM(combined_clamp.timestamp,combined_clamp.data{1}(trialRows(validRows),:) + (trial-1)*stackSpacing,...
+            clampColor_delayReward,plotIndividual=true,plotPatch=false);
+end
+plotEvent('Tone',.5,color=toneColor);
+yticks((first10Trials-1)*stackSpacing); yticklabels(string(first10Trials));
+xlabel('Time (s)'); ylabel('Trial'); title('Clamp: delay reward');
+xlim(timeRange); ylim([-0.35*stackSpacing,first10Trials(end)*stackSpacing]);
+
+% Ctrl animals: first 10 trials of session 4
+nexttile;
+sessionStarts = combined_ctrl.options.startIdx.session{1};
+animalStarts = combined_ctrl.options.startIdx.animal{1};
+ctrlSessionStarts = [];
+for animal = 1:numel(animalStarts)
+    if animal < numel(animalStarts); animalEnd = animalStarts(animal+1)-1;
+    else; animalEnd = size(combined_ctrl.data{1},1); end
+    curSessionStarts = sessionStarts(sessionStarts >= animalStarts(animal) & sessionStarts <= animalEnd);
+    if numel(curSessionStarts) >= ctrlSessionNum
+        ctrlSessionStarts = [ctrlSessionStarts; curSessionStarts(ctrlSessionNum)];
+    end
+end
+[~,ctrlSessionIdx] = ismember(ctrlSessionStarts,sessionStarts);
+nextSessionStarts = [sessionStarts(2:end); size(combined_ctrl.data{1},1)+1];
+for trial = first10Trials
+    trialRows = ctrlSessionStarts + trial - 1;
+    validRows = trialRows < nextSessionStarts(ctrlSessionIdx) & trialRows <= size(combined_ctrl.data{1},1);
+    plotSEM(combined_ctrl.timestamp,combined_ctrl.data{1}(trialRows(validRows),:) + (trial-1)*stackSpacing,...
+            unclampColor,plotIndividual=true,individualColor=addOpacity(unclampColor,0.35),...
+            plotPatch=false);
+end
+plotEvent('Tone',.5,color=toneColor);
+yticks((first10Trials-1)*stackSpacing); yticklabels(string(first10Trials));
+xlabel('Time (s)'); ylabel('Trial'); title(['Ctrl: session ',num2str(ctrlSessionNum)]);
+xlim(timeRange); ylim([-0.35*stackSpacing,first10Trials(end)*stackSpacing]);
+
+% saveFigures(gcf,'Summary_first10Trials_NAc',...
+%         strcat(resultspath),...
+%         saveFIG=true,savePDF=true);
+
+%% Plot lick trace
+
+timeRange = [-0.5,3];
+
+totalTrialRange = 'All';
+trialRange = 'All';
+
+initializeFig(.6,.5); tiledlayout('flow');
+
+% Plot clamp animals
+nexttile;
+combined = combineTraces(animals,timeRange=timeRange,...
+                            eventRange='Tone (clamp)',...
+                            taskRange='Reward-Clamp',...
+                            animalRange=animalRange{1},...
+                            totalTrialRange=totalTrialRange,...
+                            trialRange=trialRange,...
+                            signalRange='Lick');
+legendList = plotGroupTraces(combined.data{1},combined.timestamp,sessionColormap_clamped,...
+                groupby='session',startIdx=combined.options.startIdx);
+combined = combineTraces(animals,timeRange=timeRange,...
+                            eventRange='Tone (unclamp)',...
+                            taskRange='Reward-Unclamp',...
+                            animalRange=animalRange{1},...
+                            totalTrialRange=totalTrialRange,...
+                            trialRange=trialRange,...
+                            signalRange='Lick');
+plotSEM(combined.timestamp,combined.data{1},unclampColor);
+legendList{end+1} = strcat("Unclamp (n=",num2str(size(combined.data{1},1)),")");
+plotEvent('Tone',.5,color=toneColor);
+
+title(animalTypes{1});
+xlabel('Time (s)'); ylabel('Licks/s'); ylim([0 Inf]);
+legend(legendList,'Location','northeast');
+
+% Plot ctrl animals
+nexttile;
+combined = combineTraces(animals,timeRange=timeRange,...
+                            eventRange='Tone',...
+                            taskRange='Reward-Ctrl',...
+                            animalRange=animalRange{2},...
+                            totalTrialRange=totalTrialRange,...
+                            trialRange=trialRange,...
+                            signalRange='Lick');
+legendList = plotGroupTraces(combined.data{1},combined.timestamp,bluePurpleRed,...
+                groupby='session',startIdx=combined.options.startIdx);
+plotEvent('Tone',.5,color=toneColor);
+
+title(animalTypes{2});
+xlabel('Time (s)'); ylabel('Licks/s'); ylim([0 Inf]);
+legend(legendList,'Location','northeast');
+
 % saveFigures(gcf,['Summary_licking_',taskRange{task}],...
 %     strcat(resultspath),...
 %     saveFIG=true,savePDF=true);
@@ -366,7 +497,6 @@ end
 %% Plot grouped anticipatory lick changes
 % TODO: modify plotGroupedTrialsStats so that it can group based on
 % sessions
-% TODO: !!! check whether anticipatory licks are correct !!!
 
 taskRange = {'Reward'};
 statsType = 'nAnticipatoryLicks';
@@ -393,10 +523,33 @@ combinedStats = getGroupedTrialStats(animals,statsType,...
                             totalTrialRange=conditionRange,...
                             signalRange=signalRange, ...
                             trialConditions=trialConditions);
+animalList_clamped = intersect(unique({animals(contains({animals.task},taskRange{1},IgnoreCase=true)).animal}),animalRange{1});
+clampTrialTask = cell(numel(animalList_clamped),1);
+for animal = 1:numel(animalList_clamped)
+    rowIdx = find(contains({animals.animal},animalList_clamped{animal},IgnoreCase=true) & ...
+                  contains({animals.task},taskRange{1},IgnoreCase=true) & ...
+                  contains({animals.event},eventRange{1},IgnoreCase=true) & ...
+                  contains({animals.name},signalRange,IgnoreCase=true));
+    [~,sortIdx] = sort(arrayfun(@(x) min(x.options.signalRows),animals(rowIdx)));
+    combinedStats.stats{1}{animal,1} = [];
+    for row = rowIdx(sortIdx)
+        trialIdx = 1:numel(animals(row).trialInfo.trialNumber);
+        if ~(ischar(conditionRange) || isstring(conditionRange))
+            trialIdx = find(animals(row).trialInfo.trialNumber >= conditionRange(1) & ...
+                            animals(row).trialInfo.trialNumber <= conditionRange(2));
+        end
+        if ~isempty(trialConditions)
+            trials = animals(row).trialInfo.trialTable;
+            trialIdx = intersect(trialIdx,find(eval(trialConditions)));
+        end
+        combinedStats.stats{1}{animal,1} = [combinedStats.stats{1}{animal,1}; animals(row).trialInfo.trialTable.(statsType)(trialIdx)];
+        clampTrialTask{animal} = [clampTrialTask{animal}; repmat(string(animals(row).task),numel(trialIdx),1)];
+    end
+end
 results_clamped = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=groupSize,color=clampColor,...
-                                plotIndividual=false, plotCommonTrials=false);
+                                plotIndividual=false, plotCommonTrials=false, plot=false);
 
-% Unclamp animals
+% Ctrl animals
 combinedStats = getGroupedTrialStats(animals,statsType,...
                             eventRange=eventRange,...
                             animalRange=animalRange{2},...
@@ -405,7 +558,51 @@ combinedStats = getGroupedTrialStats(animals,statsType,...
                             signalRange=signalRange, ...
                             trialConditions=trialConditions);
 results_unclamped = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=groupSize,color=unclampColor,...
-                                plotIndividual=false, plotCommonTrials=false, plotNextTile=false);
+                                plotIndividual=false, plotCommonTrials=false, plot=false);
+
+nexttile;
+clampTaskRange = {'Reward-Clamp-wholeTrial','Reward-Clamp-delayReward','Reward-Clamp-withRPE','Reward-Unclamp','Reward'};
+clampTaskLabel = {'Clamp whole trial','Clamp delay reward','Clamp with RPE','Unclamp','Reward'};
+clampTaskColors = [clampColor_wholeTrial; clampColor_delayReward; clampColor_withRPE; unclampColor; clampColor];
+
+clampGrouped = results_clamped.traces{1}{1};
+x_clamp = groupSize:groupSize:groupSize*size(clampGrouped,2);
+clampGroupTask = cell(numel(clampTrialTask),numel(x_clamp));
+for animal = 1:numel(clampTrialTask)
+    for group = 1:numel(x_clamp)
+        idx = (group-1)*groupSize+1:min(group*groupSize,numel(clampTrialTask{animal}));
+        if ~isempty(idx)
+            clampGroupTask{animal,group} = char(mode(categorical(clampTrialTask{animal}(idx))));
+        end
+    end
+end
+
+clampGroupTaskMode = strings(1,numel(x_clamp));
+for group = 1:numel(x_clamp)
+    taskList = clampGroupTask(~cellfun(@isempty,clampGroupTask(:,group)),group);
+    if ~isempty(taskList); clampGroupTaskMode(group) = string(mode(categorical(taskList))); end
+end
+
+ctrlGrouped = results_unclamped.traces{1}{1};
+x_ctrl = groupSize:groupSize:groupSize*size(ctrlGrouped,2);
+scatter(x_ctrl,mean(ctrlGrouped,1,'omitnan'),200,unclampColor,'filled',HandleVisibility='off'); hold on
+plotSEM(x_ctrl,ctrlGrouped,unclampColor,label='Ctrl');
+
+for task = 1:numel(clampTaskRange)
+    groupIdx = find(strcmpi(clampGroupTaskMode,clampTaskRange{task}));
+    if isempty(groupIdx); continue; end
+    scatter(x_clamp(groupIdx),mean(clampGrouped(:,groupIdx),1,'omitnan'),200,clampTaskColors(task,:),'filled',HandleVisibility='off');
+    segmentBreaks = [0,find(diff(groupIdx)>1),numel(groupIdx)];
+    legendLabel = clampTaskLabel{task};
+    for segment = 1:numel(segmentBreaks)-1
+        idx = groupIdx(segmentBreaks(segment)+1:segmentBreaks(segment+1));
+        plotSEM(x_clamp(idx),clampGrouped(:,idx),clampTaskColors(task,:),label=legendLabel);
+        legendLabel = '';
+    end
+end
+xlabel('Trials'); ylabel(ylabelList); 
+xlim([0,800]);%xlim([0,max(x_clamp)]);
+legend('Location','northeast');
 
 % saveFigures(gcf,'Summary_CSvsTrialsGrouped_Lick',...
 %         strcat(resultspath),...
