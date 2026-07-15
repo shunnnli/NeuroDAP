@@ -569,8 +569,8 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
         disp("Ongoing: Process NI photometry data");
 
         % Find row to store
-        if ~withPhotometry; i = 1;
-        else; i = size(timeSeries,2) + 1; end
+        if exist('timeSeries','var'); row = size(timeSeries,2) + 1;
+        else; row = 1; end
 
         % Process
         if options.photometryNI_mod
@@ -591,17 +591,17 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
             params.sync.ni_photometryFs = [finalFs, params.sync.ni_photometryFs];
 
             % Store params
-            timeSeries(i).name = 'PMT';
-            timeSeries(i).data = processed.demodData;
-            timeSeries(i).finalFs = finalFs;
-            timeSeries(i).system = 'NI';
-            timeSeries(i).time_offset = 0;
-            timeSeries(i).demux = true;
-            timeSeries(i).demux_freq = processed.options.modFreq;
-            timeSeries(i).detrend = true;
-            timeSeries(i).detrend_type = 'rolling-z';
-            timeSeries(i).detrend_window = processed.options.rollingWindowTime;
-            timeSeries(i).options = processed.options;
+            timeSeries(row).name = 'PMT';
+            timeSeries(row).data = processed.demodData;
+            timeSeries(row).finalFs = finalFs;
+            timeSeries(row).system = 'NI';
+            timeSeries(row).time_offset = 0;
+            timeSeries(row).demux = true;
+            timeSeries(row).demux_freq = processed.options.modFreq;
+            timeSeries(row).detrend = true;
+            timeSeries(row).detrend_type = 'rolling-z';
+            timeSeries(row).detrend_window = processed.options.rollingWindowTime;
+            timeSeries(row).options = processed.options;
             disp('Finished: NI photometry demodulation');
 
         else
@@ -629,23 +629,23 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
             params.sync.ni_photometryFs = [finalFs, params.sync.ni_photometryFs];
             
             % Store params
-            timeSeries(i).name = 'PMT';
-            timeSeries(i).data = processed.dsData;
-            timeSeries(i).finalFs = finalFs;
-            timeSeries(i).system = 'NI';
-            timeSeries(i).time_offset = 0;
-            timeSeries(i).demux = false;
-            timeSeries(i).demux_freq = NaN;
+            timeSeries(row).name = 'PMT';
+            timeSeries(row).data = processed.dsData;
+            timeSeries(row).finalFs = finalFs;
+            timeSeries(row).system = 'NI';
+            timeSeries(row).time_offset = 0;
+            timeSeries(row).demux = false;
+            timeSeries(row).demux_freq = NaN;
             if options.withClamp
-                timeSeries(i).detrend = true;
-                timeSeries(i).detrend_type = 'dff';
-                timeSeries(i).detrend_window = processed.options.rollingWindowTime;
+                timeSeries(row).detrend = true;
+                timeSeries(row).detrend_type = 'dff';
+                timeSeries(row).detrend_window = processed.options.rollingWindowTime;
             else
-                timeSeries(i).detrend = true;
-                timeSeries(i).detrend_type = 'rolling-z';
-                timeSeries(i).detrend_window = processed.options.rollingWindowTime;
+                timeSeries(row).detrend = true;
+                timeSeries(row).detrend_type = 'rolling-z';
+                timeSeries(row).detrend_window = processed.options.rollingWindowTime;
             end
-            timeSeries(i).options = processed.options;
+            timeSeries(row).options = processed.options;
             disp('Finished: NI photometry downsampling');
         end
     end
@@ -666,15 +666,16 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
         end
 
         % Store params
-        timeSeries(i).name = 'blueClamp';
-        timeSeries(i).data = processed.dsData;
-        timeSeries(i).finalFs = finalFs;
-        timeSeries(i).system = 'NI';
-        timeSeries(i).time_offset = 0;
-        timeSeries(i).demux = false;
-        timeSeries(i).demux_freq = NaN;
-        timeSeries(i).detrend = false;
-        timeSeries(i).options = processed.options;
+        row = size(timeSeries,2) + 1;
+        timeSeries(row).name = 'blueClamp';
+        timeSeries(row).data = processed.dsData;
+        timeSeries(row).finalFs = finalFs;
+        timeSeries(row).system = 'NI';
+        timeSeries(row).time_offset = 0;
+        timeSeries(row).demux = false;
+        timeSeries(row).demux_freq = NaN;
+        timeSeries(row).detrend = false;
+        timeSeries(row).options = processed.options;
         disp('Finished: store blue clamping command');
 
         % Downsample
@@ -691,15 +692,16 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
         end
 
         % Store params
-        timeSeries(i+1).name = 'redClamp';
-        timeSeries(i+1).data = processed.dsData;
-        timeSeries(i+1).finalFs = finalFs;
-        timeSeries(i+1).system = 'NI';
-        timeSeries(i+1).time_offset = 0;
-        timeSeries(i+1).demux = false;
-        timeSeries(i+1).demux_freq = NaN;
-        timeSeries(i+1).detrend = false;
-        timeSeries(i+1).options = processed.options;
+        row = size(timeSeries,2) + 1;
+        timeSeries(row).name = 'redClamp';
+        timeSeries(row).data = processed.dsData;
+        timeSeries(row).finalFs = finalFs;
+        timeSeries(row).system = 'NI';
+        timeSeries(row).time_offset = 0;
+        timeSeries(row).demux = false;
+        timeSeries(row).demux_freq = NaN;
+        timeSeries(row).detrend = false;
+        timeSeries(row).options = processed.options;
         disp('Finished: store red clamping command');
 
         % % Downsample
@@ -967,7 +969,8 @@ if withCamera && (options.reloadAll || options.reloadCam)
                 end
 
                 % Save to timeseries struct
-                row = size(timeSeries,2) + 1;
+                if exist('timeSeries','var'); row = size(timeSeries,2) + 1;
+                else; row = 1; end
                 timeSeries(row).name = trace_names{i};
                 timeSeries(row).data = processed_cam.dsData;
                 timeSeries(row).finalFs = options.downsampleFs;

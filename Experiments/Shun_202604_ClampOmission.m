@@ -182,7 +182,15 @@ disp('Finished: summary struct and trialtables loaded');
 % Change task to reward
 for i = 1:length(summary)
     cur_session = summary(i).session;
-    if contains(cur_session,["unclamp","ctrl"],IgnoreCase=true)
+    if contains(cur_session,"omission",IgnoreCase=true)
+        if contains(cur_session,"unclamp",IgnoreCase=true)
+            summary(i).task = 'Reward-Unlamp-Omission';
+        elseif contains(cur_session,"clamp",IgnoreCase=true)
+            summary(i).task = 'Reward-Clamp-Omission';
+        end
+    elseif contains(cur_session,"bringbackreward",IgnoreCase=true)
+        summary(i).task = 'Reward-Unclamp-BringBackReward';
+    elseif contains(cur_session,["unclamp","ctrl"],IgnoreCase=true)
         summary(i).task = 'Reward-Unclamp';
     elseif contains(cur_session,"wholeTrial",IgnoreCase=true)
         summary(i).task = 'Reward-Clamp-wholeTrial';
@@ -195,7 +203,7 @@ for i = 1:length(summary)
     end
 end
 
-% Change / add more details to task
+%% Change / add more details to task
 for i = 1:length(summary)
     cur_task    = summary(i).task;
     cur_animal  = summary(i).animal;
@@ -242,7 +250,7 @@ for i = 1:length(summary)
     skipGroup1 = any(strcmpi(cur_animal, ["SL438", "SL439"])) && ...
                  any(strcmpi(cur_name, ["NAc-left", "NAc-rightLS"]));
 
-    skipGroup2 = any(strcmpi(cur_animal, ["SL446","SL447","SL443","SL444","SL445","SL438","SL439"])) && ...
+    skipGroup2 = any(strcmpi(cur_animal, ["SL446","SL447","SL443","SL444","SL445","SL438","SL439","M430"])) && ...
                  any(strcmpi(cur_name, ["blueClamp", "redClamp"]));
 
     skipGroup3 = any(strcmpi(cur_animal, ["SL431", "SL432", "SL433"])) && ...
