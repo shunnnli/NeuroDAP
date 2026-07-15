@@ -28,7 +28,6 @@ v3.0 Shun Li, Harvard Medical School
 % concatLabjack('C:\Shun\Recordings\20231107-test-25uW_g0',plot=true);
 
 clear; close all; loadNeuroDAP;
-% addpath(addpath(genpath('\\research.files.med.harvard.edu\neurobio\MICROSCOPE\Shun\Behavior setup\Matlab')));
 root_path = 'C:\Shun\Recordings';
 % addpath(addpath(genpath('E:\Sally\Matlab')));
 % root_path = 'E:\Sally\Recordings';
