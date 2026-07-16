@@ -182,11 +182,16 @@ disp('Finished: summary struct and trialtables loaded');
 % Change task to reward
 for i = 1:length(summary)
     cur_session = summary(i).session;
+    cur_animal  = summary(i).animal;
+    cur_date    = str2double(summary(i).date);
+
     if contains(cur_session,"omission",IgnoreCase=true)
         if contains(cur_session,"unclamp",IgnoreCase=true)
-            summary(i).task = 'Reward-Unlamp-Omission';
+            summary(i).task = 'Reward-Unclamp-Omission';
         elseif contains(cur_session,"clamp",IgnoreCase=true)
             summary(i).task = 'Reward-Clamp-Omission';
+        else
+            summary(i).task = 'Reward-Unclamp-Omission';
         end
     elseif contains(cur_session,"bringbackreward",IgnoreCase=true)
         summary(i).task = 'Reward-Unclamp-BringBackReward';
@@ -199,7 +204,11 @@ for i = 1:length(summary)
     elseif contains(cur_session,"RPE",IgnoreCase=true)
         summary(i).task = 'Reward-Clamp-withRPE';
     else
-        summary(i).task = 'Reward';
+        summary(i).task = 'Reward-Unclamp';
+    end
+
+    if cur_date == 20260521 && any(strcmpi(cur_animal, ["SL438", "SL439"]))
+        summary(i).task = 'Reward-Unclamp-BringBackReward';
     end
 end
 
@@ -265,6 +274,10 @@ for i = 1:length(summary)
 
     skipGroup5 = any(strcmpi(cur_animal, "M431")) && ...
                  any(strcmpi(cur_name, "NAc-right"));
+
+    skipGroup6 = any(strcmpi(cur_animal, "M430")) && ...
+                 any(strcmpi(cur_name, "NAc-left")) && ...
+                 any(strcmpi(cur_date, "20260714"));
 
     if skipGroup1 || skipGroup2 || skipGroup3 || skipGroup4 || skipGroup5
         keepRows(i) = false;
