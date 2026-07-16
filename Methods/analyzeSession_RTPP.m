@@ -216,10 +216,10 @@ function [sessionType, condition, stimSideFromFolder] = parseSessionFolderName(s
             condition = "Baseline";
             stimSideFromFolder = "";
         elseif contains(lastToken,'Left',IgnoreCase=true)
-            condition = "Clamp";
+            condition = "Stimulated";
             stimSideFromFolder = "left";
         elseif contains(lastToken,'Right',IgnoreCase=true)
-            condition = "Clamp";
+            condition = "Stimulated";
             stimSideFromFolder = "right";
         else
             error('Unrecognized last token "%s" in session folder "%s". Expected baseline/random, Left, or Right.', ...

@@ -297,6 +297,10 @@ else
     end
 end
 
+%% Skip the rest if session is RTPP
+if contains(sessionName,'RTPP',IgnoreCase=true)
+    return
+end
 
 % Find start of lick bout
 rightLickON = find(rightLick);

@@ -18,8 +18,7 @@
 % Group summary is organized by SessionType rather than stimulated side.
 
 %% Load
-clear; close all;
-addpath(genpath(osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Analysis/NeuroDAP/Methods')));
+clear; close all; loadNeuroDAP;
 [~,~,~,~,~,~,bluePurpleRed] = loadColors;
 
 %% Pick animal folders
