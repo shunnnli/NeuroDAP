@@ -311,6 +311,7 @@ animalTypes = {'Clamped','Ctrl'};
 clampColor_wholeTrial = clampColor;
 clampColor_delayReward = [169, 178, 82]./255; % a9b252
 clampColor_withRPE = [0, 118, 77]./255;
+ctrlColor = [154, 176, 166]./255; % #9ab0a6
 
 % TODO: make nSessions not hard coded
 nSessions = 12; 
@@ -449,6 +450,14 @@ initializeFig(.6,.5); tiledlayout('flow');
 
 % Plot clamp animals
 nexttile;
+
+combined = combineTraces(animals,timeRange=timeRange,...
+                            eventRange='Baseline',...
+                            taskRange='Reward-Clamp',...
+                            animalRange=animalRange{1},...
+                            signalRange='Lick');
+plotSEM(combined.timestamp,combined.data{1},ctrlColor);
+
 combined = combineTraces(animals,timeRange=timeRange,...
                             eventRange='Tone (clamp)',...
                             taskRange='Reward-Clamp',...
@@ -610,31 +619,6 @@ legend('Location','northeast');
 
 %% Plot bar plot of anticipatory lick slopes (unmodified)
 
-initializeFig(.7,.7); tiledlayout('flow');
-for task = 1:length(results.stats)
-    nexttile;
-    cur_stats = results.stats{task};
-    for event = 1:length(eventRange)
-        slopes = cur_stats{event}(:,1);
-        plotScatterBar(event,slopes,color=colorList{event},...
-                       style='bar',dotSize=200,LineWidth=2);
-
-        % Calculate significance
-        if event < length(eventRange)
-            for i = event+1:length(eventRange)
-                plotStats(slopes,cur_stats{i}(:,1),[event i],testType='kstest');
-            end
-        end
-    end
-
-    xticks(1:length(eventRange)); xticklabels(eventRange);
-    ylabel('Slope of DA amplitude during CS');
-end
-
-% saveFigures(gcf,'Summary_anticpatoryLicks_slopeBar',...
-%         strcat(resultspath),...
-%         saveFIG=true,savePDF=true);
-
 
 %% Plot grouped CS DA response (check correctness)
 
@@ -677,28 +661,3 @@ results_unclamped = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=gro
 %         saveFIG=true,savePDF=true);
 
 %% Plot bar plot of DA slopes (unmodified)
-
-initializeFig(.7,.7); tiledlayout('flow');
-for task = 1:length(results.stats)
-    nexttile;
-    cur_stats = results.stats{task};
-    for event = 1:length(eventRange)
-        slopes = cur_stats{event}(:,1);
-        plotScatterBar(event,slopes,color=colorList{event},...
-                       style='bar',dotSize=200,LineWidth=2,connectPairs=true);
-
-        % Calculate significance
-        if event < length(eventRange)
-            for i = event+1:length(eventRange)
-                plotStats(slopes,cur_stats{i}(:,1),[event i],testType='kstest');
-            end
-        end
-    end
-
-    xticks(1:length(eventRange)); xticklabels(eventRange);
-    ylabel('Slope of DA amplitude during CS');
-end
-
-% saveFigures(gcf,'Summary_CSvsTrialsGrouped_dLight_slopeBar',...
-%         strcat(resultspath),...
-%         saveFIG=true,savePDF=true);

@@ -323,11 +323,12 @@ sessionColormap_clamped = [
 ];
 sessionColormap_unclamped = getColormap(unclampColor*255,clampColor_withRPE*255,nSessions,'midCol',clampColor*255);
 
-%% Plot DA trace aligned to Tone
+%% Plot DA trace aligned to Tone during omission
 
 timeRange = [-0.5,3];
-eventRange = {'Tone (clamp omission)','Tone (unclamp omission)'};
 signalRange = {'NAc-clamp','NAc-right'};
+
+eventRange = {'Tone (clamp omission)','Tone (unclamp omission)'};
 taskRange = {'Reward-Clamp-Omission','Reward-Unclamp-Omission'};
 
 totalTrialRange = 'All';
@@ -353,6 +354,88 @@ for type = 1:length(animalRange)
 
     title(animalTypes{type});
     xlabel('Time (s)'); ylabel('dff'); ylim([-0.02,0.16]);
+    plotEvent('Tone',.5,color=toneColor);
+    legend(legendList,'Location','northeast');
+end
+% saveFigures(gcf,['Summary_licking_',taskRange{task}],...
+%     strcat(resultspath),...
+%     saveFIG=true,savePDF=true);
+
+%% Plot clamp trace aligned to Tone during omission
+
+timeRange = [-0.5,3];
+totalTrialRange = 'All';
+trialRange = 'All';
+
+initializeFig(.3,.5); tiledlayout('flow');
+nexttile;
+combined = combineTraces(animals,timeRange=timeRange,...
+                            eventRange='Tone (clamp omission)',...
+                            taskRange='Reward-Clamp-Omission',...
+                            animalRange=animalRange{1},...
+                            totalTrialRange=totalTrialRange,...
+                            trialRange=trialRange,...
+                            signalRange='redClamp');
+legendList = plotGroupTraces(combined.data{1},combined.timestamp,sessionColormap_clamped,...
+                groupby='session',startIdx=combined.options.startIdx);
+
+title('Red clamp command');
+xlabel('Time (s)'); ylabel('clamp command (%)'); %ylim([0,Inf]);
+plotEvent('Tone',.5,color=toneColor);
+legend(legendList,'Location','northeast');
+
+% nexttile;
+% combined = combineTraces(animals,timeRange=timeRange,...
+%                             eventRange='Tone (clamp omission)',...
+%                             taskRange='Reward-Clamp-Omission',...
+%                             animalRange=animalRange{1},...
+%                             totalTrialRange=totalTrialRange,...
+%                             trialRange=trialRange,...
+%                             signalRange='blueClamp');
+% legendList = plotGroupTraces(combined.data{1},combined.timestamp,sessionColormap_clamped,...
+%                 groupby='session',startIdx=combined.options.startIdx);
+% 
+% title('Blue clamp command');
+% xlabel('Time (s)'); ylabel('clamp command (%)'); %ylim([0,Inf]);
+% plotEvent('Tone',.5,color=toneColor);
+% legend(legendList,'Location','northeast');
+
+% saveFigures(gcf,['Summary_licking_',taskRange{task}],...
+%     strcat(resultspath),...
+%     saveFIG=true,savePDF=true);
+
+
+%% Plot DA trace aligned to Tone back to reward
+
+timeRange = [-0.5,3];
+signalRange = {'NAc-clamp','NAc-right'};
+
+eventRange = {'Tone (unclamp)','Tone (unclamp)'};
+taskRange = {'Reward-Unclamp-BringBackReward','Reward-Unclamp-BringBackReward'};
+
+totalTrialRange = 'All';
+trialRange = 'All';
+nGroupsList = 4;
+
+initializeFig(.6,.5); tiledlayout('flow');
+for type = 1:length(animalRange)
+    if type == 1; sessionColormap = sessionColormap_clamped;
+    else; sessionColormap = sessionColormap_unclamped; end
+
+    nexttile;
+    combined = combineTraces(animals,timeRange=timeRange,...
+                                eventRange=eventRange{type},...
+                                taskRange=taskRange{type},...
+                                animalRange=animalRange{type},...
+                                totalTrialRange=totalTrialRange,...
+                                trialRange=trialRange,...
+                                signalRange=signalRange{type});
+    legendList = plotGroupTraces(combined.data{1},combined.timestamp,sessionColormap,...
+                    groupSize=20,...
+                    groupby='trials',startIdx=combined.options.startIdx);
+
+    title(animalTypes{type});
+    xlabel('Time (s)'); ylabel('dff'); ylim([-0.05,0.45]);
     plotEvent('Tone',.5,color=toneColor);
     legend(legendList,'Location','northeast');
 end
@@ -601,3 +684,7 @@ linkaxes(ax,'y'); %ylim([0 Inf]);
 % saveFigures(gcf,'Summary_CSvsTrialsGrouped_stageAmp',...
 %         strcat(resultspath),...
 %         saveFIG=true,savePDF=true);
+
+%% Bar plot of DA (unfinished)
+
+%% BringBackReward analysis
