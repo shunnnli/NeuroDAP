@@ -617,7 +617,9 @@ legend('Location','northeast');
 %         strcat(resultspath),...
 %         saveFIG=true,savePDF=true);
 
-%% Plot bar plot of anticipatory lick slopes (unmodified)
+%% Plot bar plot of anticipatory lick (unmodified)
+
+%% Plot bar plot of reaction time
 
 
 %% Plot grouped CS DA response (check correctness)
@@ -661,3 +663,50 @@ results_unclamped = plotGroupedTrialStats(combinedStats,ylabelList,groupSize=gro
 %         saveFIG=true,savePDF=true);
 
 %% Plot bar plot of DA slopes (unmodified)
+
+
+%% Test: clamp index test
+
+initializeFig(0.3,0.5); tiledlayout('flow');
+
+% nexttile
+% combinedBlue = combineTraces(animals,timeRange=timeRange,...
+%                                 eventRange='Baseline',...
+%                                 taskRange='Reward-Clamp-wholeTrial',...
+%                                 animalRange=animalRange{1},...
+%                                 signalRange='blueClamp');
+% plotSEM(combinedBlue.timestamp,combinedBlue.data{1},bluePurpleRed(1,:));
+% 
+% combinedRed = combineTraces(animals,timeRange=timeRange,...
+%                                 eventRange='Baseline',...
+%                                 taskRange='Reward-Clamp-wholeTrial',...
+%                                 animalRange=animalRange{1},...
+%                                 signalRange='redClamp');
+% plotSEM(combinedRed.timestamp,combinedRed.data{1},bluePurpleRed(end,:));
+
+% % Minus
+% nexttile
+% clamp_diff = combinedRed.data{1} - combinedBlue.data{1};
+% clamp_index = clamp_diff ./ (combinedRed.data{1} + combinedBlue.data{1});
+% plotSEM(combinedRed.timestamp,clamp_index,clampColor);
+
+
+nexttile
+combinedBlue = combineTraces(animals,timeRange=timeRange,...
+                                eventRange='Tone (clamp)',...
+                                taskRange='Reward-Clamp-wholeTrial',...
+                                animalRange=animalRange{1},...
+                                signalRange='blueClamp');
+plotSEM(combinedBlue.timestamp,combinedBlue.data{1},bluePurpleRed(1,:));
+
+combinedRed = combineTraces(animals,timeRange=timeRange,...
+                                eventRange='Tone (clamp)',...
+                                taskRange='Reward-Clamp-wholeTrial',...
+                                animalRange=animalRange{1},...
+                                signalRange='redClamp');
+plotSEM(combinedRed.timestamp,combinedRed.data{1},bluePurpleRed(end,:));
+
+% Minus
+nexttile
+clamp_index = getClampIdx(combinedBlue.data{1},combinedRed.data{1},type='diff',timestamp=combinedBlue.timestamp);
+plotSEM(combinedRed.timestamp,clamp_index,clampColor);
