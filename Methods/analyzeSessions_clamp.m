@@ -360,6 +360,39 @@ if ~exist('clampTarget_dff','var') || options.redo
     save(strcat(sessionpath,filesep,'data_',options.outputName),'clampTarget_dff','-append');
 end
 
+%% Fallback if clampON detection fails: if clampON is all 1, use find(clampTarget) instead
+if ~isempty(clampON) && all(clampON(:)) && ~any(clampTarget_dff)
+    clampON = false(size(clampTarget));
+    clampON(find(clampTarget)) = true;
+
+    clampState = clampON(:);
+    clampEdges = diff([false; clampState; false]);
+    clampOnset = find(clampEdges > 0)';
+    clampOffset = min(find(clampEdges < 0), numel(clampState))';
+
+    % Code to check 
+    sampleStart_sec = 112;
+    sampleWindow_sec = 60;
+
+    sampleStart = sampleStart_sec*Fs;
+    sampleWindow = sampleStart : sampleStart+sampleWindow_sec*Fs;
+    sampleTime = sampleWindow ./ Fs;
+    close all; initializeFig(0.8,0.4); tiledlayout(2,1);
+
+    nexttile;
+    plot(sampleTime, blueClamp_pct(sampleWindow)); hold on;
+    plot(sampleTime, redClamp_pct(sampleWindow)); hold on;
+    nexttile;
+    % plot(sampleTime, blueOn(sampleWindow)); hold on;
+    % plot(sampleTime, redOn(sampleWindow)); hold on;
+    plot(sampleTime, clampON(sampleWindow));
+    xlabel('time (s)');
+    saveFigures(gcf,'Sample-clamp-detection',sessionpath,savePNG=true,savePDF=false);
+
+    save(strcat(sessionpath,filesep,'data_',options.outputName), ...
+        'clampON','clampOnset','clampOffset','-append');
+end
+
 %% Skip the rest if session is RTPP
 if contains(sessionName,'RTPP',IgnoreCase=true)
     return

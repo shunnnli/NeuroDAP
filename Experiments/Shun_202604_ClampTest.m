@@ -185,35 +185,41 @@ for i = 1:length(summary)
     cur_date = str2double(summary(i).date);
     cur_session = summary(i).session;
 
-    if strcmp('random',cur_task)
-        if contains(cur_session,'ctrl',IgnoreCase=true)
+    if strcmp('random',cur_session)
+        summary(i).task = 'Random';
+        if contains(cur_session,["unclamp","ctrl"],IgnoreCase=true)
             summary(i).task = 'Random-ctrl';
-        elseif contains(cur_session,'clamp',IgnoreCase=true)
-            summary(i).task = 'Random-clamp';
         else
-            summary(i).task = 'Random';
-        end
-    elseif contains('reward pairing',cur_task,IgnoreCase=true)
-        if contains(cur_session,'ctrl',IgnoreCase=true)
-            summary(i).task = 'Reward-ctrl';
-        elseif contains(cur_session,'clamp',IgnoreCase=true)
-            summary(i).task = 'Reward-clamp';
-        end
-    elseif contains('punish pairing',cur_task,IgnoreCase=true)
-        if contains(cur_session,'ctrl',IgnoreCase=true)
-            summary(i).task = 'Punish-ctrl';
-        elseif contains(cur_session,'clamp',IgnoreCase=true)
-            summary(i).task = 'Punish-clamp';
+            summary(i).task = 'Random-clamp';
         end
     end
 end
 
-% Remove some rows if needed
-% eventIdx = cellfun(@(x) strcmp(x,'BiPOLES2'), {summary.aniaml});
-% summary(eventIdx) = [];
-% 
-% eventIdx = cellfun(@(x) contains(x,'PMT',IgnoreCase=true), {summary.name});
-% summary(eventIdx) = [];
+% Change / add more details to task
+keepRows = true(1, length(summary));
+for i = 1:length(summary)
+
+    cur_animal = string(summary(i).animal);
+    cur_name   = string(summary(i).name);
+    cur_task   = string(summary(i).task);
+    cur_event  = string(summary(i).event);
+    cur_date   = string(summary(i).date);
+
+    skipGroup1 = any(strcmpi(cur_animal, "BiPOLES2")) && ...
+                 any(strcmpi(cur_name, "NAc-right"));
+
+    skipGroup2 = any(strcmpi(cur_animal, "M431")) && ...
+                 any(strcmpi(cur_name, "NAc-right"));
+
+    skipGroup3 = any(strcmpi(cur_animal, "M430")) && ...
+                 any(strcmpi(cur_name, "NAc-left")) && ...
+                 any(strcmpi(cur_date, "20260714"));
+
+    if skipGroup1 || skipGroup2 || skipGroup3
+        keepRows(i) = false;
+    end
+end
+summary = summary(keepRows);
 
 %% Optional: for ONOFF sessions only
 
