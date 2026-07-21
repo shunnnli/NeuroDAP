@@ -361,9 +361,23 @@ if ~exist('clampTarget_dff','var') || options.redo
 end
 
 %% Fallback if clampON detection fails: if clampON is all 1, use find(clampTarget) instead
-if ~isempty(clampON) && all(clampON(:)) && ~any(clampTarget_dff)
-    clampON = false(size(clampTarget));
-    clampON(find(clampTarget)) = true;
+if ~isempty(clampON) && mean(clampON(:)>0.5)>0.99 && any(clampTarget_dff)
+    clampON = false(size(clampTarget_dff));
+    clampON(abs(clampTarget_dff) > 1) = true;
+
+    % Fill short OFF gaps
+    maxGapSamples = round(gap_ms/1000 * Fs);
+    offRuns = ~clampON;
+    d = diff([false; offRuns(:); false]);
+    runStarts = find(d == 1);
+    runEnds   = find(d == -1) - 1;
+    for k = 1:numel(runStarts)
+        runLen = runEnds(k) - runStarts(k) + 1;
+        % fill only internal OFF gaps shorter than threshold
+        if runLen <= maxGapSamples && runStarts(k) > 1 && runEnds(k) < numel(clampON)
+            clampON(runStarts(k):runEnds(k)) = true;
+        end
+    end
 
     clampState = clampON(:);
     clampEdges = diff([false; clampState; false]);
@@ -383,11 +397,12 @@ if ~isempty(clampON) && all(clampON(:)) && ~any(clampTarget_dff)
     plot(sampleTime, blueClamp_pct(sampleWindow)); hold on;
     plot(sampleTime, redClamp_pct(sampleWindow)); hold on;
     nexttile;
-    % plot(sampleTime, blueOn(sampleWindow)); hold on;
-    % plot(sampleTime, redOn(sampleWindow)); hold on;
-    plot(sampleTime, clampON(sampleWindow));
+    yyaxis left
+    plot(sampleTime, clampON(sampleWindow)); hold on; ylabel('clampON');
+    yyaxis right
+    plot(sampleTime, clampTarget_dff(sampleWindow)); hold on; ylabel('clampTarget_dff');
     xlabel('time (s)');
-    saveFigures(gcf,'Sample-clamp-detection',sessionpath,savePNG=true,savePDF=false);
+    saveFigures(gcf,'Sample-clamp-detection-useClampTarget',sessionpath,savePNG=true,savePDF=false);
 
     save(strcat(sessionpath,filesep,'data_',options.outputName), ...
         'clampON','clampOnset','clampOffset','-append');
