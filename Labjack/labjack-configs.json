@@ -1,7 +1,7 @@
 {
   "configs": [
     {
-      "animal": "SL453",
+      "animal": "NAc-DA, LHb-Stim",
       "spikeGLX": true,
       "channels": [
         {"name": "dLight", "freqMod": true, "display": false, "record": true},
@@ -11,21 +11,11 @@
     },
 
     {
-      "animal": "BiPOLES2",
+      "animal": "M445, M446",
       "spikeGLX": true,
       "channels": [
         {"name": "NAc-left", "freqMod": false, "display": false, "record": true},
-        {"name": "NAc-right", "freqMod": false, "display": false, "record": false},
-        {"name": "PMT", "freqMod": false, "display": false, "record": false}
-      ]
-    },
-
-    {
-      "animal": "M430",
-      "spikeGLX": true,
-      "channels": [
         {"name": "NAc-right", "freqMod": false, "display": false, "record": true},
-        {"name": "NAc-left", "freqMod": false, "display": false, "record": true},
         {"name": "PMT", "freqMod": false, "display": false, "record": false}
       ]
     },
