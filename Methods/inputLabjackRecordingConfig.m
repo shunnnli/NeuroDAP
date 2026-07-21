@@ -63,6 +63,11 @@ for i = 1:3
     displayCheck(i) = uicontrol(fig,'Style','checkbox','Position',[442 y+4 24 24]);
 end
 
+% Channels 1 and 3 share a single physical DAC0 output (only one LED is
+% patched in at a time), so their freq-mod checkboxes are mutually exclusive.
+set(freqCheck(1),'Callback',@(src,~) setExclusiveFreqMod(src,freqCheck(3)));
+set(freqCheck(3),'Callback',@(src,~) setExclusiveFreqMod(src,freqCheck(1)));
+
 uicontrol(fig,'Style','pushbutton','String','OK','Position',[315 20 80 30], ...
     'Callback',@okDialog);
 uicontrol(fig,'Style','pushbutton','String','Cancel','Position',[410 20 80 30], ...
@@ -133,6 +138,12 @@ livePlot.enable = ~isempty(livePlot.channelIdx);
             return
         end
 
+        if cfg.freqMod(1) && cfg.freqMod(3)
+            errordlg('Channels 1 and 3 share one DAC output and cannot both use freq mod.', ...
+                'Conflicting freq mod','modal');
+            return
+        end
+
         answer = cfg;
         okPressed = true;
         uiresume(fig);
@@ -141,6 +152,10 @@ livePlot.enable = ~isempty(livePlot.channelIdx);
     function cancelDialog(~,~)
         okPressed = false;
         uiresume(fig);
+    end
+
+    function setExclusiveFreqMod(src,other)
+        if get(src,'Value'); set(other,'Value',0); end
     end
 end
 

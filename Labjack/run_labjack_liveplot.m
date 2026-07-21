@@ -54,18 +54,30 @@ plotChanIdx = livePlot.channelIdx; % 1=AIN0, 2=AIN1, 5=AIN10 (PMT)
 % LED power settings
 LEDpower1 = 0.8; %1.5;%0.5; % power to get 30uW
 LEDpower2 = 3; % 2.5=30uW
+LEDpower3 = 3; % 2.5=30uW
 LEDpower1Min = 0.3; %0.3 %0.5 % power to get minimal signal 
 LEDpower2Min = 0.2; % power to get minimal signal
+LEDpower3Min = 0.2; % power to get minimal signal
 
-% Define modulation params. Frequencies and LED powers are tied to channels 1-2.
-labjack.modFreq = [200,250,nan]; % NAc green
+% Channels 1 and 3 share a single physical DAC0 output (only one LED is
+% patched in at a time); whichever has freq mod checked owns DAC0.
+dac0Chan = 1;
+if labjack.mod(3); dac0Chan = 3; end
+LEDpowerDAC0 = LEDpower1; LEDpowerDAC0Min = LEDpower1Min;
+if dac0Chan == 3; LEDpowerDAC0 = LEDpower3; LEDpowerDAC0Min = LEDpower3Min; end
+
+% Define modulation params. Channel 2 always owns DAC1; channel 1 or 3
+% (whichever is patched into DAC0) is the other modulated channel.
+labjack.modFreq = nan(1,3);
+labjack.modFreq(dac0Chan) = 200;
+labjack.modFreq(2) = 250;
 
 % Define mod frequency power
 labjack.nSignals = sum(labjack.record);
 looplength = samplerate*ones(size(labjack.modFreq)) ./ labjack.modFreq; % 200, 250Hz
-labjack.LEDpowers = [LEDpower1,LEDpower2];
-labjack.LEDpowersMin = [LEDpower1Min,LEDpower2Min];
-labjack.Modpowers1 = getModPower(200,2000,LEDpower1,LEDpower1Min);
+labjack.LEDpowers = [LEDpower1,LEDpower2,LEDpower3];
+labjack.LEDpowersMin = [LEDpower1Min,LEDpower2Min,LEDpower3Min];
+labjack.Modpowers1 = getModPower(200,2000,LEDpowerDAC0,LEDpowerDAC0Min);
 labjack.Modpowers2 = getModPower(250,2000,LEDpower2,LEDpower2Min);
 
 % % Ask for confirmation
@@ -138,17 +150,19 @@ LabJack.LJM.eWriteName(handle, 'STREAM_OUT1_ENABLE', 1);
 
 % Write values to the stream-out buffer
 streamOutPowers = {labjack.Modpowers1, labjack.Modpowers2};
-streamOutConst = [LEDpower1, LEDpower2];
+streamOutConst = [LEDpowerDAC0, LEDpower2];
+dacChannel = [dac0Chan, 2]; % which labjack.mod/modFreq index feeds each DAC
 for outIdx = 1:numAddressesOut
     streamOutName = sprintf('STREAM_OUT%d',outIdx-1);
-    if labjack.mod(outIdx)
+    ch = dacChannel(outIdx);
+    if labjack.mod(ch)
         powers = streamOutPowers{outIdx};
     else
-        powers = streamOutConst(outIdx) * ones(1,looplength(outIdx));
+        powers = streamOutConst(outIdx) * ones(1,looplength(ch));
     end
 
-    LabJack.LJM.eWriteName(handle, [streamOutName '_LOOP_SIZE'], looplength(outIdx));
-    for n = 1:looplength(outIdx)
+    LabJack.LJM.eWriteName(handle, [streamOutName '_LOOP_SIZE'], looplength(ch));
+    for n = 1:looplength(ch)
         LabJack.LJM.eWriteName(handle, [streamOutName '_BUFFER_F32'], powers(n));
     end
     LabJack.LJM.eWriteName(handle, [streamOutName '_SET_LOOP'], 1);
