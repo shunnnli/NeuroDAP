@@ -361,9 +361,9 @@ if ~exist('clampTarget_dff','var') || options.redo
 end
 
 %% Fallback if clampON detection fails: if clampON is all 1, use find(clampTarget) instead
-if ~isempty(clampON) && mean(clampON(:)>0.5)>0.99 && any(clampTarget_dff)
+if ~isempty(clampON) && mean(clampON(:)>0.5)>0.9 && mean(clampTarget_dff(:)>0.5)<0.9
     clampON = false(size(clampTarget_dff));
-    clampON(abs(clampTarget_dff) > 1) = true;
+    clampON(abs(clampTarget_dff) > 10) = true;
 
     % Fill short OFF gaps
     maxGapSamples = round(gap_ms/1000 * Fs);
