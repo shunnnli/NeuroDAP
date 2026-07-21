@@ -12,7 +12,9 @@ errorSessionIdx = []; errorMessage = {};
 
 for i = 1:length(sessionList)
     try
-        disp(['Concatenating session: ',num2str(i)]);
+        dirsplit = strsplit(sessionList{i},'\');
+        sessionName = dirsplit{4:end};
+        disp(['Concatenating session: ',sessionName]);
         concatLabjack(sessionList{i},save=true,record=[1,1,0],plot=false);
     catch ME
         errorSessionIdx = [errorSessionIdx;i];
