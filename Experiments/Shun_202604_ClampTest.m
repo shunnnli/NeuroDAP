@@ -185,7 +185,7 @@ for i = 1:length(summary)
     cur_date = str2double(summary(i).date);
     cur_session = summary(i).session;
 
-    if strcmp('random',cur_session)
+    if contains('random',cur_task,IgnoreCase=true)
         summary(i).task = 'Random';
         if contains(cur_session,["unclamp","ctrl"],IgnoreCase=true)
             summary(i).task = 'Random-ctrl';
@@ -220,6 +220,39 @@ for i = 1:length(summary)
     end
 end
 summary = summary(keepRows);
+
+
+%% Change event name
+
+% If session date is before 20260716, change event name as follows:
+% If task is Random-ctrl, add "(unclamp)" to all event name except baseline
+% ie "Tone" becomes "Tone (unclamp)"
+
+% If task is Random-clamp, add "(clamp)" to all event name except baseline
+% ie "Tone" becomes "Tone (clamp)"
+
+for i = 1:length(summary)
+    cur_task = summary(i).task;
+    cur_event = summary(i).event;
+    cur_date = str2double(summary(i).date);
+
+    if ~(cur_date < 20260716) || strcmpi(cur_event, 'Baseline')
+        continue;
+    end
+
+    if strcmpi(cur_task, 'Random-ctrl')
+        eventSuffix = ' (unclamp)';
+    elseif strcmpi(cur_task, 'Random-clamp')
+        eventSuffix = ' (clamp)';
+    else
+        continue;
+    end
+
+    % Avoid adding the suffix again if this section is rerun interactively.
+    if ~endsWith(cur_event, eventSuffix, IgnoreCase=true)
+        summary(i).event = [cur_event, eventSuffix];
+    end
+end
 
 %% Optional: for ONOFF sessions only
 

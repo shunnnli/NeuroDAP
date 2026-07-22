@@ -1,7 +1,7 @@
 {
   "configs": [
     {
-      "animal": "NAc-DA, LHb-Stim",
+      "animal": "SL454-SL471",
       "spikeGLX": true,
       "channels": [
         {"name": "dLight", "freqMod": true, "display": false, "record": true},
