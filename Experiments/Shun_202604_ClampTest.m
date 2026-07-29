@@ -221,6 +221,30 @@ for i = 1:length(summary)
 end
 summary = summary(keepRows);
 
+%% Change signal names based on clamp side
+
+leftClampAnimals = {'SL431', 'SL432', 'SL433', 'BiPOLES2', 'M431'};
+rightClampAnimals = {'M445', 'M446'};
+
+for i = 1:length(summary)
+    cur_animal = summary(i).animal;
+    cur_name = summary(i).name;
+
+    if any(strcmpi(cur_animal, leftClampAnimals))
+        if strcmpi(cur_name, 'NAc-left')
+            summary(i).name = 'NAc-clamp';
+        elseif strcmpi(cur_name, 'NAc-right')
+            summary(i).name = 'NAc-unclamp';
+        end
+    elseif any(strcmpi(cur_animal, rightClampAnimals))
+        if strcmpi(cur_name, 'NAc-right')
+            summary(i).name = 'NAc-clamp';
+        elseif strcmpi(cur_name, 'NAc-left')
+            summary(i).name = 'NAc-unclamp';
+        end
+    end
+end
+
 
 %% Change event name
 
@@ -391,16 +415,15 @@ end
 
 
 %% Random: clamp vs unclamp
+
+close all;
 timeRange = [-0.5,3];
 eventRange = {'Water','Airpuff','Tone'};
-animalRange = 'All';
-
-trialRange = 'All'; % range of trials in each session
-totalTrialRange = 'All';
-signalRange = {'NAc-left','NAc-right'};
+animalRange = 'SL433';%{'SL431','SL432','SL433','BiPOLES2'};
+signalRange = {'NAc-clamp','NAc-unclamp'};
 trialConditions = 'trials.performing';
 
-colorList = {bluePurpleRed(1,:),[.2,.2,.2],bluePurpleRed(500,:)};
+colorList = {bluePurpleRed(1,:),[.2,.2,.2],bluePurpleRed(100,:)};
 eventDuration = [0,.2,.5];
 
 close all; 
@@ -409,21 +432,17 @@ for i = 1:length(eventRange)
     for s = 1:length(signalRange)
         nexttile;
         combined = combineTraces(animals,timeRange=timeRange,...
-                                    eventRange=eventRange{i},...
+                                    eventRange=[eventRange{i},' (unclamp)'],...
                                     animalRange=animalRange,...
-                                    taskRange='Random-ctrl',...
-                                    totalTrialRange=totalTrialRange,...
-                                    trialRange=trialRange,...
+                                    taskRange='Random',...
                                     signalRange=signalRange{s},...
                                     trialConditions=trialConditions);
         plotTraces(combined.data{1},combined.timestamp,color=unclampColor);
 
         combined = combineTraces(animals,timeRange=timeRange,...
-                                    eventRange=eventRange{i},...
+                                    eventRange=[eventRange{i},' (clamp)'],...
                                     animalRange=animalRange,...
-                                    taskRange='Random-clamp',...
-                                    totalTrialRange=totalTrialRange,...
-                                    trialRange=trialRange,...
+                                    taskRange='Random',...
                                     signalRange=signalRange{s},...
                                     trialConditions=trialConditions);
         plotTraces(combined.data{1},combined.timestamp,color=clampColor);
@@ -433,7 +452,7 @@ for i = 1:length(eventRange)
         legend({[eventRange{i},' (n=',num2str(size(combined.data{1},1)),')']},...
                 'Location','northeast');
     end
-    saveFigures(gcf,strcat('Summary_random_',eventRange{i}),...
-            strcat(resultspath),...
-            saveFIG=false,savePDF=true);
+    % saveFigures(gcf,strcat('Summary_random_',eventRange{i}),...
+    %         strcat(resultspath),...
+    %         saveFIG=false,savePDF=true);
 end
