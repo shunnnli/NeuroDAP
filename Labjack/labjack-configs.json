@@ -1,12 +1,22 @@
 {
   "configs": [
     {
-      "animal": "SL454-SL471",
+      "animal": "EP-LHb",
       "spikeGLX": true,
       "channels": [
         {"name": "dLight", "freqMod": true, "display": false, "record": true},
         {"name": "GCaMP8m", "freqMod": true, "display": false, "record": false},
         {"name": "PMT", "freqMod": false, "display": false, "record": false}
+      ]
+    },
+
+    {
+      "animal": "SL461-SL465",
+      "spikeGLX": true,
+      "channels": [
+        {"name": "dLight", "freqMod": false, "display": false, "record": false},
+        {"name": "GCaMP8m", "freqMod": false, "display": false, "record": false},
+        {"name": "rdLight", "freqMod": true, "display": false, "record": true}
       ]
     },
 
