@@ -1344,7 +1344,11 @@ if options.plotBehavior
 
     % Plot lick bout count distribution
     nexttile;
-    histogram(lickBout(:,2),30); 
+    if ~isempty(lickBout)
+        histogram(lickBout(:,2),30);
+    else
+        text(0.5,0.5,'No licks detected','HorizontalAlignment','center');
+    end
     xlabel('Licks per lick bout'); ylabel('Count'); box off
 
     % Plot ITI-ENL distribution
