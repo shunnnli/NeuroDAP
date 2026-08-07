@@ -155,7 +155,12 @@ dacChannel = [dac0Chan, 2]; % which labjack.mod/modFreq index feeds each DAC
 for outIdx = 1:numAddressesOut
     streamOutName = sprintf('STREAM_OUT%d',outIdx-1);
     ch = dacChannel(outIdx);
-    if labjack.mod(ch)
+    if ~labjack.record(ch)
+        % Channel not recorded: keep its LED fully off (no voltage on
+        % this DAC), since channels 2 and 3 share a physical fiber and
+        % an unrecorded channel's LED must not add stray light.
+        powers = zeros(1,looplength(ch));
+    elseif labjack.mod(ch)
         powers = streamOutPowers{outIdx};
     else
         powers = streamOutConst(outIdx) * ones(1,looplength(ch));
