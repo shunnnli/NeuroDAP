@@ -26,7 +26,7 @@
       "channels": [
         {"name": "NAc-left", "freqMod": false, "display": false, "record": true},
         {"name": "NAc-right", "freqMod": false, "display": false, "record": true},
-        {"name": "NAc-tdTom", "freqMod": false, "display": false, "record": false}
+        {"name": "NAc-tdTom", "freqMod": false, "display": false, "record": true}
       ]
     },
 
