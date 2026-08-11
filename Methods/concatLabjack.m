@@ -125,7 +125,31 @@ if options.plot
 end
 
 %% Save concat files
-labjack.name(find(~labjack.record)) = [];
+% raw and modulation are stored with one row per recorded signal. Compact
+% the corresponding per-channel metadata in the same way so that row i of
+% raw uses mod(i), modFreq(i), and name{i} from the same source channel.
+recordedIdx = logical(labjack.record);
+if numel(labjack.name) == numel(recordedIdx)
+    labjack.name = labjack.name(recordedIdx);
+end
+if numel(labjack.mod) == numel(recordedIdx)
+    labjack.mod = labjack.mod(recordedIdx);
+end
+if numel(labjack.modFreq) == numel(recordedIdx)
+    labjack.modFreq = labjack.modFreq(recordedIdx);
+end
+
+% These fields are present in newer acquisition metadata and are also
+% defined per source channel.
+if isfield(labjack,'LEDpowers') && numel(labjack.LEDpowers) == numel(recordedIdx)
+    labjack.LEDpowers = labjack.LEDpowers(recordedIdx);
+end
+if isfield(labjack,'LEDpowersMin') && numel(labjack.LEDpowersMin) == numel(recordedIdx)
+    labjack.LEDpowersMin = labjack.LEDpowersMin(recordedIdx);
+end
+if isfield(labjack,'LEDpower') && numel(labjack.LEDpower) == numel(recordedIdx)
+    labjack.LEDpower = labjack.LEDpower(recordedIdx);
+end
 
 labjack.numChannels = numChannels;
 labjack.totalLen = totalLen;

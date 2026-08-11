@@ -402,16 +402,33 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
         
         % Reload concatLabjack if labjack.record does not agree
         updateLabjack = false;
+
         if ~isfield(labjack,'record')
             disp('     Did not find labjack.record, use options.reloadLJ instead');
             labjack.record = options.recordLJ; 
             labjack.nSignals = sum(labjack.record);
             % Remove non-recorded channels
             labjack.raw(find(~labjack.record),:) = [];
-            labjack.modulation(find(~labjack.record),:) = [];s
+            labjack.modulation(find(~labjack.record),:) = [];
             labjack.name(find(~labjack.record)) = [];
             updateLabjack = true;
         end
+
+        % Older concatenated files compacted raw/name to recorded signals,
+        % but left mod and modFreq indexed by all configured channels.
+        % Compact those fields so their indices match the rows of raw.
+        recordedIdx = logical(labjack.record);
+        if size(labjack.raw,1) == sum(recordedIdx)
+            if numel(labjack.mod) == numel(recordedIdx)
+                labjack.mod = labjack.mod(recordedIdx);
+                updateLabjack = true;
+            end
+            if numel(labjack.modFreq) == numel(recordedIdx)
+                labjack.modFreq = labjack.modFreq(recordedIdx);
+                updateLabjack = true;
+            end
+        end
+
         %if sum(labjack.record == options.recordLJ)~=length(labjack.record) 
         %edited by Emily 6/28/24 to work with new rig
         if size(labjack.record,2) ~= size(options.recordLJ,2)
@@ -431,7 +448,12 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
         disp(labjack);
 
         % Update modFreq to user input if neccessary
-        if ~isfield(options,'modFreq'); options.modFreq = labjack.modFreq; end
+        if ~isfield(options,'modFreq')
+            options.modFreq = labjack.modFreq;
+        elseif numel(options.modFreq) == numel(recordedIdx) && ...
+                size(labjack.raw,1) == sum(recordedIdx)
+            options.modFreq = options.modFreq(recordedIdx);
+        end
     
         % Store relevant info
         params.photometry.params = labjack;
@@ -533,7 +555,7 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
                 timeSeries(i).finalFs = finalFs;
                 timeSeries(i).system = 'LJ';
                 timeSeries(i).time_offset = NaN;
-                timeSeries(i).demux = true;
+                timeSeries(i).demux = false;
                 timeSeries(i).demux_freq = NaN;
                 if options.withClamp
                     timeSeries(i).detrend = true;
