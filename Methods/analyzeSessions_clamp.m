@@ -1407,19 +1407,31 @@ if options.plotBehavior && contains(options.task,'pairing')
     % 1.1 Plot lick raster plot for session
     nexttile([4,1]);
     for i = 1:size(clampLicks,1)
-        scatter(clampLicks{i},clampTrials(i,1),markerSize,'filled','MarkerFaceColor',clampColor); hold on
+        lickTimes = clampLicks{i};
+        if ~isempty(lickTimes)
+            scatter(lickTimes,repmat(clampTrials(i,1),size(lickTimes)),markerSize,'filled','MarkerFaceColor',clampColor); hold on
+        end
         scatter(clampTrials(i,3),clampTrials(i,1),markerSize+20,bluePurpleRed(1,:),'pentagram','filled'); hold on
     end
     for i = 1:size(unclampLicks,1)
-        scatter(unclampLicks{i},unclampTrials(i,1),markerSize,'filled','MarkerFaceColor',unclampColor); hold on
+        lickTimes = unclampLicks{i};
+        if ~isempty(lickTimes)
+            scatter(lickTimes,repmat(unclampTrials(i,1),size(lickTimes)),markerSize,'filled','MarkerFaceColor',unclampColor); hold on
+        end
         scatter(unclampTrials(i,3),unclampTrials(i,1),markerSize+20,bluePurpleRed(1,:),'pentagram','filled'); hold on
     end
     for i = 1:size(clampOmissionLicks,1)
-        scatter(clampOmissionLicks{i},clampOmissionTrials(i,1),markerSize,'square','MarkerFaceColor',clampColor,'MarkerEdgeColor', 'none'); hold on
+        lickTimes = clampOmissionLicks{i};
+        if ~isempty(lickTimes)
+            scatter(lickTimes,repmat(clampOmissionTrials(i,1),size(lickTimes)),markerSize,'square','MarkerFaceColor',clampColor,'MarkerEdgeColor', 'none'); hold on
+        end
         scatter(clampOmissionTrials(i,3),clampOmissionTrials(i,1),markerSize+20,bluePurpleRed(1,:),'x'); hold on
     end
     for i = 1:size(unclampOmissionLicks,1)
-        scatter(unclampOmissionLicks{i},unclampOmissionTrials(i,1),markerSize,'square','MarkerFaceColor',unclampColor,'MarkerEdgeColor', 'none'); hold on
+        lickTimes = unclampOmissionLicks{i};
+        if ~isempty(lickTimes)
+            scatter(lickTimes,repmat(unclampOmissionTrials(i,1),size(lickTimes)),markerSize,'square','MarkerFaceColor',unclampColor,'MarkerEdgeColor', 'none'); hold on
+        end
         scatter(unclampOmissionTrials(i,3),unclampOmissionTrials(i,1),markerSize+20,bluePurpleRed(1,:),'x'); hold on
     end
     xlabel('Time (s)'); xlim([timeRange(1),timeRange(2)]);
