@@ -54,10 +54,10 @@ plotChanIdx = livePlot.channelIdx; % 1=AIN0, 2=AIN1, 5=AIN10 (PMT)
 % LED power settings
 LEDpower1 = 0.8; %1.5;%0.5; % power to get 30uW
 LEDpower2 = 3; % 2.5=30uW
-LEDpower3 = 3; % 2.5=30uW
+LEDpower3 = 15; % 2.5=30uW
 LEDpower1Min = 0.3; %0.3 %0.5 % power to get minimal signal 
 LEDpower2Min = 0.2; % power to get minimal signal
-LEDpower3Min = 0.2; % power to get minimal signal
+LEDpower3Min = 2.0; % power to get minimal signal
 
 % Channels 1 and 3 share a single physical DAC0 output (only one LED is
 % patched in at a time); whichever has freq mod checked owns DAC0.
