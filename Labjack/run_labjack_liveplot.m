@@ -51,21 +51,13 @@ if isempty(labjack); return; end
 enableLivePlot = livePlot.enable;
 plotChanIdx = livePlot.channelIdx; % 1=AIN0, 2=AIN1, 5=AIN10 (PMT)
 
-% LED driver command settings (LabJack DAC volts, not optical power in uW).
-% These values are currently set here; the JSON config only selects channel
-% names, Record, Freq mod, Display, and SpikeGLX.
+% LED power settings
 LEDpower1 = 0.8; %1.5;%0.5; % power to get 30uW
 LEDpower2 = 3; % 2.5=30uW
 LEDpower3 = 15; % 2.5=30uW
 LEDpower1Min = 0.3; %0.3 %0.5 % power to get minimal signal 
 LEDpower2Min = 0.2; % power to get minimal signal
-<<<<<<< Updated upstream
 LEDpower3Min = 2.0; % power to get minimal signal
-=======
-LEDpower3Min = 0.2; % power to get minimal signal
-dacMinVoltage = 0;
-dacMaxVoltage = 5; % LabJack DAC0/DAC1 hardware range
->>>>>>> Stashed changes
 
 % Channels 1 and 3 share a single physical DAC0 output (only one LED is
 % patched in at a time); whichever has freq mod checked owns DAC0.
@@ -85,10 +77,8 @@ labjack.nSignals = sum(labjack.record);
 looplength = samplerate*ones(size(labjack.modFreq)) ./ labjack.modFreq; % 200, 250Hz
 labjack.LEDpowers = [LEDpower1,LEDpower2,LEDpower3];
 labjack.LEDpowersMin = [LEDpower1Min,LEDpower2Min,LEDpower3Min];
-labjack.Modpowers1 = getModPower(200,samplerate,LEDpowerDAC0, ...
-    LEDpowerDAC0Min,dacMinVoltage,dacMaxVoltage);
-labjack.Modpowers2 = getModPower(250,samplerate,LEDpower2, ...
-    LEDpower2Min,dacMinVoltage,dacMaxVoltage);
+labjack.Modpowers1 = getModPower(200,2000,LEDpowerDAC0,LEDpowerDAC0Min);
+labjack.Modpowers2 = getModPower(250,2000,LEDpower2,LEDpower2Min);
 
 % % Ask for confirmation
 % names = sprintf(' %s,',labjack.name{:});
@@ -251,22 +241,7 @@ for outIdx = 1:numAddressesOut
     if ~labjack.record(ch)
         outputDescription = 'OFF (Record is unchecked)';
     elseif labjack.mod(ch)
-        waveform = streamOutValues{outIdx};
-        waveformMin = min(waveform);
-        waveformMax = max(waveform);
-        outputDescription = sprintf( ...
-            '%g Hz freq mod, %.3g-%.3g V (%.3g V peak-to-peak)', ...
-            labjack.modFreq(ch),waveformMin,waveformMax, ...
-            waveformMax-waveformMin);
-
-        % Above the midpoint between the LED minimum and the DAC maximum,
-        % increasing the requested power necessarily reduces modulation depth.
-        requestedPower = streamOutConst(outIdx);
-        ledMinimum = labjack.LEDpowersMin(ch);
-        if (dacMaxVoltage-requestedPower) < (requestedPower-ledMinimum)
-            outputDescription = [outputDescription, ...
-                ' -- limited by the 5 V DAC ceiling'];
-        end
+        outputDescription = sprintf('frequency modulated at %g Hz',labjack.modFreq(ch));
     else
         outputDescription = sprintf('constant at %g V',streamOutConst(outIdx));
     end
@@ -498,45 +473,17 @@ end
 
 %% Calculate freq mod power
 
-function powers = getModPower(freq,samplerate,LEDpower,LEDpowerMin, ...
-        dacMinVoltage,dacMaxVoltage)
-    if ~isscalar(freq) || ~isfinite(freq) || freq <= 0
-        error('LabJack:InvalidModFrequency', ...
-            'Modulation frequency must be a positive finite scalar.');
-    end
-    if ~isscalar(samplerate) || ~isfinite(samplerate) || samplerate <= 0
-        error('LabJack:InvalidSampleRate', ...
-            'Sample rate must be a positive finite scalar.');
-    end
-    if ~isscalar(LEDpowerMin) || ~isfinite(LEDpowerMin) || ...
-            LEDpowerMin < dacMinVoltage || LEDpowerMin >= dacMaxVoltage
-        error('LabJack:InvalidLEDMinimum', ...
-            'LED minimum must be in the LabJack DAC range [%.3g, %.3g) V.', ...
-            dacMinVoltage,dacMaxVoltage);
-    end
-    if ~isscalar(LEDpower) || ~isfinite(LEDpower) || ...
-            LEDpower <= LEDpowerMin || LEDpower >= dacMaxVoltage
-        error('LabJack:NoModulationHeadroom', [ ...
-            'Frequency modulation needs voltage headroom on both sides of ', ...
-            'the requested LED power. Set LED power strictly between ', ...
-            'its minimum (%.3g V) and the DAC maximum (%.3g V). ', ...
-            'Requested LED power was %.3g V.'], ...
-            LEDpowerMin,dacMaxVoltage,LEDpower);
-    end
-
+function powers = getModPower(freq,samplerate,LEDpower,LEDpowerMin)
     nPointsPerCycle = round(samplerate / freq);
-    if nPointsPerCycle < 2
-        error('LabJack:InsufficientWaveformSamples', ...
-            'Sample rate must provide at least two points per modulation cycle.');
+    powers = [];
+
+    for n = 0:nPointsPerCycle-1
+        powers = [powers,cos((2*pi/nPointsPerCycle)*n)];
     end
 
-    % Keep the waveform centered on the requested LED voltage without ever
-    % asking the DAC for a value below the LED minimum or above its maximum.
-    % Do not use abs() here: it hid out-of-range settings and could turn an
-    % apparently modulated waveform into a signal clipped flat at 5 V.
-    halfAmp = min(LEDpower-LEDpowerMin,dacMaxVoltage-LEDpower);
-    phase = (2*pi/nPointsPerCycle) * (0:nPointsPerCycle-1);
-    powers = LEDpower + halfAmp*cos(phase);
+    halfAmp = min(abs(LEDpower-LEDpowerMin), abs(LEDpower-5));
+    powers = rescale(powers,LEDpower-halfAmp,LEDpower+halfAmp);
+
 end
 
 
