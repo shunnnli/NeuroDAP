@@ -51,13 +51,21 @@ if isempty(labjack); return; end
 enableLivePlot = livePlot.enable;
 plotChanIdx = livePlot.channelIdx; % 1=AIN0, 2=AIN1, 5=AIN10 (PMT)
 
-% LED power settings
+% LED driver command settings (LabJack DAC volts, not optical power in uW).
+% These values are currently set here; the JSON config only selects channel
+% names, Record, Freq mod, Display, and SpikeGLX.
 LEDpower1 = 0.8; %1.5;%0.5; % power to get 30uW
 LEDpower2 = 3; % 2.5=30uW
 LEDpower3 = 15; % 2.5=30uW
 LEDpower1Min = 0.3; %0.3 %0.5 % power to get minimal signal 
 LEDpower2Min = 0.2; % power to get minimal signal
+<<<<<<< Updated upstream
 LEDpower3Min = 2.0; % power to get minimal signal
+=======
+LEDpower3Min = 0.2; % power to get minimal signal
+dacMinVoltage = 0;
+dacMaxVoltage = 5; % LabJack DAC0/DAC1 hardware range
+>>>>>>> Stashed changes
 
 % Channels 1 and 3 share a single physical DAC0 output (only one LED is
 % patched in at a time); whichever has freq mod checked owns DAC0.
@@ -77,8 +85,10 @@ labjack.nSignals = sum(labjack.record);
 looplength = samplerate*ones(size(labjack.modFreq)) ./ labjack.modFreq; % 200, 250Hz
 labjack.LEDpowers = [LEDpower1,LEDpower2,LEDpower3];
 labjack.LEDpowersMin = [LEDpower1Min,LEDpower2Min,LEDpower3Min];
-labjack.Modpowers1 = getModPower(200,2000,LEDpowerDAC0,LEDpowerDAC0Min);
-labjack.Modpowers2 = getModPower(250,2000,LEDpower2,LEDpower2Min);
+labjack.Modpowers1 = getModPower(200,samplerate,LEDpowerDAC0, ...
+    LEDpowerDAC0Min,dacMinVoltage,dacMaxVoltage);
+labjack.Modpowers2 = getModPower(250,samplerate,LEDpower2, ...
+    LEDpower2Min,dacMinVoltage,dacMaxVoltage);
 
 % % Ask for confirmation
 % names = sprintf(' %s,',labjack.name{:});
@@ -105,13 +115,9 @@ session = strcat(recordingConfig.sessionName,'_g0');
 session_path = strcat(root_path,'\',session,'\Photometry\');
 script_used = mfilename();
 
-if ~isfile(strcat(session_path,'info.mat'))
-    mkdir(session_path);
-else
+if isfile(strcat(session_path,'info.mat'))
     error("Error: session_path already have recording!");
 end
-
-save(strcat(session_path,'info.mat'),'labjack','samplerate','looplength','script_used','recordingConfig');
 
 %% Labjack initialization
 
@@ -127,6 +133,8 @@ handle = 0;
 [ljmError, handle] = LabJack.LJM.OpenS('ANY', 'ANY', 'ANY', handle);
 showDeviceInfo(handle);
 
+try
+
 % Setup stream-out
 numAddressesOut = 2; 
 aNamesOut = NET.createArray('System.String', numAddressesOut);
@@ -138,22 +146,14 @@ aTypesOut = NET.createArray('System.Int32', numAddressesOut);  % Dummy
 LabJack.LJM.NamesToAddresses(numAddressesOut, aNamesOut, ...
     aAddressesOut, aTypesOut);
 
-% Allocate memory for the stream-out buffer DAC0 (OUT0)
-LabJack.LJM.eWriteName(handle, 'STREAM_OUT0_TARGET', aAddressesOut(1));
-LabJack.LJM.eWriteName(handle, 'STREAM_OUT0_BUFFER_SIZE', 512);
-LabJack.LJM.eWriteName(handle, 'STREAM_OUT0_ENABLE', 1);
-
-% Allocate memory for the stream-out buffer DAC1 (OUT1)
-LabJack.LJM.eWriteName(handle, 'STREAM_OUT1_TARGET', aAddressesOut(2));
-LabJack.LJM.eWriteName(handle, 'STREAM_OUT1_BUFFER_SIZE', 512);
-LabJack.LJM.eWriteName(handle, 'STREAM_OUT1_ENABLE', 1);
-
-% Write values to the stream-out buffer
+% Build the exact waveforms that will be used for both LED preview and
+% recording. A freq-mod selection only produces light when that channel is
+% also selected for recording; otherwise the corresponding DAC stays at 0 V.
 streamOutPowers = {labjack.Modpowers1, labjack.Modpowers2};
 streamOutConst = [LEDpowerDAC0, LEDpower2];
 dacChannel = [dac0Chan, 2]; % which labjack.mod/modFreq index feeds each DAC
+streamOutValues = cell(1,numAddressesOut);
 for outIdx = 1:numAddressesOut
-    streamOutName = sprintf('STREAM_OUT%d',outIdx-1);
     ch = dacChannel(outIdx);
     if ~labjack.record(ch)
         % Channel not recorded: keep its LED fully off (no voltage on
@@ -165,15 +165,9 @@ for outIdx = 1:numAddressesOut
     else
         powers = streamOutConst(outIdx) * ones(1,looplength(ch));
     end
-
-    LabJack.LJM.eWriteName(handle, [streamOutName '_LOOP_SIZE'], looplength(ch));
-    for n = 1:looplength(ch)
-        LabJack.LJM.eWriteName(handle, [streamOutName '_BUFFER_F32'], powers(n));
-    end
-    LabJack.LJM.eWriteName(handle, [streamOutName '_SET_LOOP'], 1);
-    [~, value] = LabJack.LJM.eReadName(handle, [streamOutName '_BUFFER_STATUS'], 0);
-    disp([streamOutName '_BUFFER_STATUS = ' num2str(value)])
+    streamOutValues{outIdx} = powers;
 end
+configureStreamOut(handle,aAddressesOut,streamOutValues);
 
     
 % Stream-in  configuration
@@ -211,8 +205,91 @@ aData = NET.createArray('System.Double', numAddressesIn*scansPerRead);
 
 %% Run recording
 
-waitdlg = warndlg('Press OK to start labjack recording', 'Start session');
-waitfor(waitdlg);
+% Configure stream timing before starting the output-only LED preview.
+LabJack.LJM.eWriteName(handle, 'STREAM_TRIGGER_INDEX', 0);
+LabJack.LJM.eWriteName(handle, 'STREAM_CLOCK_SOURCE', 0);
+
+% All negative channels are single-ended, AIN0 and AIN1 ranges are +/-10 V,
+% stream settling is 0 (default), and stream resolution index is 0 (default).
+numFrames = 9;
+aNames = NET.createArray('System.String', numFrames);
+aNames(1) = 'AIN_ALL_NEGATIVE_CH';
+aNames(2) = 'AIN0_RANGE';
+aNames(3) = 'AIN1_RANGE';
+aNames(4) = 'AIN2_RANGE';
+aNames(5) = 'AIN3_RANGE';
+aNames(6) = 'AIN10_RANGE';
+aNames(7) = 'AIN11_RANGE';
+aNames(8) = 'STREAM_SETTLING_US';
+aNames(9) = 'STREAM_RESOLUTION_INDEX';
+aValues = NET.createArray('System.Double', numFrames);
+aValues(1) = LJM_CONSTANTS.GND;
+aValues(2) = 10.0;
+aValues(3) = 10.0;
+aValues(4) = 10.0;
+aValues(5) = 10.0;
+aValues(6) = 10.0;
+aValues(7) = 10.0;
+aValues(8) = 0;
+aValues(9) = 0;
+LabJack.LJM.eWriteNames(handle, numFrames, aNames, aValues, -1);
+
+% A stream-out waveform does not advance until a stream is running. Start a
+% stream containing only STREAM_OUT0/1 so the confirmed LED settings are
+% visible without collecting or saving input data.
+previewScanList = NET.createArray('System.Int32',numAddressesOut);
+previewScanList(1) = 4800;
+previewScanList(2) = 4801;
+previewScanRate = scanRate;
+[~, previewScanRate] = LabJack.LJM.eStreamStart(handle,1, ...
+    numAddressesOut,previewScanList,previewScanRate);
+disp(['LED preview started at a scan rate of ' num2str(previewScanRate) ' Hz.'])
+
+previewMessage = {'The confirmed LED configuration is now being output.',''};
+for outIdx = 1:numAddressesOut
+    ch = dacChannel(outIdx);
+    if ~labjack.record(ch)
+        outputDescription = 'OFF (Record is unchecked)';
+    elseif labjack.mod(ch)
+        waveform = streamOutValues{outIdx};
+        waveformMin = min(waveform);
+        waveformMax = max(waveform);
+        outputDescription = sprintf( ...
+            '%g Hz freq mod, %.3g-%.3g V (%.3g V peak-to-peak)', ...
+            labjack.modFreq(ch),waveformMin,waveformMax, ...
+            waveformMax-waveformMin);
+
+        % Above the midpoint between the LED minimum and the DAC maximum,
+        % increasing the requested power necessarily reduces modulation depth.
+        requestedPower = streamOutConst(outIdx);
+        ledMinimum = labjack.LEDpowersMin(ch);
+        if (dacMaxVoltage-requestedPower) < (requestedPower-ledMinimum)
+            outputDescription = [outputDescription, ...
+                ' -- limited by the 5 V DAC ceiling'];
+        end
+    else
+        outputDescription = sprintf('constant at %g V',streamOutConst(outIdx));
+    end
+    previewMessage{end+1} = sprintf('DAC%d / %s: %s', ...
+        outIdx-1,labjack.name{ch},outputDescription); %#ok<SAGROW>
+end
+previewMessage{end+1} = '';
+previewMessage{end+1} = 'Check the LEDs, then press Start recording to continue.';
+
+startAnswer = questdlg(previewMessage, ...
+    'LED preview','Start recording','Cancel','Start recording');
+
+if ~strcmp(startAnswer,'Start recording')
+    LabJack.LJM.eStreamStop(handle);
+    setLEDOutputsOff(handle);
+    LabJack.LJM.Close(handle);
+    LabJack.LJM.CloseAll();
+    return
+end
+
+% Create metadata only after the user accepts the LED preview.
+mkdir(session_path);
+save(strcat(session_path,'info.mat'),'labjack','samplerate','looplength','script_used','recordingConfig');
 
 % Check whether NI is recorded
 ni_file_path = fullfile(root_path,session,strcat(session,'_t0.nidq.meta'));
@@ -221,47 +298,12 @@ while ~isfile(ni_file_path) && spikeGLX
     waitfor(waitdlg);
 end
 
-try
-    % When streaming, negative channels and ranges can be configured for
-    % individual analog inputs, but the stream has only one settling time
-    % and resolution.
+% Stop the output-only preview and reload the buffers so the recording starts
+% at the beginning of both waveforms.
+LabJack.LJM.eStreamStop(handle);
+configureStreamOut(handle,aAddressesOut,streamOutValues);
 
-    % Ensure triggered stream is disabled.
-    LabJack.LJM.eWriteName(handle, 'STREAM_TRIGGER_INDEX', 0);
-
-    % Enabling internally-clocked stream.
-    LabJack.LJM.eWriteName(handle, 'STREAM_CLOCK_SOURCE', 0);
-
-    % All negative channels are single-ended, AIN0 and AIN1 ranges are
-    % +/-10 V, stream settling is 0 (default) and stream resolution index
-    % is 0 (default).
-    numFrames = 9; %7;
-    aNames = NET.createArray('System.String', numFrames);
-    aNames(1) = 'AIN_ALL_NEGATIVE_CH';
-    aNames(2) = 'AIN0_RANGE';
-    aNames(3) = 'AIN1_RANGE';
-    aNames(4) = 'AIN2_RANGE';
-    aNames(5) = 'AIN3_RANGE';
-    aNames(6) = 'AIN10_RANGE';
-    aNames(7) = 'AIN11_RANGE';
-    aNames(8) = 'STREAM_SETTLING_US';
-    aNames(9) = 'STREAM_RESOLUTION_INDEX';
-    aValues = NET.createArray('System.Double', numFrames);
-    aValues(1) = LJM_CONSTANTS.GND;
-    aValues(2) = 10.0;
-    aValues(3) = 10.0;
-    aValues(4) = 10.0;
-    aValues(5) = 10.0;
-    aValues(6) = 10.0;
-    aValues(7) = 10.0;
-    aValues(8) = 0;
-    aValues(9) = 0;
-
-    % Write the analog inputs' negative channels (when applicable), ranges
-    % stream settling time and stream resolution configuration.
-    LabJack.LJM.eWriteNames(handle, numFrames, aNames, aValues, -1);
-
-    % Configure and start stream
+% Configure and start stream
     numAddresses = aScanList.Length;
     [~, scanRate] = LabJack.LJM.eStreamStart(handle, scansPerRead, ...
         numAddresses, aScanList, scanRate);
@@ -410,35 +452,91 @@ try
     disp(['Stopped: Perfored ' num2str(readRequest) ' stream reads.']);
 
     LabJack.LJM.eStreamStop(handle);
+    setLEDOutputsOff(handle);
     LabJack.LJM.Close(handle);
     LabJack.LJM.CloseAll();
 
 catch e
     showErrorMessage(e);
-    LabJack.LJM.eStreamStop(handle);
+    try; LabJack.LJM.eStreamStop(handle); catch; end
+    try; setLEDOutputsOff(handle); catch; end
     LabJack.LJM.Close(handle);
     LabJack.LJM.CloseAll();
     close all
 end
 
-% %% test getModpower
-% 
-% powers = getModPower(200,2000,0.2,0.01);
-% plot(powers);
+%% Configure stream-out buffers
+
+function configureStreamOut(handle,aAddressesOut,streamOutValues)
+    for outIdx = 1:numel(streamOutValues)
+        streamOutName = sprintf('STREAM_OUT%d',outIdx-1);
+        powers = streamOutValues{outIdx};
+
+        % Disabling first resets this stream-out channel. This is important
+        % after the preview so recording begins at waveform sample 1.
+        LabJack.LJM.eWriteName(handle,[streamOutName '_ENABLE'],0);
+        LabJack.LJM.eWriteName(handle,[streamOutName '_TARGET'],aAddressesOut(outIdx));
+        LabJack.LJM.eWriteName(handle,[streamOutName '_BUFFER_SIZE'],512);
+        LabJack.LJM.eWriteName(handle,[streamOutName '_ENABLE'],1);
+        LabJack.LJM.eWriteName(handle,[streamOutName '_LOOP_SIZE'],numel(powers));
+
+        for n = 1:numel(powers)
+            LabJack.LJM.eWriteName(handle,[streamOutName '_BUFFER_F32'],powers(n));
+        end
+
+        LabJack.LJM.eWriteName(handle,[streamOutName '_SET_LOOP'],1);
+        [~,value] = LabJack.LJM.eReadName(handle, ...
+            [streamOutName '_BUFFER_STATUS'],0);
+        disp([streamOutName '_BUFFER_STATUS = ' num2str(value)])
+    end
+end
+
+function setLEDOutputsOff(handle)
+    LabJack.LJM.eWriteName(handle,'DAC0',0);
+    LabJack.LJM.eWriteName(handle,'DAC1',0);
+end
 
 %% Calculate freq mod power
 
-function powers = getModPower(freq,samplerate,LEDpower,LEDpowerMin)
-    nPointsPerCycle = round(samplerate / freq);
-    powers = [];
-
-    for n = 0:nPointsPerCycle-1
-        powers = [powers,cos((2*pi/nPointsPerCycle)*n)];
+function powers = getModPower(freq,samplerate,LEDpower,LEDpowerMin, ...
+        dacMinVoltage,dacMaxVoltage)
+    if ~isscalar(freq) || ~isfinite(freq) || freq <= 0
+        error('LabJack:InvalidModFrequency', ...
+            'Modulation frequency must be a positive finite scalar.');
+    end
+    if ~isscalar(samplerate) || ~isfinite(samplerate) || samplerate <= 0
+        error('LabJack:InvalidSampleRate', ...
+            'Sample rate must be a positive finite scalar.');
+    end
+    if ~isscalar(LEDpowerMin) || ~isfinite(LEDpowerMin) || ...
+            LEDpowerMin < dacMinVoltage || LEDpowerMin >= dacMaxVoltage
+        error('LabJack:InvalidLEDMinimum', ...
+            'LED minimum must be in the LabJack DAC range [%.3g, %.3g) V.', ...
+            dacMinVoltage,dacMaxVoltage);
+    end
+    if ~isscalar(LEDpower) || ~isfinite(LEDpower) || ...
+            LEDpower <= LEDpowerMin || LEDpower >= dacMaxVoltage
+        error('LabJack:NoModulationHeadroom', [ ...
+            'Frequency modulation needs voltage headroom on both sides of ', ...
+            'the requested LED power. Set LED power strictly between ', ...
+            'its minimum (%.3g V) and the DAC maximum (%.3g V). ', ...
+            'Requested LED power was %.3g V.'], ...
+            LEDpowerMin,dacMaxVoltage,LEDpower);
     end
 
-    halfAmp = min(abs(LEDpower-LEDpowerMin), abs(LEDpower-5));
-    powers = rescale(powers,LEDpower-halfAmp,LEDpower+halfAmp);
+    nPointsPerCycle = round(samplerate / freq);
+    if nPointsPerCycle < 2
+        error('LabJack:InsufficientWaveformSamples', ...
+            'Sample rate must provide at least two points per modulation cycle.');
+    end
 
+    % Keep the waveform centered on the requested LED voltage without ever
+    % asking the DAC for a value below the LED minimum or above its maximum.
+    % Do not use abs() here: it hid out-of-range settings and could turn an
+    % apparently modulated waveform into a signal clipped flat at 5 V.
+    halfAmp = min(LEDpower-LEDpowerMin,dacMaxVoltage-LEDpower);
+    phase = (2*pi/nPointsPerCycle) * (0:nPointsPerCycle-1);
+    powers = LEDpower + halfAmp*cos(phase);
 end
 
 

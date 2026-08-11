@@ -433,9 +433,7 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
         % traces for a non-PMT signal recorded on logical channel 3.
         recordedChannels = find(recordedIdx);
         channel3Row = find(recordedChannels == 3,1);
-        channel3AlreadyCorrected = isfield(labjack,'channel3RawModCorrected') && ...
-                                   labjack.channel3RawModCorrected;
-        if ~isempty(channel3Row) && ~channel3AlreadyCorrected && ...
+        if ~isempty(channel3Row) && ...
                 size(labjack.raw,1) >= channel3Row && ...
                 size(labjack.modulation,1) >= channel3Row
             if numel(labjack.name) == size(labjack.raw,1)
@@ -446,13 +444,52 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
                 channel3Name = '';
             end
 
-            if ~isempty(channel3Name) && ~contains(channel3Name,'PMT','IgnoreCase',true)
-                tempTrace = labjack.raw(channel3Row,:);
-                labjack.raw(channel3Row,:) = labjack.modulation(channel3Row,:);
-                labjack.modulation(channel3Row,:) = tempTrace;
-                labjack.channel3RawModCorrected = true;
-                updateLabjack = true;
-                disp('     Corrected swapped raw/modulation traces for non-PMT channel 3');
+            if ~isempty(channel3Name) && ...
+                    ~contains(channel3Name,'PMT','IgnoreCase',true)
+                nCheck = min([1e5,size(labjack.raw,2),size(labjack.modulation,2)]);
+                [rawLow,rawHigh] = traceVoltageBounds( ...
+                    labjack.raw(channel3Row,:),nCheck);
+                [modLow,modHigh] = traceVoltageBounds( ...
+                    labjack.modulation(channel3Row,:),nCheck);
+
+                % Calculate the DAC voltage range saved by the acquisition
+                % script. Support both full and compacted metadata arrays.
+                channel3Power = nan;
+                channel3PowerMin = nan;
+                if isfield(labjack,'LEDpowers') && isfield(labjack,'LEDpowersMin')
+                    if numel(labjack.LEDpowers) == size(labjack.raw,1) && ...
+                            numel(labjack.LEDpowersMin) == size(labjack.raw,1)
+                        channel3Power = labjack.LEDpowers(channel3Row);
+                        channel3PowerMin = labjack.LEDpowersMin(channel3Row);
+                    elseif numel(labjack.LEDpowers) >= 3 && ...
+                            numel(labjack.LEDpowersMin) >= 3
+                        channel3Power = labjack.LEDpowers(3);
+                        channel3PowerMin = labjack.LEDpowersMin(3);
+                    end
+                end
+
+                if isfinite(channel3Power) && isfinite(channel3PowerMin)
+                    halfAmp = min(abs(channel3Power-channel3PowerMin), ...
+                                  abs(channel3Power-5));
+                    expectedLow = channel3Power-halfAmp;
+                    expectedHigh = channel3Power+halfAmp;
+                    rawRangeError = abs(rawLow-expectedLow) + abs(rawHigh-expectedHigh);
+                    modRangeError = abs(modLow-expectedLow) + abs(modHigh-expectedHigh);
+                    rawLooksLikeDAC = rawRangeError < modRangeError;
+                else
+                    rawRange = rawHigh-rawLow;
+                    modRange = modHigh-modLow;
+                    rawLooksLikeDAC = rawLow >= -0.25 && rawHigh <= 5.25 && ...
+                                      rawRange > 1 && rawRange > 1.5*modRange;
+                end
+
+                if rawLooksLikeDAC
+                    tempTrace = labjack.raw(channel3Row,:);
+                    labjack.raw(channel3Row,:) = labjack.modulation(channel3Row,:);
+                    labjack.modulation(channel3Row,:) = tempTrace;
+                    updateLabjack = true;
+                    disp('     Corrected swapped raw/modulation traces for non-PMT channel 3');
+                end
             end
         end
 
@@ -1800,4 +1837,20 @@ disp('Finished: struct params, session saved in sync_.mat');
 
 return
 
+end
+
+function [lowVoltage,highVoltage] = traceVoltageBounds(trace,nCheck)
+% Robust 1st/99th percentile bounds without requiring a toolbox.
+trace = double(trace(1:nCheck));
+trace = sort(trace(isfinite(trace) & trace ~= -9999));
+if isempty(trace)
+    lowVoltage = nan;
+    highVoltage = nan;
+    return
+end
+
+lowIdx = max(1,round(0.01*numel(trace)));
+highIdx = min(numel(trace),round(0.99*numel(trace)));
+lowVoltage = trace(lowIdx);
+highVoltage = trace(highIdx);
 end

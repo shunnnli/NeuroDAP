@@ -98,18 +98,23 @@ labjack.sync = sync_labjack;
 labjack.raw = nan(labjack.nSignals,length(sync_labjack));
 labjack.modulation = nan(labjack.nSignals,length(sync_labjack));
 
-% Log signal to corresponding row
+% Map logical channels to their physical positions in the saved scan.
+% Channel 3 is always acquired from AIN10 (scan column 5), regardless of
+% its display name. Non-PMT channel 3 shares the DAC0 reference on AIN2.
+rawScanIdx = [1,2,5];       % AIN0, AIN1, AIN10
+modScanIdx = [3,4,6];       % AIN2, AIN3, AIN11 (PMT galvo copy)
+if numel(labjack.name) >= 3 && ...
+        ~contains(labjack.name{3},"PMT",IgnoreCase=true)
+    modScanIdx(3) = 3;      % non-PMT channel 3 uses the DAC0 reference
+end
+
+% Log each recorded signal to its corresponding compacted row.
 row = 0;
 for i = 1:size(labjack.name,2)
     if labjack.record(i)
         row = row + 1;
-        if contains(labjack.name{i},"PMT",IgnoreCase=true)
-            labjack.raw(row,:) = output(mod(1:totalLen,numChannels)==5);
-            labjack.modulation(row,:) = output(mod(1:totalLen,numChannels)==6);
-        else
-            labjack.raw(row,:) = output(mod(1:totalLen,numChannels)==i);
-            labjack.modulation(row,:) = output(mod(1:totalLen,numChannels)==i+2);
-        end
+        labjack.raw(row,:) = output(mod(1:totalLen,numChannels)==rawScanIdx(i));
+        labjack.modulation(row,:) = output(mod(1:totalLen,numChannels)==modScanIdx(i));
     end
 end
 
