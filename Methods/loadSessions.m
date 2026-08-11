@@ -429,6 +429,33 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
             end
         end
 
+        % concatLabjack historically swapped the detector and modulation
+        % traces for a non-PMT signal recorded on logical channel 3.
+        recordedChannels = find(recordedIdx);
+        channel3Row = find(recordedChannels == 3,1);
+        channel3AlreadyCorrected = isfield(labjack,'channel3RawModCorrected') && ...
+                                   labjack.channel3RawModCorrected;
+        if ~isempty(channel3Row) && ~channel3AlreadyCorrected && ...
+                size(labjack.raw,1) >= channel3Row && ...
+                size(labjack.modulation,1) >= channel3Row
+            if numel(labjack.name) == size(labjack.raw,1)
+                channel3Name = labjack.name{channel3Row};
+            elseif numel(labjack.name) >= 3
+                channel3Name = labjack.name{3};
+            else
+                channel3Name = '';
+            end
+
+            if ~isempty(channel3Name) && ~contains(channel3Name,'PMT','IgnoreCase',true)
+                tempTrace = labjack.raw(channel3Row,:);
+                labjack.raw(channel3Row,:) = labjack.modulation(channel3Row,:);
+                labjack.modulation(channel3Row,:) = tempTrace;
+                labjack.channel3RawModCorrected = true;
+                updateLabjack = true;
+                disp('     Corrected swapped raw/modulation traces for non-PMT channel 3');
+            end
+        end
+
         %if sum(labjack.record == options.recordLJ)~=length(labjack.record) 
         %edited by Emily 6/28/24 to work with new rig
         if size(labjack.record,2) ~= size(options.recordLJ,2)
