@@ -63,8 +63,9 @@ for i = 1:3
     displayCheck(i) = uicontrol(fig,'Style','checkbox','Position',[442 y+4 24 24]);
 end
 
-% Channels 1 and 3 share a single physical DAC0 output (only one LED is
-% patched in at a time), so their freq-mod checkboxes are mutually exclusive.
+% Channels 1 and 3 share DAC0, so their freq-mod checkboxes are mutually
+% exclusive. DAC0 ownership is determined later from the Record selections:
+% channel 1 has priority when both channels are selected.
 set(freqCheck(1),'Callback',@(src,~) setExclusiveFreqMod(src,freqCheck(3)));
 set(freqCheck(3),'Callback',@(src,~) setExclusiveFreqMod(src,freqCheck(1)));
 

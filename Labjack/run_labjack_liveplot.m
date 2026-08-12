@@ -59,15 +59,23 @@ LEDpower1Min = 0.3; %0.3 %0.5 % power to get minimal signal
 LEDpower2Min = 0.2; % power to get minimal signal
 LEDpower3Min = 0.2; % power to get minimal signal
 
-% Channels 1 and 3 share a single physical DAC0 output (only one LED is
-% patched in at a time); whichever has freq mod checked owns DAC0.
-dac0Chan = 1;
-if labjack.mod(3); dac0Chan = 3; end
+% Channels 1 and 3 share DAC0. Choose its owner from the channels selected
+% for recording: channel 1 has priority when both are selected; otherwise
+% channel 3 owns DAC0 when it is the only selected shared channel. If
+% neither is selected, leave channel 1 as the harmless default and DAC0 is
+% turned off below by the record check.
+if labjack.record(1)
+    dac0Chan = 1;
+elseif labjack.record(3)
+    dac0Chan = 3;
+else
+    dac0Chan = 1;
+end
 LEDpowerDAC0 = LEDpower1; LEDpowerDAC0Min = LEDpower1Min;
 if dac0Chan == 3; LEDpowerDAC0 = LEDpower3; LEDpowerDAC0Min = LEDpower3Min; end
 
-% Define modulation params. Channel 2 always owns DAC1; channel 1 or 3
-% (whichever is patched into DAC0) is the other modulated channel.
+% Define modulation params. Channel 2 always owns DAC1; the selected DAC0
+% owner is the other possible modulated channel.
 labjack.modFreq = nan(1,3);
 labjack.modFreq(dac0Chan) = 200;
 labjack.modFreq(2) = 250;
