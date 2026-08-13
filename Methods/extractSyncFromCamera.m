@@ -1,25 +1,25 @@
 function [sync, intensity] = extractSyncFromCamera(aviPath, options)
     % extractSyncFromCamera Extract sync ROI intensity from a camera AVI.
     %
-    %   intensity = extractSyncFromCamera(aviPath) reads the AVI file at aviPath
-    %   and returns the mean grayscale intensity within the predetermined ROI for
-    %   each frame.
+    %   [sync, intensity] = extractSyncFromCamera(aviPath) reads the AVI file,
+    %   measures the mean grayscale intensity in the sync ROI for each frame,
+    %   and thresholds that intensity to produce sync.
     %
-    %   intensity = extractSyncFromCamera(aviPath, userInspect=true) opens a GUI
+    %   extractSyncFromCamera(aviPath, inspectROI=true) opens a GUI
     %   on the first frame so the ROI can be adjusted before extraction.
     %
-    %   [intensity, roi] = extractSyncFromCamera(...) also returns the ROI used,
-    %   formatted as [x y width height].
-    %
     %   Optional name-value inputs:
-    %       userInspect - logical, whether to inspect/adjust ROI interactively
-    %       roi         - predetermined ROI, [x y width height]
+    %       inspectROI   - whether to inspect/adjust the ROI interactively
+    %       roi          - fallback ROI, [x y width height]
+    %       saveROI      - whether to save the ROI MAT file and preview PNG
+    %       selectROIOnly - return after ROI selection without reading all frames
     
     arguments
         aviPath (1,1) string
         options.inspectROI (1,1) logical = false
         options.roi (1,4) double = [310 459 50 50]
         options.saveROI logical = true
+        options.selectROIOnly logical = false
     end
     
     if ~isfile(aviPath)
@@ -27,7 +27,7 @@ function [sync, intensity] = extractSyncFromCamera(aviPath, options)
             'Could not find AVI file: %s', char(aviPath));
     end
     
-    % Convert to mp4 so matlab can read
+    % Read only one frame for ROI selection; defer full conversion until needed.
     aviPath = char(strtrim(string(aviPath)));
     aviPath = osPathSwitch(aviPath);
     [aviFolder, aviName] = fileparts(aviPath);
@@ -37,35 +37,48 @@ function [sync, intensity] = extractSyncFromCamera(aviPath, options)
         mkdir(mp4Folder);
     end
     mp4Path = fullfile(aviFolder,'camera-processed', [aviName '.mp4']);
-    
-    if ~isfile(mp4Path)
-        if ispc
-            ffmpegPath = 'ffmpeg';
-        else
-            ffmpegPath = '/opt/homebrew/bin/ffmpeg';
-        end
-    
-        cmd = sprintf(['%s -y -i %s ' ...
-            '-c:v libx264 -pix_fmt yuv420p -crf 18 -preset fast %s'], ...
-            shellQuote(ffmpegPath), shellQuote(aviPath), shellQuote(mp4Path));
-        
-        if ispc
-            [status, msg] = dos(cmd);
-        else
-            [status, msg] = system(cmd);
-        end
-        
-        if status ~= 0
-            error("Could not convert AVI for MATLAB VideoReader:\n%s", msg);
-        end
+
+    if ispc
+        ffmpegPath = 'ffmpeg';
+    else
+        ffmpegPath = '/opt/homebrew/bin/ffmpeg';
     end
-    
-    % read video
-    v = VideoReader(mp4Path);
-    firstFrame = readFrame(v);
+
+    if options.selectROIOnly
+        firstFramePath = [tempname(mp4Folder), '.png'];
+        cmd = sprintf('%s -y -i %s -frames:v 1 %s', ...
+            shellQuote(ffmpegPath), shellQuote(aviPath), shellQuote(firstFramePath));
+        [status, msg] = runCommand(cmd);
+        if status ~= 0
+            error("Could not extract the first camera frame:\n%s", msg);
+        end
+
+        firstFrame = imread(firstFramePath);
+        delete(firstFramePath);
+    else
+        if ~isfile(mp4Path)
+            cmd = sprintf(['%s -y -i %s ' ...
+                '-c:v libx264 -pix_fmt yuv420p -crf 18 -preset fast %s'], ...
+                shellQuote(ffmpegPath), shellQuote(aviPath), shellQuote(mp4Path));
+            [status, msg] = runCommand(cmd);
+            if status ~= 0
+                error("Could not convert AVI for MATLAB VideoReader:\n%s", msg);
+            end
+        end
+
+        v = VideoReader(mp4Path);
+        firstFrame = readFrame(v);
+    end
+
     frameSize = [size(firstFrame,1), size(firstFrame,2)];
-    
-    roi = clampRoi(options.roi, frameSize);
+
+    roiMatPath = fullfile(aviFolder, 'Camera-SyncROI.mat');
+    if isfile(roiMatPath)
+        savedROI = load(roiMatPath, 'roi');
+        roi = clampRoi(savedROI.roi, frameSize);
+    else
+        roi = clampRoi(options.roi, frameSize);
+    end
     
     if options.inspectROI
         roi = inspectRoi(firstFrame, roi);
@@ -74,7 +87,7 @@ function [sync, intensity] = extractSyncFromCamera(aviPath, options)
     
     % Save ROI if necessary
     if options.saveROI
-        [aviFolder, ~] = fileparts(char(aviPath));
+        save(roiMatPath, 'roi');
         roiPngPath = fullfile(aviFolder, 'Camera-SyncROI.png');
         
         fig = figure('Visible', 'off', 'Color', 'w');
@@ -90,6 +103,12 @@ function [sync, intensity] = extractSyncFromCamera(aviPath, options)
 
         exportgraphics(gca, roiPngPath, 'Resolution', 200);
         close(fig);
+    end
+
+    if options.selectROIOnly
+        sync = [];
+        intensity = [];
+        return;
     end
     
     v.CurrentTime = 0;
@@ -193,4 +212,12 @@ function quotedPath = shellQuote(pathIn)
     dq = char(34);          % double quote: "
 
     quotedPath = [sq strrep(pathIn, sq, [sq dq sq dq sq]) sq];
+end
+
+function [status, msg] = runCommand(cmd)
+    if ispc
+        [status, msg] = dos(cmd);
+    else
+        [status, msg] = system(cmd);
+    end
 end
