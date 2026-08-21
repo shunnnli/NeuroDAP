@@ -113,7 +113,9 @@ if ~isfield(options,'QCThreshold')
     options.QCThreshold.Ibaseline = -300;
     options.QCThreshold.Ibaseline_std = 20;
 else
-    if isfield(options.QCThreshold,'include') && isstring(options.QCThreshold.include)
+    if ~isfield(options.QCThreshold,'include')
+        options.QCThreshold.include = {};
+    elseif isstring(options.QCThreshold.include)
         options.QCThreshold.include = {options.QCThreshold.include};
     end
     if ~isfield(options.QCThreshold,'Rs')
@@ -258,10 +260,9 @@ if options.reload
             withVhold = ~isempty(dir(fullfile(grpFolder{1}, options.vholdChannel + "*.mat")));
         end
     end
-    vholdInfo.vholdEpochMean = nan;
-    vholdInfo.vholdSweepsMean = nan;
-    vholdInfo.vholdEpochTrace = nan;
-    vholdInfo.vholdSweepsTrace = nan;
+    % Wengang recordings do not have cell folders, so retain an explicit
+    % session-level counter rather than implicitly reusing loop variables.
+    wengangCellId = 0;
     
     %% Iterate & analyze individual epoch
     
@@ -304,8 +305,19 @@ if options.reload
             vhold = exp{row,"Vhold"};
             vholdInfo = exp{row,"VholdInfo"}{1};
             prot = exp{row,"Protocol"}{1};
-            if isfield(prot,'PulseNumByAcq')
+            if isstruct(prot) && isfield(prot,'PulseNumByAcq')
                 pulseNumByAcq = prot.PulseNumByAcq;
+            end
+        else
+            included = true(numel(sweepAcq),1);
+            vhold = NaN;
+            if strcmp(rig,'Paolo')
+                cellid = grpCell(row);
+            else
+                % A DMD search can precede the first voltage-clamp epoch.
+                % Use cell 1 until the holding-voltage heuristic detects a
+                % later cell transition.
+                cellid = max(wengangCellId,1);
             end
         end
 
@@ -319,6 +331,9 @@ if options.reload
         cycles = cell(length(sweepAcq),1); % For detecting whether a sweep uses different cycle within an epoch
         protocols = cell(length(sweepAcq),1);
         statistics = cell(length(sweepAcq),1);
+        loadedSweep = false(length(sweepAcq),1);
+        analyzedSweep = false(length(sweepAcq),1);
+        QC = struct();
         
 
         % --- Vhold bookkeeping (per-sweep) via getSweepVhold ---
@@ -329,6 +344,10 @@ if options.reload
         %   vholdInfo.vholdSweepsTrace : per-sweep vhold traces (if available; NaNs otherwise)
         vholdSweeps = nan(length(sweepAcq), avgLen);
         vholdSweepsMean = nan(length(sweepAcq), 1);
+        vholdInfo.vholdEpochMean = NaN;
+        vholdInfo.vholdSweepsMean = vholdSweepsMean;
+        vholdInfo.vholdEpochTrace = nan(1,avgLen);
+        vholdInfo.vholdSweepsTrace = vholdSweeps;
 
         % Load InfoPatching.xlsx once (if present) and pass into getSweepVhold
         infoTable = [];
@@ -381,6 +400,7 @@ if options.reload
                 nAnalyzedSweeps = nAnalyzedSweeps - 1;
                 continue
             end
+            loadedSweep(k) = true;
     
 
             % Extract raw trace
@@ -403,7 +423,7 @@ if options.reload
             % is differnt from avg trace
             % 2. For DMD random search cycles, skip since random searches means
             % some sweeps by default will have different length
-            if contains(protocol.cycle,'randomSearch')
+            if isRandomSearchCycle(protocol.cycle)
                 disp(['     Sweep cycle is ',protocol.cycle,', skip epoch-level anlaysis below.']);
                 nAnalyzedSweeps = nAnalyzedSweeps - 1;
                 continue
@@ -512,7 +532,7 @@ if options.reload
 
             % --- Vhold (per-sweep) via getSweepVhold ---
             try
-                [vh, vhMeta] = getSweepVhold(epochList{row,2}, sweepAcq{k}, baselineAvg, options.vholdChannel, infoTable=infoTable);
+                [vh, vhMeta] = getSweepVhold(grpFolder{row}, sweepAcq{k}, baselineAvg, options.vholdChannel, infoTable=infoTable);
                 vholdSweepsMean(k) = vh;
                 if isfield(vhMeta,'trace') && ~isempty(vhMeta.trace)
                     tr = vhMeta.trace(:)';
@@ -528,7 +548,7 @@ if options.reload
     
             
             % Find peak and area during analysis window (for processed)
-            if ~contains(protocol.cycle,'randomSearch')
+            if ~isRandomSearchCycle(protocol.cycle)
                 % Calculate statistics
                 % Find auc
                 stats.response.auc = sum(processed_trace(analysisWindow)) / options.outputFs;
@@ -565,26 +585,84 @@ if options.reload
                 stats.baseline.EIindex = abs(stats.baseline.max)-abs(stats.baseline.min) / abs(stats.baseline.max)+abs(stats.baseline.min);
 
                 statistics{k} = stats;
+                analyzedSweep(k) = true;
             end
         end
 
-        %% Merge protocol/qc/stats for each sweep into one for each epoch
-        if ~contains(protocol.cycle,{'randomSearch','plasticity'})
-            protocols = mergeStructs(protocols);
-            protocols.PulseNumByAcq = pulseNumByAcq;
-            protocols.PulseNumsInEpoch = unique(pulseNumByAcq)';  % quick summary
-            protocols.AcqPulseMap = table(string(sweepAcq), pulseNumByAcq, ...
-                                          'VariableNames', {'Acq','PulseNum'});
-            statistics = mergeStructs(statistics);
-            QC = mergeStructs(QCs);
+        %% Classify every sweep before deciding how to store the epoch
+        cycleNames = getSweepCycleNames(protocols,numel(sweepAcq));
+        validProtocol = loadedSweep & strlength(cycleNames) > 0;
+        isRandomSweep = validProtocol & isRandomSearchCycle(cycleNames);
+        isPlasticitySweep = validProtocol & contains(cycleNames,"plasticity",IgnoreCase=true);
+        hasRandomSearch = any(isRandomSweep);
+        hasPlasticity = any(isPlasticitySweep);
+        hasFullField = any(validProtocol & ~isRandomSweep & ~isPlasticitySweep);
 
-            %% Calculate peripeak data
-    
-            % Find min and max value for stim response
-            trace = processed(:,analysisWindow);
+        % Calculate epoch Vhold and cell identity independently of protocol
+        % representation. DMD-only epochs legitimately have NaN here because
+        % loadSlicesDMD calculates Vhold from each raw sweep.
+        if createNew
+            vh = vholdSweepsMean(~isnan(vholdSweepsMean));
+            if isempty(vh)
+                vholdEpochMean = NaN;
+                vholdEpochTrace = nan(1,avgLen);
+            else
+                vholdEpochMean = mode(round(vh));
+                if any(~isnan(vholdSweeps(:)))
+                    vholdEpochTrace = mean(vholdSweeps,1,'omitnan');
+                else
+                    vholdEpochTrace = vholdEpochMean * ones(1,avgLen);
+                end
+            end
+
+            if strcmp(rig,'Wengang')
+                if ~isnan(vholdEpochMean) && vholdEpochMean < -50
+                    wengangCellId = wengangCellId + 1;
+                end
+                cellid = max(wengangCellId,1);
+            else
+                cellid = grpCell(row);
+            end
+            vhold = vholdEpochMean;
+        else
+            vholdEpochMean = vhold;
+            if any(~isnan(vholdSweeps(:)))
+                vholdEpochTrace = mean(vholdSweeps,1,'omitnan');
+            else
+                vholdEpochTrace = vhold * ones(1,avgLen);
+            end
+        end
+
+        vholdInfo.vholdEpochMean = vholdEpochMean;
+        vholdInfo.vholdSweepsMean = vholdSweepsMean;
+        vholdInfo.vholdEpochTrace = vholdEpochTrace;
+        vholdInfo.vholdSweepsTrace = vholdSweeps;
+
+        if hasRandomSearch && hasFullField
+            warning(['Cell %g, epoch %g contains both full-field and random-search sweeps. ', ...
+                     'Sweep-level protocols are preserved; loadSlicesDMD will analyze only the searches.'], ...
+                    cellid,epoch);
+        end
+
+        %% Merge only homogeneous full-field epochs
+        % Search and plasticity protocols remain sweep-level cell arrays.
+        % This also preserves the individual cycles in a mixed acquisition
+        % group so loadSlicesDMD can select only confirmed search sweeps.
+        if any(analyzedSweep) && ~hasRandomSearch && ~hasPlasticity
+            analysisSweep = find(analyzedSweep);
+            protocols = mergeStructs(protocols(analysisSweep));
+            protocols.PulseNumByAcq = pulseNumByAcq(analysisSweep);
+            protocols.PulseNumsInEpoch = unique(pulseNumByAcq(analysisSweep))';
+            protocols.AcqPulseMap = table(string(sweepAcq(analysisSweep)), ...
+                                          pulseNumByAcq(analysisSweep), ...
+                                          'VariableNames',{'Acq','PulseNum'});
+            statistics = mergeStructs(statistics(analysisSweep));
+            QC = mergeStructs(QCs(analysisSweep));
+
+            %% Calculate peripeak data from successfully analyzed sweeps
+            trace = processed(analysisSweep,analysisWindow);
             avg_trace = mean(trace,1);
             [~,maxIdx] = max(avg_trace); [~,minIdx] = min(avg_trace);
-            % Average around max/min idx to get final value
             maxWindowStart = max(1,maxIdx-peakWindowWidth);
             maxWindowEnd = min(maxIdx+peakWindowWidth,length(avg_trace));
             minWindowStart = max(1,minIdx-peakWindowWidth);
@@ -593,12 +671,10 @@ if options.reload
             statistics.response.periMin = mean(trace(:,minWindowStart:minWindowEnd),2);
             statistics.response.periMaxTime = maxIdx * 1000/options.outputFs;
             statistics.response.periMinTime = minIdx * 1000/options.outputFs;
-    
-            % Find min and max for control baseline
-            trace = processed(:,controlWindow);
+
+            trace = processed(analysisSweep,controlWindow);
             avg_trace = mean(trace,1);
             [~,maxIdx] = max(avg_trace); [~,minIdx] = min(avg_trace);
-            % Average around max/min idx to get final value
             maxWindowStart = max(1,maxIdx-peakWindowWidth);
             maxWindowEnd = min(maxIdx+peakWindowWidth,length(avg_trace));
             minWindowStart = max(1,minIdx-peakWindowWidth);
@@ -607,147 +683,59 @@ if options.reload
             statistics.baseline.periMin = mean(trace(:,minWindowStart:minWindowEnd),2);
             statistics.baseline.periMaxTime = maxIdx * 1000/options.outputFs;
             statistics.baseline.periMinTime = minIdx * 1000/options.outputFs;
-        
-        
-            %% Determine cellID and mean epoch vhold for that cell
-            if createNew
-                % Most common (mode) vhold across sweeps in this epoch.
-                % Tip: change the rounding/bin size below if your vhold values are noisy.
-                vh = vholdSweepsMean;
-                vh = vh(~isnan(vh));
-                if isempty(vh)
-                    vholdEpochMean = NaN;
-                    vholdEpochTrace = nan(1, avgLen);
-                else
-                    vhRounded = round(vh);   % e.g. -69.7 -> -70
-                    vholdEpochMean = mode(vhRounded);
 
-                    % If we managed to load vhold traces, keep the epoch trace as their mean.
-                    if any(~isnan(vholdSweeps(:)))
-                        vholdEpochTrace = mean(vholdSweeps, 1, 'omitnan');
-                    else
-                        vholdEpochTrace = vholdEpochMean * ones(1, avgLen);
-                    end
-                end
-
-                % Preserve original cellid heuristic for Wengang recordings
-                if strcmp(rig,'Wengang')
-                    if ~isnan(vholdEpochMean) && vholdEpochMean < -50
-                        cellid = cellid + 1;
-                    end
-                else
-                    cellid = grpCell(row);
-                end
-
-                vhold = vholdEpochMean;
-
-                % Keep vholdInfo fields identical to previous versions
-                vholdInfo.vholdEpochMean   = vholdEpochMean;
-                vholdInfo.vholdSweepsMean  = vholdSweepsMean;
-                vholdInfo.vholdEpochTrace  = vholdEpochTrace;
-                vholdInfo.vholdSweepsTrace = vholdSweeps;
-
-                % if strcmp(rig,'Wengang')
-                %     if withVhold
-                %         if withVholdAvg
-                %             vholdEpochMean = mean(vholdEpoch(:,baselineWindow),"all");
-                %         else
-                %             vholdEpochMean = mean(vholdSweeps(:,baselineWindow),"all"); 
-                %             vholdEpoch = mean(vholdSweeps(:,baselineWindow),1);
-                %         end
-                %         if vholdEpochMean < -50; cellid = cellid + 1; end
-                %         vholdSweepsMean = mean(vholdSweeps(:,1:20000),2);
-                %         vholdInfo.vholdSweepsMean = vholdSweepsMean;
-                %         vholdInfo.vholdEpochTrace = vholdEpoch;
-                %         vholdInfo.vholdSweepsTrace = vholdSweeps;
-                %     else
-                %         cellid = row;
-                %         vholdEpochMean = 100;
-                %     end
-                %     vhold = vholdEpochMean;
-                %     vholdInfo.vholdEpochMean = vholdEpochMean;
-                % else
-                %     cellid = grpCell(row);
-                % 
-                %     % Determine Vhold
-                %     % Find in .xlsx file first, if can't find, use the heuristic that
-                %     % cells with negative leak current Vhold=-70, otherwise Vhold = 10;
-                %     acqsplit = split(sweepAcq{k},'_'); acqNum = str2double(acqsplit{end});
-                %     vhold = info{info.acq_ == acqNum,'holding'};
-                %     if isempty(vhold)
-                %         if baselineAvg < 0; vhold = -70;
-                %         else; vhold = 10; end
-                %     end
-                % end
+            %% Apply inclusion criteria while preserving sweep alignment
+            localIncluded = true(numel(analysisSweep),1);
+            analysisCycles = cycleNames(analysisSweep);
+            uniqueCycles = unique(analysisCycles,'stable');
+            cycleCounts = zeros(numel(uniqueCycles),1);
+            for cycleIdx = 1:numel(uniqueCycles)
+                cycleCounts(cycleIdx) = sum(analysisCycles == uniqueCycles(cycleIdx));
             end
-    
-            %% Remove empty/erraneous sweeps
-            if createNew || isfield(options,'include')
-                included = ones(nAnalyzedSweeps,1);
-    
-                % Remove sweeps with different Vhold
-                if options.filterSweeps && withVhold
-                    % rounded_epoch_vhold = roundToTarget(vholdEpochMean,[-70,0,8]);
-                    % rounded_sweeps_vhold = roundToTarget(vholdSweepsMean,[-70,0,8]);
-                    % included = (rounded_sweeps_vhold == rounded_epoch_vhold);
-                    % diffVhold_included = ~isoutlier(vholdInfo.vholdSweepsMean,'mean');
-                    % included = all([included,diffVhold_included],2);
-                end 
-        
-                % Remove sweeps with non full field cycles
-                cycles = cycles(~cellfun(@isempty,cycles));
-                if ~isempty(cycles)
-                    cyclesCount = tabulate(cycles);
-                    [~, mostCommonIdx] = max([cyclesCount{:, 2}]);
-                    if ~all(strcmp(cycles, cycles{mostCommonIdx}))
-                        cycles_included = strcmp(cycles, cycles{mostCommonIdx});
-                        % protocol = protocols{mostCommonIdx};
-                        if length(included) == length(cycles_included)
-                            included = all([included,cycles_included],2);
-                        end
-                    end
+            [~,mostCommonIdx] = max(cycleCounts);
+            localIncluded = localIncluded & analysisCycles == uniqueCycles(mostCommonIdx);
+
+            if ~isempty(fieldnames(QC))
+                if all(isnan(QC.Ibaseline)) || all(isnan(QC.Ibaseline_std))
+                    QCIncluded = false(numel(analysisSweep),1);
+                else
+                    QCIncluded = QC.Ibaseline >= options.QCThreshold.Ibaseline & ...
+                                 QC.Ibaseline_std <= options.QCThreshold.Ibaseline_std;
                 end
-    
-                % Remove sweeps based on QC
-                if ~isempty(fieldnames(QC))
-                    % Remove sweeps from QC based on baseline current
-                    if all(isnan(QC.Ibaseline)) || all(isnan(QC.Ibaseline_std))
-                        QCIncluded = zeros(length(included),1);
-                        QC.included = QCIncluded;
-                    else
-                        Ibaseline_avg_filter = QC.Ibaseline >= options.QCThreshold.Ibaseline;
-                        Ibaseline_std_filter = QC.Ibaseline_std <= options.QCThreshold.Ibaseline_std;
-                        QCIncluded = all([Ibaseline_avg_filter,Ibaseline_std_filter],2);
-                        QC.included = QCIncluded;
-                    end
-                    if length(included) == length(QCIncluded)
-                        included = all([included,QCIncluded],2);
-                    end
-    
-                    % Remove epochs with high Rs or high Verror
-                    Rs_final = mean(QC.Rs(included==1));
-                    Verror_final = mean(abs(QC.Verror(included==1)));
-                    if Rs_final > options.QCThreshold.Rs || Verror_final > options.QCThreshold.Verror
-                        included = zeros(length(sweepAcq),1);
-                    end
-    
-                    % Remove sweeps based on other provided criteria
-                    if ~isempty(options.QCThreshold.include)
-                        for criterion = options.QCThreshold.include
-                            if length(eval(criterion{1})) > 1
-                                newIncluded = eval(criterion{1});
-                            else
-                                newIncluded = ones(length(sweepAcq),1) * eval(criterion{1});
-                            end
-                            included = all([included,newIncluded],2);
-                        end
-                        if length(included) ~= length(sweepAcq)
-                            warning('included have different size than #sweeps! Reset included to true for all!');
-                            included = ones(length(sweepAcq),1);
-                        end
-                    end
-                end 
+                QCIncluded = QCIncluded(:);
+                QC.included = QCIncluded;
+                localIncluded = localIncluded & QCIncluded;
+
+                Rs_final = mean(QC.Rs(localIncluded),'omitnan');
+                Verror_final = mean(abs(QC.Verror(localIncluded)),'omitnan');
+                if Rs_final > options.QCThreshold.Rs || Verror_final > options.QCThreshold.Verror
+                    localIncluded(:) = false;
+                end
             end
+
+            for criterion = options.QCThreshold.include
+                criterionIncluded = eval(criterion{1});
+                if isscalar(criterionIncluded)
+                    criterionIncluded = repmat(logical(criterionIncluded),numel(analysisSweep),1);
+                elseif numel(criterionIncluded) == numel(sweepAcq)
+                    criterionIncluded = logical(criterionIncluded(analysisSweep));
+                elseif numel(criterionIncluded) == numel(analysisSweep)
+                    criterionIncluded = logical(criterionIncluded(:));
+                else
+                    warning('Ignoring QC criterion with %d values; expected 1, %d, or %d.', ...
+                            numel(criterionIncluded),numel(analysisSweep),numel(sweepAcq));
+                    continue
+                end
+                localIncluded = localIncluded & criterionIncluded;
+            end
+
+            included = false(numel(sweepAcq),1);
+            included(analysisSweep) = localIncluded;
+        else
+            % Search/mixed rows are not subjected to epoch-level full-field
+            % QC. Keep successful acquisitions aligned; loadSlicesDMD will
+            % apply its own QC after selecting search sweeps.
+            included = loadedSweep;
         end
     
         %% Store everything in epochs
@@ -772,11 +760,6 @@ if options.reload
             close all;
             plotEpochSummary(epochs,row,save=true,saveDataPath=options.saveDataPath);
         end
-    end
-    
-    % If vhold never have -70, plot by each epoch
-    if isscalar(unique(epochs{:,'Cell'}))
-        epochs{:,'Cell'} = (1:size(epochs,1))';
     end
     
     %% Save epochs.mat

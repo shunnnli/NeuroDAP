@@ -62,9 +62,15 @@ for i = 1:length(animalList)
 
     for c = 1:size(cellList,1)
         cellEpochs = animalEpochs(animalEpochs.Cell == cellList(c),:);
-        cellProtocols = cellfun(@(v) v.cycle, cellEpochs.Protocol, UniformOutput=false);
-        wholeFieldIdx = ~cellfun(@(x) any(contains(x,'randomSearch')),cellProtocols);
+        wholeFieldIdx = cellfun(@(protocol) ...
+            isstruct(protocol) && ...
+            ~any(isRandomSearchCycle(getSweepCycleNames(protocol))), ...
+            cellEpochs.Protocol);
         cellEpochs = cellEpochs(wholeFieldIdx,:);
+        if isempty(cellEpochs)
+            warning('Cell %g has no homogeneous full-field epochs; skipping cells.mat aggregation.',cellList(c));
+            continue
+        end
         options.rawDataPath = cellEpochs{1,'Options'}{1}.rawDataPath;
 
         % Get rows
@@ -242,6 +248,8 @@ for i = 1:length(animalList)
         cells{c,'VholdInfo'} = {cellEpochs.('VholdInfo')};
         cells{c,'Options'} = {cellEpochs.('Options')};
     end
+
+    cells = rmmissing(cells,DataVariables='Session');
 
     if options.save
         today = char(datetime('today','Format','yyyyMMdd')); 

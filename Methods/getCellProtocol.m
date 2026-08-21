@@ -73,7 +73,7 @@ else
 end
 
 % Extract DMD related params
-if contains(protocol.cycle,'randomSearch')
+if isRandomSearchCycle(protocol.cycle)
     protocol.depth = getHeaderValue(headerString,'state.zDMD.searchDepth',convert=true);
     protocol.repetition = getHeaderValue(headerString,'state.zDMD.searchRepetition',convert=true);
 

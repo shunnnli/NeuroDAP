@@ -94,14 +94,27 @@ warning('off','MATLAB:unknownObjectNowStruct');
 warning('off','MATLAB:table:RowsAddedExistingVars');
 
 %% Select randomSearch epochs
-% randomSearchIdx = cellfun(@(x) contains(x.cycle, 'randomSearch'), epochs.("Protocol"));
-% randomSearchIdx = cellfun(@(x) iscell(x), epochs.("Protocol"));
-randomSearchIdx = cellfun(@(x) iscell(x) && contains(x{1}.cycle, 'randomSearch', IgnoreCase=true), epochs.("Protocol"));
-exp = sortrows(epochs(randomSearchIdx,:),'Cell'); % randomSearchEpochs
+dmdSweepMasks = cell(height(epochs),1);
+for epochRow = 1:height(epochs)
+    sweepNames = epochs{epochRow,'Sweep names'}{1};
+    cycleNames = getSweepCycleNames(epochs{epochRow,'Protocol'}{1},numel(sweepNames));
+    dmdSweepMasks{epochRow} = isRandomSearchCycle(cycleNames);
+end
+
+randomSearchIdx = cellfun(@any,dmdSweepMasks);
+if ~any(randomSearchIdx)
+    error(['No random-search sweeps were detected. Check epochs.Protocol ', ...
+           'and the cycle names in the acquisition headers.']);
+end
+
+exp = epochs(randomSearchIdx,:);
+exp.DMDSweepMask = dmdSweepMasks(randomSearchIdx);
+exp = sortrows(exp,'Cell'); % randomSearchEpochs
 
 %% Build spots.mat and cells.mat
 if options.reloadCells
     %% Initialize cells_DMD.mat
+    % One table row per cell that actually contains a random search.
     % structure for responseMap
     % For each row, response map is a cell with #searches element
     % within each element, theres a 3-dim matrix (xRange,yRange,depth)
@@ -110,7 +123,12 @@ if options.reloadCells
                 'cell','cell','cell','cell','cell'};
     varNames = {'Session','Animal','Task','Cell','Epochs','Vhold','Protocol',...
                 'Response map','Difference map','Stats','QC','Options'};
-    cells = table('Size',[max(exp{:,'Cell'}),length(varNames)],...
+    cellIds = exp{:,'Cell'};
+    if any(~isfinite(cellIds) | cellIds < 1 | cellIds ~= fix(cellIds))
+        error('Random-search epochs contain invalid Cell identifiers.');
+    end
+    searchCellIds = unique(cellIds,'stable');
+    cells = table('Size',[numel(searchCellIds),length(varNames)],...
         'VariableTypes',varTypes,'VariableNames',varNames);
     
     % Initialize cell-level params
@@ -143,6 +161,12 @@ if options.reloadCells
             % Load fullSearchTable
             epoch = exp{row,'Epoch'};
             sweepAcq = exp{row,'Sweep names'}{1};
+            dmdSweepMask = exp{row,'DMDSweepMask'}{1};
+            if numel(dmdSweepMask) ~= numel(sweepAcq)
+                error('DMD sweep mask is not aligned with Sweep names for cell %g, epoch %g.', ...
+                      exp{row,'Cell'},epoch);
+            end
+            sweepAcq = sweepAcq(logical(dmdSweepMask));
             epochPath = osPathSwitch(exp{row,'Options'}{1}.rawDataPath);
             
             % Intialize potentia reconstruction params
@@ -523,7 +547,8 @@ if options.reloadCells
         if isempty(spotsAll)
             filename = basePrefix;
             disp(['Skipped: search epoch ', filename,' not found, skipped instead']);
-            if row == size(exp,1)
+            isCellBoundary = row == size(exp,1) || exp{row,'Cell'} ~= exp{row+1,'Cell'};
+            if isCellBoundary && ~isempty(cellEpochs)
                 responseMap.responseMap = cellResponseMap';
                 responseMap.isResponseMap = isResponseMap_cell';
                 responseMap.hotspotMap = cellHotspotMap';
@@ -547,17 +572,18 @@ if options.reloadCells
                 options.cellLocation = [spotsAtDepth{1,'Protocol'}{1}.cellX, spotsAtDepth{1,'Protocol'}{1}.cellY];
                 options.spotOptions = spotsAtDepth{1,'Options'}{1};
 
-                cells{curCell,'Session'} = options.saveDataPath;
-                cells{curCell,'Animal'} = spotsAtDepth{1,'Animal'};
-                cells{curCell,'Task'} = spotsAtDepth{1,'Task'};
-                cells{curCell,'Cell'} = curCell;
-                cells{curCell,'Epochs'} = {cellEpochs'};
-                cells{curCell,'Vhold'} = {cellVhold};
-                cells{curCell,'Protocol'} = {cellProtocols'};
-                cells{curCell,'Response map'} = {responseMap};
-                cells{curCell,'Stats'} = {cellStats};
-                cells{curCell,'QC'} = {cellQC'};
-                cells{curCell,'Options'} = {options};
+                cellRow = find(searchCellIds == curCell,1);
+                cells{cellRow,'Session'} = options.saveDataPath;
+                cells{cellRow,'Animal'} = spotsAtDepth{1,'Animal'};
+                cells{cellRow,'Task'} = spotsAtDepth{1,'Task'};
+                cells{cellRow,'Cell'} = curCell;
+                cells{cellRow,'Epochs'} = {cellEpochs'};
+                cells{cellRow,'Vhold'} = {cellVhold};
+                cells{cellRow,'Protocol'} = {cellProtocols'};
+                cells{cellRow,'Response map'} = {responseMap};
+                cells{cellRow,'Stats'} = {cellStats};
+                cells{cellRow,'QC'} = {cellQC'};
+                cells{cellRow,'Options'} = {options};
 
                 % Save noise data for this cell
                 if options.reload
@@ -827,17 +853,18 @@ if options.reloadCells
             options.cellLocation = [spotsAtDepth{1,'Protocol'}{1}.cellX, spotsAtDepth{1,'Protocol'}{1}.cellY];
             options.spotOptions = spotsAtDepth{1,'Options'}{1};
     
-            cells{curCell,'Session'} = options.saveDataPath;
-            cells{curCell,'Animal'} = spotsAtDepth{1,'Animal'};
-            cells{curCell,'Task'} = spotsAtDepth{1,'Task'};
-            cells{curCell,'Cell'} = curCell;
-            cells{curCell,'Epochs'} = {cellEpochs'};
-            cells{curCell,'Vhold'} = {cellVhold};
-            cells{curCell,'Protocol'} = {cellProtocols'};
-            cells{curCell,'Response map'} = {responseMap};
-            cells{curCell,'Stats'} = {cellStats};
-            cells{curCell,'QC'} = {cellQC'};
-            cells{curCell,'Options'} = {options};
+            cellRow = find(searchCellIds == curCell,1);
+            cells{cellRow,'Session'} = options.saveDataPath;
+            cells{cellRow,'Animal'} = spotsAtDepth{1,'Animal'};
+            cells{cellRow,'Task'} = spotsAtDepth{1,'Task'};
+            cells{cellRow,'Cell'} = curCell;
+            cells{cellRow,'Epochs'} = {cellEpochs'};
+            cells{cellRow,'Vhold'} = {cellVhold};
+            cells{cellRow,'Protocol'} = {cellProtocols'};
+            cells{cellRow,'Response map'} = {responseMap};
+            cells{cellRow,'Stats'} = {cellStats};
+            cells{cellRow,'QC'} = {cellQC'};
+            cells{cellRow,'Options'} = {options};
     
             % Save noise data for this cell
             if options.reload
@@ -1999,6 +2026,9 @@ function [reconOK, reconNoise] = reconstructFromResponseMap(epochPath, cellResul
     protocolTemplate = struct('depth',nan,'pulseWidth',5,'cellX',nan,'cellY',nan,'repetition',1);
     try
         sweepAcq = expRow{1,'Sweep names'}{1};
+        if ismember('DMDSweepMask',expRow.Properties.VariableNames)
+            sweepAcq = sweepAcq(logical(expRow{1,'DMDSweepMask'}{1}));
+        end
         if ~isempty(sweepAcq)
             load(fullfile(epochPath, [sweepAcq{1},'.mat']));
             headerString = eval([sweepAcq{1},'.UserData.headerString']);
@@ -2047,6 +2077,9 @@ function [reconOK, reconNoise] = reconstructFromResponseMap(epochPath, cellResul
         targetSweepName = '';
         try
             sweepNames = expRow{1,'Sweep names'}{1};
+            if ismember('DMDSweepMask',expRow.Properties.VariableNames)
+                sweepNames = sweepNames(logical(expRow{1,'DMDSweepMask'}{1}));
+            end
             for k = 1:length(sweepNames)
                 swName = sweepNames{k};
                 swFile = fullfile(epochPath, [swName, '.mat']);
