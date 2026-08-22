@@ -317,6 +317,12 @@ if options.reloadCells
                 options.plotWindowTime = plotWindowTime;
                 options.analysisWindowSamples = analysisWindowSamples;
                 options.controlWindowSamples = controlWindowSamples;
+
+                % Store compact metadata once per sweep. Full header strings
+                % and long sample-index vectors are available from the raw
+                % files and should not be duplicated for every spot.
+                storedProtocol = localCompactDMDProtocol(protocol);
+                storedOptions = localCompactDMDOptions(options);
     
         
                 % Extract quality metrics from header string
@@ -361,6 +367,8 @@ if options.reloadCells
         
                 %% Loop through all spots
                 for s = 1:nPulsesThisSweep
+                    responses = struct();
+
                     %% Define timeWindow and extract response
                     % Define control window
                     plotWindow = timeRangeStartSample(s):timeRangeEndSample(s);
@@ -374,16 +382,15 @@ if options.reloadCells
         
                     % Save spot responses
                     responses.raw = raw_trace(plotWindow);
-                    responses.rawTrace = raw_trace;
 
                     % Per-spot local baseline: median of control window before this spot
                     spotBaseline = median(processed_trace(controlWindow), 'omitnan');
                     stats.response.localBaseline = spotBaseline;
-                    spotProcessedTrace = processed_trace - spotBaseline;
-
-                    responses.processed = spotProcessedTrace(plotWindow);
-                    responses.control = spotProcessedTrace(controlWindow);
-                    responses.processedTrace = spotProcessedTrace;
+                    % Only retain the windows consumed downstream. Storing a
+                    % baseline-shifted copy of the complete sweep for every
+                    % spot makes memory scale as nSamples*nSpots.
+                    responses.processed = processed_trace(plotWindow) - spotBaseline;
+                    responses.control = processed_trace(controlWindow) - spotBaseline;
         
                     %% Identify putative hotspots
     
@@ -468,11 +475,11 @@ if options.reloadCells
                         hotspotSpots{hotIdx,'Repetition'} = protocol.repetition;
                         hotspotSpots{hotIdx,'Sweep'} = string(sweepAcq{k});
                         hotspotSpots{hotIdx,'Location'} = num2cell(location,[1 2]);
-                        hotspotSpots{hotIdx,'Protocol'} = {protocol};
+                        hotspotSpots{hotIdx,'Protocol'} = {storedProtocol};
                         hotspotSpots{hotIdx,'Response'} = {responses};
                         hotspotSpots{hotIdx,'Stats'} = {stats};
                         hotspotSpots{hotIdx,'QC'} = {qc};
-                        hotspotSpots{hotIdx,'Options'} = {options};
+                        hotspotSpots{hotIdx,'Options'} = {storedOptions};
                     else
                         curSpot = curSpot + 1;
                         spots{curSpot,'Session'} = cellResultsPath;
@@ -485,11 +492,11 @@ if options.reloadCells
                         spots{curSpot,'Repetition'} = protocol.repetition;
                         spots{curSpot,'Sweep'} = string(sweepAcq{k});
                         spots{curSpot,'Location'} = num2cell(location,[1 2]);
-                        spots{curSpot,'Protocol'} = {protocol};
+                        spots{curSpot,'Protocol'} = {storedProtocol};
                         spots{curSpot,'Response'} = {responses};
                         spots{curSpot,'Stats'} = {stats};
                         spots{curSpot,'QC'} = {qc};
-                        spots{curSpot,'Options'} = {options};
+                        spots{curSpot,'Options'} = {storedOptions};
                     end
                 end
     
@@ -2153,7 +2160,6 @@ function [reconOK, reconNoise] = reconstructFromResponseMap(epochPath, cellResul
                 isHotspot = sum(abs(processed(analysisWindow))>=thr)>=minHotspotSamples;
     
                 responses = struct('raw',processed,'processed',processed,'control',control,...
-                                   'rawTrace',processed,'processedTrace',processed,...
                                    'isResponse',logical(isResponse_img),'hotspot',logical(isHotspot));
     
                 stats = localComputeStatsFromProcessed(processed, control, analysisWindow, effectiveVhold, options);
@@ -2171,12 +2177,13 @@ function [reconOK, reconNoise] = reconstructFromResponseMap(epochPath, cellResul
                 spotsAtDepth{idx,'Location'}    = num2cell(location,[1 2]);
     
                 p=protocolTemplate; p.depth=depth; p.repetition=rep; p.pulseWidth=5;
+                p=localCompactDMDProtocol(p);
                 spotsAtDepth{idx,'Protocol'} = {p};
     
                 spotsAtDepth{idx,'Response'}    = {responses};
                 spotsAtDepth{idx,'Stats'}       = {stats};
                 spotsAtDepth{idx,'QC'}          = {struct('included',true,'reconstructed',true)};
-                spotsAtDepth{idx,'Options'}     = {options};
+                spotsAtDepth{idx,'Options'}     = {localCompactDMDOptions(options)};
     
                 reconNoise.preStimData  = [reconNoise.preStimData, control];
                 reconNoise.baselineData = [reconNoise.baselineData, control];
@@ -2305,6 +2312,25 @@ function control = localMakeSyntheticControl(processed, plotWindowTime, ctrlLen)
     control = repmat(pre,1,repN);
     control = control(1:ctrlLen);
     end
+
+
+function protocol = localCompactDMDProtocol(protocol)
+    largeFields = intersect({'headerString','pulseString'},fieldnames(protocol));
+    if ~isempty(largeFields)
+        protocol = rmfield(protocol,largeFields);
+    end
+end
+
+
+function spotOptions = localCompactDMDOptions(options)
+    spotOptions = options;
+    largeFields = {'baselineWindow','baselineWindow_preStim','baselineWindow_postStim', ...
+                   'analysisWindow','controlWindow','plotWindow','eventSample','spotOptions'};
+    largeFields = intersect(largeFields,fieldnames(spotOptions));
+    if ~isempty(largeFields)
+        spotOptions = rmfield(spotOptions,largeFields);
+    end
+end
     
     function stats = localComputeStatsFromProcessed(processed, control, analysisWindow, vhold, options)
     Fs = options.outputFs;
