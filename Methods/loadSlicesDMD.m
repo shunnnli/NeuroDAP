@@ -361,6 +361,8 @@ if options.reloadCells
         
                 %% Loop through all spots
                 for s = 1:nPulsesThisSweep
+                    responses = struct();
+
                     %% Define timeWindow and extract response
                     % Define control window
                     plotWindow = timeRangeStartSample(s):timeRangeEndSample(s);
@@ -374,16 +376,16 @@ if options.reloadCells
         
                     % Save spot responses
                     responses.raw = raw_trace(plotWindow);
-                    responses.rawTrace = raw_trace;
 
                     % Per-spot local baseline: median of control window before this spot
                     spotBaseline = median(processed_trace(controlWindow), 'omitnan');
                     stats.response.localBaseline = spotBaseline;
-                    spotProcessedTrace = processed_trace - spotBaseline;
 
-                    responses.processed = spotProcessedTrace(plotWindow);
-                    responses.control = spotProcessedTrace(controlWindow);
-                    responses.processedTrace = spotProcessedTrace;
+                    % Save only the windows used by downstream analysis.
+                    % A full baseline-shifted sweep per spot scales memory as
+                    % nSamples*nSpots and duplicates responses from other spots.
+                    responses.processed = processed_trace(plotWindow) - spotBaseline;
+                    responses.control = processed_trace(controlWindow) - spotBaseline;
         
                     %% Identify putative hotspots
     
@@ -2153,7 +2155,6 @@ function [reconOK, reconNoise] = reconstructFromResponseMap(epochPath, cellResul
                 isHotspot = sum(abs(processed(analysisWindow))>=thr)>=minHotspotSamples;
     
                 responses = struct('raw',processed,'processed',processed,'control',control,...
-                                   'rawTrace',processed,'processedTrace',processed,...
                                    'isResponse',logical(isResponse_img),'hotspot',logical(isHotspot));
     
                 stats = localComputeStatsFromProcessed(processed, control, analysisWindow, effectiveVhold, options);
