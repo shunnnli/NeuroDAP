@@ -11,6 +11,16 @@
     },
 
     {
+      "animal": "SL470-SL471",
+      "spikeGLX": true,
+      "channels": [
+        {"name": "dLight", "freqMod": false, "display": false, "record": true},
+        {"name": "iGABASnFR", "freqMod": false, "display": false, "record": true},
+        {"name": "nan", "freqMod": true, "display": false, "record": false}
+      ]
+    },
+
+    {
       "animal": "SL461-SL465",
       "spikeGLX": true,
       "channels": [
@@ -37,6 +47,26 @@
         {"name": "NAc-right", "freqMod": false, "display": false, "record": false},
         {"name": "NAc-left", "freqMod": false, "display": false, "record": true},
         {"name": "NAc-tdTom", "freqMod": false, "display": false, "record": true}
+      ]
+    },
+
+    {
+      "animal": "SL478",
+      "spikeGLX": true,
+      "channels": [
+        {"name": "NAc-MS", "freqMod": false, "display": false, "record": true},
+        {"name": "NAc-LS", "freqMod": false, "display": false, "record": true},
+        {"name": "NAc-tdTom", "freqMod": false, "display": false, "record": false}
+      ]
+    },
+
+    {
+      "animal": "SL479-SL481",
+      "spikeGLX": true,
+      "channels": [
+        {"name": "DLS", "freqMod": false, "display": false, "record": true},
+        {"name": "NAc-LS", "freqMod": false, "display": false, "record": true},
+        {"name": "NAc-tdTom", "freqMod": false, "display": false, "record": false}
       ]
     }
   ]
