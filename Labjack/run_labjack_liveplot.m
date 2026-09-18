@@ -75,7 +75,10 @@ LEDpowerDAC0 = LEDpower1; LEDpowerDAC0Min = LEDpower1Min;
 if dac0Chan == 3; LEDpowerDAC0 = LEDpower3; LEDpowerDAC0Min = LEDpower3Min; end
 
 % Channels 2 (AIN1) and 4 (AIN9) are physically split from DAC1. Channel 2
-% defines their common power and modulation even if only AIN9 is recorded.
+% defines their common power even if only AIN9 is recorded. The GUI links
+% modulation settings within both DAC pairs.
+assert(labjack.mod(1) == labjack.mod(3), ...
+    'Channels 1 and 3 share DAC0 and cannot have independent modulation.');
 assert(labjack.mod(2) == labjack.mod(4), ...
     'Channels 2 and 4 share DAC1 and cannot have independent modulation.');
 dacEnabled = [labjack.record(dac0Chan), any(labjack.record([2 4]))];
@@ -83,14 +86,14 @@ labjack.dacChannel = [dac0Chan 2];
 labjack.dacEnabled = dacEnabled;
 labjack.channelDAC = [0 1 0 1];
 labjack.modFreq = nan(1,4);
-labjack.modFreq(dac0Chan) = 200;
+labjack.modFreq([1 3]) = 200;
 labjack.modFreq([2 4]) = 250;
 
 % Define mod frequency power
 labjack.nSignals = sum(labjack.record);
 looplength = samplerate*ones(size(labjack.modFreq)) ./ labjack.modFreq; % 200, 250Hz
-labjack.LEDpowers = [LEDpower1,LEDpower2,LEDpower3,LEDpower2];
-labjack.LEDpowersMin = [LEDpower1Min,LEDpower2Min,LEDpower3Min,LEDpower2Min];
+labjack.LEDpowers = [LEDpowerDAC0,LEDpower2,LEDpowerDAC0,LEDpower2];
+labjack.LEDpowersMin = [LEDpowerDAC0Min,LEDpower2Min,LEDpowerDAC0Min,LEDpower2Min];
 labjack.Modpowers1 = getModPower(200,2000,LEDpowerDAC0,LEDpowerDAC0Min);
 labjack.Modpowers2 = getModPower(250,2000,LEDpower2,LEDpower2Min);
 
@@ -179,7 +182,8 @@ configureStreamOut(handle,aAddressesOut,streamOutValues);
 scanNames = {'AIN0','AIN1','AIN2','AIN3','AIN10','AIN11'};
 labjack.rawScanIdx = [1 2 5 nan];
 labjack.modScanIdx = [3 4 6 4];
-if ~contains(labjack.name{3},'PMT','IgnoreCase',true)
+if labjack.mod(3) || ~contains(labjack.name{3},'PMT','IgnoreCase',true)
+    % Shared DAC0 modulation uses its AIN2 reference, including PMT inputs.
     labjack.modScanIdx(3) = 3;
 end
 if labjack.record(4)

@@ -54,8 +54,11 @@ mkdir(folder);
 cleanup = onCleanup(@() rmdir(folder,'s')); %#ok<NASGU>
 configFile = fullfile(folder,'config.json');
 fid = fopen(configFile,'w');
-fprintf(fid,'%s',jsonencode(struct('animal','test','spikeGLX',false, ...
-    'record',[false false false],'freqMod',[false true false])));
+presets(1) = struct('animal','legacy','spikeGLX',false, ...
+    'record',[false false false],'freqMod',[false true true]);
+presets(2) = struct('animal','AIN9','spikeGLX',false, ...
+    'record',[false false false false],'freqMod',[false false false true]);
+fprintf(fid,'%s',jsonencode(presets));
 fclose(fid);
 % Initialize graphics before timers can interrupt library loading, then wait
 % until the dialog has completed construction and entered uiwait.
@@ -67,7 +70,7 @@ start(t);
 [labjack,~,livePlot] = inputLabjackRecordingConfig(2000,configFile);
 verifyNotEmpty(testCase,labjack);
 verifyEqual(testCase,labjack.record,[false false false true]);
-verifyEqual(testCase,labjack.mod,[false true false true]);
+verifyEqual(testCase,labjack.mod,[true true true true]);
 verifyEqual(testCase,livePlot.channelIdx,7);
 
     function editDialog(~,~)
@@ -77,12 +80,24 @@ verifyEqual(testCase,livePlot.channelIdx,7);
         closeCleanup = onCleanup(@() closeDialog(fig)); %#ok<NASGU>
         control = @(tag) findobj(fig,'Tag',tag);
         verifyEqual(testCase,get(control('record4'),'Value'),0);
-        verifyEqual(testCase,get(control('freqMod4'),'Enable'),'off');
+        for c = 1:4
+            verifyEqual(testCase,get(control(sprintf('freqMod%d',c)),'Enable'),'on');
+            verifyEqual(testCase,get(control(sprintf('freqMod%d',c)),'Value'),1);
+        end
+        popup = findobj(fig,'Style','popupmenu');
+        set(popup,'Value',2);
+        invoke(popup);
+        verifyEqual(testCase,get(control('freqMod1'),'Value'),0);
+        verifyEqual(testCase,get(control('freqMod3'),'Value'),0);
+        verifyEqual(testCase,get(control('freqMod2'),'Value'),1);
         verifyEqual(testCase,get(control('freqMod4'),'Value'),1);
-        for value = [0 1]
-            set(control('freqMod2'),'Value',value);
-            invoke(control('freqMod2'));
-            verifyEqual(testCase,get(control('freqMod4'),'Value'),value);
+        for c = 1:4
+            partner = [3 4 1 2];
+            for value = [0 1]
+                set(control(sprintf('freqMod%d',c)),'Value',value);
+                invoke(control(sprintf('freqMod%d',c)));
+                verifyEqual(testCase,get(control(sprintf('freqMod%d',partner(c))),'Value'),value);
+            end
         end
         set(control('display4'),'Value',1);
         invoke(control('display4'));

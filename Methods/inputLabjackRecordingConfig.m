@@ -67,25 +67,24 @@ for i = 1:4
         'Tag',sprintf('display%d',i));
 end
 
-% A BNC split carries one physical waveform: channel 4 follows channel 2,
-% including when only channel 4 is recorded. Do not offer a separate mode.
-set(freqCheck(2),'Callback',@syncDAC1Mode);
-set(freqCheck(4),'Enable','off','TooltipString', ...
-    'Shares DAC1 with channel 2. Change frequency modulation in row 2.');
+% Each BNC split carries one physical waveform. Both checkboxes remain
+% editable, and changing either checkbox updates its shared-DAC partner.
+sharedPairs = [1 3; 2 4];
+for pairIdx = 1:size(sharedPairs,1)
+    callbackPair = sharedPairs(pairIdx,:);
+    for sharedChannel = callbackPair
+        set(freqCheck(sharedChannel),'Callback',@(src,~) syncSharedMode(src,callbackPair), ...
+            'TooltipString','Shared DAC: changing either checkbox updates both.');
+    end
+end
 set(recordCheck(4),'Callback',@selectAIN9Recording);
 set(displayCheck(4),'Callback',@selectAIN9Display);
 uicontrol(fig,'Style','text','HorizontalAlignment','left', ...
     'Position',[35 65 530 85],'String', ...
-    sprintf(['Channels 2 and 4 share DAC1: identical power and modulation.\n' ...
-    'Set frequency modulation in row 2; row 4 always follows it.\n' ...
+    sprintf(['Channels 1 + 3 share DAC0; channels 2 + 4 share DAC1.\n' ...
+    'Checking or unchecking either Freq mod box updates both in its pair.\n' ...
     'Recording either input powers BOTH connected LEDs.\n' ...
     'Record selects input data; it cannot switch the split LEDs separately.']));
-
-% Channels 1 and 3 share DAC0, so their freq-mod checkboxes are mutually
-% exclusive. DAC0 ownership is determined later from the Record selections:
-% channel 1 has priority when both channels are selected.
-set(freqCheck(1),'Callback',@(src,~) setExclusiveFreqMod(src,freqCheck(3)));
-set(freqCheck(3),'Callback',@(src,~) setExclusiveFreqMod(src,freqCheck(1)));
 
 uicontrol(fig,'Style','pushbutton','String','OK','Position',[315 20 80 30], ...
     'Callback',@okDialog);
@@ -131,7 +130,11 @@ livePlot.enable = ~isempty(livePlot.channelIdx);
             set(freqCheck(c),'Value',cfg.freqMod(c));
             set(displayCheck(c),'Value',cfg.display(c));
         end
-        syncDAC1Mode();
+        % For older presets with different values, either true selects both.
+        for p = 1:size(sharedPairs,1)
+            pair = sharedPairs(p,:);
+            set(freqCheck(pair),'Value',any(cfg.freqMod(pair)));
+        end
         selectAIN9Recording();
     end
 
@@ -170,9 +173,9 @@ livePlot.enable = ~isempty(livePlot.channelIdx);
             return
         end
 
-        if cfg.freqMod(1) && cfg.freqMod(3)
-            errordlg('Channels 1 and 3 share one DAC output and cannot both use freq mod.', ...
-                'Conflicting freq mod','modal');
+        if cfg.freqMod(1) ~= cfg.freqMod(3)
+            errordlg('Channels 1 and 3 share DAC0 and must use the same modulation setting.', ...
+                'Conflicting DAC0 settings','modal');
             return
         end
 
@@ -186,12 +189,8 @@ livePlot.enable = ~isempty(livePlot.channelIdx);
         uiresume(fig);
     end
 
-    function setExclusiveFreqMod(src,other)
-        if get(src,'Value'); set(other,'Value',0); end
-    end
-
-    function syncDAC1Mode(varargin)
-        set(freqCheck(4),'Value',get(freqCheck(2),'Value'));
+    function syncSharedMode(src,pair)
+        set(freqCheck(pair),'Value',get(src,'Value'));
     end
 
     function selectAIN9Recording(varargin)
