@@ -59,10 +59,10 @@
       "animal": "SL478",
       "spikeGLX": true,
       "channels": [
-        {"name": "NAc-MS", "freqMod": false, "display": false, "record": true},
+        {"name": "NAc-MS", "freqMod": false, "display": false, "record": false},
+        {"name": "NAc-LS", "freqMod": false, "display": false, "record": false},
         {"name": "NAc-LS", "freqMod": false, "display": false, "record": true},
-        {"name": "NAc-tdTom", "freqMod": false, "display": false, "record": false},
-        {"name": "AIN9", "freqMod": false, "display": false, "record": false}
+        {"name": "NAc-MS", "freqMod": false, "display": false, "record": true}
       ]
     },
 
@@ -70,10 +70,10 @@
       "animal": "SL479-SL481",
       "spikeGLX": true,
       "channels": [
-        {"name": "DLS", "freqMod": false, "display": false, "record": true},
+        {"name": "DLS", "freqMod": false, "display": false, "record": false},
+        {"name": "NAc-LS", "freqMod": false, "display": false, "record": false},
         {"name": "NAc-LS", "freqMod": false, "display": false, "record": true},
-        {"name": "NAc-tdTom", "freqMod": false, "display": false, "record": false},
-        {"name": "AIN9", "freqMod": false, "display": false, "record": false}
+        {"name": "DLS", "freqMod": false, "display": false, "record": true}
       ]
     }
   ]
