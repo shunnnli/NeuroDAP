@@ -1100,6 +1100,7 @@ function qcSummary = localSummarizeDMDQC(spotsAtDepth)
                       'VariableNames',varNames);
 
     if isempty(spotsAtDepth) || ~ismember('QC',spotsAtDepth.Properties.VariableNames)
+        qcSummary = localQCTableToStruct(qcSummary);
         return
     end
 
@@ -1121,6 +1122,23 @@ function qcSummary = localSummarizeDMDQC(spotsAtDepth)
         for m = 1:numel(metricNames)
             qcSummary{i,metricNames{m}} = localGetQCValue(qc,metricNames{m});
         end
+    end
+
+    qcSummary = localQCTableToStruct(qcSummary);
+end
+
+function qcStruct = localQCTableToStruct(qcTable)
+    % Store the QC summary as a scalar struct of columns rather than a table.
+    %
+    % A MATLAB table is a classdef object, so saving one inside cells_DMD_*.mat
+    % writes only an MCOS handle into the 'QC' column and hides the values in
+    % #subsystem#/MCOS, where h5py-based readers cannot reach them. A scalar
+    % struct of arrays is plain HDF5 and loads like 'Response map' or 'Stats'.
+    % Sweep has to become a cellstr for the same reason: MATLAB string is
+    % itself a classdef object and would serialize as MCOS again.
+    qcStruct = table2struct(qcTable,'ToScalar',true);
+    if isfield(qcStruct,'Sweep')
+        qcStruct.Sweep = cellstr(qcStruct.Sweep);
     end
 end
 
