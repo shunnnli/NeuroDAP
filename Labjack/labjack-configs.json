@@ -6,7 +6,8 @@
       "channels": [
         {"name": "dLight", "freqMod": true, "display": false, "record": true},
         {"name": "GCaMP8m", "freqMod": true, "display": false, "record": false},
-        {"name": "PMT", "freqMod": false, "display": false, "record": false}
+        {"name": "PMT", "freqMod": false, "display": false, "record": false},
+        {"name": "AIN9", "freqMod": true, "display": false, "record": false}
       ]
     },
 
@@ -16,7 +17,8 @@
       "channels": [
         {"name": "dLight", "freqMod": false, "display": false, "record": true},
         {"name": "iGABASnFR", "freqMod": false, "display": false, "record": true},
-        {"name": "nan", "freqMod": true, "display": false, "record": false}
+        {"name": "nan", "freqMod": true, "display": false, "record": false},
+        {"name": "AIN9", "freqMod": false, "display": false, "record": false}
       ]
     },
 
@@ -26,7 +28,8 @@
       "channels": [
         {"name": "dLight", "freqMod": false, "display": false, "record": false},
         {"name": "GCaMP8m", "freqMod": false, "display": false, "record": false},
-        {"name": "rdLight", "freqMod": true, "display": false, "record": true}
+        {"name": "rdLight", "freqMod": true, "display": false, "record": true},
+        {"name": "AIN9", "freqMod": false, "display": false, "record": false}
       ]
     },
 
@@ -36,7 +39,8 @@
       "channels": [
         {"name": "NAc-left", "freqMod": false, "display": false, "record": true},
         {"name": "NAc-right", "freqMod": false, "display": false, "record": true},
-        {"name": "NAc-tdTom", "freqMod": false, "display": false, "record": true}
+        {"name": "NAc-tdTom", "freqMod": false, "display": false, "record": true},
+        {"name": "AIN9", "freqMod": false, "display": false, "record": false}
       ]
     },
 
@@ -46,7 +50,8 @@
       "channels": [
         {"name": "NAc-right", "freqMod": false, "display": false, "record": false},
         {"name": "NAc-left", "freqMod": false, "display": false, "record": true},
-        {"name": "NAc-tdTom", "freqMod": false, "display": false, "record": true}
+        {"name": "NAc-tdTom", "freqMod": false, "display": false, "record": true},
+        {"name": "AIN9", "freqMod": false, "display": false, "record": false}
       ]
     },
 
@@ -56,7 +61,8 @@
       "channels": [
         {"name": "NAc-MS", "freqMod": false, "display": false, "record": true},
         {"name": "NAc-LS", "freqMod": false, "display": false, "record": true},
-        {"name": "NAc-tdTom", "freqMod": false, "display": false, "record": false}
+        {"name": "NAc-tdTom", "freqMod": false, "display": false, "record": false},
+        {"name": "AIN9", "freqMod": false, "display": false, "record": false}
       ]
     },
 
@@ -66,7 +72,8 @@
       "channels": [
         {"name": "DLS", "freqMod": false, "display": false, "record": true},
         {"name": "NAc-LS", "freqMod": false, "display": false, "record": true},
-        {"name": "NAc-tdTom", "freqMod": false, "display": false, "record": false}
+        {"name": "NAc-tdTom", "freqMod": false, "display": false, "record": false},
+        {"name": "AIN9", "freqMod": false, "display": false, "record": false}
       ]
     }
   ]

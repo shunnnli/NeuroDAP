@@ -61,28 +61,35 @@ if ~isfield(labjack,'record')
     labjack.record = options.record; 
     labjack.nSignals = sum(labjack.record);
 end
+% Older callers supply three selections; an omitted AIN9 selection is false.
+requestedRecord = logical(options.record(:)');
+if numel(requestedRecord) < numel(labjack.record)
+    requestedRecord(end+1:numel(labjack.record)) = false;
+end
 % If input is different from labjack.record
-if sum(labjack.record == options.record) ~= 3 
+if ~isequal(logical(labjack.record(:)'),requestedRecord)
         disp(['labjack.record: ',num2str(labjack.record)]);
         disp(['options.recordLJ: ',num2str(options.record)]);
     if options.followOriginal
         warning("labjack.record does not agree with recordLJ, reload using labjack.record"); 
     else
-        labjack.record = options.record;
+        if numel(requestedRecord) ~= numel(labjack.record)
+            error('Requested channels do not match the recorded channel layout.');
+        end
+        labjack.record = requestedRecord;
         labjack.nSignals = sum(labjack.record);
-        labjack.mod(find(~labjack.record)) = [];
-        labjack.modFreq(find(~labjack.record)) = [];
         warning("labjack.record does not agree with recordLJ, reload using recordLJ"); 
     end
 end
 % Replace space in name with underscore
-for i = 1:labjack.nSignals
+for i = 1:numel(labjack.name)
     labjack.name{i} = strrep(labjack.name{i}, ' ', '-');
     labjack.name{i} = strrep(labjack.name{i}, '_', '-');
 end
 
 %% Load all data
 numChannels = length(temp)/labjack.samplerate;
+if isfield(labjack,'numAddressesIn'); numChannels = labjack.numAddressesIn; end
 output = zeros(1,(length(D)*length(temp)));
 for i = 1:length(D)
     load(strcat(pathPhotometry,filename{i}));
@@ -91,7 +98,9 @@ end
 totalLen = length(output);
 
 % Store sync pulse
-sync_labjack = output(mod(1:totalLen,numChannels)==0);  % sync pulse
+syncScanIdx = numChannels;
+if isfield(labjack,'syncScanIdx'); syncScanIdx = labjack.syncScanIdx; end
+sync_labjack = output(syncScanIdx:numChannels:end);
 labjack.sync = sync_labjack;
 
 % Initialize data matrix
@@ -107,14 +116,24 @@ if numel(labjack.name) >= 3 && ...
         ~contains(labjack.name{3},"PMT",IgnoreCase=true)
     modScanIdx(3) = 3;      % non-PMT channel 3 uses the DAC0 reference
 end
+% New recordings save the exact layout, including optional AIN9 and its
+% shared DAC1 reference (AIN3). Keep the legacy mapping for older info.mat.
+if isfield(labjack,'rawScanIdx')
+    rawScanIdx = labjack.rawScanIdx;
+    modScanIdx = labjack.modScanIdx;
+end
+selectedScanIdx = rawScanIdx(logical(labjack.record));
+if any(~isfinite(selectedScanIdx))
+    error('A selected input was not acquired in this recording.');
+end
 
 % Log each recorded signal to its corresponding compacted row.
 row = 0;
 for i = 1:size(labjack.name,2)
     if labjack.record(i)
         row = row + 1;
-        labjack.raw(row,:) = output(mod(1:totalLen,numChannels)==rawScanIdx(i));
-        labjack.modulation(row,:) = output(mod(1:totalLen,numChannels)==modScanIdx(i));
+        labjack.raw(row,:) = output(rawScanIdx(i):numChannels:end);
+        labjack.modulation(row,:) = output(modScanIdx(i):numChannels:end);
     end
 end
 
@@ -122,9 +141,10 @@ end
 if options.plot
     initializeFig(0.67,0.67); tiledlayout(labjack.nSignals*2 + 1,1);
     nexttile; plot(sync_labjack); title('sync'); box off
+    sourceIdx = find(labjack.record);
     for i = 1:size(labjack.raw,1)
-        nexttile; plot(labjack.raw(i,:)); title(strcat(labjack.name{i},'(raw)')); box off
-        nexttile; plot(labjack.modulation(i,:)); title(strcat(labjack.name{i},'(mod)')); box off
+        nexttile; plot(labjack.raw(i,:)); title(strcat(labjack.name{sourceIdx(i)},'(raw)')); box off
+        nexttile; plot(labjack.modulation(i,:)); title(strcat(labjack.name{sourceIdx(i)},'(mod)')); box off
     end
     saveas(gcf,strcat(options.outputPath,filesep,'Summary_labjack_raw.fig'));
 end

@@ -10,12 +10,13 @@ end
 configs = readConfigFiles(configPath);
 if isempty(configs); configs = defaultConfigs(); end
 
-channelScanIdx = [1 2 5]; % AIN0, AIN1, AIN10 (PMT)
+channelScanIdx = [1 2 5 7]; % AIN0, AIN1, AIN10, optional AIN9
+channelLabels = {'1: AIN0','2: AIN1','3: AIN10','4: AIN9'};
 answer = [];
 okPressed = false;
 
 fig = dialog('Name','LabJack recording config','WindowStyle','modal', ...
-    'Units','pixels','Position',[100 100 560 365],'Resize','off');
+    'Units','pixels','Position',[100 100 600 460],'Resize','off');
 movegui(fig,'center');
 set(fig,'CloseRequestFcn',@cancelDialog);
 
@@ -26,42 +27,59 @@ rightEdge = 440;
 spikeW = 80;
 
 uicontrol(fig,'Style','text','String','Session name','HorizontalAlignment','right', ...
-    'Position',[labelX 325 labelW 20]);
+    'Position',[labelX 420 labelW 20]);
 sessionEdit = uicontrol(fig,'Style','edit','HorizontalAlignment','left', ...
-    'Position',[controlX 322 rightEdge-controlX 26]);
+    'Position',[controlX 417 rightEdge-controlX 26],'Tag','sessionName');
 
 uicontrol(fig,'Style','text','String','Animal settings','HorizontalAlignment','right', ...
-    'Position',[labelX 290 labelW 20]);
+    'Position',[labelX 385 labelW 20]);
 animalPopup = uicontrol(fig,'Style','popupmenu','String',{configs.animal}, ...
-    'Position',[controlX 287 150 24],'Callback',@selectConfig);
+    'Position',[controlX 382 150 24],'Callback',@selectConfig);
 spikeCheck = uicontrol(fig,'Style','checkbox','String','SpikeGLX', ...
-    'Position',[rightEdge-spikeW 287 spikeW 24]);
+    'Position',[rightEdge-spikeW 382 spikeW 24]);
 
 uicontrol(fig,'Style','text','String','Channel','HorizontalAlignment','left', ...
-    'Position',[35 250 75 18]);
+    'Position',[35 345 75 18]);
 uicontrol(fig,'Style','text','String','Record','HorizontalAlignment','center', ...
-    'Position',[115 250 65 18]);
+    'Position',[115 345 65 18]);
 uicontrol(fig,'Style','text','String','Name','HorizontalAlignment','left', ...
-    'Position',[195 250 120 18]);
+    'Position',[195 345 120 18]);
 uicontrol(fig,'Style','text','String','Freq mod','HorizontalAlignment','center', ...
-    'Position',[335 250 65 18]);
+    'Position',[335 345 65 18]);
 uicontrol(fig,'Style','text','String','Display','HorizontalAlignment','center', ...
-    'Position',[420 250 65 18]);
+    'Position',[420 345 65 18]);
 
-recordCheck = gobjects(1,3);
-nameEdit = gobjects(1,3);
-freqCheck = gobjects(1,3);
-displayCheck = gobjects(1,3);
-for i = 1:3
-    y = 250 - i*45;
-    uicontrol(fig,'Style','text','String',sprintf('Channel %d',i), ...
+recordCheck = gobjects(1,4);
+nameEdit = gobjects(1,4);
+freqCheck = gobjects(1,4);
+displayCheck = gobjects(1,4);
+for i = 1:4
+    y = 345 - i*45;
+    uicontrol(fig,'Style','text','String',channelLabels{i}, ...
         'HorizontalAlignment','left','Position',[35 y+4 75 20]);
-    recordCheck(i) = uicontrol(fig,'Style','checkbox','Position',[137 y+4 24 24]);
+    recordCheck(i) = uicontrol(fig,'Style','checkbox','Position',[137 y+4 24 24], ...
+        'Tag',sprintf('record%d',i));
     nameEdit(i) = uicontrol(fig,'Style','edit','HorizontalAlignment','left', ...
         'Position',[195 y 120 26]);
-    freqCheck(i) = uicontrol(fig,'Style','checkbox','Position',[358 y+4 24 24]);
-    displayCheck(i) = uicontrol(fig,'Style','checkbox','Position',[442 y+4 24 24]);
+    freqCheck(i) = uicontrol(fig,'Style','checkbox','Position',[358 y+4 24 24], ...
+        'Tag',sprintf('freqMod%d',i));
+    displayCheck(i) = uicontrol(fig,'Style','checkbox','Position',[442 y+4 24 24], ...
+        'Tag',sprintf('display%d',i));
 end
+
+% A BNC split carries one physical waveform: channel 4 follows channel 2,
+% including when only channel 4 is recorded. Do not offer a separate mode.
+set(freqCheck(2),'Callback',@syncDAC1Mode);
+set(freqCheck(4),'Enable','off','TooltipString', ...
+    'Shares DAC1 with channel 2. Change frequency modulation in row 2.');
+set(recordCheck(4),'Callback',@selectAIN9Recording);
+set(displayCheck(4),'Callback',@selectAIN9Display);
+uicontrol(fig,'Style','text','HorizontalAlignment','left', ...
+    'Position',[35 65 530 85],'String', ...
+    sprintf(['Channels 2 and 4 share DAC1: identical power and modulation.\n' ...
+    'Set frequency modulation in row 2; row 4 always follows it.\n' ...
+    'Recording either input powers BOTH connected LEDs.\n' ...
+    'Record selects input data; it cannot switch the split LEDs separately.']));
 
 % Channels 1 and 3 share DAC0, so their freq-mod checkboxes are mutually
 % exclusive. DAC0 ownership is determined later from the Record selections:
@@ -81,7 +99,7 @@ if ishandle(fig); delete(fig); end
 if ~okPressed
     labjack = [];
     spikeGLX = false;
-    livePlot = struct('enable',false,'channelIdx',[],'display',false(1,3));
+    livePlot = struct('enable',false,'channelIdx',[],'display',false(1,4));
     config = [];
     return
 end
@@ -107,19 +125,21 @@ livePlot.enable = ~isempty(livePlot.channelIdx);
     function applyConfig(idx)
         cfg = configs(idx);
         set(spikeCheck,'Value',cfg.spikeGLX);
-        for c = 1:3
+        for c = 1:4
             set(recordCheck(c),'Value',cfg.record(c));
             set(nameEdit(c),'String',cfg.channelNames{c});
             set(freqCheck(c),'Value',cfg.freqMod(c));
             set(displayCheck(c),'Value',cfg.display(c));
         end
+        syncDAC1Mode();
+        selectAIN9Recording();
     end
 
     function okDialog(~,~)
         idx = get(animalPopup,'Value');
         cfg = configs(idx);
         cfg.sessionName = strtrim(get(sessionEdit,'String'));
-        for c = 1:3
+        for c = 1:4
             cfg.record(c) = logical(get(recordCheck(c),'Value'));
             cfg.channelNames{c} = strtrim(get(nameEdit(c),'String'));
             cfg.freqMod(c) = logical(get(freqCheck(c),'Value'));
@@ -134,8 +154,19 @@ livePlot.enable = ~isempty(livePlot.channelIdx);
         end
 
         if any(cellfun(@isempty,cfg.channelNames))
-            errordlg('Please enter a name for all three channels.', ...
+            errordlg('Please enter a name for all four channels.', ...
                 'Missing channel name','modal');
+            return
+        end
+
+        if cfg.freqMod(2) ~= cfg.freqMod(4)
+            errordlg('Channels 2 and 4 share DAC1 and must use the same modulation setting.', ...
+                'Conflicting DAC1 settings','modal');
+            return
+        end
+        if cfg.display(4) && ~cfg.record(4)
+            errordlg('Select Record for AIN9 before displaying it.', ...
+                'AIN9 is not recorded','modal');
             return
         end
 
@@ -157,6 +188,18 @@ livePlot.enable = ~isempty(livePlot.channelIdx);
 
     function setExclusiveFreqMod(src,other)
         if get(src,'Value'); set(other,'Value',0); end
+    end
+
+    function syncDAC1Mode(varargin)
+        set(freqCheck(4),'Value',get(freqCheck(2),'Value'));
+    end
+
+    function selectAIN9Recording(varargin)
+        if ~get(recordCheck(4),'Value'); set(displayCheck(4),'Value',0); end
+    end
+
+    function selectAIN9Display(varargin)
+        if get(displayCheck(4),'Value'); set(recordCheck(4),'Value',1); end
     end
 end
 
@@ -198,7 +241,7 @@ if isfield(raw,'channelNames')
 end
 if isfield(raw,'channels')
     channels = raw.channels;
-    for i = 1:min(numel(channels),3)
+    for i = 1:min(numel(channels),4)
         if isfield(channels(i),'name'); cfg.channelNames{i} = char(channels(i).name); end
         if isfield(channels(i),'freqMod'); cfg.freqMod(i) = logical(channels(i).freqMod); end
         if isfield(channels(i),'display'); cfg.display(i) = logical(channels(i).display); end
@@ -210,14 +253,14 @@ end
 
 function cfg = blankConfig()
 cfg = struct('sessionName','','animal','Default', ...
-    'channelNames',{{'NAc-left','NAc-right','PMT'}}, ...
-    'freqMod',false(1,3),'display',false(1,3),'record',[true true false], ...
+    'channelNames',{{'NAc-left','NAc-right','PMT','AIN9'}}, ...
+    'freqMod',false(1,4),'display',false(1,4),'record',[true true false false], ...
     'spikeGLX',true,'sourceFile','');
 end
 
 function configs = defaultConfigs()
 configs = blankConfig();
-configs.display = [true true false];
+configs.display = [true true false false];
 end
 
 function out = logicalVector(value, fallback)

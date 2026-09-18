@@ -1,0 +1,131 @@
+function tests = testLabjackAIN9
+tests = functiontests(localfunctions);
+end
+
+function testOptionalAIN9AndSharedReference(testCase)
+% Exercise every recording selection, with and without the extra scan input.
+for mask = 0:15
+    record = logical(bitget(mask,1:4));
+    [folder,cleanup,labjack,scans] = makeRecording(record); %#ok<ASGLU>
+    concatLabjack(folder,record=double(record),saveDuplicate=false);
+    result = load(fullfile(folder,'data_labjack.mat'));
+    rows = labjack.rawScanIdx(record);
+    refs = labjack.modScanIdx(record);
+    verifyEqual(testCase,result.labjack.raw,scans(rows,:));
+    verifyEqual(testCase,result.labjack.modulation,scans(refs,:));
+    verifyEqual(testCase,result.sync_labjack,scans(end,:));
+    verifyEqual(testCase,result.labjack.mod,labjack.mod(record));
+    verifyEqual(testCase,result.labjack.modFreq,labjack.modFreq(record));
+    verifyEqual(testCase,result.labjack.LEDpowers,labjack.LEDpowers(record));
+    clear cleanup
+end
+end
+
+function testLegacyThreeChannelRecording(testCase)
+[folder,cleanup,labjack,scans] = makeRecording([true true true false]); %#ok<ASGLU>
+labjack = rmfield(labjack,{'rawScanIdx','modScanIdx','numAddressesIn','syncScanIdx'});
+labjack.record = [true true true];
+labjack.name = labjack.name(1:3);
+labjack.mod = labjack.mod(1:3);
+labjack.modFreq = labjack.modFreq(1:3);
+save(fullfile(folder,'Photometry','info.mat'),'labjack');
+concatLabjack(folder,record=[1 1 1],saveDuplicate=false);
+result = load(fullfile(folder,'data_labjack.mat'));
+verifyEqual(testCase,result.labjack.raw,scans([1 2 5],:));
+verifyEqual(testCase,result.labjack.modulation,scans([3 4 6],:));
+verifyEqual(testCase,result.sync_labjack,scans(7,:));
+end
+
+function testSelectingOnlyAIN9DuringConcatenation(testCase)
+[folder,cleanup,labjack,scans] = makeRecording([true true true true]); %#ok<ASGLU>
+concatLabjack(folder,record=[0 0 0 1],followOriginal=false,saveDuplicate=false);
+result = load(fullfile(folder,'data_labjack.mat'));
+verifyEqual(testCase,result.labjack.raw,scans(7,:));
+verifyEqual(testCase,result.labjack.modulation,scans(4,:));
+verifyEqual(testCase,result.labjack.mod,true);
+verifyEqual(testCase,result.labjack.modFreq,250);
+verifyEqual(testCase,result.labjack.name,{'AIN9'});
+end
+
+function testGUISharedModeAndOptionalInput(testCase)
+% An old three-channel preset must still open, defaulting AIN9 to unselected.
+folder = tempname;
+mkdir(folder);
+cleanup = onCleanup(@() rmdir(folder,'s')); %#ok<NASGU>
+configFile = fullfile(folder,'config.json');
+fid = fopen(configFile,'w');
+fprintf(fid,'%s',jsonencode(struct('animal','test','spikeGLX',false, ...
+    'record',[false false false],'freqMod',[false true false])));
+fclose(fid);
+% Initialize graphics before timers can interrupt library loading, then wait
+% until the dialog has completed construction and entered uiwait.
+warmup = figure('Visible','off');
+delete(warmup);
+t = timer('ExecutionMode','fixedSpacing','Period',0.2,'TimerFcn',@editDialog);
+timerCleanup = onCleanup(@() delete(t)); %#ok<NASGU>
+start(t);
+[labjack,~,livePlot] = inputLabjackRecordingConfig(2000,configFile);
+verifyNotEmpty(testCase,labjack);
+verifyEqual(testCase,labjack.record,[false false false true]);
+verifyEqual(testCase,labjack.mod,[false true false true]);
+verifyEqual(testCase,livePlot.channelIdx,7);
+
+    function editDialog(~,~)
+        fig = findall(groot,'Type','figure','Name','LabJack recording config');
+        if isempty(fig) || ~strcmp(get(fig,'WaitStatus'),'waiting'); return; end
+        stop(t);
+        closeCleanup = onCleanup(@() closeDialog(fig)); %#ok<NASGU>
+        control = @(tag) findobj(fig,'Tag',tag);
+        verifyEqual(testCase,get(control('record4'),'Value'),0);
+        verifyEqual(testCase,get(control('freqMod4'),'Enable'),'off');
+        verifyEqual(testCase,get(control('freqMod4'),'Value'),1);
+        for value = [0 1]
+            set(control('freqMod2'),'Value',value);
+            invoke(control('freqMod2'));
+            verifyEqual(testCase,get(control('freqMod4'),'Value'),value);
+        end
+        set(control('display4'),'Value',1);
+        invoke(control('display4'));
+        verifyEqual(testCase,get(control('record4'),'Value'),1);
+        set(control('record4'),'Value',0);
+        invoke(control('record4'));
+        verifyEqual(testCase,get(control('display4'),'Value'),0);
+        set(control('display4'),'Value',1);
+        invoke(control('display4'));
+        set(control('sessionName'),'String','test-session');
+        invoke(findobj(fig,'Style','pushbutton','String','OK'));
+    end
+end
+
+function invoke(control)
+callback = get(control,'Callback');
+callback(control,[]);
+end
+
+function closeDialog(fig)
+% Release uiwait even if a GUI assertion fails; leave accepted state intact.
+if isgraphics(fig); uiresume(fig); end
+end
+
+function [folder,cleanup,labjack,scans] = makeRecording(record)
+folder = tempname;
+mkdir(fullfile(folder,'Photometry'));
+cleanup = onCleanup(@() rmdir(folder,'s'));
+labjack.record = record;
+labjack.nSignals = sum(record);
+labjack.name = {'first','second','PMT','AIN9'};
+labjack.mod = [false true false true];
+labjack.modFreq = [200 250 nan 250];
+labjack.LEDpowers = [0.8 3 3 3];
+labjack.LEDpowersMin = [0.3 0.2 0.2 0.2];
+labjack.samplerate = 20;
+labjack.numAddressesIn = 7 + double(record(4));
+labjack.syncScanIdx = labjack.numAddressesIn;
+labjack.rawScanIdx = [1 2 5 nan];
+if record(4); labjack.rawScanIdx(4) = 7; end
+labjack.modScanIdx = [3 4 6 4];
+scans = (1:labjack.numAddressesIn)'*100 + (1:labjack.samplerate);
+temp = reshape(scans,1,[]);
+save(fullfile(folder,'Photometry','info.mat'),'labjack');
+save(fullfile(folder,'Photometry','Raw_1001.mat'),'temp');
+end

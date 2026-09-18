@@ -49,7 +49,7 @@ if isempty(labjack); return; end
 
 % Select channels for live plotting from GUI display checkboxes.
 enableLivePlot = livePlot.enable;
-plotChanIdx = livePlot.channelIdx; % 1=AIN0, 2=AIN1, 5=AIN10 (PMT)
+plotChanIdx = livePlot.channelIdx; % 1=AIN0, 2=AIN1, 5=AIN10, 7=AIN9 (if recorded)
 
 % LED power settings
 LEDpower1 = 0.8; %1.5;%0.5; % power to get 30uW
@@ -74,17 +74,23 @@ end
 LEDpowerDAC0 = LEDpower1; LEDpowerDAC0Min = LEDpower1Min;
 if dac0Chan == 3; LEDpowerDAC0 = LEDpower3; LEDpowerDAC0Min = LEDpower3Min; end
 
-% Define modulation params. Channel 2 always owns DAC1; the selected DAC0
-% owner is the other possible modulated channel.
-labjack.modFreq = nan(1,3);
+% Channels 2 (AIN1) and 4 (AIN9) are physically split from DAC1. Channel 2
+% defines their common power and modulation even if only AIN9 is recorded.
+assert(labjack.mod(2) == labjack.mod(4), ...
+    'Channels 2 and 4 share DAC1 and cannot have independent modulation.');
+dacEnabled = [labjack.record(dac0Chan), any(labjack.record([2 4]))];
+labjack.dacChannel = [dac0Chan 2];
+labjack.dacEnabled = dacEnabled;
+labjack.channelDAC = [0 1 0 1];
+labjack.modFreq = nan(1,4);
 labjack.modFreq(dac0Chan) = 200;
-labjack.modFreq(2) = 250;
+labjack.modFreq([2 4]) = 250;
 
 % Define mod frequency power
 labjack.nSignals = sum(labjack.record);
 looplength = samplerate*ones(size(labjack.modFreq)) ./ labjack.modFreq; % 200, 250Hz
-labjack.LEDpowers = [LEDpower1,LEDpower2,LEDpower3];
-labjack.LEDpowersMin = [LEDpower1Min,LEDpower2Min,LEDpower3Min];
+labjack.LEDpowers = [LEDpower1,LEDpower2,LEDpower3,LEDpower2];
+labjack.LEDpowersMin = [LEDpower1Min,LEDpower2Min,LEDpower3Min,LEDpower2Min];
 labjack.Modpowers1 = getModPower(200,2000,LEDpowerDAC0,LEDpowerDAC0Min);
 labjack.Modpowers2 = getModPower(250,2000,LEDpower2,LEDpower2Min);
 
@@ -145,18 +151,16 @@ LabJack.LJM.NamesToAddresses(numAddressesOut, aNamesOut, ...
     aAddressesOut, aTypesOut);
 
 % Build the exact waveforms that will be used for both LED preview and
-% recording. A freq-mod selection only produces light when that channel is
-% also selected for recording; otherwise the corresponding DAC stays at 0 V.
+% recording. DAC1 is on when either channel 2 or 4 is recorded. With the
+% physical BNC split, both attached LEDs receive that voltage together.
 streamOutPowers = {labjack.Modpowers1, labjack.Modpowers2};
 streamOutConst = [LEDpowerDAC0, LEDpower2];
 dacChannel = [dac0Chan, 2]; % which labjack.mod/modFreq index feeds each DAC
 streamOutValues = cell(1,numAddressesOut);
 for outIdx = 1:numAddressesOut
     ch = dacChannel(outIdx);
-    if ~labjack.record(ch)
-        % Channel not recorded: keep its LED fully off (no voltage on
-        % this DAC), since channels 2 and 3 share a physical fiber and
-        % an unrecorded channel's LED must not add stray light.
+    if ~dacEnabled(outIdx)
+        % Turn off a physical output only when none of its owners need it.
         powers = zeros(1,looplength(ch));
     elseif labjack.mod(ch)
         powers = streamOutPowers{outIdx};
@@ -170,15 +174,27 @@ configureStreamOut(handle,aAddressesOut,streamOutValues);
     
 % Stream-in  configuration
 % Scan list names to stream-in
-numAddressesIn = 7; %5;
+% Preserve the existing six analog inputs. Insert optional AIN9 before sync
+% so DIO0 remains the final input in both seven- and eight-column recordings.
+scanNames = {'AIN0','AIN1','AIN2','AIN3','AIN10','AIN11'};
+labjack.rawScanIdx = [1 2 5 nan];
+labjack.modScanIdx = [3 4 6 4];
+if ~contains(labjack.name{3},'PMT','IgnoreCase',true)
+    labjack.modScanIdx(3) = 3;
+end
+if labjack.record(4)
+    scanNames{end+1} = 'AIN9';
+    labjack.rawScanIdx(4) = numel(scanNames);
+end
+scanNames{end+1} = 'DIO0';
+numAddressesIn = numel(scanNames);
+labjack.scanNames = scanNames;
+labjack.numAddressesIn = numAddressesIn;
+labjack.syncScanIdx = numAddressesIn;
 aScanListNames = NET.createArray('System.String', numAddressesIn);
-aScanListNames(1) = 'AIN0';     % photodiode green NAc channel
-aScanListNames(2) = 'AIN1';     % photodiode green LHb channel
-aScanListNames(3) = 'AIN2';     % copy of DAC0 out to NAc LED
-aScanListNames(4) = 'AIN3';     % copy of DAC1 out to LHb LED
-aScanListNames(5) = 'AIN10';    % PMT channel
-aScanListNames(6) = 'AIN11';    % PMT galvo copy (not working)
-aScanListNames(7) = 'DIO0';     % Sync pulse
+for inIdx = 1:numAddressesIn
+    aScanListNames(inIdx) = scanNames{inIdx};
+end
 
 
 % Scan list addresses to stream
@@ -209,7 +225,7 @@ LabJack.LJM.eWriteName(handle, 'STREAM_CLOCK_SOURCE', 0);
 
 % All negative channels are single-ended, AIN0 and AIN1 ranges are +/-10 V,
 % stream settling is 0 (default), and stream resolution index is 0 (default).
-numFrames = 9;
+numFrames = 9 + double(labjack.record(4));
 aNames = NET.createArray('System.String', numFrames);
 aNames(1) = 'AIN_ALL_NEGATIVE_CH';
 aNames(2) = 'AIN0_RANGE';
@@ -230,6 +246,10 @@ aValues(6) = 10.0;
 aValues(7) = 10.0;
 aValues(8) = 0;
 aValues(9) = 0;
+if labjack.record(4)
+    aNames(10) = 'AIN9_RANGE';
+    aValues(10) = 10.0;
+end
 LabJack.LJM.eWriteNames(handle, numFrames, aNames, aValues, -1);
 
 % A stream-out waveform does not advance until a stream is running. Start a
@@ -246,16 +266,22 @@ disp(['LED preview started at a scan rate of ' num2str(previewScanRate) ' Hz.'])
 previewMessage = {'The confirmed LED configuration is now being output.',''};
 for outIdx = 1:numAddressesOut
     ch = dacChannel(outIdx);
-    if ~labjack.record(ch)
-        outputDescription = 'OFF (Record is unchecked)';
+    if ~dacEnabled(outIdx)
+        outputDescription = 'OFF (no associated input selected for recording)';
     elseif labjack.mod(ch)
         outputDescription = sprintf('frequency modulated at %g Hz',labjack.modFreq(ch));
     else
         outputDescription = sprintf('constant at %g V',streamOutConst(outIdx));
     end
+    outputLabel = labjack.name{ch};
+    if outIdx == 2
+        outputLabel = sprintf('%s + %s (channels 2 + 4)', ...
+            labjack.name{2},labjack.name{4});
+    end
     previewMessage{end+1} = sprintf('DAC%d / %s: %s', ...
-        outIdx-1,labjack.name{ch},outputDescription); %#ok<SAGROW>
+        outIdx-1,outputLabel,outputDescription); %#ok<SAGROW>
 end
+previewMessage{end+1} = 'DAC1 powers BOTH split LEDs, even if only one input is recorded.';
 previewMessage{end+1} = '';
 previewMessage{end+1} = 'Check the LEDs, then press Start recording to continue.';
 
@@ -295,7 +321,7 @@ configureStreamOut(handle,aAddressesOut,streamOutValues);
      % ---------------- Live plot + save buffering ----------------
     % Reading smaller chunks so the live plot updates roughly every plotUpdateSec.
     if enableLivePlot
-        chanLabels = {'AIN0','AIN1','AIN2','AIN3','AIN10','AIN11','DIO0'};
+        chanLabels = scanNames;
 
         % Create a wide + short window so the trace looks "flat" and the title
         % has enough headroom.
