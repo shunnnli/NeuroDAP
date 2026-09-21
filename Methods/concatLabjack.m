@@ -1,12 +1,13 @@
 function concatLabjack(sessionpath,options)
 
-% Extract params and concatenate Raw_*.mat files from a given directory
+% Concatenate recordings using their saved input and shared-DAC mappings.
+% Legacy recordings without scan metadata retain the original channel layout.
 arguments
     sessionpath % path to photometry
 
     options.plot logical = false % Plot summary figures
     options.save logical = true % save as mat files
-    options.record double = [1,1,0] % Recorded channels
+    options.record double = [1,1,0] % AIN0, AIN1, AIN10, optional AIN9
     options.rebuildInfo logical = false % rebuild info (old version of the system)
 
     options.followOriginal logical = true % Follow original recorded information
@@ -22,7 +23,16 @@ pathPhotometry = strcat(sessionpath,filesep,'Photometry',filesep);
 load(strcat(pathPhotometry,'info.mat'));
 
 D = dir(strcat(pathPhotometry,'Raw_*.mat')); 
-filename = {D.name}; load(strcat(pathPhotometry,filename{1}));
+if isempty(D)
+    error('concatLabjack:NoRawFiles','No Raw_*.mat files found in %s.',pathPhotometry);
+end
+filename = {D.name};
+% Numeric order remains correct when the counter grows past Raw_9999.mat.
+fileNumber = cellfun(@(name) sscanf(name,'Raw_%d.mat',1),filename);
+[~,fileOrder] = sort(fileNumber);
+filename = filename(fileOrder);
+firstChunk = load(fullfile(pathPhotometry,filename{1}),'temp');
+temp = firstChunk.temp;
 
 %% Store mod related signal
 if ~exist('labjack','var')
@@ -81,6 +91,8 @@ if ~isequal(logical(labjack.record(:)'),requestedRecord)
         warning("labjack.record does not agree with recordLJ, reload using recordLJ"); 
     end
 end
+labjack.record = logical(labjack.record(:)');
+labjack.nSignals = sum(labjack.record);
 % Replace space in name with underscore
 for i = 1:numel(labjack.name)
     labjack.name{i} = strrep(labjack.name{i}, ' ', '-');
@@ -91,10 +103,18 @@ end
 numChannels = length(temp)/labjack.samplerate;
 if isfield(labjack,'numAddressesIn'); numChannels = labjack.numAddressesIn; end
 output = zeros(1,(length(D)*length(temp)));
+writePos = 1;
 for i = 1:length(D)
-    load(strcat(pathPhotometry,filename{i}));
-    output(((i-1)*length(temp)+1):(i*length(temp))) = temp;
+    chunk = load(fullfile(pathPhotometry,filename{i}),'temp');
+    if mod(numel(chunk.temp),numChannels) ~= 0
+        error('concatLabjack:IncompleteScan', ...
+            '%s does not contain a whole number of input scans.',filename{i});
+    end
+    nextPos = writePos + numel(chunk.temp);
+    output(writePos:nextPos-1) = reshape(chunk.temp,1,[]);
+    writePos = nextPos;
 end
+output = output(1:writePos-1);
 totalLen = length(output);
 
 % Store sync pulse
@@ -124,12 +144,13 @@ if isfield(labjack,'rawScanIdx')
 end
 selectedScanIdx = rawScanIdx(logical(labjack.record));
 if any(~isfinite(selectedScanIdx))
-    error('A selected input was not acquired in this recording.');
+    error('concatLabjack:InputNotAcquired', ...
+        'A selected input was not acquired in this recording.');
 end
 
 % Log each recorded signal to its corresponding compacted row.
 row = 0;
-for i = 1:size(labjack.name,2)
+for i = 1:numel(labjack.name)
     if labjack.record(i)
         row = row + 1;
         labjack.raw(row,:) = output(rawScanIdx(i):numChannels:end);
@@ -154,6 +175,7 @@ end
 % the corresponding per-channel metadata in the same way so that row i of
 % raw uses mod(i), modFreq(i), and name{i} from the same source channel.
 recordedIdx = logical(labjack.record);
+labjack.sourceChannelIdx = find(recordedIdx);
 if numel(labjack.name) == numel(recordedIdx)
     labjack.name = labjack.name(recordedIdx);
 end
@@ -174,6 +196,15 @@ if isfield(labjack,'LEDpowersMin') && numel(labjack.LEDpowersMin) == numel(recor
 end
 if isfield(labjack,'LEDpower') && numel(labjack.LEDpower) == numel(recordedIdx)
     labjack.LEDpower = labjack.LEDpower(recordedIdx);
+end
+% Match each output row to its original input and physical DAC. The record
+% mask and scanNames still describe the original acquisition layout.
+rowFields = {'rawScanIdx','modScanIdx','channelDAC','display'};
+for fieldIdx = 1:numel(rowFields)
+    field = rowFields{fieldIdx};
+    if isfield(labjack,field) && numel(labjack.(field)) == numel(recordedIdx)
+        labjack.(field) = labjack.(field)(recordedIdx);
+    end
 end
 
 labjack.numChannels = numChannels;

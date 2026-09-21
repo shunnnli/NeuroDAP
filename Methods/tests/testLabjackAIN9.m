@@ -3,27 +3,34 @@ tests = functiontests(localfunctions);
 end
 
 function testOptionalAIN9AndSharedReference(testCase)
-% Exercise every recording selection, with and without the extra scan input.
-for mask = 0:15
-    record = logical(bitget(mask,1:4));
-    [folder,cleanup,labjack,scans] = makeRecording(record); %#ok<ASGLU>
-    concatLabjack(folder,record=double(record),saveDuplicate=false);
-    result = load(fullfile(folder,'data_labjack.mat'));
-    rows = labjack.rawScanIdx(record);
-    refs = labjack.modScanIdx(record);
-    verifyEqual(testCase,result.labjack.raw,scans(rows,:));
-    verifyEqual(testCase,result.labjack.modulation,scans(refs,:));
-    verifyEqual(testCase,result.sync_labjack,scans(end,:));
-    verifyEqual(testCase,result.labjack.mod,labjack.mod(record));
-    verifyEqual(testCase,result.labjack.modFreq,labjack.modFreq(record));
-    verifyEqual(testCase,result.labjack.LEDpowers,labjack.LEDpowers(record));
-    clear cleanup
+% Exercise all selections and both modes of each shared DAC independently.
+for modeMask = 0:3
+    for mask = 0:15
+        record = logical(bitget(mask,1:4));
+        [folder,cleanup,labjack,scans] = makeRecording(record,logical(bitget(modeMask,1:2))); %#ok<ASGLU>
+        concatLabjack(folder,record=double(record),saveDuplicate=false);
+        result = load(fullfile(folder,'data_labjack.mat'));
+        rows = labjack.rawScanIdx(record);
+        refs = labjack.modScanIdx(record);
+        verifyEqual(testCase,result.labjack.raw,scans(rows,:));
+        verifyEqual(testCase,result.labjack.modulation,scans(refs,:));
+        verifyEqual(testCase,result.sync_labjack,scans(end,:));
+        verifyEqual(testCase,result.labjack.mod,labjack.mod(record));
+        verifyEqual(testCase,result.labjack.modFreq,labjack.modFreq(record));
+        verifyEqual(testCase,result.labjack.LEDpowers,labjack.LEDpowers(record));
+        verifyEqual(testCase,result.labjack.rawScanIdx,rows);
+        verifyEqual(testCase,result.labjack.modScanIdx,refs);
+        verifyEqual(testCase,result.labjack.channelDAC,labjack.channelDAC(record));
+        verifyEqual(testCase,result.labjack.display,labjack.display(record));
+        verifyEqual(testCase,result.labjack.sourceChannelIdx,find(record));
+        clear cleanup
+    end
 end
 end
 
 function testLegacyThreeChannelRecording(testCase)
 [folder,cleanup,labjack,scans] = makeRecording([true true true false]); %#ok<ASGLU>
-labjack = rmfield(labjack,{'rawScanIdx','modScanIdx','numAddressesIn','syncScanIdx'});
+labjack = rmfield(labjack,{'rawScanIdx','modScanIdx','numAddressesIn','syncScanIdx','channelDAC','display'});
 labjack.record = [true true true];
 labjack.name = labjack.name(1:3);
 labjack.mod = labjack.mod(1:3);
@@ -45,6 +52,39 @@ verifyEqual(testCase,result.labjack.modulation,scans(4,:));
 verifyEqual(testCase,result.labjack.mod,true);
 verifyEqual(testCase,result.labjack.modFreq,250);
 verifyEqual(testCase,result.labjack.name,{'AIN9'});
+end
+
+function testShortFinalFileAndNumericFileOrder(testCase)
+[folder,cleanup,~,scans] = makeRecording([true true true true]); %#ok<ASGLU>
+middle = scans + 1000;
+tail = scans(:,1:3) + 2000;
+temp = middle(:)';
+save(fullfile(folder,'Photometry','Raw_9999.mat'),'temp');
+temp = tail(:)';
+save(fullfile(folder,'Photometry','Raw_10000.mat'),'temp');
+concatLabjack(folder,record=[1 1 1 1],saveDuplicate=false);
+result = load(fullfile(folder,'data_labjack.mat'));
+expected = [scans middle tail];
+verifyEqual(testCase,result.labjack.raw,expected([1 2 5 7],:));
+verifyEqual(testCase,result.labjack.modulation,expected([3 4 6 4],:));
+verifyEqual(testCase,result.sync_labjack,expected(end,:));
+verifyEqual(testCase,result.labjack.totalLen,numel(expected));
+end
+
+function testDefaultSelectionPreservesRecordedAIN9(testCase)
+[folder,cleanup,~,scans] = makeRecording([false false false true]); %#ok<ASGLU>
+concatLabjack(folder,saveDuplicate=false);
+result = load(fullfile(folder,'data_labjack.mat'));
+verifyEqual(testCase,result.labjack.raw,scans(7,:));
+verifyEqual(testCase,result.labjack.modulation,scans(4,:));
+verifyEqual(testCase,result.labjack.channelDAC,1);
+verifyEqual(testCase,result.labjack.sourceChannelIdx,4);
+end
+
+function testAIN9CannotBeRecoveredIfNotAcquired(testCase)
+[folder,cleanup] = makeRecording([true true false false]); %#ok<ASGLU>
+verifyError(testCase,@() concatLabjack(folder,record=[0 0 0 1], ...
+    followOriginal=false,save=false),'concatLabjack:InputNotAcquired');
 end
 
 function testGUISharedModeAndOptionalInput(testCase)
@@ -122,23 +162,27 @@ function closeDialog(fig)
 if isgraphics(fig); uiresume(fig); end
 end
 
-function [folder,cleanup,labjack,scans] = makeRecording(record)
+function [folder,cleanup,labjack,scans] = makeRecording(record,modes)
+if nargin < 2; modes = [false true]; end
 folder = tempname;
 mkdir(fullfile(folder,'Photometry'));
 cleanup = onCleanup(@() rmdir(folder,'s'));
 labjack.record = record;
 labjack.nSignals = sum(record);
 labjack.name = {'first','second','PMT','AIN9'};
-labjack.mod = [false true false true];
-labjack.modFreq = [200 250 nan 250];
-labjack.LEDpowers = [0.8 3 3 3];
-labjack.LEDpowersMin = [0.3 0.2 0.2 0.2];
+labjack.mod = modes([1 2 1 2]);
+labjack.modFreq = [200 250 200 250];
+labjack.LEDpowers = [0.8 3 0.8 3];
+labjack.LEDpowersMin = [0.3 0.2 0.3 0.2];
+labjack.channelDAC = [0 1 0 1];
+labjack.display = record;
 labjack.samplerate = 20;
 labjack.numAddressesIn = 7 + double(record(4));
 labjack.syncScanIdx = labjack.numAddressesIn;
 labjack.rawScanIdx = [1 2 5 nan];
 if record(4); labjack.rawScanIdx(4) = 7; end
 labjack.modScanIdx = [3 4 6 4];
+if modes(1); labjack.modScanIdx(3) = 3; end
 scans = (1:labjack.numAddressesIn)'*100 + (1:labjack.samplerate);
 temp = reshape(scans,1,[]);
 save(fullfile(folder,'Photometry','info.mat'),'labjack');
