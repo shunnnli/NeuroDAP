@@ -55,9 +55,11 @@ plotChanIdx = livePlot.channelIdx; % 1=AIN0, 2=AIN1, 5=AIN10, 7=AIN9 (if recorde
 LEDpower1 = 0.8; %1.5;%0.5; % power to get 30uW
 LEDpower2 = 3; % 2.5=30uW
 LEDpower3 = 3; % 2.5=30uW
+LEDpower4 = 1;
 LEDpower1Min = 0.3; %0.3 %0.5 % power to get minimal signal 
 LEDpower2Min = 0.2; % power to get minimal signal
 LEDpower3Min = 0.2; % power to get minimal signal
+LEDpower4Min = 0.5; %0.3 %0.5 % power to get minimal signal 
 
 % Channels 1 and 3 share DAC0. Choose its owner from the channels selected
 % for recording: channel 1 has priority when both are selected; otherwise
@@ -74,6 +76,16 @@ end
 LEDpowerDAC0 = LEDpower1; LEDpowerDAC0Min = LEDpower1Min;
 if dac0Chan == 3; LEDpowerDAC0 = LEDpower3; LEDpowerDAC0Min = LEDpower3Min; end
 
+if labjack.record(2)
+    dac1Chan = 2;
+elseif labjack.record(4)
+    dac1Chan = 4;
+else
+    dac1Chan = 2;
+end
+LEDpowerDAC1 = LEDpower2; LEDpowerDAC1Min = LEDpower2Min;
+if dac1Chan == 4; LEDpowerDAC1 = LEDpower4; LEDpowerDAC1Min = LEDpower4Min; end
+
 % Channels 2 (AIN1) and 4 (AIN9) are physically split from DAC1. Channel 2
 % defines their common power even if only AIN9 is recorded. The GUI links
 % modulation settings within both DAC pairs.
@@ -81,8 +93,8 @@ assert(labjack.mod(1) == labjack.mod(3), ...
     'Channels 1 and 3 share DAC0 and cannot have independent modulation.');
 assert(labjack.mod(2) == labjack.mod(4), ...
     'Channels 2 and 4 share DAC1 and cannot have independent modulation.');
-dacEnabled = [labjack.record(dac0Chan), any(labjack.record([2 4]))];
-labjack.dacChannel = [dac0Chan 2];
+dacEnabled = [labjack.record(dac0Chan), labjack.record(dac1Chan)];
+labjack.dacChannel = [dac0Chan dac1Chan];
 labjack.dacEnabled = dacEnabled;
 labjack.channelDAC = [0 1 0 1];
 labjack.modFreq = nan(1,4);
@@ -92,10 +104,10 @@ labjack.modFreq([2 4]) = 250;
 % Define mod frequency power
 labjack.nSignals = sum(labjack.record);
 looplength = samplerate*ones(size(labjack.modFreq)) ./ labjack.modFreq; % 200, 250Hz
-labjack.LEDpowers = [LEDpowerDAC0,LEDpower2,LEDpowerDAC0,LEDpower2];
-labjack.LEDpowersMin = [LEDpowerDAC0Min,LEDpower2Min,LEDpowerDAC0Min,LEDpower2Min];
+labjack.LEDpowers = [LEDpowerDAC0,LEDpowerDAC1,LEDpowerDAC0,LEDpowerDAC1];
+labjack.LEDpowersMin = [LEDpowerDAC0Min,LEDpowerDAC1Min,LEDpowerDAC0Min,LEDpowerDAC1Min];
 labjack.Modpowers1 = getModPower(200,2000,LEDpowerDAC0,LEDpowerDAC0Min);
-labjack.Modpowers2 = getModPower(250,2000,LEDpower2,LEDpower2Min);
+labjack.Modpowers2 = getModPower(250,2000,LEDpowerDAC1,LEDpowerDAC1Min);
 
 % % Ask for confirmation
 % names = sprintf(' %s,',labjack.name{:});
@@ -157,7 +169,7 @@ LabJack.LJM.NamesToAddresses(numAddressesOut, aNamesOut, ...
 % recording. DAC1 is on when either channel 2 or 4 is recorded. With the
 % physical BNC split, both attached LEDs receive that voltage together.
 streamOutPowers = {labjack.Modpowers1, labjack.Modpowers2};
-streamOutConst = [LEDpowerDAC0, LEDpower2];
+streamOutConst = [LEDpowerDAC0, LEDpowerDAC1];
 dacChannel = [dac0Chan, 2]; % which labjack.mod/modFreq index feeds each DAC
 streamOutValues = cell(1,numAddressesOut);
 for outIdx = 1:numAddressesOut
