@@ -62,7 +62,7 @@
         {"name": "NAc-MS", "freqMod": false, "display": false, "record": false},
         {"name": "NAc-LS", "freqMod": false, "display": false, "record": false},
         {"name": "NAc-LS", "freqMod": false, "display": false, "record": true},
-        {"name": "NAc-MS", "freqMod": false, "display": false, "record": true}
+        {"name": "NAc-MS", "freqMod": false, "display": false, "record": false}
       ]
     },
 

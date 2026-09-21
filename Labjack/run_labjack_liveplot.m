@@ -55,7 +55,7 @@ plotChanIdx = livePlot.channelIdx; % 1=AIN0, 2=AIN1, 5=AIN10, 7=AIN9 (if recorde
 LEDpower1 = 0.8; %1.5;%0.5; % power to get 30uW
 LEDpower2 = 3; % 2.5=30uW
 LEDpower3 = 3; % 2.5=30uW
-LEDpower4 = 1;
+LEDpower4 = 0.8;
 LEDpower1Min = 0.3; %0.3 %0.5 % power to get minimal signal 
 LEDpower2Min = 0.2; % power to get minimal signal
 LEDpower3Min = 0.2; % power to get minimal signal
