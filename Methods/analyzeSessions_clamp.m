@@ -10,8 +10,9 @@ arguments
     options.intervalThreshold double = 100 % max interval of both clamps are off to be consider as clamp ON, in ms
 
     % Clamp options
-    options.blueClampRange double = [800, 1500]
-    options.redClampRange double  = [25,  600]
+    options.blueClampRange double % default [800,1500]; calibration [800,1600]
+    options.redClampRange double  % default [25,600]; calibration [25,500]
+    options.calibration struct = struct() % optional calibration response settings
 
     options.pavlovian logical = false
     options.reactionTime double = 1
@@ -43,6 +44,7 @@ clampColor = [.232 .76 .58];
 unclampColor = [179, 210, 196]./255;
              
 % 1. Select session via uigetdir
+sessionpath = strip(sessionpath,'right',filesep);
 dirsplit = strsplit(sessionpath,filesep); 
 if ~isfield(options,'outputName'); options.outputName = dirsplit{end}; end
 if ispc; projectPath = strcat('\\',fullfile(dirsplit{2:end-1}));
@@ -57,6 +59,31 @@ else
     sessionName = options.outputName;
     dirsplit = strsplit(options.outputName,{'-','_'}); 
 end
+% Route calibration before loading behavioral data or parsing task labels.
+% Read only params here; the calibration function owns its data and outputs.
+syncData = load(fullfile(sessionpath,"sync_"+options.outputName+".mat"),'params');
+[~,sessionFolder] = fileparts(sessionpath);
+isCalibration = contains(sessionName,'calibration',IgnoreCase=true) || ...
+    contains(sessionFolder,'calibration',IgnoreCase=true);
+if isfield(options,'task')
+    isCalibration = isCalibration || strcmpi(options.task,'calibration');
+elseif isfield(syncData.params,'session') && isfield(syncData.params.session,'task')
+    isCalibration = isCalibration || strcmpi(syncData.params.session.task,'calibration');
+end
+if isCalibration
+    calibrationOptions = struct('outputName',options.outputName, ...
+        'redo',options.redo,'analyzeTraces',options.analyzeTraces, ...
+        'plotPhotometry',options.plotPhotometry,'calibration',options.calibration);
+    if isfield(options,'blueClampRange'); calibrationOptions.blueClampRange = options.blueClampRange; end
+    if isfield(options,'redClampRange'); calibrationOptions.redClampRange = options.redClampRange; end
+    calibrationArgs = namedargs2cell(calibrationOptions);
+    analyzeSessions_clampCalibration(sessionpath,calibrationArgs{:});
+    return
+end
+if ~isfield(options,'blueClampRange'); options.blueClampRange = [800,1500]; end
+if ~isfield(options,'redClampRange'); options.redClampRange = [25,600]; end
+clear syncData
+
 date = dirsplit{1}; animal = dirsplit{2}; sessionTask = dirsplit{3};
 clear dirsplit
 
