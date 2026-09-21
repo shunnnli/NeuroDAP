@@ -493,12 +493,19 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
             end
         end
 
-        %if sum(labjack.record == options.recordLJ)~=length(labjack.record) 
-        %edited by Emily 6/28/24 to work with new rig
-        if size(labjack.record,2) ~= size(options.recordLJ,2)
-            disp(['labjack.record: ',labjack.record]);
-            disp(['options.recordLJ: ',options.recordLJ]);
-            warning(['labjack.record does not agree with recordLJ, use labjack.record = ',num2str(labjack.record)]); 
+        % Compare selections, allowing older three-channel defaults to omit
+        % an unselected AIN9. Convert logical/numeric masks to text explicitly.
+        recordedSelection = logical(labjack.record(:)');
+        requestedSelection = logical(options.recordLJ(:)');
+        selectionLength = max(numel(recordedSelection),numel(requestedSelection));
+        recordedSelection(end+1:selectionLength) = false;
+        requestedSelection(end+1:selectionLength) = false;
+        if ~isequal(recordedSelection,requestedSelection)
+            fprintf('labjack.record: %s\n',num2str(labjack.record(:)'));
+            fprintf('options.recordLJ: %s\n',num2str(options.recordLJ(:)'));
+            warning('loadSessions:LabjackRecordMismatch', ...
+                'labjack.record differs from recordLJ; using loaded labjack.record = [%s].', ...
+                num2str(labjack.record(:)'));
         end
 
         % Update old recording's frequency modulation parameters
