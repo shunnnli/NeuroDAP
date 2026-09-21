@@ -62,6 +62,8 @@ for c = 1:2
     grid(responseAx,'on');
     box(traceAx,'off'); box(responseAx,'off');
 end
-sgtitle(sprintf('Calibration: mean +/- SEM; F_0 from %.3g s before onset', ...
-    calibration.options.preTime));
+label = 'Calibration';
+if isfield(calibration,'name'); label = sprintf('Calibration: %s (LabJack)',calibration.name); end
+sgtitle(sprintf('%s: mean +/- SEM; F0 from %.3g s before onset', ...
+    label,calibration.options.preTime),'Interpreter','none');
 end

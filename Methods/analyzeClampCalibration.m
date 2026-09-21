@@ -1,12 +1,16 @@
 function calibration = analyzeClampCalibration(photometry_raw,blueClamp,redClamp,Fs,options)
-%ANALYZECLAMPCALIBRATION Open-loop power sweeps from NI voltage recordings.
-% Follows PID-tuning.ipynb: 200 Hz sampling, rounded 10-bit photometry ADC,
-% 20 ms EMA, a 1 s pre-onset F0, and median dF/F0 in the last 2 s of each pulse.
+%ANALYZECLAMPCALIBRATION Open-loop power sweeps aligned to NI laser recordings.
+% Follows PID-tuning.ipynb: 200 Hz sampling, 20 ms EMA, a 1 s pre-onset F0,
+% and median dF/F0 in the last 2 s of each pulse. Direct calls default to the
+% legacy NI input convention (voltage converted to rounded 10-bit ADC).
 % Power is percent of the configured DAC range, not physical optical power.
 % Event indices refer to the original NI samples (1-based, offset exclusive).
 % Long blocks are excluded; exactly 5 s pulses are included. Nearby measured
 % powers are grouped within powerTolerance percentage points, without merging
 % sparse but distinct levels. Boundary pulses remain in events as invalid.
+% For LabJack fluorescence, pass photometryTime and laserTime on the shared
+% sync clock and convertToADC=false. Photometry need not have the same sample
+% rate, start time, or length as the laser recordings. No extrapolation is used.
 
 arguments
     photometry_raw double {mustBeVector,mustBeNonempty,mustBeFinite}
@@ -25,10 +29,23 @@ arguments
     options.maxDuration (1,1) double {mustBePositive} = 5
     options.minGap (1,1) double {mustBeNonnegative,mustBeFinite} = 2
     options.powerTolerance (1,1) double {mustBeNonnegative,mustBeFinite} = 2
+    options.photometryTime double = []
+    options.laserTime double = []
+    options.convertToADC (1,1) logical = true
 end
 
-if numel(photometry_raw) ~= numel(blueClamp) || numel(photometry_raw) ~= numel(redClamp)
-    error('analyzeClampCalibration:LengthMismatch','NI photometry and laser traces must have equal lengths.');
+hasSync = ~isempty(options.photometryTime) && ~isempty(options.laserTime);
+if xor(isempty(options.photometryTime),isempty(options.laserTime))
+    error('analyzeClampCalibration:MissingSync','Provide both photometryTime and laserTime.');
+end
+if numel(blueClamp) ~= numel(redClamp) || ...
+        (~hasSync && numel(photometry_raw) ~= numel(blueClamp))
+    error('analyzeClampCalibration:LengthMismatch', ...
+        'Laser traces must have equal lengths; separate photometry requires sync timestamps.');
+end
+if hasSync
+    validateTime(options.photometryTime,numel(photometry_raw),'photometryTime');
+    validateTime(options.laserTime,numel(blueClamp),'laserTime');
 end
 if options.blueClampRange(2) <= options.blueClampRange(1) || ...
         options.redClampRange(2) <= options.redClampRange(1)
@@ -40,12 +57,27 @@ end
 
 stride = max(1,round(Fs/options.targetFs));
 analysisFs = Fs/stride;
-sampleIdx = 1:stride:numel(photometry_raw);
-signal = round(voltage2arduino(photometry_raw(sampleIdx)));
+sampleIdx = 1:stride:numel(blueClamp);
+if hasSync
+    % loadSessions/assignTimeStamp already express both devices on a common
+    % clock. Using the full vectors accounts for drift as well as start lag.
+    signal = interp1(options.photometryTime,photometry_raw, ...
+        options.laserTime(sampleIdx),'linear',NaN);
+else
+    signal = photometry_raw(sampleIdx);
+end
+if options.convertToADC; signal = round(voltage2arduino(signal)); end
 signal = signal(:);
 if options.emaTau > 0
     alpha = 1-exp(-1/(analysisFs*options.emaTau));
-    signal = filter(alpha,[1,-(1-alpha)],signal,(1-alpha)*signal(1));
+    % Alignment may leave NaN padding before/after the LabJack recording.
+    % Filter only finite runs so padding cannot poison the entire trace.
+    edges = diff([false;isfinite(signal);false]);
+    starts = find(edges == 1); stops = find(edges == -1)-1;
+    for run = 1:numel(starts)
+        idx = starts(run):stops(run);
+        signal(idx) = filter(alpha,[1,-(1-alpha)],signal(idx),(1-alpha)*signal(idx(1)));
+    end
 end
 red = voltage2percent(redClamp(sampleIdx),options.redClampRange);
 blue = voltage2percent(blueClamp(sampleIdx),options.blueClampRange);
@@ -53,8 +85,11 @@ redEvents = extractPulses(red,analysisFs,"red","excite",options);
 blueEvents = extractPulses(blue,analysisFs,"blue","inhibit",options);
 events = sortrows([redEvents;blueEvents],'onset_analysis_idx');
 events.onset_idx = (events.onset_analysis_idx-1)*stride+1;
-events.offset_idx = min((events.offset_analysis_idx-1)*stride+1,numel(photometry_raw)+1);
+events.offset_idx = min((events.offset_analysis_idx-1)*stride+1,numel(blueClamp)+1);
 events.onset_sec = (events.onset_idx-1)/Fs;
+if hasSync
+    events.onset_sync_sec = reshape(options.laserTime(events.onset_idx),[],1);
+end
 events.level_pct = nan(height(events),1);
 events.validTrial = false(height(events),1);
 
@@ -62,7 +97,7 @@ preSamples = max(1,round(options.preTime*analysisFs));
 postSamples = round(options.postTime*analysisFs);
 lateSamples = max(1,round(options.lateTime*analysisFs));
 groups = struct('channel',{},'type',{},'power_pct',{},'eventRows',{}, ...
-    'nTrials',{},'time_sec',{},'duration_sec',{},'raw_adc',{},'baseline_adc',{}, ...
+    'nTrials',{},'time_sec',{},'duration_sec',{},'raw_signal',{},'baseline_signal',{}, ...
     'dff',{},'mean_dff',{},'sem_dff',{},'lateOnMedian_dff',{},'medianResponse_dff',{});
 
 channels = ["red","blue"];
@@ -97,6 +132,10 @@ for c = 1:numel(channels)
             idx = on(trial)+offsets;
             available = idx >= 1 & idx <= numel(signal);
             raw(trial,available) = signal(idx(available));
+            required = offsets < onSamples(trial);
+            if any(~isfinite(raw(trial,required)))
+                continue
+            end
             f0(trial) = mean(raw(trial,offsets < 0));
             if ~isfinite(f0(trial)) || abs(f0(trial)) < 1e-9
                 continue
@@ -113,7 +152,7 @@ for c = 1:numel(channels)
         groups(g) = struct('channel',channels(c),'type',events.type(eventRows(1)), ...
             'power_pct',level,'eventRows',eventRows, ...
             'nTrials',sum(events.validTrial(eventRows)),'time_sec',offsets/analysisFs, ...
-            'duration_sec',onSamples/analysisFs,'raw_adc',raw,'baseline_adc',f0, ...
+            'duration_sec',onSamples/analysisFs,'raw_signal',raw,'baseline_signal',f0, ...
             'dff',dff,'mean_dff',mean(dff,1,'omitnan'),'sem_dff',sem, ...
             'lateOnMedian_dff',late,'medianResponse_dff',median(late,'omitnan'));
         first = last+1;
@@ -137,10 +176,32 @@ for c = 1:numel(channels)
     fits(c) = struct('channel',channels(c),'slope',slope,'intercept',intercept,'r2',r2);
 end
 
-calibration = struct('source','photometry_raw (NI)','originalFs',Fs, ...
+% Sync vectors live in sync_*.mat; do not duplicate them for every channel.
+options = rmfield(options,{'photometryTime','laserTime'});
+source = 'photometry_raw (NI)';
+units = 'ADC';
+if ~options.convertToADC
+    source = 'synchronized fluorescence';
+    units = 'fluorescence';
+else
+    % Preserve the original single-channel helper's ADC aliases.
+    for g = 1:numel(groups)
+        groups(g).raw_adc = groups(g).raw_signal;
+        groups(g).baseline_adc = groups(g).baseline_signal;
+    end
+end
+calibration = struct('source',source,'signalUnits',units,'originalFs',Fs, ...
     'analysisFs',analysisFs,'options',options,'events',events,'groups',groups,'fits',fits);
 if isempty(events)
     warning('analyzeClampCalibration:NoPulses','No calibration pulses met the power and duration criteria.');
+end
+end
+
+function validateTime(t,n,name)
+if ~isvector(t) || numel(t) ~= n || n < 2 || ...
+        any(~isfinite(t(:))) || any(diff(t(:)) <= 0)
+    error('analyzeClampCalibration:InvalidSync', ...
+        '%s must contain one finite, strictly increasing timestamp per sample.',name);
 end
 end
 
