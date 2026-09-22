@@ -12,3 +12,7 @@ Tutorials/Sample data/Recordings/202310-Photometry-paAIP2/20231114-SL133-R2_g0/t
 Methods/npy-matlab/.DS_Store
 .claude/worktrees/quizzical-rhodes-68e195/
 /.claude
+
+# Python behavior GUI
+__pycache__/
+*.py[cod]
