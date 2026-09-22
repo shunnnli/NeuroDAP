@@ -1,6 +1,6 @@
 # Behavior GUI
 
-Run `behavior_gui.py` from the repository root. Its layout follows the supplied
+Run `gui_behavior.py` from the repository root. Its layout follows the supplied
 sketch: Arduino controls at upper left, event-parser/UDP controls at upper right,
 then the serial input and a full-width monitor below.
 
@@ -11,7 +11,7 @@ installers; on Linux it may need the `python3-tk` package).
 
 ```sh
 python -m pip install -r requirements-behavior.txt
-python behavior_gui.py
+python gui_behavior.py
 ```
 
 For uploads, install [Arduino CLI](https://docs.arduino.cc/arduino-cli/installation/)
@@ -40,8 +40,8 @@ unknown boards can still be selected manually.
    arrange a correctly named copy before uploading that sketch.
 2. **Port / Board ID**: refresh ports, select the connected Arduino, then use
    Detect or select/type a board ID. For a Mega 2560 use
-   `arduino:avr:mega:cpu=atmega2560`. Confirm the detected selection. Board ID is
-   left blank initially so the app does not assume your hardware.
+   `arduino:avr:mega:cpu=atmega2560`. The defaults are COM4, 115200 baud, and this
+   Mega 2560 board ID. You can change them before connecting.
 3. **Compile & Upload**: the app stops the protocol, cancels pending UDP work,
    closes serial, compiles to a temporary directory, and uploads only on compile
    success. The monitor shows progress. Controls are disabled during this work.
@@ -55,8 +55,11 @@ unknown boards can still be selected manually.
 5. **Optional event protocol**: select the Python parser, set the receiver IPv4
    address and UDP port, then click Start protocol. It handles new serial lines
    while you continue using the command box. Stop protocol keeps serial connected.
-   The bundled `behavior_protocols/rpe.py` is selected initially, but does not run
-   until you explicitly start it.
+   The default parser is `BrainClamp/scripts/send_event_RPE.py`, with BrainClamp
+   next to the NeuroDAP repository. For example, on your Windows rig this resolves
+   to `C:/Shun-local/BrainClamp/scripts/send_event_RPE.py`. The parser picker opens
+   the selected parser's folder. Nothing runs until you explicitly start it.
+   The bundled `behavior_protocols/rpe.py` remains available as an alternative.
 
 Close any other serial monitor before connecting. Opening a serial connection can
 reset an Arduino. Allow startup to finish before sending commands or starting the
@@ -126,7 +129,12 @@ continues. Slow callbacks can delay serial processing and stop actions.
 ## Profiles and logs
 
 Save/load profiles to remember sketch, board, port, parser, baud, line ending,
-CLI location, and UDP settings. Loading a profile never connects or sends data.
+CLI location, and UDP settings. **Save profile** opens a file dialog: you choose
+the folder and filename for a `.json` file. There is no fixed profile folder and
+no automatic saving. The monitor prints the saved file's full path. **Load
+profile** opens a previously saved `.json` file and restores its settings into
+the controls. Profiles are not loaded automatically at startup; the app starts
+with the defaults above. Loading a profile never connects or sends data.
 Profiles contain local file paths; update them when moving between computers.
 
 The monitor keeps the most recent 10,000 lines, showing raw RX, TX, parsed event

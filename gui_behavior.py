@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Arduino upload, serial monitor, and optional Python-to-UDP behavior bridge.
 
-Run: python behavior_gui.py
+Run: python gui_behavior.py
 Dependencies/setup and the protocol API: Tutorials/behavior_gui.md.
 Importing this module does not open a window or connect to hardware.
 """
@@ -25,6 +25,7 @@ import uuid
 from dataclasses import asdict, dataclass, fields
 
 ROOT = Path(__file__).resolve().parent
+PARSER_DIR = ROOT.parent / "BrainClamp" / "scripts"
 LINE_ENDINGS = {"Newline (LF)": "\n", "Carriage return (CR)": "\r",
                 "Both (CRLF)": "\r\n", "None": ""}
 BOARDS = ("arduino:avr:uno", "arduino:avr:mega:cpu=atmega2560",
@@ -35,11 +36,11 @@ BOARDS = ("arduino:avr:uno", "arduino:avr:mega:cpu=atmega2560",
 @dataclass
 class Settings:
     sketch: str = ""
-    board: str = ""
-    port: str = ""
+    board: str = "arduino:avr:mega:cpu=atmega2560"
+    port: str = "COM4"
     baud: str = "115200"
     cli: str = "arduino-cli"
-    protocol: str = str(ROOT / "behavior_protocols" / "rpe.py")
+    protocol: str = str(PARSER_DIR / "send_event_RPE.py")
     host: str = "192.168.50.132"
     udp_port: str = "5005"
     line_ending: str = "Newline (LF)"
@@ -558,8 +559,10 @@ class BehaviorGUI:
 
     def select_protocol(self):
         from tkinter import filedialog
+        current = self.vars["protocol"].get()
+        directory = Path(current).expanduser().parent if current else PARSER_DIR
         value = filedialog.askopenfilename(parent=self.root, title="Select Python event parser",
-                                          initialdir=ROOT / "behavior_protocols", filetypes=[("Python script", "*.py")])
+                                          initialdir=directory, filetypes=[("Python script", "*.py")])
         if value:
             self.vars["protocol"].set(value)
 
@@ -663,6 +666,7 @@ class BehaviorGUI:
         if path:
             try:
                 Path(path).write_text(json.dumps(asdict(self.settings()), indent=2) + "\n", encoding="utf-8")
+                self.service.log(f"[profile saved] {path}")
             except OSError as exc:
                 messagebox.showerror("Save profile", str(exc), parent=self.root)
 

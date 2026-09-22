@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-import behavior_gui as gui
+import gui_behavior as gui
 
 
 class FakeSerial:
@@ -238,7 +238,7 @@ def apply_session_logic(event, udp):
         self.assertIn("missing board core", self.logs())
 
     def test_bundled_rpe_emits_original_cue_reward_and_omission_commands(self):
-        protocol = gui.Protocol(gui.Settings().protocol, Mock())
+        protocol = gui.Protocol(gui.ROOT / "behavior_protocols" / "rpe.py", Mock())
         self.addCleanup(protocol.close)
         udp = Mock()
         event = protocol.handle("Trial: 12 Cue start (Pair #3) Time: 123.45", udp)

@@ -1,6 +1,6 @@
 """RPE event protocol adapted from scripts/send_event_RPE.py in BrainClamp.
 
-Loaded by behavior_gui.py. No serial connection or GUI is created here.
+Loaded by gui_behavior.py. No serial connection or GUI is created here.
 Edit apply_session_logic() to change the experimental protocol.
 """
 from __future__ import annotations

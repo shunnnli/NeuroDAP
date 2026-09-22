@@ -5,7 +5,7 @@
 
  The Python [Behavior GUI](Tutorials/behavior_gui.md) provides Arduino sketch
  upload, serial monitoring/input, and optional event-driven UDP control. Launch
- `python behavior_gui.py` after installing `requirements-behavior.txt` and Arduino CLI.
+ `python gui_behavior.py` after installing `requirements-behavior.txt` and Arduino CLI.
 
  ## General structure
 
