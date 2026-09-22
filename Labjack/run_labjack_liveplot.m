@@ -52,14 +52,14 @@ enableLivePlot = livePlot.enable;
 plotChanIdx = livePlot.channelIdx; % 1=AIN0, 2=AIN1, 5=AIN10, 7=AIN9 (if recorded)
 
 % LED power settings
-LEDpower1 = 0.8; %1.5;%0.5; % power to get 30uW
+LEDpower1 = 3; %1.5;%0.5; % power to get 30uW
 LEDpower2 = 3; % 2.5=30uW
 LEDpower3 = 3; % 2.5=30uW
-LEDpower4 = 0.8;
-LEDpower1Min = 0.3; %0.3 %0.5 % power to get minimal signal 
+LEDpower4 = 3;
+LEDpower1Min = 0.2; %0.3 %0.5 % power to get minimal signal 
 LEDpower2Min = 0.2; % power to get minimal signal
 LEDpower3Min = 0.2; % power to get minimal signal
-LEDpower4Min = 0.5; %0.3 %0.5 % power to get minimal signal 
+LEDpower4Min = 0.2; %0.3 %0.5 % power to get minimal signal 
 
 % Channels 1 and 3 share DAC0. Choose its owner from the channels selected
 % for recording: channel 1 has priority when both are selected; otherwise
@@ -483,8 +483,8 @@ configureStreamOut(handle,aAddressesOut,streamOutValues);
 
 catch e
     showErrorMessage(e);
-    try; LabJack.LJM.eStreamStop(handle); catch; end
-    try; setLEDOutputsOff(handle); catch; end
+    try LabJack.LJM.eStreamStop(handle); catch; end
+    try setLEDOutputsOff(handle); catch; end
     LabJack.LJM.Close(handle);
     LabJack.LJM.CloseAll();
     close all
