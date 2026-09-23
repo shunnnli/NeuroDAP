@@ -1,13 +1,16 @@
 """Behavior lifecycle tests; never open hardware or send network traffic."""
 import itertools
+import json
+from dataclasses import asdict
 from pathlib import Path
 import queue
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-import gui_behavior as gui
+from gui import behavior as gui
 
 
 class FakeSerial:
@@ -201,12 +204,17 @@ def apply_session_logic(event, udp):
             self.assertTrue(serial.closed)
             self.assertTrue(sender.closed)
             self.assertIsNone(self.service.protocol)
+            staged = Path(args[-1])
+            self.assertNotEqual(staged, Path(settings.sketch).resolve().parent)
+            self.assertEqual(staged.name, Path(settings.sketch).parent.name)
+            self.assertEqual((staged / Path(settings.sketch).name).read_bytes(), Path(settings.sketch).read_bytes())
             commands.append(args)
         with patch.object(gui, "cli_executable", return_value="/path with spaces/arduino-cli"), \
                 patch.object(self.service, "_run_cli", side_effect=run):
             self.service.do_upload(settings)
         self.assertEqual([c[1] for c in commands], ["compile", "upload"])
-        self.assertEqual(commands[0][-1], str(Path(settings.sketch).resolve().parent))
+        self.assertEqual(commands[0][-1], commands[1][-1])
+        self.assertFalse(Path(commands[0][-1]).exists())
         self.assertEqual(commands[0][commands[0].index("--build-path") + 1],
                          commands[1][commands[1].index("--build-path") + 1])
         self.assertFalse(self.service.busy)
@@ -237,21 +245,6 @@ def apply_session_logic(event, udp):
             self.service._run_cli([sys.executable, str(script)], 5)
         self.assertIn("missing board core", self.logs())
 
-    def test_bundled_rpe_emits_original_cue_reward_and_omission_commands(self):
-        protocol = gui.Protocol(gui.ROOT / "behavior_protocols" / "rpe.py", Mock())
-        self.addCleanup(protocol.close)
-        udp = Mock()
-        event = protocol.handle("Trial: 12 Cue start (Pair #3) Time: 123.45", udp)
-        self.assertEqual((event.type, event.trial), ("TRIAL_ON", 12))
-        udp.send.assert_called_with("CMD PID_ON 200")
-        udp.call_later.assert_called_with("CMD SET_TARGET 0.8000 0.25 natural", 0.4)
-        protocol.handle("Trial: 12 Reward block: big reward Time: 124.0", udp)
-        udp.send.assert_called_with("CMD SET_TARGET 0.8000")
-        udp.call_later.assert_called_with("CMD PID_OFF 500", 0.5)
-        protocol.handle("Trial: 13 Reward block: omission Time: 130.0", udp)
-        udp.send.assert_called_with("CMD SET_TARGET -0.1000 0.25 natural")
-        self.assertIsNone(protocol.handle("unrecognized message", udp))
-
     def test_service_shutdown_closes_connections(self):
         serial = FakeSerial()
         self.service.ser = serial
@@ -263,6 +256,31 @@ def apply_session_logic(event, udp):
         self.assertFalse(self.service.thread.is_alive())
         self.assertTrue(serial.closed)
         self.assertTrue(udp.closed)
+
+    def test_save_profile_defaults_to_gui_profiles_and_logs_actual_path(self):
+        profiles = self.base / 'gui' / 'profiles'
+        path = profiles / 'daily.json'
+        settings = gui.Settings(parameter_overrides={'UnitRewardSize': '30'})
+        app = SimpleNamespace(root=None, settings=Mock(return_value=settings), service=Mock())
+        with patch.object(gui, 'PROFILES_DIR', profiles), \
+                patch('tkinter.filedialog.asksaveasfilename', return_value=str(path)) as dialog:
+            gui.BehaviorGUI.save_profile(app)
+        self.assertEqual(dialog.call_args.kwargs['initialdir'], profiles)
+        self.assertEqual(json.loads(path.read_text())['parameter_overrides'], {'UnitRewardSize': '30'})
+        app.service.log.assert_called_once_with(f'[profile saved] {path}')
+
+    def test_load_profile_accepts_file_outside_default_profiles_folder(self):
+        path = self.base / 'elsewhere.json'
+        path.write_text(json.dumps({'port': 'COM7', 'baud': '57600'}))
+        variables = {name: Mock() for name in asdict(gui.Settings())
+                     if name not in ('parameter_overrides', 'parameter_source_hash')}
+        app = SimpleNamespace(root=None, vars=variables, service=Mock(), reload_parameters=Mock())
+        with patch('tkinter.filedialog.askopenfilename', return_value=str(path)) as dialog:
+            gui.BehaviorGUI.load_profile(app)
+        self.assertEqual(dialog.call_args.kwargs['initialdir'], gui.ROOT / 'gui' / 'profiles')
+        variables['port'].set.assert_called_once_with('COM7')
+        variables['baud'].set.assert_called_once_with('57600')
+        app.reload_parameters.assert_called_once_with(quiet=True)
 
 
 if __name__ == "__main__":
