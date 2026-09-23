@@ -28,7 +28,7 @@
 //********** User settings ***********//
 // Set up parameters for the behavior
 boolean ENL = true; // whether ITI is ENL
-unsigned long UnitRewardSize = 20; // reward size of 1ul
+unsigned long UnitRewardSize = 15; // reward size of 1ul
 unsigned long SmallRewardSize = 5 * UnitRewardSize;
 unsigned long BigRewardSize = 5 * UnitRewardSize;
 unsigned long SmallPunishSize = 50;
@@ -37,7 +37,7 @@ unsigned long BigPunishSize = 200;
 // Outcome probability params
 // CHANGE BACK!!
 int PairProbRange[2] = {1,40}; //40%
-int StimOnlyProbRange[2] = {41,90}; //50%
+int StimOnlyProbRange[2] = {41,100}; //50%
 int ToneOnlyProbRange[2] = {91,100}; //10%
 
 int PunishProb = 90;

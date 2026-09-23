@@ -41,7 +41,7 @@ unsigned long BigPunishSize = 200;
 // Outcome probability params
 // CHANGE BACK!!!
 int PairProbRange[2] = {1,40};
-int StimOnlyProbRange[2] = {41, 90};
+int StimOnlyProbRange[2] = {41, 100};
 int ToneOnlyProbRange[2] = {91, 100};
 
 boolean OmitToneOnly = true;

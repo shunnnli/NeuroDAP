@@ -16,6 +16,11 @@
 //20240502
 // 1. Add option to choose between using blue or red to stimulate
 
+//20260429
+// 1. Remove all laser/opto/paAIP2 code
+// 2. Randomly choose LeftCueFreq (50%) vs RightCueFreq (50%) per trial
+// 3. Separate OmissionProb for Left and Right cue
+
 #define Idle 0
 #define ITI_State 1
 #define FirstCueOn 2
@@ -32,68 +37,34 @@
 //********** User settings ***********//
 // Set up parameters for the behavior
 boolean ENL = true; // whether ITI is ENL
-unsigned long UnitRewardSize = 24; // reward size of 1ul
-unsigned long SmallRewardSize = 2 * UnitRewardSize;
-unsigned long BigRewardSize = 10 * UnitRewardSize;
+unsigned long UnitRewardSize = 20; // reward size of 1ul
+unsigned long SmallRewardSize = 3 * UnitRewardSize;
+unsigned long BigRewardSize = 8 * UnitRewardSize;
 unsigned long SmallPunishSize = 50;
 unsigned long BigPunishSize = 200;
 
-// Outcome probability params
-// CHANGE BACK!!!
-int PairProbRange[2] = {-1,-40};
-int StimOnlyProbRange[2] = {-41, -90};
-int ToneOnlyProbRange[2] = {1, 100};
+// Cue selection (50/50 left vs right)
+int LeftCueProb = 100; // probability (1-100) of using LeftCueFreq
 
-boolean OmitToneOnly = false;
-boolean OmitStimOnly = false;
-int OmissionProb = 40; // Omission prob for BigReward or SmallReward
+// Outcome probability params (per cue)
+int LeftOmissionProb = 10;  // omission prob for Left cue trials
+int RightOmissionProb = 10; // omission prob for Right cue trials
 int FreeRewardProb = 100;
 
-// Opto stim params
-boolean RedStim = true; // 1 means using red to stim, 0 means using blue to stim
-int TestAfter = 20000000; //test pulse appears after how many normal trials
-int nTestPulse = 1;
-int StimTotalPulseNum = 25; // number of pulses per pattern
-unsigned long StimPulseDuration = 5; // Total duration of each pulse within a stimulation
-unsigned long StimPulseFreq = 50; //For single 500ms pulse
-unsigned long StimTotalDuration = 500; // Total duration of each stimulation
-unsigned long StimPulseInterval = 0; // no need to define this
-
-// 1Red opto stim params
-// if RedStim if true, these will be rewritten to match opto stim params
-int RedTotalPulseNum = 25; // number of pulses per pattern
-unsigned long RedPulseDuration = 5; // Total duration of each pulse within a stimulation
-unsigned long RedPulseFreq = 50; //For single 500ms pulse
-unsigned long RedStimDuration = 500; // Total duration of each stimulation
-unsigned long RedPulseInterval = 0;
-
-// Blue opto stim params (basically a trigger pulse to matlab galvo.m)
-// if RedStim if false, these will be rewritten to match opto stim params
-int BlueTotalPulseNum = 15; // number of pulses per pattern 15
-unsigned long BluePulseDuration = 10; // Total duration of each pulse within a stimulation
-unsigned long BluePulseFreq = 30; //For single 500ms pulse
-unsigned long BlueStimDuration = 500; // Total duration of each stimulation
-unsigned long BluePulseInterval = 0;
-// paAIP2 params
-int paAIP2MaxTrial = 0;//1000000;
-unsigned long paAIP2StimInterval = 5000;
-unsigned long paAIP2TimerPulse = 0; // should set to 0
-
 // Trial settings params
-boolean pavlovian = false; // If true, make reward pavlovian; if false, reward is operant
-int minLicks = 3; // min amount of licks within response window to get an reward
-int minLicks_pav = 2; // min amount of licks to get big reward for pavlovian task
+boolean pavlovian = true; // If true, make reward pavlovian; if false, reward is operant
+int minLicks = 2; // min amount of licks within response window to get an reward
+int minLicks_pav = 4; // min amount of licks to get big reward for pavlovian task
 
 // Tone params
-int LeftCueFreq = 3000;
-int RightCueFreq = 12000;
-//unsigned long LongToneDuration = 1000; // Duration of the speaker tone in ms
+int LeftCueFreq = 11000;
+int RightCueFreq = 6000;
 unsigned long ShortToneDuration = 500;
-unsigned long ToneDelayTime = 0; // start tone 250ms after
+unsigned long ToneDelayTime = 400; // start tone 250ms after for clamping
 
 // Time params
-unsigned long DelayTime = 2000; // delay period between cue and outcome
-unsigned long ReactionTime = 2000; // maximum reaction period (after cue) in ms
+unsigned long DelayTime = 1500; // delay period between cue and outcome
+unsigned long ReactionTime = 1500; // maximum reaction period (after cue) in ms
 unsigned long TimeOutDuration = 10000; // time out duration in ms
 unsigned long ITI1 = 2000;
 unsigned long ITI2 = 4000;
@@ -102,40 +73,23 @@ unsigned long ITIMin = 15000;
 unsigned long ITIGracePeriod = 1000;
 unsigned long ITI = 0; // ITI = random(ITI1,ITI2)
 
-// Optotag pattern params
-unsigned long ITIlaser = 25; // Time of stim in (ms)after cue
-unsigned long ITIblue = 1000; // ITI of blue laser in ms
-unsigned long PulseDurationBlue = 20; // duration of blue laser in ms
-unsigned long PulseDurationRed = 2;
-unsigned long ITIred = 10000; // duration of red laser in ms
-
 //********** Params Initializtion ***********//
 // Outcome related params
-int trialRewardProb = 0;
-int trialPunishProb = 0;
-int trialRandomProb = 0;
 int trialOmissionProb = 0;
 int trialFreeRewardProb = 0;
-int trialLeftCueOmissionProb = 0;
-boolean trialSecondCue = false;
-boolean existAnticipatoryLick = false; //get reward if animal makes anticipatory licks
+int trialCueProb = 0;
+boolean trialUseLeftCue = true; // which cue this trial uses
 
-// Block structure related params
-int TrialNum = 0; //current trial number
-int BlockNum = 1; //current block number
-int TrialInBlock = 0; //current number of trials of this block
-int PositiveNum = 0; //current positive outcome number
-int NegativeNum = 0; //current negative outcome number
-int ObtainedReward = 0; //reward follow by licking
+// Trial counters
+int TrialNum = 0;        // current trial number
+int LeftCueNum = 0;      // total left-cue trials
+int RightCueNum = 0;     // total right-cue trials
+int PositiveNum = 0;     // current positive outcome number
+int NegativeNum = 0;     // current negative outcome number
 
 // Misc
 static int state = 0 ; // MAIN behavior state variable for running behavior task
-// For test pulse
-boolean giveTest = false; // no need to change
-int remainingTest = 0;
-// For tone
 unsigned long ToneDuration = 0; // Tone duration of each trial
-boolean cueON = false;
 
 // Input output pin description //
 const byte Sync = 2; // non-periodic sync pulse
@@ -150,8 +104,8 @@ const byte WaterSpout_copy = 6; //copy left spout solenoid for data recording de
 const byte WaterSpout2_copy = 7; //copy right spout solenoid for data recording device
 const byte Airpuff = 32; //airpuff valve
 const byte Airpuff_copy = 34; //airpuff valve copy for data receiving device
-const byte ShutterBlue = 22; //1=blue shutter open, 0=closed
-const byte ShutterRed = 24; //1=red shutter open, 0=closed
+const byte ShutterBlue = 22; //1=blue shutter closed, 0=open
+const byte ShutterRed = 24; //1=red shutter closed, 0=open
 
 
 // Initialize real time variables //
@@ -162,34 +116,14 @@ unsigned long TimerSync = 0; //timer for non-periodic sync pulse
 int SyncPulseInterval = 1000; //interval for non-periodic sync pulse
 int SyncNow = 0; //current sync signal status
 
-// Red Opto stim parameters
-int RedPulseNum = 0;
-unsigned long RedTimerPulse = 0;
-int RedOptoNow = 0;
-unsigned long RedOptoInterval = 0;
-
-// Blue Opto stim parameters
-int BluePulseNum = 0;
-unsigned long BlueTimerPulse = 0;
-int BlueOptoNow = 0;
-unsigned long BlueOptoInterval = 0;
-
-//Control shuttersound
-unsigned long TimerShutterSound = 0;
-unsigned long ShutterSoundInterval = 0;
-int ShutterSoundNow = 0;
-
 // Detection related
 int Lick = 0;
-int AnticipatoryLick = 0;
 unsigned long LastLick = 0; //timestamp of last lick
-//int LickLeft = 0; //left spout lick status
-//int LickRight = 0; //right spout lick status
 unsigned long Lick_Duration; //duration of current lick in ms
 int LickCount = 0;
 
 // Outcome related
-unsigned long OutcomeSize = 20; // current trial's port reward size (updated by OutcomeSizeLeft or OutcomeSizeRight)
+unsigned long OutcomeSize = 20; // current trial's port reward size
 int LeftOutcomeButton = 0; //left reward button status
 int RightOutcomeButton = 0; //right reward button status
 unsigned long LeftOutcomeTimer = 0; //timer for left reward button
@@ -221,10 +155,6 @@ int FalseAlarm = 0;
 int CorrectReject = 0;
 int GoNum = 0;
 int NoGoNum = 0;
-int StimToneNum = 0;
-int StimOnlyNum = 0;
-int ToneOnlyNum = 0;
-int OmissionNum = 0;
 
 // boolean for printTrials()
 int getReward = 0; //0: no reward; 1: small reward; 2: large reward
@@ -258,14 +188,6 @@ void setup()
   TimerSync = millis();
   state = 0;
   SyncNow = 0;
-  // Initialize opto params
-  RedTimerPulse = 0;
-  RedOptoNow = 0;
-  BlueTimerPulse = 0;
-  BlueOptoNow = 0;
-  // Initialize random shutter params
-  TimerShutterSound = 0;
-  ShutterSoundNow = 0;
 
   digitalWrite(Sync, LOW);
   digitalWrite(WaterSpout, LOW);
@@ -280,70 +202,26 @@ void setup()
   randomSeed(analogRead(3));
 
   Serial.println("-----------------------------------------------------------------");
-  Serial.println("Manual check: 1 -> reward; 2 -> punishment; 3 -> blue; 4 -> red");
-  Serial.println("Laser shutter: 5 -> blue stim; 6 -> red stim");
+  Serial.println("Manual check: 1 -> reward; 2 -> tone; 3 -> blue shutter; 4 -> red shutter");
   Serial.println("Water calibration: 7");
   Serial.println("Trial start/stop: 8 -> start; 9 -> end");
+  Serial.print("LeftCueFreq: ");
+  Serial.println(LeftCueFreq);
+  Serial.print("RightCueFreq: ");
+  Serial.println(RightCueFreq);
+  Serial.print("LeftCueProb: ");
+  Serial.println(LeftCueProb);
+  Serial.print("LeftOmissionProb: ");
+  Serial.println(LeftOmissionProb);
+  Serial.print("RightOmissionProb: ");
+  Serial.println(RightOmissionProb);
   Serial.println("-----------------------------------------------------------------");
-
-  if (RedStim){
-    // Red opto stim params
-    RedTotalPulseNum = StimTotalPulseNum; // number of pulses per pattern
-    RedPulseDuration = StimPulseDuration; // Total duration of each pulse within a stimulation
-    RedPulseFreq = StimPulseFreq; //For single 500ms pulse
-    RedStimDuration = StimTotalDuration; // Total duration of each stimulation
-    RedPulseInterval = StimPulseInterval;
-
-    // Print checks
-    Serial.println("Stim color: red");
-    Serial.print("Stim total pulse num: ");
-    Serial.println(RedTotalPulseNum);
-    Serial.print("Stim pulse duration: ");
-    Serial.println(RedPulseDuration);
-    Serial.print("Stim pulse freq: ");
-    Serial.println(RedPulseFreq);
-    Serial.print("Stim total duration: ");
-    Serial.println(RedStimDuration);
-    
-  }else{
-    // Blue opto stim params
-    BlueTotalPulseNum = StimTotalPulseNum; // number of pulses per pattern
-    BluePulseDuration = StimPulseDuration; // Total duration of each pulse within a stimulation
-    BluePulseFreq = StimPulseFreq; //For single 500ms pulse
-    BlueStimDuration = StimTotalDuration; // Total duration of each stimulation
-    BluePulseInterval = StimPulseInterval;
-
-    // Print checks
-    Serial.println("Stim color: blue");
-    Serial.print("Stim total pulse num: ");
-    Serial.println(BlueTotalPulseNum);
-    Serial.print("Stim pulse duration: ");
-    Serial.println(BluePulseDuration);
-    Serial.print("Stim pulse freq: ");
-    Serial.println(BluePulseFreq);
-    Serial.print("Stim total duration: ");
-    Serial.println(BlueStimDuration);
-  }
 }
 
 
 void loop() {
   sync(); //Non period sync pulse (1s width) generation
   lickDetection();
-  opto();
-  //randomShutterSound(ShutterBlue);
-
-  // Check: if using blue to stim, no paAIP2 stim anymore
-  if (!RedStim && paAIP2MaxTrial > 0){
-    Serial.println("ERROR: should not use blue for stimulation if paAIP2 is on!");
-    delay(1000000000000000);
-  }
-
-  // Give blue stim for paAIP2 before paAIP2MaxTrial
-  if (millis() - paAIP2TimerPulse >= paAIP2StimInterval && TrialNum < paAIP2MaxTrial) {
-    paAIP2TimerPulse = millis();
-    giveBlueOpto();
-  }
 
   switch (state) {
     //state 0: Idle state until Start button pushed
@@ -366,12 +244,12 @@ void loop() {
       digitalWrite(WaterSpout_copy, LOW);
       digitalWrite(WaterSpout2_copy, LOW);
       digitalWrite(Airpuff_copy, LOW);
+      digitalWrite(ShutterBlue, HIGH);
+      digitalWrite(ShutterRed, HIGH);
       noTone(Speaker);
       ITI_start = millis();
       ITI_firstStart = millis();
       ITI = random(ITI1, ITI2);
-      trialSecondCue = false;
-      //updateTrials(); //If update trial here, ITI following tone belongs to next trial
       printTrials(state, trialReward, trialPunish);
       state = 2;
       break;
@@ -385,57 +263,23 @@ void loop() {
       trialITIMax = random(ITIMax - ITIGracePeriod, ITIMax);
 
       if (Current_ITI > ITI && Actual_ITI > trialITIMin) {
-        updateTrials();
+        TrialNum += 1;
         LickCount = 0;
-        if (giveTest) {
-          trialRandomProb = random(1, 101);
-          if (OmitStimOnly) {
-            trialOmissionProb = -100; // no outcome
-          } else {
-            trialOmissionProb = random(1, 101);
-          }
-          trialFreeRewardProb = random(1, 101);
 
-          if (RedStim){giveRedOpto();}
-          else{giveBlueOpto();}
-          
-          ToneDuration = ShortToneDuration;
-          Cue_start = millis();
-          getFreeReward = 0;
-          StimOnlyNum += 1;
-
-          printTrials(state, trialReward, trialPunish);
-          state = 3;
-
+        // Choose left vs right cue (50/50 by LeftCueProb)
+        trialCueProb = random(1, 101);
+        if (trialCueProb <= LeftCueProb) {
+          trialUseLeftCue = true;
+          LeftCueNum += 1;
         } else {
-          // Determine trial type params
-          trialRandomProb = random(1, 101);
-          trialOmissionProb = random(1, 101);
-          trialFreeRewardProb = random(1, 101);
-
-          ToneDuration = ShortToneDuration;
-          if (trialRandomProb >= PairProbRange[0] && trialRandomProb <= PairProbRange[1]) {
-            if (RedStim){giveRedOpto();}
-            else{giveBlueOpto();}
-            trialSecondCue = true;
-            StimToneNum += 1;
-          } else if (trialRandomProb >= StimOnlyProbRange[0] && trialRandomProb <= StimOnlyProbRange[1]) {
-            if (RedStim){giveRedOpto();}
-            else{giveBlueOpto();}
-            ToneDuration = ShortToneDuration;
-            StimOnlyNum += 1;
-            if (OmitStimOnly) {
-              trialOmissionProb = -100; // no outcome for tone only trials
-            }
-          } else if (trialRandomProb >= ToneOnlyProbRange[0] && trialRandomProb <= ToneOnlyProbRange[1]) {
-            if (OmitToneOnly) {
-              trialOmissionProb = -100; // no outcome for tone only trials
-            }
-            trialSecondCue = true;
-            ToneOnlyNum += 1;
-          }
+          trialUseLeftCue = false;
+          RightCueNum += 1;
         }
 
+        trialOmissionProb = random(1, 101);
+        trialFreeRewardProb = random(1, 101);
+
+        ToneDuration = ShortToneDuration;
         Cue_start = millis();
         getFreeReward = 0;
         printTrials(state, trialReward, trialPunish);
@@ -449,13 +293,15 @@ void loop() {
 
     // state 3: Second cue (tone) on
     case SecondCueOn:
-      if (trialSecondCue && millis() - Cue_start >= ToneDelayTime) {
+      if (millis() - Cue_start >= ToneDelayTime) {
         Cue_start = millis();
-        tone(Speaker, LeftCueFreq);
-        digitalWrite(SpeakerLeft_copy, HIGH);
-        state = 4;
-      } else if (!trialSecondCue && millis() - Cue_start >= ToneDelayTime) {
-        Cue_start = millis();
+        if (trialUseLeftCue) {
+          tone(Speaker, LeftCueFreq);
+          digitalWrite(SpeakerLeft_copy, HIGH);
+        } else {
+          tone(Speaker, RightCueFreq);
+          digitalWrite(SpeakerRight_copy, HIGH);
+        }
         state = 4;
       }
       break;
@@ -469,16 +315,18 @@ void loop() {
         digitalWrite(SpeakerRight_copy, LOW);
         if (millis() - Cue_start > ToneDuration) {
           state = 5;
-          //LickCount = 0;
         }
       }
       break;
 
     //state 5: Turn on solenoid after delay period (1 sec)
-    case SolenoidOn:
+    case SolenoidOn: {
+      // Pick the cue-specific omission threshold for this trial
+      int currentOmissionProb = trialUseLeftCue ? LeftOmissionProb : RightOmissionProb;
+
       if (!pavlovian && LickCount >= minLicks) {
         Hit += 1;
-        if (trialOmissionProb > OmissionProb) {
+        if (trialOmissionProb > currentOmissionProb) {
           getReward = 2;
           getPunish = 0;
           giveReward();
@@ -491,22 +339,22 @@ void loop() {
       } else if (millis() - Cue_start > ReactionTime) {
         if (pavlovian) {
           if (LickCount >= minLicks_pav) {
-            if (trialOmissionProb > OmissionProb) {
+            if (trialOmissionProb > currentOmissionProb) {
               getReward = 2;
               getPunish = 0;
               giveReward();
-              Punish_start = 0; // so it automatically shuts the solenoid down
+              Punish_start = 0;
             } else {
               getReward = 0;
               getPunish = 0;
               state = 6;
             }
           } else {
-            if (trialOmissionProb > OmissionProb) {
+            if (trialOmissionProb > currentOmissionProb) {
               getReward = 1;
               getPunish = 0;
               giveReward();
-              Punish_start = 0; // so it automatically shuts the solenoid down
+              Punish_start = 0;
             } else {
               getReward = 0;
               getPunish = 0;
@@ -516,12 +364,12 @@ void loop() {
         } else {
           Miss += 1;
           if (trialFreeRewardProb <= FreeRewardProb) {
-            if (trialOmissionProb > OmissionProb) {
+            if (trialOmissionProb > currentOmissionProb) {
               getFreeReward = 1;
               getReward = 1;
               getPunish = 0;
               giveReward();
-              Punish_start = 0; // so it automatically shuts the solenoid down
+              Punish_start = 0;
             } else {
               getReward = 0;
               getPunish = 0;
@@ -534,12 +382,12 @@ void loop() {
         }
       }
 
-
       // Record reward/punishment delivery for current trial
       trialReward = getReward;
       trialPunish = getPunish;
       trialFreeReward = getFreeReward;
       break;
+    }
 
     //state 6: Turn off solenoid
     case SolenoidOff:
@@ -612,12 +460,10 @@ void loop() {
       Serial.println(PositiveNum);
       Serial.print("Total punishment: ");
       Serial.println(NegativeNum);
-      Serial.print("Total stim only trials: ");
-      Serial.println(StimOnlyNum);
-      Serial.print("Total tone only trials: ");
-      Serial.println(ToneOnlyNum);
-      Serial.print("Total stim&tone trials: ");
-      Serial.println(StimToneNum);
+      Serial.print("Total left cue trials: ");
+      Serial.println(LeftCueNum);
+      Serial.print("Total right cue trials: ");
+      Serial.println(RightCueNum);
       Serial.print("Go: ");
       Serial.println(GoNum);
       Serial.print("NoGoNum: ");
@@ -640,19 +486,8 @@ void loop() {
     // read the incoming byte:
     SerialInput = Serial.read();
 
-    //Serial.print("I received: ");
-    //Serial.println(SerialInput);
-
     if (SerialInput == '1' && LeftOutcomeButton == 0) { // dispense left reward
       Serial.println("Entered 1: reward");
-      //tone(Speaker, LeftCueFreq);
-      //digitalWrite(SpeakerLeft_copy, HIGH);
-      //delay(500);
-      //noTone(Speaker);
-      //digitalWrite(SpeakerLeft_copy, LOW);
-      //if (pavlovian) {
-      //  delay(DelayTime);
-      //}
       LeftOutcomeButton = 1;
       digitalWrite(WaterSpout2, HIGH);
       digitalWrite(WaterSpout2_copy, HIGH);
@@ -660,56 +495,23 @@ void loop() {
       LeftOutcomeTimer = millis();
     }
 
-    if (SerialInput == '2' && RightOutcomeButton == 0) {
-      Serial.println("Entered 2: punishment");
-      //tone(Speaker, RightCueFreq);
-      //digitalWrite(SpeakerRight_copy, HIGH);
-      //delay(ToneDuration);
-      //noTone(Speaker);
-      //digitalWrite(SpeakerRight_copy, LOW);
-      //delay(DelayTime);
-      RightOutcomeButton = 1;
-      digitalWrite(Airpuff, HIGH);
-      digitalWrite(Airpuff_copy, HIGH);
-      OutcomeSize = SmallPunishSize;
-      RightOutcomeTimer = millis();
+    if (SerialInput == '2') {
+      Serial.println("Entered 2: Tone");
+      tone(Speaker, LeftCueFreq);
+      digitalWrite(SpeakerLeft_copy, HIGH);
+      delay(ShortToneDuration);
+      noTone(Speaker);
+      digitalWrite(SpeakerLeft_copy, LOW);
     }
 
     if (SerialInput == '3') {
-      Serial.println("Entered 3: Deliver blue stim");
-      //giveBlueOpto();
+      Serial.println("Entered 3: Open blue shutter");
       digitalWrite(ShutterBlue, LOW);
     }
 
     if (SerialInput == '4') {
-      Serial.println("Entered 4: Deliver red stim");
-      //      giveRedOpto();
+      Serial.println("Entered 4: Open red shutter");
       digitalWrite(ShutterRed, LOW);
-    }
-
-    if (SerialInput == '5') { //blue opto pattern
-      Serial.println("Entered 5: blue pulsing");
-//      giveBlueOpto();
-      for (int i = 0; i < 20; i++) {
-        digitalWrite(ShutterBlue, LOW);
-        delay(1000);
-        digitalWrite(ShutterBlue, HIGH);
-        delay(5000);
-       }
-      Serial.println("5: blue pulsing finished");
-    }
-
-    if (SerialInput == '6') { //blue pulsing pattern
-      Serial.println("Entered 6: red opto");
-//      giveRedOpto();
-      for (int i = 0; i < 50; i++) {
-        digitalWrite(ShutterRed, LOW);
-        delay(1000);
-        digitalWrite(ShutterRed, HIGH);
-        delay(5000);
-       }
-      Serial.println("5: blue pulsing finished");
-      Serial.println("6: red opto finished");
     }
 
     if (SerialInput == '7') {
@@ -773,74 +575,6 @@ void sync() {
 }
 
 //********************************************************************************************//
-// Assigned upcoming red opto delivery
-void giveRedOpto() {
-  if (RedTotalPulseNum != 1) {
-    RedPulseNum = (RedStimDuration / 1000.0) * RedPulseFreq;
-    RedPulseInterval = (1000.0 / RedPulseFreq) - RedPulseDuration;
-  } else {
-    RedPulseNum = RedTotalPulseNum;
-    RedPulseInterval = 5;
-  }
-
-  if (RedPulseInterval <= 0 && RedPulseNum > 1) {
-    RedPulseInterval = 5;
-    Serial.println("Negative RedPulseInterval: reset to 5ms");
-  }
-}
-
-//********************************************************************************************//
-// Assigned upcoming blue opto delivery
-void giveBlueOpto() {
-  if (BlueTotalPulseNum != 1) {
-    BluePulseNum = (BlueStimDuration / 1000.0) * BluePulseFreq;
-    BluePulseInterval = (1000.0 / BluePulseFreq) - BluePulseDuration;
-  } else {
-    BluePulseNum = BlueTotalPulseNum;
-    BluePulseInterval = 5;
-  }
-
-  if (BluePulseInterval <= 0 && BluePulseNum > 1) {
-    BluePulseInterval = 5;
-    Serial.println("Negative BluePulseInterval: reset to 5ms");
-  }
-}
-
-//********************************************************************************************//
-// Execute opto delivery
-void opto() {
-  if (RedPulseNum > 0 && millis() - RedTimerPulse >= RedOptoInterval) {
-    if (RedOptoNow == 1) {
-      RedTimerPulse = millis();
-      digitalWrite(ShutterRed, HIGH);
-      RedOptoNow = 0;
-      RedPulseNum -= 1;
-      RedOptoInterval = RedPulseInterval;
-    } else {
-      RedTimerPulse = millis();
-      digitalWrite(ShutterRed, LOW);
-      RedOptoNow = 1;
-      RedOptoInterval = RedPulseDuration;
-    }
-  }
-
-  if (BluePulseNum > 0 && millis() - BlueTimerPulse >= BlueOptoInterval) {
-    if (BlueOptoNow == 1) {
-      BlueTimerPulse = millis();
-      digitalWrite(ShutterBlue, LOW);
-      BlueOptoNow = 0;
-      BluePulseNum -= 1;
-      BlueOptoInterval = BluePulseInterval;
-    } else {
-      BlueTimerPulse = millis();
-      digitalWrite(ShutterBlue, HIGH);
-      BlueOptoNow = 1;
-      BlueOptoInterval = BluePulseDuration;
-    }
-  }
-}
-
-//********************************************************************************************//
 void giveReward() {
   Reward_start = millis();
   digitalWrite(WaterSpout2, HIGH);
@@ -858,27 +592,6 @@ void givePunishment() {
   On = millis();
   NegativeNum += 1;
   state = 6;
-}
-
-//********************************************************************************************//
-// Deliver random shutter sound
-void randomShutterSound(int ShutterColor) {
-  if (millis() - TimerShutterSound >= ShutterSoundInterval) {
-    if (ShutterSoundNow == 1) {
-      TimerShutterSound = millis();
-      digitalWrite(ShutterColor, LOW);
-      ShutterSoundNow = 0;
-      ShutterSoundInterval = random(10, 1000); // random opto interval between 10~20s
-      //Serial.print("Next ShutterSound after ");
-      //Serial.print(ShutterSoundInterval / 1000.0);
-      //Serial.println("s");
-    } else {
-      TimerShutterSound = millis();
-      digitalWrite(ShutterColor, HIGH);
-      ShutterSoundNow = 1;
-      ShutterSoundInterval = 500;
-    }
-  }
 }
 
 //********************************************************************************************//
@@ -911,29 +624,6 @@ void lickDetection() {
 }
 
 //********************************************************************************************//
-void updateTrials() {
-  // Update trial and block
-  if (!giveTest) {
-    TrialNum = TrialNum + 1;
-
-    if (remainingTest == 0 && (TrialNum - 1) % TestAfter == 0) {
-      giveTest = true;
-      remainingTest = nTestPulse;
-      Serial.println("*************New test started*************");
-    }
-
-  } else {
-    //Serial.println(remainingTest);
-    // Give test stim if needed
-    remainingTest -= 1;
-    if (remainingTest == 0) {
-      giveTest = false;
-      Serial.println("*************Stim test finished*************");
-    }
-  }
-}
-
-//********************************************************************************************//
 void printTrials(int state, int trialReward, int trialPunish) {
   // ITI state
   if (state == 1) {
@@ -953,28 +643,16 @@ void printTrials(int state, int trialReward, int trialPunish) {
     Serial.print(TrialNum);
     Serial.print("\t");
 
-    if (giveTest) {
-      Serial.print("Cue start (Stim only #");
-      Serial.print(StimOnlyNum);
+    if (trialUseLeftCue) {
+      Serial.print("Cue start (Left #");
+      Serial.print(LeftCueNum);
       Serial.print(")");
       Serial.print("\t");
     } else {
-      if (trialRandomProb >= PairProbRange[0] && trialRandomProb <= PairProbRange[1]) {
-        Serial.print("Cue start (Pair #");
-        Serial.print(StimToneNum);
-        Serial.print(")");
-        Serial.print("\t");
-      } else if (trialRandomProb >= StimOnlyProbRange[0] && trialRandomProb <= StimOnlyProbRange[1]) {
-        Serial.print("Cue start (Stim only #");
-        Serial.print(StimOnlyNum);
-        Serial.print(")");
-        Serial.print("\t");
-      } else if (trialRandomProb >= ToneOnlyProbRange[0] && trialRandomProb <= ToneOnlyProbRange[1]) {
-        Serial.print("Cue start (Tone only #");
-        Serial.print(ToneOnlyNum);
-        Serial.print(")");
-        Serial.print("\t");
-      }
+      Serial.print("Cue start (Right #");
+      Serial.print(RightCueNum);
+      Serial.print(")");
+      Serial.print("\t");
     }
 
     Serial.print("Time: ");

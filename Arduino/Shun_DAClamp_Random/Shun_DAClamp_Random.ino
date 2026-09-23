@@ -1,10 +1,11 @@
 // Shun Li, 2022/11/10
-// Day 1 of opto pair: give opto stim randomly, give water reward randomly
+// Random outcome task: give water reward, punishment, or tone randomly
 
-//20230210: tidied up code, renamed to OptoPair_RandomOutocme
+//20230210: tidied up code, renamed to RandomOutcome
 
-//20240502
-// 1. Add option to choose between using blue or red to stimulate
+//20260625
+// 1. Remove extra outcome code
+// 2. Match sync pulse timing to Shun_DAClamp_Reward
 
 #define Idle 0
 #define ITI_State 1
@@ -16,52 +17,26 @@
 #define TurnOffLickLeft 7
 #define RestartClock 8
 #define TimeOut 9
-
 #include <math.h>
 
 //********** User settings ***********//
 // Set up for the behavior
 boolean ENL = true; // whether ITI is ENL
-unsigned long UnitRewardSize = 20; // reward size of 1ul
-unsigned long SmallRewardSize = 2 * UnitRewardSize;
+unsigned long UnitRewardSize = 15; // reward size of 1ul
+unsigned long SmallRewardSize = 3 * UnitRewardSize;
 unsigned long BigRewardSize = 8 * UnitRewardSize;
 unsigned long SmallPunishSize = 100;
 unsigned long BigPunishSize = 200;
 
 // Outcome probability params
-int RewardProbRange[2] = {1, 40}; //{0, 40};
-int PunishProbRange[2] = {31, 40}; //{41, 50};
-int ToneProbRange[2] = {41, 50}; //{51, 60};
-int StimProbRange[2] = {51, 100}; //{61, 100};
-int PunishStimProbRange[2] = {101, 110};
-
-// Opto stim params
-boolean RedStim = true; // 1 means using red to stim, 0 means using blue to stim
-int StimTotalPulseNum = 25; // number of pulses per pattern
-unsigned long StimPulseDuration = 5; // Total duration of each pulse within a stimulation
-unsigned long StimPulseFreq = 50; //For single 500ms pulse
-unsigned long StimTotalDuration = 500; // Total duration of each stimulation
-unsigned long StimPulseInterval = 0;
-
-// Red opto stim params
-// if RedStim if true, these will be rewritten to match opto stim params
-int RedTotalPulseNum = 25; // number of pulses per pattern
-unsigned long RedPulseDuration = 5; // Total duration of each pulse within a stimulation
-unsigned long RedPulseFreq = 50; //For single 500ms pulse
-unsigned long RedStimDuration = 500; // Total duration of each stimulation
-unsigned long RedPulseInterval = 0;
-
-// Blue opto stim params (basically a trigger pulse to matlab galvo.m)
-// if RedStim if false, these will be rewritten to match opto stim params
-int BlueTotalPulseNum = 1; // number of pulses per pattern
-unsigned long BluePulseDuration = 500; // Total duration of each pulse within a stimulation
-unsigned long BluePulseFreq = 30; //For single 500ms pulse
-unsigned long BlueStimDuration = 500; // Total duration of each stimulation
-unsigned long BluePulseInterval = 0;
+int RewardProbRange[2] = {0, 50}; //{0, 40};
+int PunishProbRange[2] = {51, 90}; //{41, 50};
+int ToneProbRange[2] = {91, 100}; //{51, 60};
 
 // Time dependent params
 unsigned long ShortToneDuration = 500;
 unsigned long LongToneDuration = 1000;
+unsigned long eventDelayTime = 500; // delay between ITI satisfaction and event delivery
 unsigned long ITI1 = 2000;
 unsigned long ITI2 = 4000;
 unsigned long ITIMax = 200000; //200000;
@@ -69,12 +44,9 @@ unsigned long ITIMin = 15000; //15000;
 unsigned long ITIGracePeriod = 1000;
 unsigned long ITI = 0;
 
-// Optotag pattern parameters
-unsigned long ITIlaser = 25; // Time of stim in (ms)after cue
-unsigned long ITIblue = 1000; // ITI of blue laser in ms
-unsigned long PulseDurationBlue = 20; // duration of blue laser in ms
-unsigned long PulseDurationRed = 2;
-unsigned long ITIred = 10000; // duration of red laser in ms
+// Tone params
+int LeftCueFreq = 3000;
+int RightCueFreq = 12000;
 
 //********** Params Initializtion ***********//
 // Input output pin description //
@@ -90,8 +62,8 @@ const byte WaterSpout_copy = 6; //copy left spout solenoid for data recording de
 const byte WaterSpout2_copy = 7; //copy right spout solenoid for data recording device
 const byte Airpuff = 32; //airpuff valve
 const byte Airpuff_copy = 34; //airpuff valve copy for data receiving device
-const byte ShutterBlue = 22; //1=blue shutter open, 0=closed
-const byte ShutterRed = 24; //1=red shutter open, 0=closed
+const byte ShutterBlue = 22; //1=blue shutter closed, 0=open
+const byte ShutterRed = 24; //1=red shutter closed, 0=open
 
 // Misc
 char SerialInput = '0'; //for incoming serial data
@@ -111,34 +83,14 @@ int RewardNow = 0;
 unsigned long TimerPunish = 0;
 unsigned long PunishInterval = 0;
 int PunishNow = 0;
-//randomOpto()
-unsigned long TimerOpto = 0;
-unsigned long OptoInterval = 0;
-int OptoNow = 0;
-//randomShutterSound()
-unsigned long TimerShutterSound = 0;
-unsigned long ShutterSoundInterval = 0;
-int ShutterSoundNow = 0;
-//giveOpto()
-// Red Opto stim parameters
-int RedPulseNum = 0;
-unsigned long RedTimerPulse = 0;
-int RedOptoNow = 0;
-unsigned long RedOptoInterval = 0;
-// Blue Opto stim parameters
-int BluePulseNum = 0;
-unsigned long BlueTimerPulse = 0;
-int BlueOptoNow = 0;
-unsigned long BlueOptoInterval = 0;
 
 // Trial structure related
 int PositiveNum = 0; //current positive outcome number
-int OptoNum = 0; //current negative outcome number
 int NegativeNum = 0;
 int ManualPositiveNum = 0;
 int ManualNegativeNum = 0;
 int toneNum = 0;
-int pairNum = 0;
+int TrialNum = 0;
 
 // boolean for printTrials()
 int getReward = 0; //0: no reward; 1: small reward; 2: large reward
@@ -166,13 +118,13 @@ unsigned long ITI_start = 0; //timestamp for beginning of ITI
 unsigned long Current_ITI = 0; // current ITI (reset by licks)
 unsigned long Actual_ITI = 0; // actual elapsed time from last trial (not reset by licks)
 unsigned long ITI_firstStart = 0;
+unsigned long EventDelay_start = 0; //timestamp for event delay after ITI is satisfied
 unsigned long trialITIMin = 0;
 unsigned long trialITIMax = 0;
 unsigned long Cue_start = 0; //timestamp for cue onset
 unsigned long Cue_off = 0; //timestamp for cue off
 unsigned long Reward_start = 0; //timestamp for start of reward
 unsigned long Punish_start = 0; //timestamp for start of punishment
-unsigned long Opto_start = 0;
 unsigned long Outcome_off = 0; //timestamp for solenoid off
 unsigned long Timeout_start = 0; //timestamp for timeout
 unsigned long On; //timestamp for reward delivery (solenoid on)
@@ -204,20 +156,12 @@ void setup()
   TimerSync = millis();
   state = 0;
   SyncNow = 0;
-  // Initialize opto params
-  RedTimerPulse = 0;
-  RedOptoNow = 0;
-  BlueTimerPulse = 0;
-  BlueOptoNow = 0;
   // Initialize random reward params
   TimerReward = 0;
   RewardNow = 1;
   // Initialize random punish params
   TimerPunish = 0;
   PunishNow = 1;
-  // Initialize random stim params
-  TimerOpto = 0;
-  OptoNow = 1;
 
   digitalWrite(Sync, LOW);
   digitalWrite(WaterSpout, LOW);
@@ -232,58 +176,16 @@ void setup()
   randomSeed(analogRead(3));
 
   Serial.println("---------------------------------RandomOutcome--------------------------------");
-  Serial.println("Manual check: 1 -> reward; 2 -> punishment; 3 -> blue; 4 -> red");
-  Serial.println("Laser shutter: 5 -> blue stim; 6 -> red stim");
+  Serial.println("Manual check: 1 -> reward; 2 -> punishment; 3 -> blue shutter; 4 -> red shutter");
   Serial.println("Water calibration: 7");
   Serial.println("Trial start/stop: 8 -> start; 9 -> end");
   Serial.println("---------------------------------RandomOutcome--------------------------------");
-
-  if (RedStim) {
-    // Red opto stim params
-    RedTotalPulseNum = StimTotalPulseNum; // number of pulses per pattern
-    RedPulseDuration = StimPulseDuration; // Total duration of each pulse within a stimulation
-    RedPulseFreq = StimPulseFreq; //For single 500ms pulse
-    RedStimDuration = StimTotalDuration; // Total duration of each stimulation
-    RedPulseInterval = StimPulseInterval;
-
-    // Print checks
-    Serial.println("Stim color: red");
-    Serial.print("Stim total pulse num: ");
-    Serial.println(RedTotalPulseNum);
-    Serial.print("Stim pulse duration: ");
-    Serial.println(RedPulseDuration);
-    Serial.print("Stim pulse freq: ");
-    Serial.println(RedPulseFreq);
-    Serial.print("Stim total duration: ");
-    Serial.println(RedStimDuration);
-
-  } else {
-    // Blue opto stim params
-    BlueTotalPulseNum = StimTotalPulseNum; // number of pulses per pattern
-    BluePulseDuration = StimPulseDuration; // Total duration of each pulse within a stimulation
-    BluePulseFreq = StimPulseFreq; //For single 500ms pulse
-    BlueStimDuration = StimTotalDuration; // Total duration of each stimulation
-    BluePulseInterval = StimPulseInterval;
-
-    // Print checks
-    Serial.println("Stim color: blue");
-    Serial.print("Stim total pulse num: ");
-    Serial.println(BlueTotalPulseNum);
-    Serial.print("Stim pulse duration: ");
-    Serial.println(BluePulseDuration);
-    Serial.print("Stim pulse freq: ");
-    Serial.println(BluePulseFreq);
-    Serial.print("Stim total duration: ");
-    Serial.println(BlueStimDuration);
-  }
 }
 
 
 void loop() {
   sync(); //Non period sync pulse (1s width) generation
   lickDetection();
-  opto();
-  //randomShutterSound(ShutterBlue);
 
   switch (state) {
     //state 0: Idle state until Start button pushed
@@ -311,6 +213,7 @@ void loop() {
     case ITI_State:
       ITI_start = millis();
       ITI_firstStart = millis();
+      EventDelay_start = 0;
       ITI = random(ITI1, ITI2);
       state = 2;
       Serial.print("ITI: ");
@@ -320,103 +223,83 @@ void loop() {
 
     //state 2: select what to deliver
     case OutcomeDelivery:
-      Cue_start = millis();
-      Actual_ITI = Cue_start - ITI_firstStart;
-      Current_ITI = Cue_start - ITI_start;
+      Now = millis();
+      Actual_ITI = Now - ITI_firstStart;
+      Current_ITI = Now - ITI_start;
       trialITIMin = random(ITIMin - ITIGracePeriod, ITIMin + ITIGracePeriod);
       trialITIMax = random(ITIMax - ITIGracePeriod, ITIMax + ITIGracePeriod);
 
-      if (Current_ITI > ITI && Actual_ITI > trialITIMin) {
-
-        trialRandomProb = random(101);
-        //Serial.println(RewardProbRange[1]);
-        if (trialRandomProb >= RewardProbRange[0] && trialRandomProb <= RewardProbRange[1]) {
-          Reward_start = millis();
-          digitalWrite(WaterSpout2, HIGH);
-          digitalWrite(WaterSpout2_copy, HIGH);
-          PositiveNum += 1;
-          Punish_start = 0;
-          getReward = 2;
-
-          Serial.print("Reward: ");
-          Serial.print(PositiveNum);
-          Serial.print("\t");
-          Serial.print("Time: ");
-          Serial.println(millis() / 1000.0);
-
-        } else if (trialRandomProb >= PunishProbRange[0] && trialRandomProb <= PunishProbRange[1]) {
-          Punish_start = millis();
-          digitalWrite(Airpuff, HIGH);
-          digitalWrite(Airpuff_copy, HIGH);
-          NegativeNum += 1;
-          Reward_start = 0;
-          getPunish = 2;
-
-          Serial.print("Punish: ");
-          Serial.print(NegativeNum);
-          Serial.print("\t");
-          Serial.print("Time: ");
-          Serial.println(millis() / 1000.0);
-
-        } else if (trialRandomProb >= ToneProbRange[0] && trialRandomProb <= ToneProbRange[1]) {
-          tone(Speaker, 3000);
-          digitalWrite(SpeakerLeft_copy, HIGH);
-          delay(ShortToneDuration);
-          noTone(Speaker);
-          digitalWrite(SpeakerLeft_copy, LOW);
-          toneNum += 1;
-
-          Serial.print("Tone: ");
-          Serial.print(toneNum);
-          Serial.print("\t");
-          Serial.print("Time: ");
-          Serial.println(millis() / 1000.0);
-
-        } else if (trialRandomProb >= StimProbRange[0] && trialRandomProb <= StimProbRange[1]) {
-          Opto_start = millis();
-          if (RedStim) {
-            giveRedOpto();
-          }
-          else {
-            giveBlueOpto();
-          }
-          //giveRedOpto();
-          //giveBlueOpto();
-          OptoNum += 1;
-          Serial.print("Optostim: ");
-          Serial.print(OptoNum);
-          Serial.print("\t");
-          Serial.print("Time: ");
-          Serial.println(millis() / 1000.0);
-
-        } else if (trialRandomProb >= PunishStimProbRange[0] && trialRandomProb <= PunishStimProbRange[1]) {
-          Opto_start = millis();
-          Punish_start = millis();
-
-          if (RedStim) {
-            giveRedOpto();
-          }
-          else {
-            giveBlueOpto();
-          }
-
-          digitalWrite(Airpuff, HIGH);
-          digitalWrite(Airpuff_copy, HIGH);
-          Reward_start = 0;
-          getPunish = 2;
-          pairNum += 1;
-
-          Serial.print("Pair airpuff & stim: ");
-          Serial.print(pairNum);
-          Serial.print("\t");
-          Serial.print("Time: ");
-          Serial.println(millis() / 1000.0);
-        }
-        state = 3;
-      }
-
       if (Lick == 1 && ENL) {
         ITI_start = millis();
+        EventDelay_start = 0;
+        break;
+      }
+
+      if ((Current_ITI > ITI && Actual_ITI > trialITIMin) || EventDelay_start > 0) {
+        if (EventDelay_start == 0) {
+          EventDelay_start = millis();
+          TrialNum += 1;
+
+          Serial.print("Trial: ");
+          Serial.print(TrialNum);
+          Serial.print("\t");
+          Serial.print("ITI finished");
+          Serial.print("\t");
+          Serial.print("Time: ");
+          Serial.println(EventDelay_start / 1000.0);
+        }
+
+        if (millis() - EventDelay_start >= eventDelayTime) {
+          Cue_start = millis();
+          trialRandomProb = random(101);
+          //Serial.println(RewardProbRange[1]);
+          if (trialRandomProb >= RewardProbRange[0] && trialRandomProb <= RewardProbRange[1]) {
+            Reward_start = millis();
+            digitalWrite(WaterSpout2, HIGH);
+            digitalWrite(WaterSpout2_copy, HIGH);
+            PositiveNum += 1;
+            Punish_start = 0;
+            getReward = 2;
+
+            Serial.print("Reward: ");
+            Serial.print(PositiveNum);
+            Serial.print("\t");
+            Serial.print("Time: ");
+            Serial.println(millis() / 1000.0);
+
+          } else if (trialRandomProb >= PunishProbRange[0] && trialRandomProb <= PunishProbRange[1]) {
+            Punish_start = millis();
+            digitalWrite(Airpuff, HIGH);
+            digitalWrite(Airpuff_copy, HIGH);
+            NegativeNum += 1;
+            Reward_start = 0;
+            getPunish = 2;
+
+            Serial.print("Punish: ");
+            Serial.print(NegativeNum);
+            Serial.print("\t");
+            Serial.print("Time: ");
+            Serial.println(millis() / 1000.0);
+
+          } else if (trialRandomProb >= ToneProbRange[0] && trialRandomProb <= ToneProbRange[1]) {
+            tone(Speaker, LeftCueFreq);
+            digitalWrite(SpeakerLeft_copy, HIGH);
+            delay(ShortToneDuration);
+            noTone(Speaker);
+            digitalWrite(SpeakerLeft_copy, LOW);
+            toneNum += 1;
+
+            Serial.print("Tone: ");
+            Serial.print(toneNum);
+            Serial.print("\t");
+            Serial.print("Time: ");
+            Serial.println(millis() / 1000.0);
+          }
+          EventDelay_start = 0;
+          state = 3;
+        }
+      } else {
+        EventDelay_start = 0;
       }
 
       // Record reward/punishment delivery for current trial
@@ -483,8 +366,6 @@ void loop() {
       Serial.println(PositiveNum);
       Serial.print("Total punish: ");
       Serial.println(NegativeNum);
-      Serial.print("Total opto: ");
-      Serial.println(OptoNum);
       state = 0;
       noTone(Speaker);
       End = millis();
@@ -518,37 +399,14 @@ void loop() {
       OutcomeSize = SmallPunishSize;
       RightOutcomeTimer = millis();
     }
-
     if (SerialInput == '3') {
-      Serial.println("Entered 3: Deliver blue stim");
-      //    giveBlueOpto();
+      Serial.println("Entered 3: Open blue shutter");
       digitalWrite(ShutterBlue, LOW);
     }
-
     if (SerialInput == '4') {
-      Serial.println("Entered 4: Deliver red stim");
-      //giveRedOpto();
+      Serial.println("Entered 4: Open red shutter");
       digitalWrite(ShutterRed, LOW);
     }
-
-    if (SerialInput == '5') { //blue pulsing pattern
-      Serial.println("Entered 5: deliver blue stim");
-//      giveBlueOpto();
-      for (int i = 0; i < 20; i++) {
-        digitalWrite(ShutterBlue, LOW);
-        delay(500);
-        digitalWrite(ShutterBlue, HIGH);
-        delay(5000);
-        Serial.println(i);
-      }
-      Serial.println("Finished blue stim");
-    }
-
-    if (SerialInput == '6') { //red pulsing pattern
-      Serial.println("Entered 6: deliver red stim");
-      giveRedOpto();
-    }
-
     if (SerialInput == '7') {
       Serial.println("Deliver 200 reward for calibration");
       int num_repeat = 200;
@@ -609,74 +467,6 @@ void sync() {
 }
 
 //********************************************************************************************//
-// Assigned upcoming red opto delivery
-void giveRedOpto() {
-  if (RedTotalPulseNum != 1) {
-    RedPulseNum = (RedStimDuration / 1000.0) * RedPulseFreq;
-    RedPulseInterval = (1000.0 / RedPulseFreq) - RedPulseDuration;
-  } else {
-    RedPulseNum = RedTotalPulseNum;
-    RedPulseInterval = 5;
-  }
-
-  if (RedPulseInterval <= 0 && RedPulseNum > 1) {
-    RedPulseInterval = 5;
-    Serial.println("Negative RedPulseInterval: reset to 5ms");
-  }
-}
-
-//********************************************************************************************//
-// Assigned upcoming blue opto delivery
-void giveBlueOpto() {
-  if (BlueTotalPulseNum != 1) {
-    BluePulseNum = (BlueStimDuration / 1000.0) * BluePulseFreq;
-    BluePulseInterval = (1000.0 / BluePulseFreq) - BluePulseDuration;
-  } else {
-    BluePulseNum = BlueTotalPulseNum;
-    BluePulseInterval = 5;
-  }
-
-  if (BluePulseInterval <= 0 && BluePulseNum > 1) {
-    BluePulseInterval = 5;
-    Serial.println("Negative BluePulseInterval: reset to 5ms");
-  }
-}
-
-//********************************************************************************************//
-// Execute opto delivery
-void opto() {
-  if (RedPulseNum > 0 && millis() - RedTimerPulse >= RedOptoInterval) {
-    if (RedOptoNow == 1) {
-      RedTimerPulse = millis();
-      digitalWrite(ShutterRed, HIGH);
-      RedOptoNow = 0;
-      RedPulseNum -= 1;
-      RedOptoInterval = RedPulseInterval;
-    } else {
-      RedTimerPulse = millis();
-      digitalWrite(ShutterRed, LOW);
-      RedOptoNow = 1;
-      RedOptoInterval = RedPulseDuration;
-    }
-  }
-
-  if (BluePulseNum > 0 && millis() - BlueTimerPulse >= BlueOptoInterval) {
-    if (BlueOptoNow == 1) {
-      BlueTimerPulse = millis();
-      digitalWrite(ShutterBlue, HIGH);
-      BlueOptoNow = 0;
-      BluePulseNum -= 1;
-      BlueOptoInterval = BluePulseInterval;
-    } else {
-      BlueTimerPulse = millis();
-      digitalWrite(ShutterBlue, LOW);
-      BlueOptoNow = 1;
-      BlueOptoInterval = BluePulseDuration;
-    }
-  }
-}
-
-//********************************************************************************************//
 void randomReward() {
   if (millis() - TimerReward >= RewardInterval) {
     if (RewardNow == 1) {
@@ -685,12 +475,6 @@ void randomReward() {
       digitalWrite(WaterSpout2_copy, LOW);
       RewardNow = 0;
       RewardInterval = 5000 + random(10000); // random reward interval between 5 - 15s
-
-      //Avoid other events
-      //NextRewardTime = millis() + RewardInterval;
-      //if (NextRewardTime + 5 < NextOptoTime){
-
-      //}
 
       Serial.print("Next reward after ");
       Serial.print(RewardInterval / 1000.0);
@@ -732,50 +516,6 @@ void randomPunish() {
 }
 
 //********************************************************************************************//
-void randomOpto() {
-  if (millis() - TimerOpto >= OptoInterval) {
-    if (OptoNow == 1) {
-      TimerOpto = millis();
-      digitalWrite(ShutterRed, LOW);
-      //digitalWrite(ShutterRed_copy, LOW);
-      OptoNow = 0;
-      OptoInterval = 10000 + random(1, 10000); // random opto interval between 10~20s
-      Serial.print("Next opto after ");
-      Serial.print(OptoInterval / 1000.0);
-      Serial.println("s");
-    } else {
-      TimerOpto = millis();
-      digitalWrite(ShutterRed, HIGH);
-      //digitalWrite(ShutterRed_copy, HIGH);
-      OptoNow = 1;
-      OptoNum += 1;
-      OptoInterval = 500;
-      printTrials();
-    }
-  }
-}
-
-//********************************************************************************************//
-void randomShutterSound(const byte ShutterColor) {
-  if (millis() - TimerShutterSound >= ShutterSoundInterval) {
-    if (ShutterSoundNow == 1) {
-      TimerShutterSound = millis();
-      digitalWrite(ShutterColor, LOW);
-      ShutterSoundNow = 0;
-      ShutterSoundInterval = 100 + random(1, 900); // random opto interval between 0.1~1s
-      //Serial.print("Next ShutterSound after ");
-      //Serial.print(ShutterSoundInterval / 1000.0);
-      //Serial.println("s");
-    } else {
-      TimerShutterSound = millis();
-      digitalWrite(ShutterColor, HIGH);
-      ShutterSoundNow = 1;
-      ShutterSoundInterval = 500;
-    }
-  }
-}
-
-//********************************************************************************************//
 void lickDetection() {
   // Lick Detection //
   if (digitalRead(LickDetectRight) == 0) {
@@ -786,6 +526,7 @@ void lickDetection() {
   }
   if (digitalRead(LickDetectRight) == 1) {
     if (Lick == 1) {
+      delay(1);
       Lick = 0;
 
       Serial.print("Lick Detected");
