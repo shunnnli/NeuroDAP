@@ -339,16 +339,11 @@ configureStreamOut(handle,aAddressesOut,streamOutValues);
     if enableLivePlot
         chanLabels = scanNames;
 
-        % Create a wide + short window so the trace looks "flat" and the title
-        % has enough headroom.
-        if exist('initializeFig','file') == 2
-            liveFig = initializeFig(0.8, 0.4);
-            clf(liveFig,'reset');
-        else
-            liveFig = figure('Units','normalized','Position',[0.01 0.65 0.98 0.22]);
-        end
-
-        set(liveFig, 'Name','Photometry (live)', 'NumberTitle','off', ...
+        % Size the live window to the actual screen. initializeFig uses a
+        % fixed export size and can place oversized figures off-screen.
+        liveFig = figure('WindowStyle','normal', 'Units','normalized', ...
+            'Position',[0.05 0.55 0.90 0.35], 'Visible','on', 'Resize','on', ...
+            'Name','Photometry (live)', 'NumberTitle','off', ...
             'Color','w', 'MenuBar','none', 'ToolBar','none');
 
         liveAx = axes('Parent', liveFig, 'Units','normalized');
@@ -438,7 +433,9 @@ configureStreamOut(handle,aAddressesOut,streamOutValues);
             if ~isnan(plotTBuf(ord(end)))
                 xlim(liveAx, [max(0, plotTBuf(ord(end)) - plotWindowSec), plotTBuf(ord(end))]);
             end
-            drawnow limitrate nocallbacks;
+            % Reads already pace updates at roughly 10 Hz. Render each
+            % update and service window callbacks (including resizing).
+            drawnow;
         end
 
         % ---- Save buffering: write ~1 file per second (original behavior) ----
@@ -556,10 +553,8 @@ function setLivePlotAxesLayout(fig, ax)
     % Work in normalized units so the axes scales with the figure.
     ax.Units = 'normalized';
 
-    % TightInset is only accurate after MATLAB has computed text extents.
-    % (ResizeFcn calls already happen with callbacks enabled.)
-    drawnow;  % do NOT use 'nocallbacks' here
-
+    % Initial setup renders before calling this helper. Do not process
+    % callbacks here: a nested drawnow could close the axes during layout.
     ti = ax.TightInset;   % [left bottom right top] in normalized units
 
     % Extra padding beyond TightInset: tweak to taste.
