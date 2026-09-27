@@ -1,4 +1,4 @@
-function [traces,timestamp] = plotTraces(varargin,options)
+function [traces,timestamp,keepIdx] = plotTraces(varargin,options)
 
 %% Notes
 % plotTraces.m, Shun Li
@@ -160,6 +160,7 @@ end
 % end
 
 %% Check extract & plot
+keepIdx = []; % which input events ended up as rows of traces (see getTraces)
 if ~options.extract && ~options.plot
     if isfield(options,'traces'); options.plot = true; end
     if isfield(options,'params'); options.extract = true; end
@@ -169,6 +170,7 @@ if ~options.extract && ~options.plot
 elseif options.plot && ~options.extract
     traces = options.traces;
     timestamp = options.timestamp;
+    keepIdx = true(size(traces,1),1); % nothing was extracted, so nothing was dropped
     if ~isfield(options,'traces'); error('plotTraces: options.traces not provided!'); end
     if ~isfield(options,'timestamp'); error('plotTraces: options.timestamp not provided!'); end
 elseif options.extract
@@ -181,7 +183,7 @@ end
 
 %% Get traces if needed
 if options.extract
-    [traces,timestamp] = getTraces(options.eventIdx,options.timeRange,...
+    [traces,timestamp,keepIdx] = getTraces(options.eventIdx,options.timeRange,...
                                         options.signal,params=options.params,...
                                         signalSystem=options.signalSystem,...
                                         signalFs=options.signalFs,...

@@ -12,6 +12,7 @@ arguments
     % Clamp options
     options.blueClampRange double % default [800,1500]; calibration [800,1600]
     options.redClampRange double  % default [25,600]; calibration [25,500]
+    options.autoClampMax logical = true % map 100% onto the max command of this session
     options.calibration struct = struct() % optional calibration response settings
 
     options.pavlovian logical = false
@@ -260,10 +261,12 @@ waterLickIdx = rmmissing(waterLickIdx);
 if ~exist('clampON','var') || options.redo
     % Get clamp trace pct if needed
     if ~exist('blueClamp_pct','var')
-        blueClamp_pct = voltage2percent(blueClamp,options.blueClampRange);
+        blueClamp_pct = voltage2percent(blueClamp,options.blueClampRange,...
+                            autoMax=options.autoClampMax);
     end
     if ~exist('redClamp_pct','var')
-        redClamp_pct = voltage2percent(redClamp,options.redClampRange);
+        redClamp_pct = voltage2percent(redClamp,options.redClampRange,...
+                            autoMax=options.autoClampMax);
     end
 
     % Convert to logical

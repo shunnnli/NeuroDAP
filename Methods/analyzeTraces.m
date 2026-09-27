@@ -16,6 +16,8 @@ arguments
     options.trialTable table
     options.trialNumber cell
 
+    options.save logical = true % append analysis to the session's analysis file
+
 end
 
 disp('Ongoing: analyze traces and saved in anlaysis struct');
@@ -68,11 +70,29 @@ for i = 1:length(analysisEvents)
             system = timeSeries(signal).system;
     
             % Save overall traces
-            [trace,t] = plotTraces(analysisEvents{i},timeRange,data,params,...
+            [trace,t,keepIdx] = plotTraces(analysisEvents{i},timeRange,data,params,...
                             signalFs=finalFs,signalSystem=system,plot=false);
             if isempty(trace)
                 disp(['     Ongoing: ',analysisLabels{i},' is empty, skipped!']); 
                 continue; 
+            end
+
+            % Events whose window fell outside the recording (or contained
+            % NaNs) were dropped from trace, so drop them from the trial
+            % info as well to keep rows aligned
+            if isfield(options,'trialNumber'); cur_trialNumber = options.trialNumber{i};
+            else; cur_trialNumber = []; end
+            if ~isempty(keepIdx) && length(keepIdx) == length(cur_trialNumber)
+                if sum(~keepIdx) > 0
+                    disp(['     Ongoing: ',num2str(sum(~keepIdx)),'/',num2str(length(keepIdx)),...
+                          ' trials of ',analysisLabels{i},' in ',timeSeries(signal).name,...
+                          ' dropped (window outside recording or NaN in trace)']);
+                end
+                cur_trialNumber = cur_trialNumber(keepIdx);
+            elseif ~isempty(keepIdx) && sum(~keepIdx) > 0
+                warning(['analyzeTraces: ',num2str(sum(~keepIdx)),' traces of ',analysisLabels{i},...
+                         ' in ',timeSeries(signal).name,' were dropped but trialNumber has a ',...
+                         'different length, trial info is left unsliced and may be misaligned!']);
             end
     
             % analyzeStages
@@ -97,9 +117,9 @@ for i = 1:length(analysisEvents)
             analysis(row).stageMin = stats.stageMin;
             analysis(row).stageArea = stats.stageArea;
             
-            analysis(row).trialInfo.trialNumber = options.trialNumber{i};
-            if ~isempty(options.trialTable)
-                analysis(row).trialInfo.trialTable = options.trialTable(options.trialNumber{i},:);
+            analysis(row).trialInfo.trialNumber = cur_trialNumber;
+            if isfield(options,'trialTable') && ~isempty(options.trialTable) && ~isempty(cur_trialNumber)
+                analysis(row).trialInfo.trialTable = options.trialTable(cur_trialNumber,:);
             end
             analysis(row).options = options;
         end
@@ -141,7 +161,11 @@ for i = 1:length(analysisEvents)
 end
 
 % Save
-save(strcat(osPathSwitch(params.session.path),filesep,'analysis_',params.session.name),'analysis','-append');
-disp('Finished: analysis struct created and saved');
+if options.save
+    save(strcat(osPathSwitch(params.session.path),filesep,'analysis_',params.session.name),'analysis','-append');
+    disp('Finished: analysis struct created and saved');
+else
+    disp('Finished: analysis struct created (not saved)');
+end
 
 end

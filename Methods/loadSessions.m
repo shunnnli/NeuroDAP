@@ -13,6 +13,7 @@ arguments
    % Clamp options
    options.blueClampRange double = [800, 1500]
    options.redClampRange double  = [25,  600]
+   options.autoClampMax logical = true % map 100% onto the max command of this session
    
    % Labjack concat options
    options.labjackSetup string = 'Shun'
@@ -255,8 +256,12 @@ if withNI
             syncNI = channels{14};
 
             % Convert blueClamp/redClamp to percentage
-            blueClamp_pct = voltage2percent(blueClamp,options.blueClampRange);
-            redClamp_pct  = voltage2percent(redClamp, options.redClampRange);
+            [blueClamp_pct,blueClampRange_used] = voltage2percent(blueClamp,options.blueClampRange,...
+                                                    autoMax=options.autoClampMax);
+            [redClamp_pct,redClampRange_used]   = voltage2percent(redClamp, options.redClampRange,...
+                                                    autoMax=options.autoClampMax);
+            disp(['Finished: clamp command range used (ADC counts): blue [',...
+                  num2str(blueClampRange_used),'], red [',num2str(redClampRange_used),']']);
             
             if options.saveDigitalNI
                 if ~isfield(options,'saveDigitalNIChannelIdx')
@@ -769,6 +774,7 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
         timeSeries(row).demux_freq = NaN;
         timeSeries(row).detrend = false;
         timeSeries(row).options = processed.options;
+        timeSeries(row).options.clampRange = blueClampRange_used; % ADC counts mapped to 0-100%
         disp('Finished: store blue clamping command');
 
         % Downsample
@@ -795,6 +801,7 @@ if (withPhotometry || options.withPhotometryNI) && (options.reloadAll || options
         timeSeries(row).demux_freq = NaN;
         timeSeries(row).detrend = false;
         timeSeries(row).options = processed.options;
+        timeSeries(row).options.clampRange = redClampRange_used; % ADC counts mapped to 0-100%
         disp('Finished: store red clamping command');
 
         % % Downsample

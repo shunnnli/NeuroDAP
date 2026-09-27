@@ -225,6 +225,7 @@ summary = summary(keepRows);
 
 leftClampAnimals = {'SL431', 'SL432', 'SL433', 'BiPOLES2', 'M431'};
 rightClampAnimals = {'M445', 'M446'};
+NAcLSClampAnimals = {'SL478','SL479','SL480','SL481'};
 
 for i = 1:length(summary)
     cur_animal = summary(i).animal;
@@ -242,6 +243,10 @@ for i = 1:length(summary)
         elseif strcmpi(cur_name, 'NAc-left')
             summary(i).name = 'NAc-unclamp';
         end
+    elseif any(strcmpi(cur_animal, NAcLSClampAnimals))
+        if strcmpi(cur_name, 'NAc-LS')
+            summary(i).name = 'NAc-clamp';
+        end
     end
 end
 
@@ -255,12 +260,18 @@ end
 % If task is Random-clamp, add "(clamp)" to all event name except baseline
 % ie "Tone" becomes "Tone (clamp)"
 
+% RandomClampMix sessions interleave clamp and unclamp trials, so their
+% event names already carry the correct label and are left untouched.
+mixSessionPattern = 'RandomClampMix';
+
 for i = 1:length(summary)
     cur_task = summary(i).task;
     cur_event = summary(i).event;
     cur_date = str2double(summary(i).date);
+    cur_session = summary(i).session;
 
-    if ~(cur_date < 20260716) || strcmpi(cur_event, 'Baseline')
+    if ~(cur_date < 20260716) || strcmpi(cur_event, 'Baseline') || ...
+            contains(cur_session, mixSessionPattern, IgnoreCase=true)
         continue;
     end
 
@@ -277,6 +288,125 @@ for i = 1:length(summary)
         summary(i).event = [cur_event, eventSuffix];
     end
 end
+
+% If animal is SL478-481, if Random-ctrl, make sure is unclamp and if task
+% is Random-clamp, make sure suffix is (clamp)
+
+% These animals are enforced regardless of session date: any existing
+% (clamp)/(unclamp) suffix is stripped and replaced by the one matching the
+% task, so wrongly labeled events get corrected too.
+suffixAnimals = {'SL478','SL479','SL480','SL481'};
+
+for i = 1:length(summary)
+    cur_animal = summary(i).animal;
+    cur_task = summary(i).task;
+    cur_event = char(summary(i).event);
+    cur_session = summary(i).session;
+
+    if ~any(strcmpi(cur_animal, suffixAnimals)) || strcmpi(cur_event, 'Baseline') || ...
+            contains(cur_session, mixSessionPattern, IgnoreCase=true)
+        continue;
+    end
+
+    if strcmpi(cur_task, 'Random-ctrl')
+        eventSuffix = ' (unclamp)';
+    elseif strcmpi(cur_task, 'Random-clamp')
+        eventSuffix = ' (clamp)';
+    else
+        continue;
+    end
+
+    % Remove any existing (clamp)/(unclamp) suffix before adding the right one
+    cur_event = char(regexprep(cur_event,'\s*\((un)?clamp\)\s*$','','ignorecase'));
+    summary(i).event = [cur_event, eventSuffix];
+end
+
+%% Rescale redClamp/blueClamp if neccessary
+% Make sure the method is compatible with summary or animals struct
+
+% Sessions loaded before loadSessions auto-detected the clamp full scale
+% were normalized by a nominal ADC range that did not match the hardware
+% (eg red topping out at 82.6% instead of 100%). rescaleClampTraces finds
+% the command level each session actually reaches and maps it onto 100%.
+
+sessionsToScale = 20260927; % scale sessions before this date
+
+[summary,rescaleInfo] = rescaleClampTraces(summary,dateBefore=sessionsToScale);
+disp(rescaleInfo);
+
+% animals struct has no date field, so all clamp rows are rescaled:
+% animals = rescaleClampTraces(animals);
+
+%% Remove trials where redClamp or blueClamp is max for the whole trial
+
+% In some trials the clamp command is stuck at its maximum for essentially
+% the entire trial (>90% of the trace). Instead of deleting these trials,
+% set trials.performing = 0 in the trialTable of every signal recorded
+% during the same animal/date/session/task/event, so they are excluded by
+% any analysis using trialConditions = 'trials.performing'.
+
+clampSignals = {'redClamp','blueClamp'};
+clampTasks = {'Random-clamp'};  % only screen clamp sessions, not Random-ctrl
+maxFraction = 0.9;      % flag trial if clamp is at max for > this fraction of the trial
+saturationPct = 100;    % clamp commands are stored as 0-100% of the clamp range
+maxTolerance = 1;       % (%) how close to saturationPct still counts as "at max"
+
+% Group rows that share the same set of trials
+groupLabels = strings(length(summary),1);
+for i = 1:length(summary)
+    groupLabels(i) = strjoin(string({summary(i).animal, summary(i).date,...
+                                     summary(i).session, summary(i).task,...
+                                     summary(i).event}),'_');
+end
+[uniqueGroups,~,groupIdx] = unique(groupLabels);
+
+nRemovedTotal = 0; nTrialsTotal = 0;
+for g = 1:length(uniqueGroups)
+    groupRows = reshape(find(groupIdx == g),1,[]);
+    if ~any(strcmpi(summary(groupRows(1)).task, clampTasks)); continue; end
+    signalNames = string({summary(groupRows).name});
+    clampRows = groupRows(ismember(lower(signalNames),lower(clampSignals)));
+    if isempty(clampRows); continue; end
+
+    % Flag saturated trials (union across redClamp & blueClamp)
+    nTrials = size(summary(clampRows(1)).data,1);
+    badTrials = false(nTrials,1);
+    for r = clampRows
+        clampData = summary(r).data;
+        if size(clampData,1) ~= nTrials
+            warning(['Skipped ',char(uniqueGroups(g)),' -> ',summary(r).name,...
+                     ': trial number mismatch within group']);
+            continue
+        end
+        atMax = clampData >= (saturationPct - maxTolerance);
+        fracAtMax = sum(atMax,2) ./ sum(~isnan(clampData),2);
+        badTrials = badTrials | (fracAtMax > maxFraction);
+    end
+    nTrialsTotal = nTrialsTotal + nTrials;
+    if ~any(badTrials); continue; end
+    nRemovedTotal = nRemovedTotal + sum(badTrials);
+
+    % Set performing = 0 for flagged trials in every signal of this group
+    for r = groupRows
+        cur_table = summary(r).trialInfo.trialTable;
+        if height(cur_table) ~= nTrials
+            warning(['Skipped ',char(uniqueGroups(g)),' -> ',summary(r).name,...
+                     ': trialTable height does not match trial number']);
+            continue
+        end
+        if ~ismember('performing',cur_table.Properties.VariableNames)
+            cur_table.performing = ones(nTrials,1);
+        end
+        cur_table.performing(badTrials) = 0;
+        summary(r).trialInfo.trialTable = cur_table;
+    end
+
+    disp(['Finished: flagged ',num2str(sum(badTrials)),'/',num2str(nTrials),...
+          ' saturated clamp trials in ',char(uniqueGroups(g))]);
+end
+disp(['Finished: flagged ',num2str(nRemovedTotal),'/',num2str(nTrialsTotal),...
+      ' trials (performing = 0) where redClamp or blueClamp was at max for >',...
+      num2str(maxFraction*100),'% of the trial']);
 
 %% Optional: for ONOFF sessions only
 

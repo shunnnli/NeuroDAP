@@ -1,4 +1,9 @@
-function [traces,timestamp] = getTraces(eventIdx,timeRange,signal,options)
+function [traces,timestamp,keepIdx] = getTraces(eventIdx,timeRange,signal,options)
+
+% keepIdx is a logical column, one entry per input event, marking the events
+% whose traces survived rmmissing. Callers that carry per-trial information
+% (trial numbers, trial tables) must slice it with keepIdx, otherwise the
+% trial info no longer lines up with the rows of traces.
 
 arguments
     eventIdx double
@@ -205,8 +210,12 @@ for i = 1:length(eventInSec)
     traces(i,:) = trace;
 end
 
-% 3.1 Remove missing if necessary
-if options.rmmissing; traces = rmmissing(traces); end
+% 3.1 Remove missing if necessary, and report which events were kept
+keepIdx = true(length(eventInSec),1);
+if options.rmmissing
+    keepIdx = ~any(ismissing(traces),2);
+    traces = traces(keepIdx,:);
+end
 
 end
 
