@@ -75,11 +75,8 @@ end
 DefAns = cell2struct(DefAns,Prompt,1);
 Prompt = repmat(Prompt',1,2);
 
-% Create inputsdlg
+% Create dialog
 Title = 'Enter session and analysis params';
-Options.AlignControls = 'on';
-Options.CreateFcn = @(~,~,handles)celldisp(get(handles,'type'));
-Options.DeleteFcn = @(~,~,handles)celldisp(get(handles,'type'));
-[Answer,Canceled] = inputsdlg(Prompt,Title,Formats,DefAns,Options);
+[Answer,Canceled] = inputParamsTable(Prompt,Title,Formats,DefAns);
 
 end
