@@ -233,4 +233,11 @@ verifySize(testCase,Answer,[12 1]);
 taskOptions = {'random','reward pairing','punish pairing','RTPP'};
 verifyEqual(testCase,taskOptions{Answer(1).Paradigm},'reward pairing');
 verifyEqual(testCase,str2double(Answer(1).ReactionTime),50);
+
+% Edit fields are char, not string. Shun_loadSessionData.m used to gate the
+% str2double on isstring(), which is false for char, so ReactionTime and
+% minLicks silently stayed text. Keep that trap documented.
+verifyFalse(testCase,isstring(Answer(1).ReactionTime));
+verifyFalse(testCase,isstring(Answer(1).minLicks));
+verifyEqual(testCase,str2double(Answer(1).minLicks),60);
 end

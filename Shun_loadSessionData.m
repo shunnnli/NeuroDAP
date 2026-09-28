@@ -39,17 +39,8 @@ for s = 1:length(sessionList)
     redStimPatternList{s} = {sessionParams(s).RedPulseFreq,sessionParams(s).RedPulseDuration,sessionParams(s).RedStimDuration};
     blueStimPatternList{s} = {sessionParams(s).BluePulseFreq,sessionParams(s).BluePulseDuration,sessionParams(s).BlueStimDuration};
     
-    if isstring(sessionParams(s).ReactionTime)
-        sessionParams(s).ReactionTime = str2double(sessionParams(s).ReactionTime);
-    else
-        sessionParams(s).ReactionTime = sessionParams(s).ReactionTime;
-    end
-
-    if isstring(sessionParams(s).minLicks)
-        sessionParams(s).minLicks = str2double(sessionParams(s).minLicks);
-    else
-        sessionParams(s).minLicks = sessionParams(s).minLicks;
-    end
+    sessionParams(s).ReactionTime = str2double(sessionParams(s).ReactionTime);
+    sessionParams(s).minLicks = str2double(sessionParams(s).minLicks);
 end
 
 isRTPP = strcmp(taskList, 'RTPP');

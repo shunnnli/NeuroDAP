@@ -195,10 +195,17 @@ and that OK and Cancel return the documented values.
 
 `Methods/inputsdlg.m` is left in place and unmodified.
 
-## Known pre-existing issue (not fixed here)
+## Caller bug found and fixed alongside
 
-`Shun_loadSessionData.m:42` and `:48` test `isstring(sessionParams(s).ReactionTime)` before calling
-`str2double`. `inputsdlg` returns **char**, and `isstring('2')` is `false`, so the branch never fires
-and `ReactionTime` and `minLicks` stay char. Because this design preserves the char contract exactly,
-the behavior is unchanged and this is not a regression. It is a live bug in the caller and should be
-fixed separately.
+`Shun_loadSessionData.m:42` and `:48` tested `isstring(sessionParams(s).ReactionTime)` before
+calling `str2double`. `inputsdlg` returns **char**, and `isstring('2')` is `false`, so the branch
+never fired and `ReactionTime` and `minLicks` were silently handed downstream as text.
+
+This design preserves the char contract exactly, so the table work neither caused nor fixed it.
+It was fixed separately by dropping the guard and calling `str2double` unconditionally, which is
+what every other caller of `inputSessionParams` already did
+(`Shun_loadEphysData.m:42`, `Shun_DAClampingAnalysis.m:43`, `Tutorials/Shun_loadSessionData.m:38`,
+and `Shun_loadSessionData.m:282` in the same file).
+
+`testInputParamsTable/testInputSessionParamsFormatsShape` now asserts that the returned values are
+char rather than string, so the trap stays documented.
