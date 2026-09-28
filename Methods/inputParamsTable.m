@@ -37,7 +37,13 @@ nSessions = height(T);
 screen = get(groot,'ScreenSize');
 
 fig = uifigure('Name',Title,'Visible','off');
-cleanup = onCleanup(@()delete(fig(isvalid(fig))));
+
+% The figure must be deleted explicitly rather than by an onCleanup object.
+% Its callbacks are handles to the nested functions below, which share this
+% workspace, so figure -> callback -> workspace -> onCleanup -> figure forms
+% a reference cycle that MATLAB never collects. The cleanup would therefore
+% never run and the dialog would stay on screen after OK.
+try
 
 figW = min(max(sum([meta.width]) + 60, 460), 0.9*screen(3));
 figH = min(max(nSessions*22 + 190, 260), 0.85*screen(4));
@@ -83,6 +89,12 @@ uibutton(btnRow,'Text','OK','ButtonPushedFcn',@(~,~)onOK());
 
 fig.Visible = 'on';
 uiwait(fig);
+
+catch ME
+    delete(fig);
+    rethrow(ME);
+end
+delete(fig);
 
 %% --- nested callbacks ------------------------------------------------
 

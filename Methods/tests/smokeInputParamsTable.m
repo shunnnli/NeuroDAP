@@ -78,6 +78,11 @@ catch ME
     A = []; C = -1;
 end
 stop(t); delete(t); stop(w); delete(w);
+% Regression: the dialog used to stay on screen after OK because an
+% onCleanup object sat inside a figure->callback->workspace->figure cycle.
+leftover = findall(groot,'Type','figure');
+check(LOG,isempty(leftover),sprintf('no figure left open after dialog returned (saw %d)',numel(leftover)));
+delete(leftover);
 end
 
 function watchdog()
