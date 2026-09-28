@@ -218,6 +218,7 @@ void setup()
   digitalWrite(ShutterBlue, HIGH);
   digitalWrite(ShutterRed, HIGH);
   randomSeed(analogRead(3));
+  behaviorReportState();
 
   Serial.println("-----------------------------------------------------------------");
   Serial.println("Manual check: 1 -> reward; 2 -> tone; 3 -> blue shutter; 4 -> red shutter");

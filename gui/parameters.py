@@ -199,7 +199,7 @@ def prepare_sketch(sketch, destination, overrides, expected_hash):
 
 class ParameterEditor:
     """Pinned calibration field plus a scrollable editor for the remaining values."""
-    def __init__(self, parent, reload_command):
+    def __init__(self, parent, reload_command, upload_command=None):
         import tkinter as tk
         from tkinter import ttk
         self.tk, self.ttk = tk, ttk
@@ -221,8 +221,13 @@ class ParameterEditor:
         self.unit_entry.grid(row=0, column=1, sticky="ew")
         ttk.Label(calibration, text="ms").grid(row=0, column=2, padx=(5, 0))
         ttk.Label(self.frame, text="Daily valve calibration · applies on upload", style="Hint.TLabel").grid(row=1, column=0, sticky="w", pady=(4, 6))
-        self.reload_button = ttk.Button(self.frame, text="Reload from sketch / reset edits", command=reload_command)
-        self.reload_button.grid(row=2, column=0, sticky="ew", pady=(0, 8))
+        toolbar = ttk.Frame(self.frame)
+        toolbar.grid(row=2, column=0, sticky="ew", pady=(0, 8))
+        toolbar.columnconfigure((0, 1), weight=1)
+        self.reload_button = ttk.Button(toolbar, text="Reload / reset edits", command=reload_command)
+        self.reload_button.grid(row=0, column=0, sticky="ew", padx=(0, 4))
+        self.upload_button = ttk.Button(toolbar, text="Compile & Upload", command=upload_command)
+        self.upload_button.grid(row=0, column=1, sticky="ew", padx=(4, 0))
         scroller = ttk.Frame(self.frame)
         scroller.grid(row=3, column=0, sticky="nsew")
         scroller.rowconfigure(0, weight=1)

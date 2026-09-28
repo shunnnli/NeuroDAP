@@ -9,10 +9,41 @@ import unittest
 from unittest.mock import Mock
 
 from gui.behavior import BehaviorService, ROOT
-from gui.manual_controls import CAPABILITY_LINE, COMMANDS
+from gui.manual_controls import CAPABILITY_LINE, COMMANDS, ManualState
 
 
 class ManualCommandTests(unittest.TestCase):
+    def test_toggles_follow_acknowledgments_and_ignore_rejected_requests(self):
+        state = ManualState()
+        self.assertEqual(state.action_for('blue_toggle'), 'blue_open')
+        self.assertFalse(state.consume('ERR BUSY stop the task'))
+        self.assertFalse(state.blue_open)
+        state.consume('ACK BLUE_OPEN')
+        self.assertEqual(state.action_for('blue_toggle'), 'blue_close')
+        state.consume('ACK BLUE_CLOSE')
+        self.assertEqual(state.action_for('blue_toggle'), 'blue_open')
+        state.consume('ACK RED_PATTERN')
+        self.assertEqual(state.action_for('red_toggle'), 'red_close')
+        state.consume('DONE RED_PATTERN')
+        self.assertFalse(state.red_open)
+        state.consume('ACK START_TASK')
+        self.assertEqual(state.action_for('task_toggle'), 'end_task')
+        state.consume('ACK END_TASK counts_preserved')
+        self.assertEqual(state.action_for('task_toggle'), 'start_task')
+
+    def test_snapshots_and_raw_serial_start_stop_restore_toggle_state(self):
+        state = ManualState()
+        state.consume('BEHAVIOR_STATE task=1 blue=1 red=0')
+        self.assertTrue(state.task_running)
+        self.assertTrue(state.blue_open)
+        self.assertFalse(state.red_open)
+        self.assertFalse(state.consume('BEHAVIOR_STATE task=? blue=0 red=0'))
+        self.assertTrue(state.task_running)
+        state.consume('TASK ENDED AT\t123.4')
+        self.assertEqual(state, ManualState())
+        state.consume('TASK STARTED AT\t124000')
+        self.assertTrue(state.task_running)
+
     def test_controls_require_firmware_identification(self):
         service = BehaviorService()
         service.ser = Mock()
@@ -24,6 +55,12 @@ class ManualCommandTests(unittest.TestCase):
         service.ser.in_waiting = len(packet)
         service._read_serial()
         self.assertTrue(service.manual_ready)
+        packet = b'ACK BLUE_OPEN\nACK START_TASK\n'
+        service.ser.read.return_value = packet
+        service.ser.in_waiting = len(packet)
+        service._read_serial()
+        self.assertTrue(service.manual_state.task_running)
+        self.assertFalse(service.manual_state.blue_open)
 
     def test_commands_send_one_byte_and_end_cancels_udp_without_reset_command(self):
         service = BehaviorService()

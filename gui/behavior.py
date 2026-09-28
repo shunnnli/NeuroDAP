@@ -25,7 +25,7 @@ import uuid
 from dataclasses import asdict, dataclass, field, fields
 
 from .parameters import ParameterEditor, apply_overrides, prepare_sketch
-from .manual_controls import CAPABILITY_LINE, COMMANDS, CONTROL_GROUPS
+from .manual_controls import CAPABILITY_LINE, COMMANDS, CONTROL_GROUPS, ManualState
 
 GUI_DIR = Path(__file__).resolve().parent
 ROOT = GUI_DIR.parent
@@ -200,6 +200,7 @@ class BehaviorService:
         self.buffer = bytearray()
         self.busy = False
         self.manual_ready = False
+        self.manual_state = ManualState()
         self.capability_query_at = None
         self.sequence = time.time_ns() // 1_000_000  # survives protocol restarts; receiver accepts integer IDs
         self.dropped = 0
@@ -295,6 +296,8 @@ class BehaviorService:
         self.ser = serial_module().Serial(port, baud, timeout=0, write_timeout=1)
         self.buffer.clear()
         self.manual_ready = False
+        self.manual_state = ManualState()
+        self.events.put(("manual_state", asdict(self.manual_state)))
         self.events.put(("manual", False))
         self.capability_query_at = time.monotonic() + 2.5
         self.log(f"[connected] {port} @ {baud}. Opening the port may reset the Arduino.")
@@ -313,6 +316,8 @@ class BehaviorService:
 
     def do_disconnect(self):
         self.manual_ready = False
+        self.manual_state = ManualState()
+        self.events.put(("manual_state", asdict(self.manual_state)))
         self.capability_query_at = None
         self.events.put(("manual", False))
         self.do_stop_protocol()
@@ -381,6 +386,8 @@ class BehaviorService:
                 self.capability_query_at = None
                 self.events.put(("manual", True))
                 continue
+            if self.manual_state.consume(line):
+                self.events.put(("manual_state", asdict(self.manual_state)))
             if self.protocol:
                 try:
                     event = self.protocol.handle(line, self.udp)
@@ -474,6 +481,7 @@ class BehaviorGUI:
         self.service = BehaviorService()
         self.connected = self.protocol_running = self.busy = self.pending = False
         self.manual_ready = False
+        self.manual_state = ManualState()
         self.closing = False
         self.parameter_sketch = None
         self.parameter_reload_job = None
@@ -487,6 +495,16 @@ class BehaviorGUI:
         style = ttk.Style(root)
         style.configure("Title.TLabel", font=("Helvetica", 20, "bold"))
         style.configure("Hint.TLabel", foreground="#536477")
+        # Use a colorable border even with native themes that ignore button fills.
+        style.element_create("BehaviorAction.border", "from", "clam", "Button.border")
+        style.layout("Action.TButton", [("BehaviorAction.border", {"sticky": "nswe", "children": [
+            ("Button.padding", {"sticky": "nswe", "children": [("Button.label", {"sticky": "nswe"})]})]})])
+        for name, color, pressed in (("Start", "#218739", "#17662b"), ("Stop", "#b93535", "#922828")):
+            action_style = f"{name}.Action.TButton"
+            style.configure(action_style, background=color, foreground="white", font=("Helvetica", 12, "bold"),
+                            padding=(12, 10), anchor="center")
+            style.map(action_style, background=[("disabled", "#dfe3e6"), ("pressed", pressed), ("active", pressed)],
+                      foreground=[("disabled", "#69747d"), ("!disabled", "white")])
 
         outer = ttk.Frame(root, padding=18)
         outer.grid(sticky="nsew")
@@ -508,7 +526,7 @@ class BehaviorGUI:
         left = ttk.LabelFrame(columns, text="Arduino script", padding=12)
         right = ttk.LabelFrame(columns, text="Event parsing script / UDP", padding=12)
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
-        self.parameter_editor = ParameterEditor(columns, self.reload_parameters)
+        self.parameter_editor = ParameterEditor(columns, self.reload_parameters, self.upload)
         self.parameter_editor.frame.grid(row=0, column=1, sticky="nsew", padx=4)
         right.grid(row=0, column=2, sticky="nsew", padx=(8, 0))
         for frame in (left, right):
@@ -545,9 +563,9 @@ class BehaviorGUI:
         self.protocol_widgets.append(picker)
         self._entry(right, "Receiver IPv4", "host", 2, protocol=True)
         self._entry(right, "UDP port", "udp_port", 3, protocol=True)
-        self.protocol_button = ttk.Button(right, text="Start protocol", command=self.toggle_protocol)
+        self.protocol_button = ttk.Button(right, text="Start protocol", style="Start.Action.TButton", command=self.toggle_protocol)
         self.protocol_button.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(8, 4))
-        ttk.Label(right, text="Serial monitoring works without a protocol.\nUDP sends are logged; receipt is not confirmed.\nStop cancels pending sends, not the remote device state.",
+        ttk.Label(right, text="Start protocol here before opening brainclamp_gui.py.\n\nSerial monitoring works without a protocol.\nUDP sends are logged; receipt is not confirmed.\nStop cancels pending sends, not the remote device state.",
                   style="Hint.TLabel", wraplength=330, justify="left").grid(row=5, column=0, columnspan=3, sticky="w", pady=8)
 
         command_row = ttk.LabelFrame(outer, text="Manual controls / Serial input", padding=10)
@@ -556,19 +574,21 @@ class BehaviorGUI:
         buttons = ttk.Frame(command_row)
         buttons.grid(row=0, column=0, columnspan=3, sticky="ew", pady=(0, 8))
         self.manual_buttons = []
+        self.manual_button_by_key = {}
         for column, (title, controls) in enumerate(CONTROL_GROUPS):
             buttons.columnconfigure(column, weight=1, uniform="manual")
             group = ttk.LabelFrame(buttons, text=title, padding=5)
             group.grid(row=0, column=column, sticky="nsew", padx=3)
             group.columnconfigure((0, 1), weight=1)
-            for index, (key, label, _) in enumerate(controls):
-                button = ttk.Button(group, text=label, command=lambda action=key: self.request("manual", action))
-                # Two rows for rewards, three full-width buttons for the other groups.
-                if column == 0:
+            for index, (key, label) in enumerate(controls):
+                button = ttk.Button(group, text=label, command=lambda action=key: self.manual_action(action),
+                                    style="Start.Action.TButton" if key == "task_toggle" else "TButton")
+                if column < 2:
                     button.grid(row=index // 2, column=index % 2, sticky="ew", padx=2, pady=2)
                 else:
                     button.grid(row=index, column=0, columnspan=2, sticky="ew", pady=2)
                 self.manual_buttons.append(button)
+                self.manual_button_by_key[key] = button
         self.command_entry = ttk.Entry(command_row, textvariable=self.command)
         self.command_entry.grid(row=1, column=0, sticky="ew")
         self.command_entry.bind("<Return>", lambda event: self.send())
@@ -705,6 +725,9 @@ class BehaviorGUI:
         if self.connected and not self.pending and not self.busy and self.command.get():
             self.request("send", self.command.get(), self.vars["line_ending"].get())
 
+    def manual_action(self, key):
+        self.request("manual", self.manual_state.action_for(key))
+
     def update_controls(self):
         blocked = self.pending or self.busy or self.closing
         self.parameter_editor.set_enabled(not blocked)
@@ -717,6 +740,7 @@ class BehaviorGUI:
         for widget in (self.refresh_button, self.detect_button, self.load_button):
             enable(widget, not blocked and not self.connected)
         enable(self.upload_button, not blocked)
+        enable(self.parameter_editor.upload_button, not blocked)
         enable(self.connect_button, not blocked)
         enable(self.protocol_button, not blocked and self.connected)
         enable(self.send_button, not blocked and self.connected)
@@ -725,7 +749,14 @@ class BehaviorGUI:
         for button in self.manual_buttons:
             enable(button, not blocked and self.connected and self.manual_ready)
         self.connect_button.configure(text="Disconnect" if self.connected else "Connect")
-        self.protocol_button.configure(text="Stop protocol" if self.protocol_running else "Start protocol")
+        self.protocol_button.configure(text="Stop protocol" if self.protocol_running else "Start protocol",
+                                       style="Stop.Action.TButton" if self.protocol_running else "Start.Action.TButton")
+        for color in ("blue", "red"):
+            opened = getattr(self.manual_state, color + "_open")
+            self.manual_button_by_key[color + "_toggle"].configure(text=f"{'Close' if opened else 'Open'} {color}")
+        self.manual_button_by_key["task_toggle"].configure(
+            text="End task" if self.manual_state.task_running else "Start task",
+            style="Stop.Action.TButton" if self.manual_state.task_running else "Start.Action.TButton")
 
     def poll(self):
         if self.closing:
@@ -760,6 +791,9 @@ class BehaviorGUI:
                 self.manual_ready = value
                 self.manual_status.set("Manual controls ready. End task stops outputs and local UDP forwarding; counts are preserved."
                                        if value else "Buttons require updated DA-clamp firmware. Connect, then check controls.")
+                self.update_controls()
+            elif kind == "manual_state":
+                self.manual_state = ManualState(**value)
                 self.update_controls()
         messages = []
         for _ in range(400):

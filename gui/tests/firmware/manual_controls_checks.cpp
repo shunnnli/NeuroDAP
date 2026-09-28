@@ -26,6 +26,8 @@ int main() {
   assert(BEHAVIOR_LEGACY_REWARD_BIG ? behaviorAir.active : toneOn);
   sendByte('x');
   sendByte('b'); assert(pins[ShutterBlue]==LOW);
+  Serial.output.clear(); sendByte('?');
+  assert(Serial.output.find("BEHAVIOR_STATE task=0 blue=1 red=0")!=std::string::npos);
   sendByte('B'); assert(pins[ShutterBlue]==HIGH);
   sendByte('r'); assert(pins[ShutterRed]==LOW);
   sendByte('R'); assert(pins[ShutterRed]==HIGH);
@@ -58,6 +60,8 @@ int main() {
   for (unsigned i=0;i<counts.size();++i) assert(*counts[i]==int(11+i));
   // Starting again does not reset recorded counts, either.
   sendByte('s'); assert(state!=Idle);
+  Serial.output.clear(); sendByte('?');
+  assert(Serial.output.find("BEHAVIOR_STATE task=1 blue=0 red=0")!=std::string::npos);
   for (unsigned i=0;i<counts.size();++i) assert(*counts[i]==int(11+i));
   sendByte('9'); assert(state==Idle); assertClosed();
   // Calibration uses scheduled transitions and can stop while the valve is open.

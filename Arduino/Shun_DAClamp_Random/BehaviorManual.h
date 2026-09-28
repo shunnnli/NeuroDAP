@@ -27,6 +27,12 @@ unsigned int behaviorCalibrationDelivered = 0;
 unsigned long behaviorCalibrationChanged = 0;
 bool behaviorCalibrationWaterOn = false;
 
+void behaviorReportState() {
+  Serial.print("BEHAVIOR_STATE task="); Serial.print(state != Idle ? 1 : 0);
+  Serial.print(" blue="); Serial.print((digitalRead(ShutterBlue) == LOW || behaviorBlue.active) ? 1 : 0);
+  Serial.print(" red="); Serial.println((digitalRead(ShutterRed) == LOW || behaviorRed.active) ? 1 : 0);
+}
+
 void behaviorCapabilities() {
   Serial.println("BEHAVIOR_CONTROLS 1");
 }
@@ -146,7 +152,7 @@ void behaviorUpdateManual() {
 
 void behaviorHandleCommand(char command) {
   if (command == '\r' || command == '\n' || command == ' ') return;
-  if (command == '?') { behaviorCapabilities(); return; }
+  if (command == '?') { behaviorCapabilities(); behaviorReportState(); return; }
   // Preserve legacy digit meanings; the GUI uses the unambiguous letters.
   if (command == '1') command = BEHAVIOR_LEGACY_REWARD_BIG ? 'W' : 'w';
   if (command == '2') command = BEHAVIOR_LEGACY_REWARD_BIG ? 'p' : 't';

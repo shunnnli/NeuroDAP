@@ -15,7 +15,7 @@ unsigned long millis() { return fakeTime; }
 void delay(unsigned long value) { fakeTime += value; }
 void pinMode(byte, int) {}
 void digitalWrite(byte pin, int value) { pins[pin]=value; }
-int digitalRead(byte) { return HIGH; }
+int digitalRead(byte pin) { return (pin==22 || pin==24) ? pins[pin] : HIGH; }
 int analogRead(byte) { return 1; }
 void randomSeed(unsigned long) {}
 long random(long value) { return value > 0 ? value/2 : 0; }
