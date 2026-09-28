@@ -227,7 +227,7 @@ class ParameterEditor:
         scroller.grid(row=3, column=0, sticky="nsew")
         scroller.rowconfigure(0, weight=1)
         scroller.columnconfigure(0, weight=1)
-        self.canvas = tk.Canvas(scroller, height=255, width=340, highlightthickness=0)
+        self.canvas = tk.Canvas(scroller, height=135, width=340, highlightthickness=0)
         self.canvas.grid(row=0, column=0, sticky="nsew")
         scrollbar = ttk.Scrollbar(scroller, orient="vertical", command=self.canvas.yview)
         scrollbar.grid(row=0, column=1, sticky="ns")

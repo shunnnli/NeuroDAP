@@ -25,6 +25,7 @@ import uuid
 from dataclasses import asdict, dataclass, field, fields
 
 from .parameters import ParameterEditor, apply_overrides, prepare_sketch
+from .manual_controls import CAPABILITY_LINE, COMMANDS, CONTROL_GROUPS
 
 GUI_DIR = Path(__file__).resolve().parent
 ROOT = GUI_DIR.parent
@@ -198,6 +199,8 @@ class BehaviorService:
         self.udp = None
         self.buffer = bytearray()
         self.busy = False
+        self.manual_ready = False
+        self.capability_query_at = None
         self.sequence = time.time_ns() // 1_000_000  # survives protocol restarts; receiver accepts integer IDs
         self.dropped = 0
         self.thread = threading.Thread(target=self._run, daemon=True, name="behavior-service")
@@ -242,6 +245,10 @@ class BehaviorService:
                 if self.ser:
                     try:
                         self._read_serial()
+                        if self.capability_query_at is not None and time.monotonic() >= self.capability_query_at:
+                            self.capability_query_at = None
+                            if not self.manual_ready:
+                                self.do_check_controls()
                     except Exception as exc:
                         self.log(f"[serial error] {exc}")
                         self.do_disconnect()
@@ -287,6 +294,9 @@ class BehaviorService:
             raise RuntimeError("Disconnect before opening another serial port.")
         self.ser = serial_module().Serial(port, baud, timeout=0, write_timeout=1)
         self.buffer.clear()
+        self.manual_ready = False
+        self.events.put(("manual", False))
+        self.capability_query_at = time.monotonic() + 2.5
         self.log(f"[connected] {port} @ {baud}. Opening the port may reset the Arduino.")
 
     def do_stop_protocol(self):
@@ -302,6 +312,9 @@ class BehaviorService:
             self.log("[protocol stopped] Pending UDP commands cancelled. Remote device state is unchanged.")
 
     def do_disconnect(self):
+        self.manual_ready = False
+        self.capability_query_at = None
+        self.events.put(("manual", False))
         self.do_stop_protocol()
         ser, self.ser = self.ser, None
         if ser:
@@ -339,6 +352,19 @@ class BehaviorService:
             raise
         self.log(f"[TX] {text!r} ({ending})")
 
+    def do_check_controls(self):
+        self.do_send("?", "None")
+
+    def do_manual(self, action):
+        if action not in COMMANDS:
+            raise ValueError("Unknown manual action.")
+        if not self.manual_ready:
+            raise RuntimeError("Upload the updated DA-clamp firmware and check controls first.")
+        if action == "end_task":
+            self.do_stop_protocol()  # cancel delayed local UDP work on task stop
+        self.do_send(COMMANDS[action], "None")
+        self.log(f"[manual request] {action}; waiting for Arduino acknowledgment.")
+
     def _read_serial(self):
         self.buffer.extend(self.ser.read(min(self.ser.in_waiting, 65536)))
         # Keep incomplete lines across reads; readline(timeout=...) can split events.
@@ -350,6 +376,11 @@ class BehaviorService:
             del self.buffer[:boundary + 1]
             line = raw.decode("utf-8", errors="replace")
             self.log(f"[RX] {line}")
+            if line == CAPABILITY_LINE:
+                self.manual_ready = True
+                self.capability_query_at = None
+                self.events.put(("manual", True))
+                continue
             if self.protocol:
                 try:
                     event = self.protocol.handle(line, self.udp)
@@ -442,6 +473,7 @@ class BehaviorGUI:
         root.minsize(1230, 780)
         self.service = BehaviorService()
         self.connected = self.protocol_running = self.busy = self.pending = False
+        self.manual_ready = False
         self.closing = False
         self.parameter_sketch = None
         self.parameter_reload_job = None
@@ -518,16 +550,37 @@ class BehaviorGUI:
         ttk.Label(right, text="Serial monitoring works without a protocol.\nUDP sends are logged; receipt is not confirmed.\nStop cancels pending sends, not the remote device state.",
                   style="Hint.TLabel", wraplength=330, justify="left").grid(row=5, column=0, columnspan=3, sticky="w", pady=8)
 
-        command_row = ttk.LabelFrame(outer, text="Serial input", padding=10)
+        command_row = ttk.LabelFrame(outer, text="Manual controls / Serial input", padding=10)
         command_row.grid(row=2, column=0, sticky="ew", pady=(16, 10))
         command_row.columnconfigure(0, weight=1)
+        buttons = ttk.Frame(command_row)
+        buttons.grid(row=0, column=0, columnspan=3, sticky="ew", pady=(0, 8))
+        self.manual_buttons = []
+        for column, (title, controls) in enumerate(CONTROL_GROUPS):
+            buttons.columnconfigure(column, weight=1, uniform="manual")
+            group = ttk.LabelFrame(buttons, text=title, padding=5)
+            group.grid(row=0, column=column, sticky="nsew", padx=3)
+            group.columnconfigure((0, 1), weight=1)
+            for index, (key, label, _) in enumerate(controls):
+                button = ttk.Button(group, text=label, command=lambda action=key: self.request("manual", action))
+                # Two rows for rewards, three full-width buttons for the other groups.
+                if column == 0:
+                    button.grid(row=index // 2, column=index % 2, sticky="ew", padx=2, pady=2)
+                else:
+                    button.grid(row=index, column=0, columnspan=2, sticky="ew", pady=2)
+                self.manual_buttons.append(button)
         self.command_entry = ttk.Entry(command_row, textvariable=self.command)
-        self.command_entry.grid(row=0, column=0, sticky="ew")
+        self.command_entry.grid(row=1, column=0, sticky="ew")
         self.command_entry.bind("<Return>", lambda event: self.send())
         ttk.Combobox(command_row, textvariable=self.vars["line_ending"], values=tuple(LINE_ENDINGS),
-                     state="readonly", width=20).grid(row=0, column=1, padx=8)
+                     state="readonly", width=20).grid(row=1, column=1, padx=8)
         self.send_button = ttk.Button(command_row, text="Send", command=self.send)
-        self.send_button.grid(row=0, column=2)
+        self.send_button.grid(row=1, column=2)
+        self.manual_status = tk.StringVar(value="Connect and upload updated DA-clamp firmware to enable buttons.")
+        ttk.Label(command_row, textvariable=self.manual_status, style="Hint.TLabel").grid(
+            row=2, column=0, sticky="w", pady=(5, 0))
+        self.check_controls_button = ttk.Button(command_row, text="Check controls", command=lambda: self.request("check_controls"))
+        self.check_controls_button.grid(row=2, column=1, columnspan=2, sticky="e", pady=(5, 0))
 
         monitor_bar = ttk.Frame(outer)
         monitor_bar.grid(row=3, column=0, sticky="ew", pady=(0, 5))
@@ -668,6 +721,9 @@ class BehaviorGUI:
         enable(self.protocol_button, not blocked and self.connected)
         enable(self.send_button, not blocked and self.connected)
         enable(self.command_entry, not blocked and self.connected)
+        enable(self.check_controls_button, not blocked and self.connected)
+        for button in self.manual_buttons:
+            enable(button, not blocked and self.connected and self.manual_ready)
         self.connect_button.configure(text="Disconnect" if self.connected else "Connect")
         self.protocol_button.configure(text="Stop protocol" if self.protocol_running else "Start protocol")
 
@@ -700,6 +756,11 @@ class BehaviorGUI:
                     self.vars["port"].set(value[0])
             elif kind == "board":
                 self.vars["board"].set(value)
+            elif kind == "manual":
+                self.manual_ready = value
+                self.manual_status.set("Manual controls ready. End task stops outputs and local UDP forwarding; counts are preserved."
+                                       if value else "Buttons require updated DA-clamp firmware. Connect, then check controls.")
+                self.update_controls()
         messages = []
         for _ in range(400):
             try:

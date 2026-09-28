@@ -73,6 +73,17 @@ unsigned long ITIMin = 15000;
 unsigned long ITIGracePeriod = 1000;
 unsigned long ITI = 0; // ITI = random(ITI1,ITI2)
 
+// Manual laser pattern params (pulse width / period in ms)
+unsigned long BluePatternPulseMs = 5;
+unsigned long BluePatternPeriodMs = 50;
+unsigned int BluePatternPulseCount = 25;
+unsigned long RedPatternPulseMs = 5;
+unsigned long RedPatternPeriodMs = 50;
+unsigned int RedPatternPulseCount = 25;
+// Water calibration params
+unsigned int CalibrationRepeats = 200;
+unsigned long CalibrationIntervalMs = 100;
+
 //********** Params Initializtion ***********//
 // Outcome related params
 int trialOmissionProb = 0;
@@ -86,6 +97,9 @@ int LeftCueNum = 0;      // total left-cue trials
 int RightCueNum = 0;     // total right-cue trials
 int PositiveNum = 0;     // current positive outcome number
 int NegativeNum = 0;     // current negative outcome number
+
+int ManualPositiveNum = 0;
+int ManualNegativeNum = 0;
 
 // Misc
 static int state = 0 ; // MAIN behavior state variable for running behavior task
@@ -164,9 +178,13 @@ int trialReward = getReward;
 int trialPunish = getPunish;
 int trialFreeReward = getFreeReward;
 
+#define BEHAVIOR_LEGACY_REWARD_BIG 0
+#include "BehaviorManual.h"
+
 void setup()
 {
   Serial.begin(115200);
+  behaviorCapabilities();
 
   pinMode(Sync, OUTPUT);
   pinMode(WaterSpout, OUTPUT);
@@ -220,20 +238,14 @@ void setup()
 
 
 void loop() {
+  behaviorReadSerial();
+  behaviorUpdateManual();
   sync(); //Non period sync pulse (1s width) generation
   lickDetection();
 
   switch (state) {
     //state 0: Idle state until Start button pushed
     case Idle:
-      if (SerialInput == '8') {
-        Start = millis();
-        End = 0;
-        Serial.print("TASK STARTED AT ");
-        Serial.print("\t");
-        Serial.println(millis());
-        state = 1;
-      }
       break;
 
     //state 1: Determine the intertrial interval
@@ -450,112 +462,52 @@ void loop() {
   // END OF SWITCH STRCUTURE //
 
 
-  // Ending Task //
-  if (SerialInput == '9') {
-    if (End == 0) {
-      Serial.print("TASK ENDED AT ");
-      Serial.print("\t");
-      Serial.println(millis() / 1000.0);
-      Serial.print("Total reward: ");
-      Serial.println(PositiveNum);
-      Serial.print("Total punishment: ");
-      Serial.println(NegativeNum);
-      Serial.print("Total left cue trials: ");
-      Serial.println(LeftCueNum);
-      Serial.print("Total right cue trials: ");
-      Serial.println(RightCueNum);
-      Serial.print("Go: ");
-      Serial.println(GoNum);
-      Serial.print("NoGoNum: ");
-      Serial.println(NoGoNum);
-      Serial.print("Hit: ");
-      Serial.println(Hit);
-      Serial.print("Miss: ");
-      Serial.println(Miss);
-      Serial.print("FalseAlarm: ");
-      Serial.println(FalseAlarm);
-      Serial.print("CorrectReject: ");
-      Serial.println(CorrectReject);
-      state = 0;
-      noTone(Speaker);
-      End = millis();
-    }
-  }
-
-  if (Serial.available() > 0) {
-    // read the incoming byte:
-    SerialInput = Serial.read();
-
-    if (SerialInput == '1' && LeftOutcomeButton == 0) { // dispense left reward
-      Serial.println("Entered 1: reward");
-      LeftOutcomeButton = 1;
-      digitalWrite(WaterSpout2, HIGH);
-      digitalWrite(WaterSpout2_copy, HIGH);
-      OutcomeSize = SmallRewardSize;
-      LeftOutcomeTimer = millis();
-    }
-
-    if (SerialInput == '2') {
-      Serial.println("Entered 2: Tone");
-      tone(Speaker, LeftCueFreq);
-      digitalWrite(SpeakerLeft_copy, HIGH);
-      delay(ShortToneDuration);
-      noTone(Speaker);
-      digitalWrite(SpeakerLeft_copy, LOW);
-    }
-
-    if (SerialInput == '3') {
-      Serial.println("Entered 3: Open blue shutter");
-      digitalWrite(ShutterBlue, LOW);
-    }
-
-    if (SerialInput == '4') {
-      Serial.println("Entered 4: Open red shutter");
-      digitalWrite(ShutterRed, LOW);
-    }
-
-    if (SerialInput == '7') {
-      Serial.println("Deliver 200 reward for calibration");
-      int num_repeat = 200;
-      for (int i = 0; i < num_repeat; i++) {
-        delay(100);
-        digitalWrite(WaterSpout2, HIGH);
-        digitalWrite(WaterSpout2_copy, HIGH);
-        delay(UnitRewardSize);
-        digitalWrite(WaterSpout2, LOW);
-        digitalWrite(WaterSpout2_copy, LOW);
-      }
-      Serial.print("Finished delivery x");
-      Serial.println(num_repeat);
-    }
-
-  }
-
-  //Left Button outcome
-  if ((millis() - LeftOutcomeTimer > OutcomeSize) && LeftOutcomeButton == 1) {
-    digitalWrite(WaterSpout2, LOW);
-    digitalWrite(WaterSpout2_copy, LOW);
-    Serial.print("Manual reward");
-    Serial.print("\t");
-    Serial.print(LeftOutcomeTimer);
-    Serial.print("\t");
-    Serial.println(OutcomeSize);
-    LeftOutcomeButton = 0;
-  }
-
-  //Right button outcome
-  if ((millis() - RightOutcomeTimer) > OutcomeSize && RightOutcomeButton == 1) {
-    digitalWrite(Airpuff, LOW);
-    digitalWrite(Airpuff_copy, LOW);
-    Serial.print("Manual punishment");
-    Serial.print("\t");
-    Serial.print(RightOutcomeTimer);
-    Serial.print("\t");
-    Serial.println(OutcomeSize);
-    RightOutcomeButton = 0;
-  }
 }
 
+void behaviorStartTask() {
+  SerialInput = '0';
+  getReward = getPunish = getFreeReward = 0;
+  Start = millis();
+  End = 0;
+  Serial.print("TASK STARTED AT ");
+  Serial.print("\t");
+  Serial.println(millis());
+  state = 1;
+}
+
+void behaviorStopTask() {
+  behaviorStopOutputs();
+  state = Idle;
+  SerialInput = '0';
+  getReward = getPunish = getFreeReward = 0;
+  End = millis();
+  // Never reset TrialNum, outcome counts, lick counts, or performance counts here.
+  Serial.print("TASK ENDED AT ");
+  Serial.print("\t");
+  Serial.println(millis() / 1000.0);
+  Serial.print("Total reward: ");
+  Serial.println(PositiveNum);
+  Serial.print("Total punishment: ");
+  Serial.println(NegativeNum);
+  Serial.print("Total left cue trials: ");
+  Serial.println(LeftCueNum);
+  Serial.print("Total right cue trials: ");
+  Serial.println(RightCueNum);
+  Serial.print("Go: ");
+  Serial.println(GoNum);
+  Serial.print("NoGoNum: ");
+  Serial.println(NoGoNum);
+  Serial.print("Hit: ");
+  Serial.println(Hit);
+  Serial.print("Miss: ");
+  Serial.println(Miss);
+  Serial.print("FalseAlarm: ");
+  Serial.println(FalseAlarm);
+  Serial.print("CorrectReject: ");
+  Serial.println(CorrectReject);
+  Serial.print("Manual reward count: "); Serial.println(ManualPositiveNum);
+  Serial.print("Manual punishment count: "); Serial.println(ManualNegativeNum);
+}
 
 //********************************************************************************************//
 void sync() {

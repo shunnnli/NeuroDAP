@@ -14,6 +14,7 @@ gui_behavior.py          # launcher at repository root
 gui/
   behavior.py           # window, serial/UDP service, and upload workflow
   parameters.py         # parameter editor and temporary sketch preparation
+  manual_controls.py    # button labels and versioned serial commands
   profiles/             # default folder for saved profiles and parameter edits
   tests/                # GUI-related tests
   requirements.txt      # Python dependencies
@@ -88,11 +89,72 @@ Close any other serial monitor before connecting. Opening a serial connection ca
 reset an Arduino. Allow startup to finish before sending commands or starting the
 experiment. Some boards change port names after upload; refresh and reconnect if
 automatic reconnection fails. This app does not send a task-start command on its
-own: use the command understood by your firmware.
+own: use Start task or the command understood by your firmware.
 
 **Stop protocol stops local forwarding and cancels delayed/repeated packets. It
 does not undo commands already received by the other computer or stop the Arduino
 experiment.** Use the device's own stop controls when you need to stop it.
+
+## Manual controls and stopping
+
+The shorter configuration panels leave room for grouped manual buttons above the
+free-text serial input. Upload the updated **Shun_DAClamp_Reward** or
+**Shun_DAClamp_Random** sketch to enable them. Each sketch includes a local
+`BehaviorManual.h`; keep that file beside its `.ino` when copying the sketch.
+The GUI waits for `BEHAVIOR_CONTROLS 1` from the Arduino before enabling buttons,
+so an older sketch cannot interpret a button using a conflicting digit mapping.
+It queries once after connecting; **Check controls** sends another query if needed.
+Other sketches still support the free-text serial monitor.
+
+| Button | Serial byte | Behavior |
+| --- | --- | --- |
+| Small reward | `w` | Water for `SmallRewardSize` ms |
+| Large reward | `W` | Water for `BigRewardSize` ms |
+| Punishment (no tone) | `p` | Airpuff for `SmallPunishSize` ms; does not start a tone |
+| Tone | `t` | `LeftCueFreq` for `ShortToneDuration` |
+| Open / close blue | `b` / `B` | Hold blue shutter open / close it and cancel its pattern |
+| Open / close red | `r` / `R` | Hold red shutter open / close it and cancel its pattern |
+| Blue / red pattern | `f` / `F` | Run the corresponding pattern on the Arduino |
+| Water calibration | `c` | Deliver `CalibrationRepeats` unit rewards |
+| Start task | `s` | Start the task at its ITI with existing counts retained |
+| End task (keep counts) | `x` | Stop task and outputs, preserving recorded counts |
+
+**End task does not reset counts or reboot the board.** It closes both water
+valves and the airpuff, closes both shutters, stops tone, and cancels patterns and
+calibration. Trial, outcome, manual reward/punishment, cue, and performance counts
+are retained; the completed-calibration delivery count is also retained. Repeated
+End requests are harmless. A later Start begins another ITI with the retained
+session counts rather than resuming an interrupted trial. Uploading firmware or
+resetting the physical board still reinitializes RAM counters, as before.
+
+The GUI's End button also stops local Python event forwarding and cancels queued
+UDP sends. It does not undo commands already received by a remote computer.
+Start task does not automatically start the Python protocol; enable that separately
+when needed. Each manual request is logged, followed by the Arduino's `ACK`,
+`DONE`, or `ERR` response. `ACK` confirms command acceptance, not a physical
+measurement of delivered reward or light.
+
+Manual stimuli and calibration require the task to be stopped, preventing them
+from competing with scheduled task outputs. Close-shutter and End commands remain
+available during a task or calibration. Starting a task closes any manual outputs;
+an active calibration must finish or be stopped first.
+
+Both sketches now expose `BluePatternPulseMs`, `BluePatternPeriodMs`,
+`BluePatternPulseCount` and equivalent red parameters in the middle panel. Initial
+defaults are **25 pulses, 5 ms wide, 50 ms period (20 Hz)** per color. The period
+must be at least the pulse width, and width/count must be positive. The Arduino
+generates patterns using elapsed-time scheduling; the GUI only starts them.
+Check these parameters for your experiment before uploading.
+
+Calibration defaults to **200 deliveries** with **100 ms between deliveries**.
+It uses the uploaded `UnitRewardSize` and runs without blocking serial processing,
+so End can close the valve and cancel remaining deliveries immediately on receipt.
+The Random task's tone also uses nonblocking timing so it can be interrupted.
+
+Legacy digits remain available in the textbox: `1` is small reward in Reward and
+large reward in Random; `2` is tone in Reward and punishment in Random; `3`/`4`
+open shutters, `5`/`6` run patterns, `7` calibrates, and `8`/`9` start/stop.
+The same idle-only restriction applies to legacy manual-stimulus commands.
 
 ## Editing Arduino parameters
 
@@ -220,5 +282,7 @@ python -m unittest discover -s gui/tests -p 'test_behavior*.py' -v
 ```
 
 Tests use simulated serial, UDP, and CLI components; no Arduino or remote
-experiment is operated. Real board upload and receiver behavior still require
-verification on the target rig.
+experiment is operated. When a C++ compiler is available, both complete DA-clamp
+sketches are compiled and executed against mock Arduino I/O to check stop/count
+preservation, patterns, rewards, calibration interruption and legacy commands.
+This does not replace an Arduino-core build or validation on the target rig.

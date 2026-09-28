@@ -48,6 +48,17 @@ unsigned long ITI = 0;
 int LeftCueFreq = 3000;
 int RightCueFreq = 12000;
 
+// Manual laser pattern params (pulse width / period in ms)
+unsigned long BluePatternPulseMs = 5;
+unsigned long BluePatternPeriodMs = 50;
+unsigned int BluePatternPulseCount = 25;
+unsigned long RedPatternPulseMs = 5;
+unsigned long RedPatternPeriodMs = 50;
+unsigned int RedPatternPulseCount = 25;
+// Water calibration params
+unsigned int CalibrationRepeats = 200;
+unsigned long CalibrationIntervalMs = 100;
+
 //********** Params Initializtion ***********//
 // Input output pin description //
 const byte Sync = 2; // non-periodic sync pulse
@@ -64,6 +75,8 @@ const byte Airpuff = 32; //airpuff valve
 const byte Airpuff_copy = 34; //airpuff valve copy for data receiving device
 const byte ShutterBlue = 22; //1=blue shutter closed, 0=open
 const byte ShutterRed = 24; //1=red shutter closed, 0=open
+
+bool behaviorTaskTonePending = false;
 
 // Misc
 char SerialInput = '0'; //for incoming serial data
@@ -132,9 +145,13 @@ unsigned long Start = 0; //timestamp for starting the session (used for triggeri
 unsigned long Now = 0; //current timesatmp (used for triggering camera)
 unsigned long End = 0; //timestamp for ending the session
 
+#define BEHAVIOR_LEGACY_REWARD_BIG 1
+#include "BehaviorManual.h"
+
 void setup()
 {
   Serial.begin(115200);
+  behaviorCapabilities();
 
   pinMode(Sync, OUTPUT);
   pinMode(WaterSpout, OUTPUT);
@@ -184,29 +201,14 @@ void setup()
 
 
 void loop() {
+  behaviorReadSerial();
+  behaviorUpdateManual();
   sync(); //Non period sync pulse (1s width) generation
   lickDetection();
 
   switch (state) {
     //state 0: Idle state until Start button pushed
     case Idle:
-      if (SerialInput == '8') {
-        Start = millis();
-        End = 0;
-        Serial.print("TASK STARTED AT ");
-        Serial.print("\t");
-        Serial.println(millis());
-        state = 1;
-        digitalWrite(WaterSpout, LOW);
-        digitalWrite(WaterSpout2, LOW);
-        digitalWrite(Airpuff, LOW);
-        digitalWrite(WaterSpout_copy, LOW);
-        digitalWrite(WaterSpout2_copy, LOW);
-        digitalWrite(Airpuff_copy, LOW);
-        digitalWrite(ShutterBlue, HIGH);
-        digitalWrite(ShutterRed, HIGH);
-        noTone(Speaker);
-      }
       break;
 
     //state 1: Determine the intertrial interval
@@ -282,18 +284,8 @@ void loop() {
             Serial.println(millis() / 1000.0);
 
           } else if (trialRandomProb >= ToneProbRange[0] && trialRandomProb <= ToneProbRange[1]) {
-            tone(Speaker, LeftCueFreq);
-            digitalWrite(SpeakerLeft_copy, HIGH);
-            delay(ShortToneDuration);
-            noTone(Speaker);
-            digitalWrite(SpeakerLeft_copy, LOW);
-            toneNum += 1;
-
-            Serial.print("Tone: ");
-            Serial.print(toneNum);
-            Serial.print("\t");
-            Serial.print("Time: ");
-            Serial.println(millis() / 1000.0);
+            behaviorBeginTone();
+            behaviorTaskTonePending = true;
           }
           EventDelay_start = 0;
           state = 3;
@@ -310,6 +302,13 @@ void loop() {
 
     //state 3: end reward delivery
     case EndOutcomeDelivery:
+      if (behaviorTaskTonePending) {
+        if (behaviorToneActive) break;
+        behaviorTaskTonePending = false;
+        ++toneNum;
+        Serial.print("Tone: "); Serial.print(toneNum);
+        Serial.print("\tTime: "); Serial.println(millis() / 1000.0);
+      }
       Outcome_off = millis();
       if (getReward == 1) {
         if ((Outcome_off - Reward_start) >= SmallRewardSize) {
@@ -356,97 +355,45 @@ void loop() {
   // END OF SWITCH STRCUTURE //
 
 
-  // Ending Task //
-  if (SerialInput == '9') {
-    if (End == 0) {
-      Serial.print("TASK ENDED AT ");
-      Serial.print("\t");
-      Serial.println(millis());
-      Serial.print("Total reward: ");
-      Serial.println(PositiveNum);
-      Serial.print("Total punish: ");
-      Serial.println(NegativeNum);
-      state = 0;
-      noTone(Speaker);
-      End = millis();
-    }
-  }
+}
 
-  if (Serial.available() > 0) {
-    // read the incoming byte:
-    SerialInput = Serial.read();
+void behaviorStartTask() {
+  SerialInput = '0';
+  getReward = getPunish = getFreeReward = 0;
+  Start = millis();
+  End = 0;
+  Serial.print("TASK STARTED AT ");
+  Serial.print("\t");
+  Serial.println(millis());
+  state = 1;
+  digitalWrite(WaterSpout, LOW);
+  digitalWrite(WaterSpout2, LOW);
+  digitalWrite(Airpuff, LOW);
+  digitalWrite(WaterSpout_copy, LOW);
+  digitalWrite(WaterSpout2_copy, LOW);
+  digitalWrite(Airpuff_copy, LOW);
+  digitalWrite(ShutterBlue, HIGH);
+  digitalWrite(ShutterRed, HIGH);
+  noTone(Speaker);
+}
 
-    //Serial.print("I received: ");
-    //Serial.println(SerialInput);
-
-    if (SerialInput == '1' && LeftOutcomeButton == 0) { // dispense left reward
-      ManualPositiveNum += 1;
-      Serial.print("Entered 1: manual reward #");
-      Serial.println(ManualPositiveNum);
-      LeftOutcomeButton = 1;
-      digitalWrite(WaterSpout2, HIGH);
-      digitalWrite(WaterSpout2_copy, HIGH);
-      OutcomeSize = BigRewardSize;
-      LeftOutcomeTimer = millis();
-    }
-
-    if (SerialInput == '2' && RightOutcomeButton == 0) {
-      Serial.print("Entered 2: manual punishment #");
-      Serial.println(ManualNegativeNum);
-      RightOutcomeButton = 1;
-      digitalWrite(Airpuff, HIGH);
-      digitalWrite(Airpuff_copy, HIGH);
-      OutcomeSize = SmallPunishSize;
-      RightOutcomeTimer = millis();
-    }
-    if (SerialInput == '3') {
-      Serial.println("Entered 3: Open blue shutter");
-      digitalWrite(ShutterBlue, LOW);
-    }
-    if (SerialInput == '4') {
-      Serial.println("Entered 4: Open red shutter");
-      digitalWrite(ShutterRed, LOW);
-    }
-    if (SerialInput == '7') {
-      Serial.println("Deliver 200 reward for calibration");
-      int num_repeat = 200;
-      for (int i = 0; i < num_repeat; i++) {
-        delay(100);
-        digitalWrite(WaterSpout2, HIGH);
-        digitalWrite(WaterSpout2_copy, HIGH);
-        delay(UnitRewardSize);
-        digitalWrite(WaterSpout2, LOW);
-        digitalWrite(WaterSpout2_copy, LOW);
-      }
-      Serial.print("Finished delivery x");
-      Serial.println(num_repeat);
-    }
-
-  }
-
-  //Left Button outcome
-  if ((millis() - LeftOutcomeTimer > OutcomeSize) && LeftOutcomeButton == 1) {
-    digitalWrite(WaterSpout2, LOW);
-    digitalWrite(WaterSpout2_copy, LOW);
-    Serial.print("Manual reward");
-    Serial.print("\t");
-    Serial.print(LeftOutcomeTimer / 1000.0);
-    Serial.print("\t");
-    Serial.println(OutcomeSize);
-    LeftOutcomeButton = 0;
-  }
-
-  //Right button outcome
-  if ((millis() - RightOutcomeTimer) > OutcomeSize && RightOutcomeButton == 1) {
-    digitalWrite(Airpuff, LOW);
-    digitalWrite(Airpuff_copy, LOW);
-    Serial.print("Manual punishment");
-    Serial.print("\t");
-    Serial.print(RightOutcomeTimer / 1000.0);
-    Serial.print("\t");
-    Serial.println(OutcomeSize);
-    RightOutcomeButton = 0;
-  }
+void behaviorStopTask() {
+  behaviorStopOutputs();
+  state = Idle;
+  SerialInput = '0';
+  getReward = getPunish = getFreeReward = 0;
+  behaviorTaskTonePending = false;
+  End = millis();
+  // Never reset TrialNum, outcome counts, lick counts, or performance counts here.
+  Serial.print("TASK ENDED AT ");
+  Serial.print("\t");
+  Serial.println(millis());
+  Serial.print("Total reward: ");
+  Serial.println(PositiveNum);
+  Serial.print("Total punish: ");
+  Serial.println(NegativeNum);
+  Serial.print("Manual reward count: "); Serial.println(ManualPositiveNum);
+  Serial.print("Manual punishment count: "); Serial.println(ManualNegativeNum);
 }
 
 //********************************************************************************************//
