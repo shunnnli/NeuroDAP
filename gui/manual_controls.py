@@ -12,10 +12,11 @@ COMMANDS = {
 CONTROL_GROUPS = (
     ("Reward / sound", (("small_reward", "Small reward"),
                         ("large_reward", "Large reward"),
-                        ("punishment", "Punishment (no tone)"), ("tone", "Tone"))),
+                        ("punishment", "Punishment"), ("tone", "Tone"),
+                        ("calibration", "Water calibration"))),
     ("Lasers", (("blue_toggle", "Open blue"), ("red_toggle", "Open red"),
                 ("blue_pattern", "Blue pattern"), ("red_pattern", "Red pattern"))),
-    ("Session", (("calibration", "Water calibration"), ("task_toggle", "Start task"))),
+    ("Session", (("upload", "Upload Arduino"), ("task_toggle", "Start task"))),
 )
 
 

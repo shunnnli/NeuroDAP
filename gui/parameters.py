@@ -226,7 +226,7 @@ class ParameterEditor:
         toolbar.columnconfigure((0, 1), weight=1)
         self.reload_button = ttk.Button(toolbar, text="Reload / reset edits", command=reload_command)
         self.reload_button.grid(row=0, column=0, sticky="ew", padx=(0, 4))
-        self.upload_button = ttk.Button(toolbar, text="Compile & Upload", command=upload_command)
+        self.upload_button = ttk.Button(toolbar, text="Upload Arduino", command=upload_command)
         self.upload_button.grid(row=0, column=1, sticky="ew", padx=(4, 0))
         scroller = ttk.Frame(self.frame)
         scroller.grid(row=3, column=0, sticky="nsew")

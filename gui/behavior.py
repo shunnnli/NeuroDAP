@@ -249,7 +249,7 @@ class BehaviorService:
                         if self.capability_query_at is not None and time.monotonic() >= self.capability_query_at:
                             self.capability_query_at = None
                             if not self.manual_ready:
-                                self.do_check_controls()
+                                self.do_send("?", "None")
                     except Exception as exc:
                         self.log(f"[serial error] {exc}")
                         self.do_disconnect()
@@ -357,14 +357,11 @@ class BehaviorService:
             raise
         self.log(f"[TX] {text!r} ({ending})")
 
-    def do_check_controls(self):
-        self.do_send("?", "None")
-
     def do_manual(self, action):
         if action not in COMMANDS:
             raise ValueError("Unknown manual action.")
         if not self.manual_ready:
-            raise RuntimeError("Upload the updated DA-clamp firmware and check controls first.")
+            raise RuntimeError("Upload the updated DA-clamp firmware and connect first.")
         if action == "end_task":
             self.do_stop_protocol()  # cancel delayed local UDP work on task stop
         self.do_send(COMMANDS[action], "None")
@@ -549,7 +546,7 @@ class BehaviorGUI:
         self.config_widgets.append(cli_button)
         actions = ttk.Frame(left)
         actions.grid(row=6, column=0, columnspan=3, sticky="ew", pady=(10, 4))
-        self.upload_button = ttk.Button(actions, text="Compile & Upload", command=self.upload)
+        self.upload_button = ttk.Button(actions, text="Upload Arduino", command=self.upload)
         self.upload_button.pack(side="left")
         self.connect_button = ttk.Button(actions, text="Connect", command=self.toggle_connection)
         self.connect_button.pack(side="left", padx=8)
@@ -565,10 +562,16 @@ class BehaviorGUI:
         self._entry(right, "UDP port", "udp_port", 3, protocol=True)
         self.protocol_button = ttk.Button(right, text="Start protocol", style="Start.Action.TButton", command=self.toggle_protocol)
         self.protocol_button.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(8, 4))
-        ttk.Label(right, text="Start protocol before opening brainclamp_gui.py.\nSerial monitoring works without a protocol.\nUDP sends are logged; receipt is not confirmed.\nStop cancels pending sends, not remote actions.",
-                  style="Hint.TLabel", wraplength=330, justify="left").grid(row=5, column=0, columnspan=3, sticky="w", pady=8)
+        from tkinter import font as tkfont
+        self.parser_hint_font = tkfont.nametofont("TkDefaultFont").copy()
+        self.parser_hint_font.configure(weight="bold")
+        ttk.Label(right, text="Start protocol before opening brainclamp_gui.py.",
+                  style="Hint.TLabel", font=self.parser_hint_font, wraplength=330, justify="left").grid(
+                      row=5, column=0, columnspan=3, sticky="w", pady=(8, 0))
+        ttk.Label(right, text="Serial monitoring works without a protocol.\nUDP sends are logged; receipt is not confirmed.\nStop cancels pending sends, not remote actions.",
+                  style="Hint.TLabel", wraplength=330, justify="left").grid(row=6, column=0, columnspan=3, sticky="w", pady=(0, 8))
 
-        command_row = ttk.LabelFrame(outer, text="Manual controls / Serial input", padding=6)
+        command_row = ttk.LabelFrame(outer, text="Manual controls", padding=6)
         command_row.grid(row=2, column=0, sticky="ew", pady=(10, 8))
         command_row.columnconfigure(0, weight=1)
         buttons = ttk.Frame(command_row)
@@ -581,26 +584,34 @@ class BehaviorGUI:
             group.grid(row=0, column=column, sticky="nsew", padx=3)
             group.columnconfigure((0, 1), weight=1)
             for index, (key, label) in enumerate(controls):
-                button = ttk.Button(group, text=label, command=lambda action=key: self.manual_action(action),
+                callback = self.upload if key == "upload" else lambda action=key: self.manual_action(action)
+                button = ttk.Button(group, text=label, command=callback,
                                     style="Start.Action.TButton" if key == "task_toggle" else "TButton")
-                if column < 2:
+                if key == "calibration":
+                    button.grid(row=2, column=0, columnspan=2, sticky="ew", padx=2, pady=2)
+                elif column < 2:
                     button.grid(row=index // 2, column=index % 2, sticky="ew", padx=2, pady=2)
                 else:
                     button.grid(row=index, column=0, columnspan=2, sticky="ew", pady=2)
-                self.manual_buttons.append(button)
-                self.manual_button_by_key[key] = button
-        self.command_entry = ttk.Entry(command_row, textvariable=self.command)
-        self.command_entry.grid(row=1, column=0, sticky="ew")
+                if key == "upload":
+                    self.session_upload_button = button
+                else:
+                    self.manual_buttons.append(button)
+                    self.manual_button_by_key[key] = button
+        serial_row = ttk.Frame(command_row)
+        serial_row.grid(row=1, column=0, columnspan=3, sticky="ew")
+        serial_row.columnconfigure(1, weight=1)
+        ttk.Label(serial_row, text="Serial input").grid(row=0, column=0, padx=(0, 8))
+        self.command_entry = ttk.Entry(serial_row, textvariable=self.command)
+        self.command_entry.grid(row=0, column=1, sticky="ew")
         self.command_entry.bind("<Return>", lambda event: self.send())
-        ttk.Combobox(command_row, textvariable=self.vars["line_ending"], values=tuple(LINE_ENDINGS),
-                     state="readonly", width=20).grid(row=1, column=1, padx=8)
-        self.send_button = ttk.Button(command_row, text="Send", command=self.send)
-        self.send_button.grid(row=1, column=2)
+        ttk.Combobox(serial_row, textvariable=self.vars["line_ending"], values=tuple(LINE_ENDINGS),
+                     state="readonly", width=20).grid(row=0, column=2, padx=8)
+        self.send_button = ttk.Button(serial_row, text="Send", command=self.send)
+        self.send_button.grid(row=0, column=3)
         self.manual_status = tk.StringVar(value="Connect and upload updated DA-clamp firmware to enable buttons.")
         ttk.Label(command_row, textvariable=self.manual_status, style="Hint.TLabel").grid(
-            row=2, column=0, sticky="w", pady=(5, 0))
-        self.check_controls_button = ttk.Button(command_row, text="Check controls", command=lambda: self.request("check_controls"))
-        self.check_controls_button.grid(row=2, column=1, columnspan=2, sticky="e", pady=(5, 0))
+            row=2, column=0, columnspan=3, sticky="w", pady=(5, 0))
 
         monitor_bar = ttk.Frame(outer)
         monitor_bar.grid(row=3, column=0, sticky="ew", pady=(0, 5))
@@ -741,11 +752,11 @@ class BehaviorGUI:
             enable(widget, not blocked and not self.connected)
         enable(self.upload_button, not blocked)
         enable(self.parameter_editor.upload_button, not blocked)
+        enable(self.session_upload_button, not blocked)
         enable(self.connect_button, not blocked)
         enable(self.protocol_button, not blocked and self.connected)
         enable(self.send_button, not blocked and self.connected)
         enable(self.command_entry, not blocked and self.connected)
-        enable(self.check_controls_button, not blocked and self.connected)
         for button in self.manual_buttons:
             enable(button, not blocked and self.connected and self.manual_ready)
         self.connect_button.configure(text="Disconnect" if self.connected else "Connect")
@@ -790,7 +801,7 @@ class BehaviorGUI:
             elif kind == "manual":
                 self.manual_ready = value
                 self.manual_status.set("Manual controls ready. End task stops outputs and local UDP forwarding; counts are preserved."
-                                       if value else "Buttons require updated DA-clamp firmware. Connect, then check controls.")
+                                       if value else "Buttons require updated DA-clamp firmware. Upload and connect to enable controls.")
                 self.update_controls()
             elif kind == "manual_state":
                 self.manual_state = ManualState(**value)

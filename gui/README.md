@@ -62,10 +62,10 @@ unknown boards can still be selected manually.
    Detect or select/type a board ID. For a Mega 2560 use
    `arduino:avr:mega:cpu=atmega2560`. The defaults are COM4, 115200 baud, and this
    Mega 2560 board ID. You can change them before connecting.
-3. **Arduino parameters / Compile & Upload**: selecting a sketch fills the middle
+3. **Arduino parameters / Upload Arduino**: selecting a sketch fills the middle
    column from its marked user settings. Edit `UnitRewardSize` in the pinned top
    row for daily valve calibration; scroll through the other settings below it.
-   Click Compile & Upload to validate your edits and copy the entire sketch to a
+   Click Upload Arduino to validate your edits and copy the entire sketch to a
    temporary folder. The app applies edits to that copy, stops the protocol,
    cancels pending UDP work, closes serial, compiles, and uploads only on compile
    success. Original sketch files are never rewritten. The monitor shows the
@@ -104,16 +104,17 @@ free-text serial input. Upload the updated **Shun_DAClamp_Reward** or
 `BehaviorManual.h`; keep that file beside its `.ino` when copying the sketch.
 The GUI waits for `BEHAVIOR_CONTROLS 1` from the Arduino before enabling buttons,
 so an older sketch cannot interpret a button using a conflicting digit mapping.
-It queries once after connecting; **Check controls** sends another query if needed.
+It automatically queries once after connecting if firmware identification has not arrived.
 Other sketches still support the free-text serial monitor.
 
 The combined **Lasers** group contains blue and red open/close toggles plus one
-pattern button per color. The **Session** group has Water calibration and one
-large task toggle: green **Start task**, red **End task**. The protocol toggle
+pattern button per color. Water calibration sits below Punishment and Tone in
+the **Reward / sound** group. The **Session** group has another **Upload Arduino**
+button and one large task toggle: green **Start task**, red **End task**. The protocol toggle
 uses the same green Start / red Stop colors. Task and laser labels follow Arduino
 acknowledgments, including commands sent through the textbox; rejected commands
 do not change their state. Updated firmware also reports its current task and
-manual laser state on startup and when queried by **Check controls**.
+manual laser state on startup and in response to the automatic connection query.
 During water calibration the task toggle also shows red **End task**, so you can
 cancel calibration immediately; it returns to Start when calibration finishes.
 
@@ -121,7 +122,7 @@ cancel calibration immediately; it returns to Start when calibration finishes.
 | --- | --- | --- |
 | Small reward | `w` | Water for `SmallRewardSize` ms |
 | Large reward | `W` | Water for `BigRewardSize` ms |
-| Punishment (no tone) | `p` | Airpuff for `SmallPunishSize` ms; does not start a tone |
+| Punishment | `p` | Airpuff for `SmallPunishSize` ms; does not start a tone |
 | Tone | `t` | `LeftCueFreq` for `ShortToneDuration` |
 | Open / close blue | `b` / `B` | Hold blue shutter open / close it and cancel its pattern |
 | Open / close red | `r` / `R` | Hold red shutter open / close it and cancel its pattern |
@@ -191,7 +192,7 @@ Editing while connected is allowed, but takes effect only after another upload.
 **Reload / reset edits** discards the current edits and rereads the
 source. Selecting another sketch loads its own parameters without carrying edits
 over from the previous sketch.
-The adjacent **Compile & Upload** button performs exactly the same operation as
+The adjacent **Upload Arduino** button performs exactly the same operation as
 the button in the Arduino script panel, including applying the edited parameters.
 
 For another sketch, mark the intended configuration region explicitly:
