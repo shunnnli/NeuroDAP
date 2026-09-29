@@ -473,6 +473,16 @@ class BehaviorGUI:
         from tkinter.scrolledtext import ScrolledText
         self.tk, self.ttk, self.root = tk, ttk, root
         root.title("NeuroDAP | Behavior control")
+        try:
+            if sys.platform == "win32":
+                root.iconbitmap(default=str(GUI_DIR / "icon-windows.ico"))
+            else:
+                icon_name = "icon-mac.png" if sys.platform == "darwin" else "icon-windows.png"
+                self.app_icon = tk.PhotoImage(master=root, file=str(GUI_DIR / icon_name))
+                root.iconphoto(True, self.app_icon)
+        except tk.TclError:
+            # An unavailable icon must not prevent control of the experiment.
+            pass
         root.geometry("1480x860")
         root.minsize(1230, 780)
         self.service = BehaviorService()
@@ -908,6 +918,12 @@ def main():
         import tkinter as tk
     except ImportError:
         parser.exit(1, "Tkinter is required. Use a Python installation with Tk support.\n")
+    if sys.platform == "win32":
+        import ctypes
+        try:
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("NeuroDAP.Behavior")
+        except OSError:
+            pass
     root = tk.Tk()
     app = BehaviorGUI(root)
     try:

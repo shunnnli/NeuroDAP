@@ -32,8 +32,8 @@ An existing but broken neurodap environment is reported rather than overwritten.
    environment or install missing packages. If Conda asks you to resolve channel
    terms or configuration, do that in the prompt and rerun setup.
 
-3. Double-click **NeuroDAP Behavior** on your desktop. The shortcut uses the Python
-   icon, runs the current repository code, and handles Conda activation invisibly.
+3. Double-click **NeuroDAP Behavior** on your desktop. The shortcut uses the supplied
+   NeuroDAP icon, runs the current repository code, and handles Conda activation invisibly.
    It does not start BrainClamp, upload firmware, or start a protocol automatically.
 
 To choose an existing environment explicitly, append `--env brainclamp` or
@@ -66,6 +66,11 @@ button and save a profile. Other boards/sketches may need different cores or
 libraries. USB drivers may also be needed for the particular board.
 
 ## Updates and troubleshooting
+
+- To apply the custom icon to a shortcut created before icon support was added,
+  rerun `python gui\windows\install.py` once. The installer uses
+  `gui/icon-windows.ico`, converted from `gui/icon-windows.png` with multiple sizes.
+  Restart the GUI for its window icon to update as well.
 
 - Pull NeuroDAP updates normally, then close and reopen the GUI. The shortcut
   points to the repository; no app rebuild or shortcut recreation is needed.

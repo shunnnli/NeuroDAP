@@ -18,7 +18,7 @@ $link = $shell.CreateShortcut($path)
 $link.TargetPath = $data.target
 $link.Arguments = $data.arguments
 $link.WorkingDirectory = $data.directory
-$link.IconLocation = $data.target + ',0'
+$link.IconLocation = $data.icon + ',0'
 $link.Description = 'NeuroDAP behavior control (live repository version)'
 $link.Save()
 Write-Output $path
@@ -75,6 +75,7 @@ def create_shortcut(conda, prefix):
     if not pythonw.is_file():
         raise RuntimeError(f'Cannot find the Conda launcher: {pythonw}')
     data = {'target': str(pythonw), 'directory': str(ROOT),
+            'icon': str(ROOT / 'gui/icon-windows.ico'),
             'arguments': subprocess.list2cmdline([str(ROOT / 'gui/windows/launch.py'),
                                                 '--conda', conda, '--prefix', prefix])}
     env = os.environ.copy()

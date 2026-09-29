@@ -24,6 +24,12 @@ gui/
 Arduino sketches remain in `Arduino/`. The default external parser still points
 to `BrainClamp/scripts/send_event_RPE.py` beside this repository.
 
+The GUI uses `icon-mac.png` on macOS and `icon-windows.ico` on Windows.
+The Windows ICO contains multiple sizes converted from `icon-windows.png` and is
+also used by the desktop shortcut. These assets are bundled; no image library is
+needed to run the GUI. The macOS icon applies to the running application, not to
+the Python source file in Finder.
+
 ## Setup
 
 For Windows, see [desktop shortcut setup](windows/README.md). A single installer
