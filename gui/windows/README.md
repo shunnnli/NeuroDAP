@@ -70,6 +70,10 @@ libraries. USB drivers may also be needed for the particular board.
 - To apply the custom icon to a shortcut created before icon support was added,
   rerun `python gui\windows\install.py` once. The installer uses
   `gui/icon-windows.ico`, converted from `gui/icon-windows.png` with multiple sizes.
+  It copies the ICO into `%LOCALAPPDATA%\NeuroDAP\icons` with a filename based on
+  its contents, so changed artwork gets a fresh Windows icon-cache entry.
+  Pull both the updated installer and ICO before rerunning. Updating only the PNG
+  does not update the shortcut; the converted ICO must also be updated.
   Restart the GUI for its window icon to update as well.
 
 - Pull NeuroDAP updates normally, then close and reopen the GUI. The shortcut

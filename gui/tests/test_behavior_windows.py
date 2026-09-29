@@ -1,6 +1,7 @@
 """Portable checks for environment selection and the Windows launch command."""
 from pathlib import Path
 import subprocess
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -45,6 +46,7 @@ class WindowsSetupTests(unittest.TestCase):
 
     def test_shortcut_paths_are_data_not_powershell_source(self):
         with patch.object(install, 'run_json', return_value={'root_prefix': '/Conda With Spaces'}), \
+             patch.object(install, 'shortcut_icon', return_value=Path('/icons/behavior-new.ico')), \
              patch.object(Path, 'is_file', return_value=True), \
              patch.object(install.subprocess, 'run') as run:
             install.create_shortcut('/Conda With Spaces/conda.exe', '/envs/brainclamp')
@@ -52,6 +54,23 @@ class WindowsSetupTests(unittest.TestCase):
             self.assertEqual(args[0][-1], install.SHORTCUT_SCRIPT)
             self.assertIn('NEURODAP_SHORTCUT_DATA', kwargs['env'])
             self.assertTrue(kwargs['check'])
+
+    def test_icon_revision_changes_path_only_when_artwork_changes(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / 'gui').mkdir()
+            source = root / 'gui/icon-windows.ico'
+            source.write_bytes(b'first icon')
+            with patch.object(install, 'ROOT', root), \
+                 patch.dict(install.os.environ, {'LOCALAPPDATA': str(root / 'Local App Data')}):
+                first = install.shortcut_icon()
+                self.assertEqual(first.read_bytes(), source.read_bytes())
+                self.assertEqual(install.shortcut_icon(), first)
+                source.write_bytes(b'updated icon')
+                second = install.shortcut_icon()
+                self.assertNotEqual(first, second)
+                self.assertEqual(second.read_bytes(), source.read_bytes())
+                self.assertTrue(first.exists())  # other shortcuts may still refer to it
 
 
 if __name__ == '__main__':

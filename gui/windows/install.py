@@ -1,5 +1,6 @@
 r"""Run in Anaconda Prompt: python gui\windows\install.py."""
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -69,13 +70,26 @@ def select_environment(conda, requested=None):
     return prefix
 
 
+def shortcut_icon():
+    # Explorer can retain the old artwork when an ICO is replaced in place.
+    # A content-derived filename gives each icon revision its own cache key.
+    content = (ROOT / 'gui/icon-windows.ico').read_bytes()
+    revision = hashlib.sha256(content).hexdigest()[:16]
+    directory = Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData/Local')) / 'NeuroDAP/icons'
+    directory.mkdir(parents=True, exist_ok=True)
+    icon = directory / f'behavior-{revision}.ico'
+    if not icon.exists() or icon.read_bytes() != content:
+        icon.write_bytes(content)
+    return icon
+
+
 def create_shortcut(conda, prefix):
     base = Path(run_json([conda, 'info', '--json'])['root_prefix'])
     pythonw = base / 'pythonw.exe'
     if not pythonw.is_file():
         raise RuntimeError(f'Cannot find the Conda launcher: {pythonw}')
     data = {'target': str(pythonw), 'directory': str(ROOT),
-            'icon': str(ROOT / 'gui/icon-windows.ico'),
+            'icon': str(shortcut_icon()),
             'arguments': subprocess.list2cmdline([str(ROOT / 'gui/windows/launch.py'),
                                                 '--conda', conda, '--prefix', prefix])}
     env = os.environ.copy()
