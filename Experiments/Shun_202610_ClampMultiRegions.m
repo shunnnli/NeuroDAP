@@ -439,14 +439,15 @@ if ~isempty(answer)
 end
 
 
-%% Random: clamp vs unclamp DLS
+%% Random: clamp vs unclamp DLS 
 
 close all;
 timeRange = [-0.5,3];
 eventRange = {'Water','Airpuff','Tone'};
-animalRange = 'SL479';%{'SL431','SL432','SL433','BiPOLES2'};
+animalRange = 'All';%{'SL431','SL432','SL433','BiPOLES2'};
 signalRange = {'NAc-clamp','DLS'};
 trialConditions = 'trials.performing';
+sessionRange = 'RandomClampMix';    % only the interleaved clamp/unclamp sessions
 
 colorList = {bluePurpleRed(1,:),[.2,.2,.2],bluePurpleRed(100,:)};
 eventDuration = [0,.2,.5];
@@ -460,6 +461,7 @@ for i = 1:length(eventRange)
                                     eventRange=[eventRange{i},' (unclamp)'],...
                                     animalRange=animalRange,...
                                     taskRange='Random',...
+                                    sessionRange=sessionRange,...
                                     signalRange=signalRange{s},...
                                     trialConditions=trialConditions);
         plotTraces(combined.data{1},combined.timestamp,color=unclampColor);
@@ -468,6 +470,7 @@ for i = 1:length(eventRange)
                                     eventRange=[eventRange{i},' (clamp)'],...
                                     animalRange=animalRange,...
                                     taskRange='Random',...
+                                    sessionRange=sessionRange,...
                                     signalRange=signalRange{s},...
                                     trialConditions=trialConditions);
         plotTraces(combined.data{1},combined.timestamp,color=clampColor);
@@ -484,6 +487,163 @@ end
 
 %% ScatterBar plot showing the stageAmp for clamp vs unclamp for each event, one panel for each region
 
+close all;
+timeRange = [-0.5,3];
+eventRange = {'Water','Airpuff','Tone'};
+animalRange = {'SL478','SL479','SL480','SL481'};
+signalRange = {'NAc-clamp','DLS'};
+trialConditions = 'trials.performing';
+conditionSuffix = {' (clamp)',' (unclamp)'};
+conditionColor = [clampColor; unclampColor];
+stage = 2;      % stage window used for stageAmp (same default as plotGroupedTrialStats)
+sessionRange = 'RandomClampMix';    % only the interleaved clamp/unclamp sessions
+
+initializeFig(.5,.5); tiledlayout(1,length(signalRange));
+for s = 1:length(signalRange)
+    nexttile;
+    for i = 1:length(eventRange)
+        % Each dot is one animal's mean stageAmp across all of its trials
+        ampData = nan(length(animalRange),length(conditionSuffix));
+        for a = 1:length(animalRange)
+            for c = 1:length(conditionSuffix)
+                combined = combineTraces(animals,timeRange=timeRange,...
+                                            eventRange=[eventRange{i},conditionSuffix{c}],...
+                                            animalRange=animalRange{a},...
+                                            taskRange='Random',...
+                                            sessionRange=sessionRange,...
+                                            signalRange=signalRange{s},...
+                                            statsType='stageAmp',...
+                                            trialConditions=trialConditions);
+                if combined.options.empty || isempty(combined.stats.stageAmp{1}); continue; end
+                ampData(a,c) = mean(combined.stats.stageAmp{1}(:,stage),'omitnan');
+            end
+        end
+        ampData = ampData(all(~isnan(ampData),2),:);    % keep animals with both conditions
+        if isempty(ampData); continue; end
+
+        x = [2*i-1, 2*i];
+        plotScatterBar(x,ampData,style='bar',color=conditionColor,...
+                       connectPairs=true,dotSize=100,LineWidth=2);
+        plotStats(ampData(:,1),ampData(:,2),x,testType='signrank');
+    end
+    yline(0,'--',Color=[.7 .7 .7],HandleVisibility='off');
+    xlim([0.5,2*length(eventRange)+0.5]); xticks(1:2*length(eventRange));
+    xticklabels(reshape([strcat(eventRange,' (clamp)');strcat(eventRange,' (unclamp)')],1,[]));
+    ylabel([signalRange{s},' stageAmp (\DeltaF/F)']); title(signalRange{s});
+end
+% saveFigures(gcf,'Summary_random_stageAmp_clampVsUnclamp',...
+%         strcat(resultspath),...
+%         saveFIG=false,savePDF=true);
+
 %% Same figure but clamp trials only from RandomClampMix sessions
 
+% combineTraces can select sessions in the animals struct as well: it matches
+% options.sessionRange against the sessionList recorded in each row and keeps
+% the corresponding trials. Clamp AND unclamp trials both come from the
+% RandomClampMix sessions here, where the two conditions are interleaved.
+close all;
+timeRange = [-0.5,3];
+eventRange = {'Water','Airpuff','Tone'};
+animalRange = {'SL478','SL479','SL480','SL481'};
+signalRange = {'NAc-clamp','DLS'};
+trialConditions = 'trials.performing';
+conditionSuffix = {' (clamp)',' (unclamp)'};
+conditionColor = [clampColor; unclampColor];
+stage = 2;
+mixSessionPattern = 'RandomClampMix';
+sessionRange = mixSessionPattern;
+
+initializeFig(.5,.5); tiledlayout(1,length(signalRange));
+for s = 1:length(signalRange)
+    nexttile;
+    for i = 1:length(eventRange)
+        ampData = nan(length(animalRange),length(conditionSuffix));
+        for a = 1:length(animalRange)
+            for c = 1:length(conditionSuffix)
+                combined = combineTraces(animals,timeRange=timeRange,...
+                                            eventRange=[eventRange{i},conditionSuffix{c}],...
+                                            animalRange=animalRange{a},...
+                                            taskRange='Random',...
+                                            sessionRange=sessionRange,...
+                                            signalRange=signalRange{s},...
+                                            statsType='stageAmp',...
+                                            trialConditions=trialConditions);
+                if combined.options.empty || isempty(combined.stats.stageAmp{1}); continue; end
+                ampData(a,c) = mean(combined.stats.stageAmp{1}(:,stage),'omitnan');
+            end
+        end
+        ampData = ampData(all(~isnan(ampData),2),:);
+        if isempty(ampData); continue; end
+
+        x = [2*i-1, 2*i];
+        plotScatterBar(x,ampData,style='bar',color=conditionColor,...
+                       connectPairs=true,dotSize=100,LineWidth=2);
+        plotStats(ampData(:,1),ampData(:,2),x,testType='signrank');
+    end
+    yline(0,'--',Color=[.7 .7 .7],HandleVisibility='off');
+    xlim([0.5,2*length(eventRange)+0.5]); xticks(1:2*length(eventRange));
+    xticklabels(reshape([strcat(eventRange,' (clamp)');strcat(eventRange,' (unclamp)')],1,[]));
+    ylabel([signalRange{s},' stageAmp (\DeltaF/F)']);
+    title([signalRange{s},' (',mixSessionPattern,' sessions)']);
+end
+% saveFigures(gcf,'Summary_random_stageAmp_mixSessions',...
+%         strcat(resultspath),...
+%         saveFIG=false,savePDF=true);
+
 %% Same figure but clamp trials not from RandomClampMix sessions
+
+% Same as above with the session filter inverted (ie block-design sessions
+% where a whole session is either clamp or unclamp). sessionRange only
+% matches, never excludes, so list every non-mix session name recorded in
+% animals(i).options.sessionList.
+close all;
+timeRange = [-0.5,3];
+eventRange = {'Water','Airpuff','Tone'};
+animalRange = {'SL478','SL479','SL480','SL481'};
+signalRange = {'NAc-clamp','DLS'};
+trialConditions = 'trials.performing';
+conditionSuffix = {' (clamp)',' (unclamp)'};
+conditionColor = [clampColor; unclampColor];
+stage = 2;
+mixSessionPattern = 'RandomClampMix';
+
+sessionLists = arrayfun(@(x) string(x.options.sessionList),animals,UniformOutput=false);
+allSessions = unique([sessionLists{:}]);
+sessionRange = allSessions(~contains(allSessions,mixSessionPattern,IgnoreCase=true));
+
+initializeFig(.5,.5); tiledlayout(1,length(signalRange));
+for s = 1:length(signalRange)
+    nexttile;
+    for i = 1:length(eventRange)
+        ampData = nan(length(animalRange),length(conditionSuffix));
+        for a = 1:length(animalRange)
+            for c = 1:length(conditionSuffix)
+                combined = combineTraces(animals,timeRange=timeRange,...
+                                            eventRange=[eventRange{i},conditionSuffix{c}],...
+                                            animalRange=animalRange{a},...
+                                            taskRange='Random',...
+                                            sessionRange=sessionRange,...
+                                            signalRange=signalRange{s},...
+                                            statsType='stageAmp',...
+                                            trialConditions=trialConditions);
+                if combined.options.empty || isempty(combined.stats.stageAmp{1}); continue; end
+                ampData(a,c) = mean(combined.stats.stageAmp{1}(:,stage),'omitnan');
+            end
+        end
+        ampData = ampData(all(~isnan(ampData),2),:);
+        if isempty(ampData); continue; end
+
+        x = [2*i-1, 2*i];
+        plotScatterBar(x,ampData,style='bar',color=conditionColor,...
+                       connectPairs=true,dotSize=100,LineWidth=2);
+        plotStats(ampData(:,1),ampData(:,2),x,testType='signrank');
+    end
+    yline(0,'--',Color=[.7 .7 .7],HandleVisibility='off');
+    xlim([0.5,2*length(eventRange)+0.5]); xticks(1:2*length(eventRange));
+    xticklabels(reshape([strcat(eventRange,' (clamp)');strcat(eventRange,' (unclamp)')],1,[]));
+    ylabel([signalRange{s},' stageAmp (\DeltaF/F)']);
+    title([signalRange{s},' (block sessions)']);
+end
+% saveFigures(gcf,'Summary_random_stageAmp_blockSessions',...
+%         strcat(resultspath),...
+%         saveFIG=false,savePDF=true);
