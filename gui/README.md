@@ -26,6 +26,10 @@ to `BrainClamp/scripts/send_event_RPE.py` beside this repository.
 
 ## Setup
 
+For Windows, see [desktop shortcut setup](windows/README.md). A single installer
+command reuses `brainclamp` when suitable, otherwise creates `neurodap`, and adds
+a desktop shortcut that runs the current repository code without a terminal.
+
 Use Python 3.10+ with Tkinter (included in the standard Windows/macOS Python
 installers; on Linux it may need the `python3-tk` package).
 
