@@ -539,7 +539,7 @@ class BehaviorGUI:
         for frame in (left, right):
             frame.columnconfigure(1, weight=1)
 
-        self._entry(left, "Sketch", "sketch", 0)
+        self._path_entry(left, "Sketch", "sketch")
         button = ttk.Button(left, text="Select Arduino file…", command=self.select_sketch)
         button.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(4, 10))
         self.config_widgets.append(button)
@@ -564,7 +564,7 @@ class BehaviorGUI:
         check.grid(row=7, column=0, columnspan=3, sticky="w")
         self.config_widgets.append(check)
 
-        self._entry(right, "Parser", "protocol", 0, protocol=True)
+        self._path_entry(right, "Parser", "protocol", protocol=True)
         picker = ttk.Button(right, text="Select event parser…", command=self.select_protocol)
         picker.grid(row=1, column=0, columnspan=3, sticky="ew", pady=(4, 10))
         self.protocol_widgets.append(picker)
@@ -643,6 +643,14 @@ class BehaviorGUI:
         self.request("refresh")
         self.vars["sketch"].trace_add("write", self._schedule_parameter_reload)
         root.after(50, self.poll)
+
+    def _path_entry(self, panel, label, key, protocol=False):
+        # Path rows use all panel columns, independent of longer labels and
+        # action buttons below them. Both labels retain the same 8-pixel gap.
+        row = self.ttk.Frame(panel)
+        row.grid(row=0, column=0, columnspan=3, sticky="ew")
+        row.columnconfigure(1, weight=1)
+        return self._entry(row, label, key, 0, protocol=protocol)
 
     def _entry(self, frame, label, key, row, values=None, protocol=False):
         self.ttk.Label(frame, text=label).grid(row=row, column=0, sticky="w", padx=(0, 8), pady=4)
