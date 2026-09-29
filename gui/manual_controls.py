@@ -24,17 +24,27 @@ class ManualState:
     task_running: bool = False
     blue_open: bool = False
     red_open: bool = False
+    calibrating: bool = False
+
+    @property
+    def needs_stop(self):
+        return self.task_running or self.calibrating
 
     def consume(self, line):
         """Update only on board feedback, never optimistically on a GUI click."""
-        snapshot = re.fullmatch(r"BEHAVIOR_STATE task=([01]) blue=([01]) red=([01])", line)
+        snapshot = re.fullmatch(r"BEHAVIOR_STATE task=([01]) blue=([01]) red=([01])(?: calibration=([01]))?", line)
         if snapshot:
-            self.task_running, self.blue_open, self.red_open = (v == "1" for v in snapshot.groups())
+            self.task_running, self.blue_open, self.red_open, self.calibrating = (v == "1" for v in snapshot.groups())
         elif line == "ACK START_TASK" or line.startswith("TASK STARTED AT"):
             self.task_running = True
+            self.calibrating = False
             self.blue_open = self.red_open = False
         elif line.startswith("ACK END_TASK") or line.startswith("TASK ENDED AT"):
-            self.task_running = self.blue_open = self.red_open = False
+            self.task_running = self.blue_open = self.red_open = self.calibrating = False
+        elif line == "ACK CALIBRATION":
+            self.calibrating = True
+        elif line.startswith("DONE CALIBRATION deliveries="):
+            self.calibrating = False
         elif line in ("ACK BLUE_OPEN", "ACK BLUE_PATTERN"):
             self.blue_open = True
         elif line in ("ACK RED_OPEN", "ACK RED_PATTERN"):
@@ -53,5 +63,5 @@ class ManualState:
         if key == "red_toggle":
             return "red_close" if self.red_open else "red_open"
         if key == "task_toggle":
-            return "end_task" if self.task_running else "start_task"
+            return "end_task" if self.needs_stop else "start_task"
         return key

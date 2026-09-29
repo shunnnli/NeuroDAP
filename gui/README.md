@@ -78,7 +78,8 @@ unknown boards can still be selected manually.
    preserved. Successful sends clear the textbox; failed sends retain the text.
    Set the baud rate to the value in the sketch's `Serial.begin(...)`.
 5. **Optional event protocol**: select the Python parser, set the receiver IPv4
-   address and UDP port, then click Start protocol. It handles new serial lines
+   address and UDP port, then click Start protocol **before opening
+   `brainclamp_gui.py`**. It handles new serial lines
    while you continue using the command box. Stop protocol keeps serial connected.
    The default parser is `BrainClamp/scripts/send_event_RPE.py`, with BrainClamp
    next to the NeuroDAP repository. For example, on your Windows rig this resolves
@@ -106,6 +107,16 @@ so an older sketch cannot interpret a button using a conflicting digit mapping.
 It queries once after connecting; **Check controls** sends another query if needed.
 Other sketches still support the free-text serial monitor.
 
+The combined **Lasers** group contains blue and red open/close toggles plus one
+pattern button per color. The **Session** group has Water calibration and one
+large task toggle: green **Start task**, red **End task**. The protocol toggle
+uses the same green Start / red Stop colors. Task and laser labels follow Arduino
+acknowledgments, including commands sent through the textbox; rejected commands
+do not change their state. Updated firmware also reports its current task and
+manual laser state on startup and when queried by **Check controls**.
+During water calibration the task toggle also shows red **End task**, so you can
+cancel calibration immediately; it returns to Start when calibration finishes.
+
 | Button | Serial byte | Behavior |
 | --- | --- | --- |
 | Small reward | `w` | Water for `SmallRewardSize` ms |
@@ -117,7 +128,7 @@ Other sketches still support the free-text serial monitor.
 | Blue / red pattern | `f` / `F` | Run the corresponding pattern on the Arduino |
 | Water calibration | `c` | Deliver `CalibrationRepeats` unit rewards |
 | Start task | `s` | Start the task at its ITI with existing counts retained |
-| End task (keep counts) | `x` | Stop task and outputs, preserving recorded counts |
+| End task | `x` | Stop task and outputs, preserving recorded counts |
 
 **End task does not reset counts or reboot the board.** It closes both water
 valves and the airpuff, closes both shutters, stops tone, and cancels patterns and
@@ -177,9 +188,11 @@ section headings, and inline comments are displayed. For example:
 Values are source initializers, not live readbacks from the Arduino. Some sketches
 override initial values later in `setup()`; the GUI preserves that firmware logic.
 Editing while connected is allowed, but takes effect only after another upload.
-**Reload from sketch / reset edits** discards the current edits and rereads the
+**Reload / reset edits** discards the current edits and rereads the
 source. Selecting another sketch loads its own parameters without carrying edits
 over from the previous sketch.
+The adjacent **Compile & Upload** button performs exactly the same operation as
+the button in the Arduino script panel, including applying the edited parameters.
 
 For another sketch, mark the intended configuration region explicitly:
 

@@ -30,7 +30,8 @@ bool behaviorCalibrationWaterOn = false;
 void behaviorReportState() {
   Serial.print("BEHAVIOR_STATE task="); Serial.print(state != Idle ? 1 : 0);
   Serial.print(" blue="); Serial.print((digitalRead(ShutterBlue) == LOW || behaviorBlue.active) ? 1 : 0);
-  Serial.print(" red="); Serial.println((digitalRead(ShutterRed) == LOW || behaviorRed.active) ? 1 : 0);
+  Serial.print(" red="); Serial.print((digitalRead(ShutterRed) == LOW || behaviorRed.active) ? 1 : 0);
+  Serial.print(" calibration="); Serial.println(behaviorCalibrating ? 1 : 0);
 }
 
 void behaviorCapabilities() {

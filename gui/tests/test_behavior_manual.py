@@ -13,6 +13,18 @@ from gui.manual_controls import CAPABILITY_LINE, COMMANDS, ManualState
 
 
 class ManualCommandTests(unittest.TestCase):
+    def test_calibration_keeps_stop_available_until_completed_or_cancelled(self):
+        state = ManualState()
+        state.consume('ACK CALIBRATION')
+        self.assertFalse(state.task_running)
+        self.assertEqual(state.action_for('task_toggle'), 'end_task')
+        state.consume('DONE CALIBRATION deliveries=200')
+        self.assertEqual(state.action_for('task_toggle'), 'start_task')
+        state.consume('BEHAVIOR_STATE task=0 blue=0 red=0 calibration=1')
+        self.assertEqual(state.action_for('task_toggle'), 'end_task')
+        state.consume('ACK END_TASK counts_preserved')
+        self.assertEqual(state, ManualState())
+
     def test_toggles_follow_acknowledgments_and_ignore_rejected_requests(self):
         state = ManualState()
         self.assertEqual(state.action_for('blue_toggle'), 'blue_open')

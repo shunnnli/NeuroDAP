@@ -523,8 +523,8 @@ class BehaviorGUI:
         columns = ttk.Frame(outer)
         columns.grid(row=1, column=0, sticky="nsew")
         columns.columnconfigure((0, 1, 2), weight=1, uniform="panels")
-        left = ttk.LabelFrame(columns, text="Arduino script", padding=12)
-        right = ttk.LabelFrame(columns, text="Event parsing script / UDP", padding=12)
+        left = ttk.LabelFrame(columns, text="Arduino script", padding=8)
+        right = ttk.LabelFrame(columns, text="Event parsing script / UDP", padding=8)
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
         self.parameter_editor = ParameterEditor(columns, self.reload_parameters, self.upload)
         self.parameter_editor.frame.grid(row=0, column=1, sticky="nsew", padx=4)
@@ -565,11 +565,11 @@ class BehaviorGUI:
         self._entry(right, "UDP port", "udp_port", 3, protocol=True)
         self.protocol_button = ttk.Button(right, text="Start protocol", style="Start.Action.TButton", command=self.toggle_protocol)
         self.protocol_button.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(8, 4))
-        ttk.Label(right, text="Start protocol here before opening brainclamp_gui.py.\n\nSerial monitoring works without a protocol.\nUDP sends are logged; receipt is not confirmed.\nStop cancels pending sends, not the remote device state.",
+        ttk.Label(right, text="Start protocol before opening brainclamp_gui.py.\nSerial monitoring works without a protocol.\nUDP sends are logged; receipt is not confirmed.\nStop cancels pending sends, not remote actions.",
                   style="Hint.TLabel", wraplength=330, justify="left").grid(row=5, column=0, columnspan=3, sticky="w", pady=8)
 
-        command_row = ttk.LabelFrame(outer, text="Manual controls / Serial input", padding=10)
-        command_row.grid(row=2, column=0, sticky="ew", pady=(16, 10))
+        command_row = ttk.LabelFrame(outer, text="Manual controls / Serial input", padding=6)
+        command_row.grid(row=2, column=0, sticky="ew", pady=(10, 8))
         command_row.columnconfigure(0, weight=1)
         buttons = ttk.Frame(command_row)
         buttons.grid(row=0, column=0, columnspan=3, sticky="ew", pady=(0, 8))
@@ -577,7 +577,7 @@ class BehaviorGUI:
         self.manual_button_by_key = {}
         for column, (title, controls) in enumerate(CONTROL_GROUPS):
             buttons.columnconfigure(column, weight=1, uniform="manual")
-            group = ttk.LabelFrame(buttons, text=title, padding=5)
+            group = ttk.LabelFrame(buttons, text=title, padding=3)
             group.grid(row=0, column=column, sticky="nsew", padx=3)
             group.columnconfigure((0, 1), weight=1)
             for index, (key, label) in enumerate(controls):
@@ -755,8 +755,8 @@ class BehaviorGUI:
             opened = getattr(self.manual_state, color + "_open")
             self.manual_button_by_key[color + "_toggle"].configure(text=f"{'Close' if opened else 'Open'} {color}")
         self.manual_button_by_key["task_toggle"].configure(
-            text="End task" if self.manual_state.task_running else "Start task",
-            style="Stop.Action.TButton" if self.manual_state.task_running else "Start.Action.TButton")
+            text="End task" if self.manual_state.needs_stop else "Start task",
+            style="Stop.Action.TButton" if self.manual_state.needs_stop else "Start.Action.TButton")
 
     def poll(self):
         if self.closing:
