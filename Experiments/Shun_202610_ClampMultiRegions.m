@@ -225,6 +225,7 @@ summary = summary(keepRows);
 
 leftClampAnimals = {'SL431', 'SL432', 'SL433', 'BiPOLES2', 'M431'};
 rightClampAnimals = {'M445', 'M446'};
+NAcLSClampAnimals = {'SL478','SL479','SL480','SL481'};
 
 for i = 1:length(summary)
     cur_animal = summary(i).animal;
@@ -241,6 +242,10 @@ for i = 1:length(summary)
             summary(i).name = 'NAc-clamp';
         elseif strcmpi(cur_name, 'NAc-left')
             summary(i).name = 'NAc-unclamp';
+        end
+    elseif any(strcmpi(cur_animal, NAcLSClampAnimals))
+        if strcmpi(cur_name, 'NAc-LS')
+            summary(i).name = 'NAc-clamp';
         end
     end
 end
@@ -403,24 +408,6 @@ disp(['Finished: flagged ',num2str(nRemovedTotal),'/',num2str(nTrialsTotal),...
       ' trials (performing = 0) where redClamp or blueClamp was at max for >',...
       num2str(maxFraction*100),'% of the trial']);
 
-%% Optional: for ONOFF sessions only
-
-% Change some names if needed
-for i = 1:length(summary)
-    cur_task = summary(i).task;
-    cur_event = summary(i).event;
-    cur_date = str2double(summary(i).date);
-    cur_session = summary(i).session;
-
-    % ONOFF type
-    if cur_date == 20260418
-        summary(i).task = 'Raw';
-    elseif cur_date == 20260421 
-        summary(i).task = 'withBump';
-    elseif cur_date >= 20260423
-        summary(i).task = 'Final';
-    end
-end
 
 %% Create animals struct
 
@@ -432,19 +419,6 @@ end
 for i = 1:size(animals,2)
     stageMax = animals(i).stageMax.data;
     stageMin = animals(i).stageMin.data;
-    
-    animals(i).stageAmp = struct('data', getAmplitude(stageMax, stageMin));
-end
-
-%% Optional: ONOFF only (remove artifact clamp commands)
-
-for i = 1:size(animals,2)
-    if contains('clamp',animals(i).name, IgnoreCase=true)
-        data = animals(i).data;
-        % data(:, [1:749, 1000:end]) = 0;
-        
-        % Remove trials where there's still clamp command after 6sec
-    end
     
     animals(i).stageAmp = struct('data', getAmplitude(stageMax, stageMin));
 end
@@ -464,88 +438,14 @@ if ~isempty(answer)
     disp(['Finished: saved animals.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
 end
 
-%% ON/OFF: clamp on vs clamp off
 
-timeRange = [-5,10];
-taskRange = 'Final';
-animalRange = 'All'; %{'SL431','SL432','BiPOLES2'};
-
-trialRange = 'All'; % range of trials in each session
-totalTrialRange = 'All';
-signalRange = {'NAc-left','NAc-right'};
-% signalRange = {'blueClamp','redClamp'};
-trialConditions = 'trials.performing';
-
-eventDuration = 5;
-
-close all; 
-initializeFig(.5,.5); tiledlayout(1,length(signalRange));
-for s = 1:length(signalRange)
-    nexttile;
-    combined = combineTraces(animals,timeRange=timeRange,...
-                                eventRange='Clamp',...
-                                animalRange=animalRange,...
-                                taskRange=taskRange,...
-                                totalTrialRange=totalTrialRange,...
-                                trialRange=trialRange,...
-                                signalRange=signalRange{s},...
-                                trialConditions=trialConditions);
-    plotTraces(combined.data{1},combined.timestamp,color=clampColor,plotIndividual=true);
-    xlabel('Time (s)'); ylabel([signalRange{s},' (\DeltaF/F)']);
-    ylim([-0.3,1.4]);
-    plotEvent('Clamp',eventDuration,color=clampColor);
-    legend({['Clamp (n=',num2str(size(combined.data{1},1)),')']},...
-            'Location','northeast');
-end
-% saveFigures(gcf,strcat('Summary_DA_ONOFF_',taskRange),...
-%         strcat(resultspath),...
-%         saveFIG=false,savePDF=true);
-
-%% ON/OFF: Calculate running var of clamp off vs clamp on
-% use combined data above
-% x axis is time, y axis is var in a window (1s)
-
-initializeFig(.4,.5); tiledlayout(length(signalRange),4);
-for s = 1:length(signalRange)
-    combined = combineTraces(animals,timeRange=[0,10],...
-                                eventRange='Clamp',...
-                                animalRange=animalRange,...
-                                taskRange=taskRange,...
-                                totalTrialRange=totalTrialRange,...
-                                trialRange=trialRange,...
-                                signalRange=signalRange{s},...
-                                trialConditions=trialConditions);
-    windowSize = 3 * combined.options.finalFs;
-    runningVar = movvar(combined.data{1},windowSize,0,2,'omitnan');
-
-    nexttile((s-1)*4+1,[1 3]);
-    plotTraces(runningVar,combined.timestamp,color=clampColor,plotIndividual=false);
-    xlabel('Time (s)'); ylabel([signalRange{s},' var']);
-    plotEvent('Clamp',eventDuration,color=clampColor);
-
-    % Plot average variability of on vs off using plotScatterBar
-    offIdx = combined.timestamp >= eventDuration;
-    onIdx = combined.timestamp < eventDuration;
-    varData = [mean(runningVar(:,onIdx),2,'omitnan'), ...
-               mean(runningVar(:,offIdx),2,'omitnan')];
-
-    nexttile((s-1)*4+4);
-    plotScatterBar([1 2],varData,style='bar',color=[clampColor;unclampColor],...
-                   plotScatter=false,connectPairs=false,dotSize=80);
-
-    % plotStats(varData(:,1),varData(:,2),[1 2],testType='kstest');
-    xticks([1 2]); xticklabels({'Off','On'});
-    ylabel([signalRange{s},' var']);
-end
-
-
-%% Random: clamp vs unclamp NAc
+%% Random: clamp vs unclamp DLS
 
 close all;
 timeRange = [-0.5,3];
 eventRange = {'Water','Airpuff','Tone'};
-animalRange = 'SL433';%{'SL431','SL432','SL433','BiPOLES2'};
-signalRange = {'NAc-clamp','NAc-unclamp'};
+animalRange = 'SL479';%{'SL431','SL432','SL433','BiPOLES2'};
+signalRange = {'NAc-clamp','DLS'};
 trialConditions = 'trials.performing';
 
 colorList = {bluePurpleRed(1,:),[.2,.2,.2],bluePurpleRed(100,:)};
@@ -572,7 +472,7 @@ for i = 1:length(eventRange)
                                     trialConditions=trialConditions);
         plotTraces(combined.data{1},combined.timestamp,color=clampColor);
         xlabel('Time (s)'); ylabel([signalRange{s},' (\DeltaF/F)']); 
-        ylim([-0.1,0.8]);
+        ylim([-0.02,0.1]);
         plotEvent(eventRange{i},eventDuration(i),color=colorList{i});
         legend({[eventRange{i},' (n=',num2str(size(combined.data{1},1)),')']},...
                 'Location','northeast');
@@ -582,3 +482,8 @@ for i = 1:length(eventRange)
     %         saveFIG=false,savePDF=true);
 end
 
+%% ScatterBar plot showing the stageAmp for clamp vs unclamp for each event, one panel for each region
+
+%% Same figure but clamp trials only from RandomClampMix sessions
+
+%% Same figure but clamp trials not from RandomClampMix sessions
