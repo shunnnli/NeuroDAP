@@ -83,9 +83,11 @@ btnRow.ColumnWidth = {'1x',90,90};
 btnRow.Padding = [0 0 0 0];
 btnRow.ColumnSpacing = 8;
 
+% OK then Cancel, so Cancel sits on the right. Matches
+% inputLabjackRecordingConfig.
 uilabel(btnRow,'Text','');
-uibutton(btnRow,'Text','Cancel','ButtonPushedFcn',@(~,~)onCancel());
 uibutton(btnRow,'Text','OK','ButtonPushedFcn',@(~,~)onOK());
+uibutton(btnRow,'Text','Cancel','ButtonPushedFcn',@(~,~)onCancel());
 
 fig.Visible = 'on';
 uiwait(fig);

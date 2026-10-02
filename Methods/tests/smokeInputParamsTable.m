@@ -155,6 +155,11 @@ bCol = findButton(f,'Fill column from selected cell');
 bSel = findButton(f,'Fill selected rows');
 check(LOG,strcmp(bCol.Enable,'off'),'fill buttons start disabled');
 
+bOK = findButton(f,'OK');
+bCancel = findButton(f,'Cancel');
+say(LOG,'OK x=%g, Cancel x=%g',bOK.Position(1),bCancel.Position(1));
+check(LOG,bCancel.Position(1) > bOK.Position(1),'Cancel sits to the right of OK');
+
 if ~strcmp(action,'ok'); return; end
 
 if ismember('Paradigm',D.Properties.VariableNames)
