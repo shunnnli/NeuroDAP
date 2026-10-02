@@ -438,13 +438,17 @@ if ~isempty(answer)
     disp(['Finished: saved animals.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
 end
 
+%% Animal groups
+
+DLS1 = {'SL479','SL480','SL481'};
+
 
 %% Random: clamp vs unclamp DLS 
 
 close all;
 timeRange = [-0.5,3];
-eventRange = {'Water','Airpuff','Tone'};
-animalRange = 'All';%{'SL431','SL432','SL433','BiPOLES2'};
+eventRange = {'Rewarded licks','Airpuff','Tone'};
+animalRange = DLS1;%{'SL431','SL432','SL433','BiPOLES2'};
 signalRange = {'NAc-clamp','DLS'};
 trialConditions = 'trials.performing';
 sessionRange = 'RandomClampMix';    % only the interleaved clamp/unclamp sessions
@@ -475,7 +479,7 @@ for i = 1:length(eventRange)
                                     trialConditions=trialConditions);
         plotTraces(combined.data{1},combined.timestamp,color=clampColor);
         xlabel('Time (s)'); ylabel([signalRange{s},' (\DeltaF/F)']); 
-        ylim([-0.02,0.1]);
+        ylim([-0.02,0.15]);
         plotEvent(eventRange{i},eventDuration(i),color=colorList{i});
         legend({[eventRange{i},' (n=',num2str(size(combined.data{1},1)),')']},...
                 'Location','northeast');
@@ -502,29 +506,29 @@ initializeFig(.5,.5); tiledlayout(1,length(signalRange));
 for s = 1:length(signalRange)
     nexttile;
     for i = 1:length(eventRange)
-        % Each dot is one animal's mean stageAmp across all of its trials
-        ampData = nan(length(animalRange),length(conditionSuffix));
-        for a = 1:length(animalRange)
-            for c = 1:length(conditionSuffix)
-                combined = combineTraces(animals,timeRange=timeRange,...
-                                            eventRange=[eventRange{i},conditionSuffix{c}],...
-                                            animalRange=animalRange{a},...
-                                            taskRange='Random',...
-                                            sessionRange=sessionRange,...
-                                            signalRange=signalRange{s},...
-                                            statsType='stageAmp',...
-                                            trialConditions=trialConditions);
-                if combined.options.empty || isempty(combined.stats.stageAmp{1}); continue; end
-                ampData(a,c) = mean(combined.stats.stageAmp{1}(:,stage),'omitnan');
-            end
+        % Each dot is one trial, pooled across animals
+        ampData = cell(1,length(conditionSuffix));
+        for c = 1:length(conditionSuffix)
+            combined = combineTraces(animals,timeRange=timeRange,...
+                                        eventRange=[eventRange{i},conditionSuffix{c}],...
+                                        animalRange=animalRange,...
+                                        taskRange='Random',...
+                                        sessionRange=sessionRange,...
+                                        signalRange=signalRange{s},...
+                                        statsType='stageAmp',...
+                                        trialConditions=trialConditions);
+            if combined.options.empty || isempty(combined.stats.stageAmp{1}); continue; end
+            trialAmp = combined.stats.stageAmp{1}(:,stage);     % one value per trial
+            ampData{c} = trialAmp(~isnan(trialAmp));
         end
-        ampData = ampData(all(~isnan(ampData),2),:);    % keep animals with both conditions
-        if isempty(ampData); continue; end
+        if any(cellfun(@isempty,ampData)); continue; end
 
         x = [2*i-1, 2*i];
-        plotScatterBar(x,ampData,style='bar',color=conditionColor,...
-                       connectPairs=true,dotSize=100,LineWidth=2);
-        plotStats(ampData(:,1),ampData(:,2),x,testType='signrank');
+        for c = 1:length(conditionSuffix)
+            plotScatterBar(x(c),ampData{c},style='bar',color=conditionColor(c,:),...
+                           dotSize=20,MarkerFaceAlpha=0.5,LineWidth=2);
+        end
+        plotStats(ampData{1},ampData{2},x,testType='ranksum');  % unpaired across trials
     end
     yline(0,'--',Color=[.7 .7 .7],HandleVisibility='off');
     xlim([0.5,2*length(eventRange)+0.5]); xticks(1:2*length(eventRange));
@@ -557,28 +561,29 @@ initializeFig(.5,.5); tiledlayout(1,length(signalRange));
 for s = 1:length(signalRange)
     nexttile;
     for i = 1:length(eventRange)
-        ampData = nan(length(animalRange),length(conditionSuffix));
-        for a = 1:length(animalRange)
-            for c = 1:length(conditionSuffix)
-                combined = combineTraces(animals,timeRange=timeRange,...
-                                            eventRange=[eventRange{i},conditionSuffix{c}],...
-                                            animalRange=animalRange{a},...
-                                            taskRange='Random',...
-                                            sessionRange=sessionRange,...
-                                            signalRange=signalRange{s},...
-                                            statsType='stageAmp',...
-                                            trialConditions=trialConditions);
-                if combined.options.empty || isempty(combined.stats.stageAmp{1}); continue; end
-                ampData(a,c) = mean(combined.stats.stageAmp{1}(:,stage),'omitnan');
-            end
+        % Each dot is one trial, pooled across animals
+        ampData = cell(1,length(conditionSuffix));
+        for c = 1:length(conditionSuffix)
+            combined = combineTraces(animals,timeRange=timeRange,...
+                                        eventRange=[eventRange{i},conditionSuffix{c}],...
+                                        animalRange=animalRange,...
+                                        taskRange='Random',...
+                                        sessionRange=sessionRange,...
+                                        signalRange=signalRange{s},...
+                                        statsType='stageAmp',...
+                                        trialConditions=trialConditions);
+            if combined.options.empty || isempty(combined.stats.stageAmp{1}); continue; end
+            trialAmp = combined.stats.stageAmp{1}(:,stage);     % one value per trial
+            ampData{c} = trialAmp(~isnan(trialAmp));
         end
-        ampData = ampData(all(~isnan(ampData),2),:);
-        if isempty(ampData); continue; end
+        if any(cellfun(@isempty,ampData)); continue; end
 
         x = [2*i-1, 2*i];
-        plotScatterBar(x,ampData,style='bar',color=conditionColor,...
-                       connectPairs=true,dotSize=100,LineWidth=2);
-        plotStats(ampData(:,1),ampData(:,2),x,testType='signrank');
+        for c = 1:length(conditionSuffix)
+            plotScatterBar(x(c),ampData{c},style='bar',color=conditionColor(c,:),...
+                           dotSize=20,MarkerFaceAlpha=0.5,LineWidth=2);
+        end
+        plotStats(ampData{1},ampData{2},x,testType='ranksum');  % unpaired across trials
     end
     yline(0,'--',Color=[.7 .7 .7],HandleVisibility='off');
     xlim([0.5,2*length(eventRange)+0.5]); xticks(1:2*length(eventRange));
@@ -615,28 +620,29 @@ initializeFig(.5,.5); tiledlayout(1,length(signalRange));
 for s = 1:length(signalRange)
     nexttile;
     for i = 1:length(eventRange)
-        ampData = nan(length(animalRange),length(conditionSuffix));
-        for a = 1:length(animalRange)
-            for c = 1:length(conditionSuffix)
-                combined = combineTraces(animals,timeRange=timeRange,...
-                                            eventRange=[eventRange{i},conditionSuffix{c}],...
-                                            animalRange=animalRange{a},...
-                                            taskRange='Random',...
-                                            sessionRange=sessionRange,...
-                                            signalRange=signalRange{s},...
-                                            statsType='stageAmp',...
-                                            trialConditions=trialConditions);
-                if combined.options.empty || isempty(combined.stats.stageAmp{1}); continue; end
-                ampData(a,c) = mean(combined.stats.stageAmp{1}(:,stage),'omitnan');
-            end
+        % Each dot is one trial, pooled across animals
+        ampData = cell(1,length(conditionSuffix));
+        for c = 1:length(conditionSuffix)
+            combined = combineTraces(animals,timeRange=timeRange,...
+                                        eventRange=[eventRange{i},conditionSuffix{c}],...
+                                        animalRange=animalRange,...
+                                        taskRange='Random',...
+                                        sessionRange=sessionRange,...
+                                        signalRange=signalRange{s},...
+                                        statsType='stageAmp',...
+                                        trialConditions=trialConditions);
+            if combined.options.empty || isempty(combined.stats.stageAmp{1}); continue; end
+            trialAmp = combined.stats.stageAmp{1}(:,stage);     % one value per trial
+            ampData{c} = trialAmp(~isnan(trialAmp));
         end
-        ampData = ampData(all(~isnan(ampData),2),:);
-        if isempty(ampData); continue; end
+        if any(cellfun(@isempty,ampData)); continue; end
 
         x = [2*i-1, 2*i];
-        plotScatterBar(x,ampData,style='bar',color=conditionColor,...
-                       connectPairs=true,dotSize=100,LineWidth=2);
-        plotStats(ampData(:,1),ampData(:,2),x,testType='signrank');
+        for c = 1:length(conditionSuffix)
+            plotScatterBar(x(c),ampData{c},style='bar',color=conditionColor(c,:),...
+                           dotSize=20,MarkerFaceAlpha=0.5,LineWidth=2);
+        end
+        plotStats(ampData{1},ampData{2},x,testType='ranksum');  % unpaired across trials
     end
     yline(0,'--',Color=[.7 .7 .7],HandleVisibility='off');
     xlim([0.5,2*length(eventRange)+0.5]); xticks(1:2*length(eventRange));
