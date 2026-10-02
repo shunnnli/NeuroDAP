@@ -16,7 +16,7 @@ CONTROL_GROUPS = (
                         ("calibration", "Water calibration"))),
     ("Lasers", (("blue_toggle", "Open blue"), ("red_toggle", "Open red"),
                 ("blue_pattern", "Blue pattern"), ("red_pattern", "Red pattern"))),
-    ("Session", (("upload", "Upload Arduino (before start protocol)"), ("task_toggle", "Start task"))),
+    ("Session", (("reset_arduino", "Reset Arduino"), ("task_toggle", "Start task"))),
 )
 
 

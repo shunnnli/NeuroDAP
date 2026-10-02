@@ -147,6 +147,11 @@ class UdpSender:
             self.pending.clear()
             self.sock.close()
 
+    def cancel_pending(self):
+        """Discard work from the previous Arduino run without closing the sender."""
+        with self.lock:
+            self.pending.clear()
+
 
 class Protocol:
     """Load a fresh module per session, without running its __main__ entry point."""
@@ -202,6 +207,8 @@ class BehaviorService:
         self.manual_ready = False
         self.manual_state = ManualState()
         self.capability_query_at = None
+        self.resetting = False
+        self.reset_boot_seen = self.reset_state_seen = False
         self.sequence = time.time_ns() // 1_000_000  # survives protocol restarts; receiver accepts integer IDs
         self.dropped = 0
         self.thread = threading.Thread(target=self._run, daemon=True, name="behavior-service")
@@ -258,7 +265,7 @@ class BehaviorService:
                     try:
                         self.udp.poll()
                     except Exception as exc:
-                        self.log(f"[protocol stopped] {exc}")
+                        self.log(f"[parser ended] {exc}")
                         self.do_stop_protocol()
                         self.state()
         finally:
@@ -311,8 +318,51 @@ class BehaviorService:
             try:
                 protocol.close()
             except Exception as exc:
-                self.log(f"[protocol cleanup] {exc}")
-            self.log("[protocol stopped] Pending UDP commands cancelled. Remote device state is unchanged.")
+                self.log(f"[parser cleanup] {exc}")
+            self.log("[parser ended] Pending UDP commands cancelled. Remote device state is unchanged.")
+
+    def do_reset_arduino(self, board):
+        if not self.ser:
+            raise RuntimeError("Connect the Arduino before resetting it.")
+        if ':'.join(board.strip().split(':')[:3]) not in (
+                'arduino:avr:mega', 'arduino:avr:uno', 'arduino:avr:nano'):
+            raise ValueError("Reset Arduino supports Mega, Uno, and classic Nano USB auto-reset. Select the correct Board ID.")
+        if self.udp:
+            self.udp.cancel_pending()
+        self.manual_ready = False
+        self.events.put(("manual", False))
+        self.capability_query_at = None
+        self.resetting = True
+        self.reset_boot_seen = self.reset_state_seen = False
+        self.log("[Arduino reset] Restarting the uploaded sketch; Arduino counts will clear. Parser stays running. Pending UDP sends cancelled; remote device state is unchanged.")
+        try:
+            # Deassert, then assert DTR: the USB bridge pulses the AVR reset pin.
+            # Keep the same serial handle, parser module, and UDP socket alive.
+            self.ser.dtr = False
+            try:
+                self.shutdown.wait(0.1)
+                self.ser.reset_output_buffer()
+                self.ser.reset_input_buffer()
+                self.buffer.clear()
+            finally:
+                self.ser.dtr = True
+            deadline = time.monotonic() + 5
+            while not self.shutdown.is_set() and time.monotonic() < deadline:
+                self._read_serial()
+                if self.reset_boot_seen and self.reset_state_seen:
+                    self.log("[Arduino reset complete] Startup confirmed; counts and timers restarted. Parser was not restarted. Ready for Start task.")
+                    return
+                self.shutdown.wait(0.02)
+            raise RuntimeError("Reset was requested but startup was not confirmed. Check USB auto-reset and that the uploaded sketch reports BEHAVIOR_CONTROLS / BEHAVIOR_STATE. Parser remains loaded.")
+        except OSError:
+            # A real USB disconnection cannot keep the parser receiving events.
+            self.do_disconnect()
+            raise
+        finally:
+            self.resetting = False
+            if not self.reset_state_seen:
+                self.manual_ready = False
+                self.events.put(("manual", False))
 
     def do_disconnect(self):
         self.manual_ready = False
@@ -334,7 +384,7 @@ class BehaviorService:
         if not self.ser:
             raise RuntimeError("Connect the Arduino before starting the protocol.")
         if self.protocol:
-            raise RuntimeError("Stop the current protocol first.")
+            raise RuntimeError("End the current parser first.")
         udp = UdpSender(settings.host.strip(), settings.udp_port, self.log, self._next_sequence)
         try:
             protocol = Protocol(settings.protocol, self.log)
@@ -342,7 +392,7 @@ class BehaviorService:
             udp.close()
             raise
         self.udp, self.protocol = udp, protocol
-        self.log(f"[protocol started] {Path(settings.protocol).name} -> {udp.addr[0]}:{udp.addr[1]}")
+        self.log(f"[parser started] {Path(settings.protocol).name} -> {udp.addr[0]}:{udp.addr[1]}")
 
     def do_send(self, text, ending):
         if not self.ser:
@@ -380,11 +430,18 @@ class BehaviorService:
             self.log(f"[RX] {line}")
             if line == CAPABILITY_LINE:
                 self.manual_ready = True
+                if self.resetting:
+                    self.reset_boot_seen = True
                 self.capability_query_at = None
                 self.events.put(("manual", True))
                 continue
             if self.manual_state.consume(line):
                 self.events.put(("manual_state", asdict(self.manual_state)))
+                if (self.resetting and self.reset_boot_seen and line.startswith("BEHAVIOR_STATE ")
+                        and self.manual_state == ManualState()):
+                    self.reset_state_seen = True
+            if self.resetting:
+                continue  # Startup chatter is not a behavioral event for the parser.
             if self.protocol:
                 try:
                     event = self.protocol.handle(line, self.udp)
@@ -392,7 +449,7 @@ class BehaviorService:
                         kind = getattr(event, "type", str(event))
                         self.log(f"[event] {kind}")
                 except Exception as exc:
-                    self.log(f"[protocol stopped] {type(exc).__name__}: {exc}")
+                    self.log(f"[parser ended] {type(exc).__name__}: {exc}")
                     self.do_stop_protocol()
                     self.state()
         if len(self.buffer) > 1_048_576:
@@ -449,7 +506,7 @@ class BehaviorService:
                 common = ["--fqbn", settings.board.strip(), "--build-path", build]
                 self._run_cli([cli, "compile", *common, str(staged)], 600)
                 self._run_cli([cli, "upload", *common, "--port", settings.port.strip(), str(staged)], 120)
-            self.log("[upload complete] Protocol is stopped; start it when the board is ready.")
+            self.log("[upload complete] Parser is stopped; start it when the board is ready.")
             if settings.reconnect and not self.shutdown.is_set():
                 self.shutdown.wait(1)
                 deadline = time.monotonic() + 8
@@ -570,15 +627,15 @@ class BehaviorGUI:
         self.protocol_widgets.append(picker)
         self._entry(right, "Receiver IPv4", "host", 2, protocol=True)
         self._entry(right, "UDP port", "udp_port", 3, protocol=True)
-        self.protocol_button = ttk.Button(right, text="Start protocol", style="Start.Action.TButton", command=self.toggle_protocol)
+        self.protocol_button = ttk.Button(right, text="Start parser", style="Start.Action.TButton", command=self.toggle_protocol)
         self.protocol_button.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(8, 4))
         from tkinter import font as tkfont
         self.parser_hint_font = tkfont.nametofont("TkDefaultFont").copy()
         self.parser_hint_font.configure(weight="bold")
-        ttk.Label(right, text="Start protocol before opening brainclamp_gui.py.",
+        ttk.Label(right, text="Start parser before opening brainclamp_gui.py.",
                   style="Hint.TLabel", font=self.parser_hint_font, wraplength=330, justify="left").grid(
                       row=5, column=0, columnspan=3, sticky="w", pady=(8, 0))
-        ttk.Label(right, text="Serial monitoring works without a protocol.\nUDP sends are logged; receipt is not confirmed.\nStop cancels pending sends, not remote actions.",
+        ttk.Label(right, text="Serial monitoring works without a parser.\nUDP sends are logged; receipt is not confirmed.\nEnd parser cancels pending sends, not remote actions.",
                   style="Hint.TLabel", wraplength=330, justify="left").grid(row=6, column=0, columnspan=3, sticky="w", pady=(0, 8))
 
         command_row = ttk.LabelFrame(outer, text="Manual controls", padding=6)
@@ -594,7 +651,7 @@ class BehaviorGUI:
             group.grid(row=0, column=column, sticky="nsew", padx=3)
             group.columnconfigure((0, 1), weight=1)
             for index, (key, label) in enumerate(controls):
-                callback = self.upload if key == "upload" else lambda action=key: self.manual_action(action)
+                callback = self.reset_arduino if key == "reset_arduino" else lambda action=key: self.manual_action(action)
                 button = ttk.Button(group, text=label, command=callback,
                                     style="Start.Action.TButton" if key == "task_toggle" else "TButton")
                 if key == "calibration":
@@ -603,8 +660,8 @@ class BehaviorGUI:
                     button.grid(row=index // 2, column=index % 2, sticky="ew", padx=2, pady=2)
                 else:
                     button.grid(row=index, column=0, columnspan=2, sticky="ew", pady=2)
-                if key == "upload":
-                    self.session_upload_button = button
+                if key == "reset_arduino":
+                    self.reset_button = button
                 else:
                     self.manual_buttons.append(button)
                     self.manual_button_by_key[key] = button
@@ -744,6 +801,9 @@ class BehaviorGUI:
         else:
             self.request("connect", self.settings())
 
+    def reset_arduino(self):
+        self.request("reset_arduino", self.vars["board"].get())
+
     def toggle_protocol(self):
         if self.protocol_running:
             self.request("stop_protocol")
@@ -770,7 +830,7 @@ class BehaviorGUI:
             enable(widget, not blocked and not self.connected)
         enable(self.upload_button, not blocked)
         enable(self.parameter_editor.upload_button, not blocked)
-        enable(self.session_upload_button, not blocked)
+        enable(self.reset_button, not blocked and self.connected)
         enable(self.connect_button, not blocked)
         enable(self.protocol_button, not blocked and self.connected)
         enable(self.send_button, not blocked and self.connected)
@@ -778,7 +838,7 @@ class BehaviorGUI:
         for button in self.manual_buttons:
             enable(button, not blocked and self.connected and self.manual_ready)
         self.connect_button.configure(text="Disconnect" if self.connected else "Connect")
-        self.protocol_button.configure(text="Stop protocol" if self.protocol_running else "Start protocol",
+        self.protocol_button.configure(text="End parser" if self.protocol_running else "Start parser",
                                        style="Stop.Action.TButton" if self.protocol_running else "Start.Action.TButton")
         for color in ("blue", "red"):
             opened = getattr(self.manual_state, color + "_open")
@@ -802,8 +862,8 @@ class BehaviorGUI:
             if kind == "state":
                 self.connected, self.protocol_running, self.busy = value["connected"], value["protocol"], value["busy"]
                 self.status.set("Compiling / uploading…" if self.busy else
-                                ("Connected | Protocol running" if self.protocol_running else
-                                 "Connected | Protocol stopped" if self.connected else "Disconnected"))
+                                ("Connected | Parser running" if self.protocol_running else
+                                 "Connected | Parser stopped" if self.connected else "Disconnected"))
                 self.update_controls()
             elif kind == "done":
                 self.pending = False

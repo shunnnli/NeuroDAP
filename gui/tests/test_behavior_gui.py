@@ -90,6 +90,89 @@ class BehaviorTests(unittest.TestCase):
             sender.poll()
             sock.sendto.assert_called_once_with(b"MSG 100 CMD PID_OFF\n", ("127.0.0.1", 5005))
 
+    def test_reset_reboots_over_dtr_without_closing_parser_or_udp(self):
+        class ResetSerial(FakeSerial):
+            def __init__(self):
+                super().__init__()
+                self.transitions = []
+            @property
+            def dtr(self):
+                return self.transitions[-1]
+            @dtr.setter
+            def dtr(self, value):
+                self.transitions.append(value)
+                if value:
+                    self.input.extend(b'BEHAVIOR_CONTROLS 1\nBEHAVIOR_STATE task=0 blue=0 red=0 calibration=0\nboot text\n')
+            def reset_input_buffer(self):
+                self.input.clear()
+            def reset_output_buffer(self):
+                self.written.clear()
+        serial = ResetSerial()
+        serial.input.extend(b'old event\n')
+        self.service.ser = serial
+        self.service.buffer.extend(b'old partial')
+        self.service.manual_state = gui.ManualState(task_running=True, blue_open=True)
+        parser = Mock()
+        parser.handle.return_value = None
+        self.service.protocol = parser
+        sender, sock = self.sender()
+        sender.call_later('CMD OLD_RUN', 1)
+        self.service.udp = sender
+        with patch.object(self.service.shutdown, 'wait', return_value=False):
+            self.service.do_reset_arduino('arduino:avr:mega:cpu=atmega2560')
+        self.assertEqual(serial.transitions, [False, True])
+        self.assertFalse(serial.closed)
+        self.assertIs(self.service.protocol, parser)
+        self.assertIs(self.service.udp, sender)
+        parser.close.assert_not_called()
+        parser.handle.assert_not_called()  # discarded pre-reset data and boot chatter
+        self.assertFalse(sender.closed)
+        self.assertFalse(sender.pending)
+        self.assertTrue(self.service.manual_ready)
+        self.assertEqual(self.service.manual_state, gui.ManualState())
+        self.assertIn('Startup confirmed', self.logs())
+        serial.input.extend(b'new trial\n')
+        self.service._read_serial()
+        parser.handle.assert_called_once_with('new trial', sender)
+        sender.send('CMD NEW_RUN')
+        sock.sendto.assert_called_once()
+
+    def test_reset_timeout_does_not_claim_success_or_end_parser(self):
+        self.service.ser = Mock()
+        self.service.protocol = Mock()
+        parser = self.service.protocol
+        with patch.object(self.service.shutdown, 'wait', return_value=False), \
+             patch.object(gui.time, 'monotonic', side_effect=[0, 6]):
+            with self.assertRaisesRegex(RuntimeError, 'startup was not confirmed'):
+                self.service.do_reset_arduino('arduino:avr:mega')
+        self.assertIs(self.service.protocol, parser)
+        parser.close.assert_not_called()
+        self.assertFalse(self.service.resetting)
+        self.assertFalse(self.service.manual_ready)
+        self.assertNotIn('reset complete', self.logs())
+
+    def test_reset_validates_connection_and_board_before_changing_anything(self):
+        with self.assertRaisesRegex(RuntimeError, 'Connect'):
+            self.service.do_reset_arduino('arduino:avr:mega')
+        serial = Mock()
+        self.service.ser = serial
+        self.service.udp = Mock()
+        with self.assertRaisesRegex(ValueError, 'supports Mega'):
+            self.service.do_reset_arduino('arduino:avr:leonardo')
+        serial.reset_input_buffer.assert_not_called()
+        self.service.udp.cancel_pending.assert_not_called()
+
+    def test_reset_serial_failure_disconnects_cleanly(self):
+        serial = Mock()
+        serial.reset_input_buffer.side_effect = OSError('unplugged')
+        self.service.ser = serial
+        with patch.object(self.service.shutdown, 'wait', return_value=False):
+            with self.assertRaisesRegex(OSError, 'unplugged'):
+                self.service.do_reset_arduino('arduino:avr:mega')
+        self.assertIsNone(self.service.ser)
+        self.assertFalse(self.service.resetting)
+        serial.close.assert_called_once()
+
     def test_protocol_import_skips_main_and_redirects_legacy_timer(self):
         path = self.module('''from dataclasses import dataclass
 @dataclass

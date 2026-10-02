@@ -87,10 +87,10 @@ unknown boards can still be selected manually.
    or no line ending to match the sketch. Commands are UTF-8; whitespace is
    preserved. Successful sends clear the textbox; failed sends retain the text.
    Set the baud rate to the value in the sketch's `Serial.begin(...)`.
-5. **Optional event protocol**: select the Python parser, set the receiver IPv4
-   address and UDP port, then click Start protocol **before opening
+5. **Optional event parser**: select the Python parser, set the receiver IPv4
+   address and UDP port, then click Start parser **before opening
    `brainclamp_gui.py`**. It handles new serial lines
-   while you continue using the command box. Stop protocol keeps serial connected.
+   while you continue using the command box. End parser keeps serial connected.
    The default parser is `BrainClamp/scripts/send_event_RPE.py`, with BrainClamp
    next to the NeuroDAP repository. For example, on your Windows rig this resolves
    to `C:/Shun-local/BrainClamp/scripts/send_event_RPE.py`. The parser picker opens
@@ -102,9 +102,43 @@ experiment. Some boards change port names after upload; refresh and reconnect if
 automatic reconnection fails. This app does not send a task-start command on its
 own: use Start task or the command understood by your firmware.
 
-**Stop protocol stops local forwarding and cancels delayed/repeated packets. It
+**End parser stops local forwarding and cancels delayed/repeated packets. It
 does not undo commands already received by the other computer or stop the Arduino
 experiment.** Use the device's own stop controls when you need to stop it.
+
+## Reset Arduino while keeping the parser running
+
+**Reset Arduino** in the Session panel restarts the currently uploaded sketch
+through the USB DTR auto-reset line, without compiling, uploading, or reopening
+the serial port. It supports Mega 2560, Uno, and classic Nano boards with USB
+auto-reset enabled. Select the correct Board ID before connecting. No new firmware
+upload is needed if your sketch already reports `BEHAVIOR_CONTROLS` and
+`BEHAVIOR_STATE` on startup, as both supported DA-clamp sketches do.
+
+Like restarting after an upload, this clears Arduino RAM counters and timers,
+stops the current task, and reruns `setup()` with the **last uploaded parameter
+values**. Edits still sitting in the GUI are not applied by Reset; use either
+**Upload Arduino** button in the top panels to apply those edits.
+
+The parser module, its Python globals, and UDP connection stay alive. Pending
+UDP sends from the old run are cancelled, and startup chatter is withheld from
+the parser. Commands already received by BrainClamp are not undone. Reset only
+restarts the Arduino; it does not reset BrainClamp or the parser's own state.
+Custom parsers must allow Arduino timestamps and trial numbers to start over.
+
+Wait for **[Arduino reset complete]** in the monitor, then click **Start task**.
+There is no need to click Start parser again. During reset, controls are disabled
+until startup is confirmed or the five-second wait expires. If startup is not
+confirmed, the monitor reports an error rather than claiming success. If the USB
+connection actually drops, the normal disconnect cleanup still ends the parser.
+
+**End task** remains a stop that preserves counts; **Reset Arduino** deliberately
+clears them. A real upload still ends the parser and requires Start parser afterward.
+
+The reset uses the [Mega's USB auto-reset circuit](https://store.arduino.cc/products/arduino-mega-2560-rev3)
+and [pySerial's DTR control](https://pyserial.readthedocs.io/en/latest/pyserial_api.html).
+Native-USB boards such as Leonardo use a different reset mechanism and are not
+supported by this button.
 
 ## Manual controls and stopping
 
@@ -119,9 +153,9 @@ Other sketches still support the free-text serial monitor.
 
 The combined **Lasers** group contains blue and red open/close toggles plus one
 pattern button per color. Water calibration sits below Punishment and Tone in
-the **Reward / sound** group. The **Session** group has another **Upload Arduino**
-button and one large task toggle: green **Start task**, red **End task**. The protocol toggle
-uses the same green Start / red Stop colors. Task and laser labels follow Arduino
+the **Reward / sound** group. The **Session** group has **Reset Arduino**
+and one large task toggle: green **Start task**, red **End task**. The parser toggle
+uses green **Start parser** / red **End parser**. Task and laser labels follow Arduino
 acknowledgments, including commands sent through the textbox; rejected commands
 do not change their state. Updated firmware also reports its current task and
 manual laser state on startup and in response to the automatic connection query.
