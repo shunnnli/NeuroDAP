@@ -79,6 +79,10 @@ unsigned long PulseDurationBlue = 20; // duration of blue laser in ms
 unsigned long PulseDurationRed = 2;
 unsigned long ITIred = 10000; // duration of red laser in ms
 
+// Manual calibration parameters
+unsigned int CalibrationRepeats = 200;
+unsigned long CalibrationIntervalMs = 100;
+
 //********** Params Initializtion ***********//
 // Input output pin description //
 const byte Sync = 2; // non-periodic sync pulse
@@ -183,6 +187,18 @@ unsigned long Start = 0; //timestamp for starting the session (used for triggeri
 unsigned long Now = 0; //current timesatmp (used for triggering camera)
 unsigned long End = 0; //timestamp for ending the session
 
+// GUI manual controls use the same letter protocol as the DA-clamp sketches.
+#define BluePatternPulseMs BluePulseDuration
+#define BluePatternPeriodMs (BlueTotalPulseNum == 1 ? BluePulseDuration : (BluePulseFreq > 0 ? 1000UL / BluePulseFreq : 0UL))
+#define BluePatternPulseCount BlueTotalPulseNum
+#define RedPatternPulseMs RedPulseDuration
+#define RedPatternPeriodMs (RedTotalPulseNum == 1 ? RedPulseDuration : (RedPulseFreq > 0 ? 1000UL / RedPulseFreq : 0UL))
+#define RedPatternPulseCount RedTotalPulseNum
+int LeftCueFreq = 3000;
+#define BEHAVIOR_LEGACY_REWARD_BIG 1
+#define BEHAVIOR_LEGACY_SECOND_TONE 0
+#include "BehaviorManual.h"
+
 void setup()
 {
   Serial.begin(115200);
@@ -259,7 +275,7 @@ void setup()
     Serial.println(RedPulseFreq);
     Serial.print("Stim total duration: ");
     Serial.println(RedStimDuration);
-    
+
   }else{
     // Blue opto stim params
     BlueTotalPulseNum = StimTotalPulseNum; // number of pulses per pattern
@@ -279,38 +295,23 @@ void setup()
     Serial.print("Stim total duration: ");
     Serial.println(BlueStimDuration);
   }
+  behaviorCapabilities();
+  behaviorReportState();
 }
 
 
 void loop() {
+  behaviorReadSerial();
+  behaviorUpdateManual();
   sync(); //Non period sync pulse (1s width) generation
   lickDetection();
+  if (state == Idle) return; // Idle must not restart cancelled task outputs.
   opto();
   //randomShutterSound(ShutterBlue);
 
   switch (state) {
     //state 0: Idle state until Start button pushed
     case Idle:
-      if (SerialInput == '8') {
-        Start = millis();
-        End = 0;
-        Serial.print("TASK STARTED AT ");
-        Serial.print("\t");
-        Serial.println(millis());
-        state = 1;
-        digitalWrite(WaterSpout, LOW);
-        digitalWrite(WaterSpout2, LOW);
-        digitalWrite(Airpuff, LOW);
-        digitalWrite(WaterSpout_copy, LOW);
-        digitalWrite(WaterSpout2_copy, LOW);
-        digitalWrite(Airpuff_copy, LOW);
-        digitalWrite(ShutterBlue, HIGH);
-        digitalWrite(ShutterRed, HIGH);
-        noTone(Speaker);
-
-        OptoNum = 0;
-        SerialInput = '0';
-      }
       break;
 
     //state 1: Determine the intertrial interval
@@ -330,13 +331,13 @@ void loop() {
       if (OptoNum >= MaxStimNumber){
         state = 0;
       }
-    
+
       Cue_start = millis();
       Actual_ITI = Cue_start - ITI_firstStart;
       Current_ITI = Cue_start - ITI_start;
       trialITIMin = random(ITIMin - ITIGracePeriod, ITIMin + ITIGracePeriod);
       trialITIMax = random(ITIMax - ITIGracePeriod, ITIMax + ITIGracePeriod);
-      
+
       if (Current_ITI > ITI && Actual_ITI > trialITIMin) {
 
         trialRandomProb = random(101);
@@ -368,21 +369,21 @@ void loop() {
           Serial.print("\t");
           Serial.print("Time: ");
           Serial.println(millis() / 1000.0);
-        
+
         } else if (trialRandomProb >= ToneProbRange[0] && trialRandomProb <= ToneProbRange[1]){
           tone(Speaker, 3000);
           digitalWrite(SpeakerLeft_copy, HIGH);
-          delay(ShortToneDuration);
+          if (!behaviorWait(ShortToneDuration)) return;
           noTone(Speaker);
           digitalWrite(SpeakerLeft_copy, LOW);
           toneNum += 1;
-          
+
           Serial.print("Tone: ");
           Serial.print(toneNum);
           Serial.print("\t");
           Serial.print("Time: ");
           Serial.println(millis() / 1000.0);
-        
+
         } else if (trialRandomProb >= StimProbRange[0] && trialRandomProb <= StimProbRange[1]){
           Opto_start = millis();
           if (RedStim){giveRedOpto();}
@@ -397,16 +398,16 @@ void loop() {
         } else if (trialRandomProb >= PunishStimProbRange[0] && trialRandomProb <= PunishStimProbRange[1]){
           Opto_start = millis();
           Punish_start = millis();
-          
+
           if (RedStim){giveRedOpto();}
           else{giveBlueOpto();}
-          
+
           digitalWrite(Airpuff, HIGH);
           digitalWrite(Airpuff_copy, HIGH);
           Reward_start = 0;
           getPunish = 2;
           pairNum += 1;
-          
+
           Serial.print("Pair airpuff & stim: ");
           Serial.print(pairNum);
           Serial.print("\t");
@@ -476,124 +477,7 @@ default:
 
 
 // Ending Task //
-if (SerialInput == '9') {
-  if (End == 0) {
-    Serial.print("TASK ENDED AT ");
-    Serial.print("\t");
-    Serial.println(millis());
-    Serial.print("Total reward: ");
-    Serial.println(PositiveNum);
-    Serial.print("Total punish: ");
-    Serial.println(NegativeNum);
-    Serial.print("Total opto: ");
-    Serial.println(OptoNum);
-    state = 0;
-    noTone(Speaker);
-    End = millis();
-  }
-}
 
-if (Serial.available() > 0) {
-  // read the incoming byte:
-  SerialInput = Serial.read();
-
-  //Serial.print("I received: ");
-  //Serial.println(SerialInput);
-
-  if (SerialInput == '1' && LeftOutcomeButton == 0) { // dispense left reward
-    ManualPositiveNum += 1;
-    Serial.print("Entered 1: manual reward #");
-    Serial.println(ManualPositiveNum);
-    LeftOutcomeButton = 1;
-    digitalWrite(WaterSpout2, HIGH);
-    digitalWrite(WaterSpout2_copy, HIGH);
-    OutcomeSize = BigRewardSize;
-    LeftOutcomeTimer = millis();
-  }
-
-  if (SerialInput == '2' && RightOutcomeButton == 0) {
-    Serial.print("Entered 2: manual punishment #");
-    Serial.println(ManualNegativeNum);
-    RightOutcomeButton = 1;
-    digitalWrite(Airpuff, HIGH);
-    digitalWrite(Airpuff_copy, HIGH);
-    OutcomeSize = SmallPunishSize;
-    RightOutcomeTimer = millis();
-  }
-
-  if (SerialInput == '3') {
-    Serial.println("Entered 3: Deliver blue stim");
-//    giveBlueOpto();
-    digitalWrite(ShutterBlue,LOW);
-  }
-
-  if (SerialInput == '4') {
-    Serial.println("Entered 4: Deliver red stim");
-    //giveRedOpto();
-    digitalWrite(ShutterRed,LOW);
-  }
-
-  if (SerialInput == '5') { //blue pulsing pattern
-    Serial.println("Entered 5: deliver blue stim");
-//    giveBlueOpto();
-
-    // Do 20x 100s stim at 10s interval
-    for (int i = 0; i < 30; i++){
-      delay(10000);
-      digitalWrite(ShutterBlue,LOW);
-      delay(200);
-      digitalWrite(ShutterBlue,HIGH);
-      Serial.print("Delivered blue stim #");
-      Serial.println(i+1);
-    }
-    Serial.println("Finished blue stim");
-  }
-
-  if (SerialInput == '6') { //red pulsing pattern
-    Serial.println("Entered 6: deliver red stim");
-    giveRedOpto();
-  }
-
-  if (SerialInput == '7'){
-      Serial.println("Deliver 200 reward for calibration");
-      int num_repeat = 200;
-      for (int i = 0; i < num_repeat; i++) {
-        delay(100);
-        digitalWrite(WaterSpout2, HIGH);
-        digitalWrite(WaterSpout2_copy, HIGH);
-        delay(UnitRewardSize);
-        digitalWrite(WaterSpout2, LOW);
-        digitalWrite(WaterSpout2_copy, LOW);
-      }
-      Serial.print("Finished delivery x");
-      Serial.println(num_repeat);
-    }
-
-}
-
-//Left Button outcome
-if ((millis() - LeftOutcomeTimer > OutcomeSize) && LeftOutcomeButton == 1) {
-  digitalWrite(WaterSpout2, LOW);
-  digitalWrite(WaterSpout2_copy, LOW);
-  Serial.print("Manual reward");
-  Serial.print("\t");
-  Serial.print(LeftOutcomeTimer / 1000.0);
-  Serial.print("\t");
-  Serial.println(OutcomeSize);
-  LeftOutcomeButton = 0;
-}
-
-//Right button outcome
-if ((millis() - RightOutcomeTimer) > OutcomeSize && RightOutcomeButton == 1) {
-  digitalWrite(Airpuff, LOW);
-  digitalWrite(Airpuff_copy, LOW);
-  Serial.print("Manual punishment");
-  Serial.print("\t");
-  Serial.print(RightOutcomeTimer / 1000.0);
-  Serial.print("\t");
-  Serial.println(OutcomeSize);
-  RightOutcomeButton = 0;
-}
 }
 
 //********************************************************************************************//
@@ -825,4 +709,60 @@ void printTrials() {
     Serial.print("Time: ");
     Serial.println(millis() / 1000.0);
   }
+}
+
+void behaviorStartTask() {
+  SerialInput = '0';
+  getReward = 0;
+  getPunish = 0;
+  getFreeReward = 0;
+  RedPulseNum = 0;
+  BluePulseNum = 0;
+  RedOptoNow = 0;
+  BlueOptoNow = 0;
+  OptoNow = 0;
+  ShutterSoundNow = 0;
+  Start = millis();
+  End = 0;
+  Serial.print("TASK STARTED AT ");
+  Serial.print("\t");
+  Serial.println(millis());
+  state = 1;
+  digitalWrite(WaterSpout, LOW);
+  digitalWrite(WaterSpout2, LOW);
+  digitalWrite(Airpuff, LOW);
+  digitalWrite(WaterSpout_copy, LOW);
+  digitalWrite(WaterSpout2_copy, LOW);
+  digitalWrite(Airpuff_copy, LOW);
+  digitalWrite(ShutterBlue, HIGH);
+  digitalWrite(ShutterRed, HIGH);
+  noTone(Speaker);
+  SerialInput = '0';
+}
+
+void behaviorStopTask() {
+  behaviorStopOutputs();
+  state = Idle;
+  SerialInput = '0';
+  getReward = 0;
+  getPunish = 0;
+  getFreeReward = 0;
+  RedPulseNum = 0;
+  BluePulseNum = 0;
+  RedOptoNow = 0;
+  BlueOptoNow = 0;
+  OptoNow = 0;
+  ShutterSoundNow = 0;
+  Serial.print("TASK ENDED AT ");
+  Serial.print("\t");
+  Serial.println(millis());
+  Serial.print("Total reward: ");
+  Serial.println(PositiveNum);
+  Serial.print("Total punish: ");
+  Serial.println(NegativeNum);
+  Serial.print("Total opto: ");
+  Serial.println(OptoNum);
+  state = 0;
+  noTone(Speaker);
+  End = millis();
 }

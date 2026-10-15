@@ -411,7 +411,7 @@ class BehaviorService:
         if action not in COMMANDS:
             raise ValueError("Unknown manual action.")
         if not self.manual_ready:
-            raise RuntimeError("Upload the updated DA-clamp firmware and connect first.")
+            raise RuntimeError("Upload the compatible behavior-control firmware and connect first.")
         if action == "end_task":
             self.do_stop_protocol()  # cancel delayed local UDP work on task stop
         self.do_send(COMMANDS[action], "None")
@@ -676,7 +676,7 @@ class BehaviorGUI:
                      state="readonly", width=20).grid(row=0, column=2, padx=8)
         self.send_button = ttk.Button(serial_row, text="Send", command=self.send)
         self.send_button.grid(row=0, column=3)
-        self.manual_status = tk.StringVar(value="Connect and upload updated DA-clamp firmware to enable buttons.")
+        self.manual_status = tk.StringVar(value="Connect and upload compatible behavior-control firmware to enable buttons.")
         ttk.Label(command_row, textvariable=self.manual_status, style="Hint.TLabel").grid(
             row=2, column=0, columnspan=3, sticky="w", pady=(5, 0))
 
@@ -879,7 +879,7 @@ class BehaviorGUI:
             elif kind == "manual":
                 self.manual_ready = value
                 self.manual_status.set("Manual controls ready. End task stops outputs and local UDP forwarding; counts are preserved."
-                                       if value else "Buttons require updated DA-clamp firmware. Upload and connect to enable controls.")
+                                       if value else "Buttons require compatible behavior-control firmware. Upload and connect to enable controls.")
                 self.update_controls()
             elif kind == "manual_state":
                 self.manual_state = ManualState(**value)

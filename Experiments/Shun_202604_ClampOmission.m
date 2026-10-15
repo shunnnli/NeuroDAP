@@ -262,6 +262,9 @@ for i = 1:length(summary)
         summary(i).name = 'NAc-clamp';
     elseif any(strcmpi(cur_animal, ["SL431", "SL433"])) && strcmpi(cur_name, "NAc-ctrl")
         summary(i).name = 'NAc-unclamp';
+
+    elseif any(strcmpi(cur_animal, ["SL478","SL479","SL480","SL481"])) && strcmpi(cur_name, "NAc-LS")
+        summary(i).name = 'NAc-clamp';
     end
 end
 
@@ -279,6 +282,10 @@ for i = 1:size(animals,2)
     animals(i).stageAmp = struct('data', getAmplitude(stageMax, stageMin));
 end
 
+%% (Optional) combine old animals struct with new ones
+
+animals = [animals, animals_newbatch];
+
 %% Save animals struct
 
 prompt = 'Enter database notes (animals_20230326_notes.mat):';
@@ -288,14 +295,14 @@ today = char(datetime('today','Format','yyyyMMdd'));
 filename = strcat('animals_',today,'_',answer{1});
 
 % Save animals.mat
-if ~isempty(answer)
+if ~isempty(answer)old
     disp(['Ongoing: saving animals.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
     save(strcat(resultspath,filesep,filename),'animals','trialTables','sessionList','-v7.3');
     disp(['Finished: saved animals.mat (',char(datetime('now','Format','HH:mm:ss')),')']);
 end
 
 %% *********************** Learning stage code ***********************
-clampAnimals = {'SL431','SL433','M431'}; % 'SL431','SL432','SL433',
+clampAnimals = {'SL431','SL433','M431','SL478','SL479','SL480','SL481'}; % 'SL431','SL432','SL433',
 ctrlAnimals = {};
 
 if isempty(ctrlAnimals)
@@ -324,6 +331,7 @@ sessionColormap_clamped = [
 sessionColormap_unclamped = getColormap(unclampColor*255,clampColor_withRPE*255,nSessions,'midCol',clampColor*255);
 
 %% Plot DA trace aligned to Tone during omission
+% compare NAc response in clamped vs unclmaped animals
 
 timeRange = [-0.5,3];
 signalRange = {'NAc-clamp','NAc-right'};
@@ -367,40 +375,59 @@ timeRange = [-0.5,3];
 totalTrialRange = 'All';
 trialRange = 'All';
 
-initializeFig(.3,.5); tiledlayout('flow');
+initializeFig(.6,.5); tiledlayout('flow');
+
+% Red clamp command
 nexttile;
-combined = combineTraces(animals,timeRange=timeRange,...
+combinedRed = combineTraces(animals,timeRange=timeRange,...
                             eventRange='Tone (clamp omission)',...
                             taskRange='Reward-Clamp-Omission',...
                             animalRange=animalRange{1},...
                             totalTrialRange=totalTrialRange,...
                             trialRange=trialRange,...
                             signalRange='redClamp');
-legendList = plotGroupTraces(combined.data{1},combined.timestamp,sessionColormap_clamped,...
-                groupby='session',startIdx=combined.options.startIdx);
+legendList = plotGroupTraces(combinedRed.data{1},combinedRed.timestamp,sessionColormap_clamped,...
+                groupby='session',startIdx=combinedRed.options.startIdx);
 
 title('Red clamp command');
 xlabel('Time (s)'); ylabel('clamp command (%)'); %ylim([0,Inf]);
 plotEvent('Tone',.5,color=toneColor);
 legend(legendList,'Location','northeast');
 
-% nexttile;
-% combined = combineTraces(animals,timeRange=timeRange,...
-%                             eventRange='Tone (clamp omission)',...
-%                             taskRange='Reward-Clamp-Omission',...
-%                             animalRange=animalRange{1},...
-%                             totalTrialRange=totalTrialRange,...
-%                             trialRange=trialRange,...
-%                             signalRange='blueClamp');
-% legendList = plotGroupTraces(combined.data{1},combined.timestamp,sessionColormap_clamped,...
-%                 groupby='session',startIdx=combined.options.startIdx);
-% 
-% title('Blue clamp command');
-% xlabel('Time (s)'); ylabel('clamp command (%)'); %ylim([0,Inf]);
-% plotEvent('Tone',.5,color=toneColor);
-% legend(legendList,'Location','northeast');
+% Blue clamp command
+nexttile;
+combinedBlue = combineTraces(animals,timeRange=timeRange,...
+                            eventRange='Tone (clamp omission)',...
+                            taskRange='Reward-Clamp-Omission',...
+                            animalRange=animalRange{1},...
+                            totalTrialRange=totalTrialRange,...
+                            trialRange=trialRange,...
+                            signalRange='blueClamp');
+legendList = plotGroupTraces(combinedBlue.data{1},combinedBlue.timestamp,sessionColormap_clamped,...
+                groupby='session',startIdx=combinedBlue.options.startIdx);
 
-% saveFigures(gcf,['Summary_licking_',taskRange{task}],...
+title('Blue clamp command');
+xlabel('Time (s)'); ylabel('clamp command (%)'); %ylim([0,Inf]);
+plotEvent('Tone',.5,color=toneColor);
+legend(legendList,'Location','northeast');
+
+% Clamp index (red - blue, baseline subtracted)
+nexttile;
+if isequal(size(combinedRed.data{1}),size(combinedBlue.data{1}))
+    clamp_index = getClampIdx(combinedBlue.data{1},combinedRed.data{1},...
+                              type='diff',timestamp=combinedBlue.timestamp);
+    legendList = plotGroupTraces(clamp_index,combinedBlue.timestamp,sessionColormap_clamped,...
+                    groupby='session',startIdx=combinedBlue.options.startIdx);
+    legend(legendList,'Location','northeast');
+else
+    warning('redClamp and blueClamp traces are not matched; skipping clamp index.');
+end
+
+title('Clamp index (red - blue)');
+xlabel('Time (s)'); ylabel('clamp index (%)');
+plotEvent('Tone',.5,color=toneColor);
+
+% saveFigures(gcf,'Summary_clampCommand_Reward-Clamp-Omission',...
 %     strcat(resultspath),...
 %     saveFIG=true,savePDF=true);
 

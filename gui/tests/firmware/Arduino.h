@@ -10,12 +10,15 @@ using boolean = bool;
 const int LOW=0, HIGH=1, OUTPUT=1, INPUT=0;
 unsigned long fakeTime=100;
 int pins[64]={};
+int inputOverrides[64];
+struct InputDefaults { InputDefaults() { for (int &value : inputOverrides) value=-1; } } inputDefaults;
+const double PI=3.14159265358979323846;
 bool toneOn=false;
 unsigned long millis() { return fakeTime; }
 void delay(unsigned long value) { fakeTime += value; }
 void pinMode(byte, int) {}
 void digitalWrite(byte pin, int value) { pins[pin]=value; }
-int digitalRead(byte pin) { return (pin==22 || pin==24) ? pins[pin] : HIGH; }
+int digitalRead(byte pin) { return inputOverrides[pin] >= 0 ? inputOverrides[pin] : ((pin==22 || pin==24) ? pins[pin] : HIGH); }
 int analogRead(byte) { return 1; }
 void randomSeed(unsigned long) {}
 long random(long value) { return value > 0 ? value/2 : 0; }

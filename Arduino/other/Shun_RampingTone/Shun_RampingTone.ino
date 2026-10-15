@@ -110,6 +110,10 @@ unsigned long PulseDurationBlue = 20; // duration of blue laser in ms
 unsigned long PulseDurationRed = 2;
 unsigned long ITIred = 10000; // duration of red laser in ms
 
+// Manual calibration parameters
+unsigned int CalibrationRepeats = 200;
+unsigned long CalibrationIntervalMs = 100;
+
 //********** Params Initializtion ***********//
 // Outcome related params
 int trialRewardProb = 0;
@@ -236,6 +240,21 @@ int trialReward = getReward;
 int trialPunish = getPunish;
 int trialFreeReward = getFreeReward;
 
+// GUI manual controls use the same letter protocol as the DA-clamp sketches.
+#define BluePatternPulseMs BluePulseDuration
+#define BluePatternPeriodMs (BlueTotalPulseNum == 1 ? BluePulseDuration : (BluePulseFreq > 0 ? 1000UL / BluePulseFreq : 0UL))
+#define BluePatternPulseCount BlueTotalPulseNum
+#define RedPatternPulseMs RedPulseDuration
+#define RedPatternPeriodMs (RedTotalPulseNum == 1 ? RedPulseDuration : (RedPulseFreq > 0 ? 1000UL / RedPulseFreq : 0UL))
+#define RedPatternPulseCount RedTotalPulseNum
+#define LeftCueFreq StartCueFreq
+int ManualPositiveNum = 0;
+int ManualNegativeNum = 0;
+#define BEHAVIOR_LEGACY_REWARD_BIG 0
+#define BEHAVIOR_LEGACY_SECOND_TONE 0
+#define BEHAVIOR_TASK_VALID (RedStim || paAIP2MaxTrial <= 0)
+#include "BehaviorManual.h"
+
 void setup()
 {
   Serial.begin(115200);
@@ -306,7 +325,7 @@ void setup()
     Serial.println(RedPulseFreq);
     Serial.print("Stim total duration: ");
     Serial.println(RedStimDuration);
-    
+
   }else{
     // Blue opto stim params
     BlueTotalPulseNum = StimTotalPulseNum; // number of pulses per pattern
@@ -326,19 +345,24 @@ void setup()
     Serial.print("Stim total duration: ");
     Serial.println(BlueStimDuration);
   }
+  behaviorCapabilities();
+  behaviorReportState();
 }
 
 
 void loop() {
+  behaviorReadSerial();
+  behaviorUpdateManual();
   sync(); //Non period sync pulse (1s width) generation
   lickDetection();
+  if (state == Idle) return; // Idle must not restart cancelled task outputs.
   opto();
   //randomShutterSound(ShutterBlue);
 
   // Check: if using blue to stim, no paAIP2 stim anymore
   if (!RedStim && paAIP2MaxTrial > 0){
     Serial.println("ERROR: should not use blue for stimulation if paAIP2 is on!");
-    delay(1000000000000000);
+    return;
   }
 
   // Give blue stim for paAIP2 before paAIP2MaxTrial
@@ -350,14 +374,6 @@ void loop() {
   switch (state) {
     //state 0: Idle state until Start button pushed
     case Idle:
-      if (SerialInput == '8') {
-        Start = millis();
-        End = 0;
-        Serial.print("TASK STARTED AT ");
-        Serial.print("\t");
-        Serial.println(millis());
-        state = 1;
-      }
       break;
 
     //state 1: Determine the intertrial interval
@@ -441,30 +457,33 @@ void loop() {
     case SecondCueOn:
       if (trialSecondCue && millis() - Cue_start >= ToneDelayTime) {
         Cue_start = millis();
-        
+
         if (ToneType == 1){
           tone(Speaker, StartCueFreq);
-          delay(500);
+          if (!behaviorWait(500)) return;
           digitalWrite(SpeakerLeft_copy, HIGH);
           digitalWrite(SpeakerRight_copy, LOW);
           //ToneDuration = random(3000, 10001);
           ToneDuration = random(2) == 0 ? 4000 : 8000;
           playRampTone(ToneDuration,StartCueFreq,EndCueFreq);
+          if (state == Idle) return;
         } else if (ToneType == 2){
           tone(Speaker, StartCueFreq);
-          delay(500);
+          if (!behaviorWait(500)) return;
           digitalWrite(SpeakerLeft_copy, LOW);
           digitalWrite(SpeakerRight_copy, HIGH);
           //ToneDuration = random(3000, 10001);
           ToneDuration = random(2) == 0 ? 4000 : 8000;
           playJumpTone(ToneDuration,StartCueFreq,EndCueFreq-2000,EndCueFreq);
+          if (state == Idle) return;
         } else if (ToneType == 3){
           tone(Speaker, StartCueFreq);
-          delay(500);
+          if (!behaviorWait(500)) return;
           digitalWrite(SpeakerLeft_copy, HIGH);
           digitalWrite(SpeakerRight_copy, HIGH);
           ToneDuration = 4000;
           playSineWave(ToneDuration, 6000, 3000, 0.5);
+          if (state == Idle) return;
         }
         state = 4;
       } else if (!trialSecondCue && millis() - Cue_start >= ToneDelayTime) {
@@ -618,149 +637,6 @@ void loop() {
   // END OF SWITCH STRCUTURE //
 
 
-  // Ending Task //
-  if (SerialInput == '9') {
-    if (End == 0) {
-      Serial.print("TASK ENDED AT ");
-      Serial.print("\t");
-      Serial.println(millis() / 1000.0);
-      Serial.print("Total reward: ");
-      Serial.println(PositiveNum);
-      Serial.print("Total punishment: ");
-      Serial.println(NegativeNum);
-      Serial.print("Total stim only trials: ");
-      Serial.println(JumpingToneNum);
-      Serial.print("Total tone only trials: ");
-      Serial.println(DippingToneNum);
-      Serial.print("Total stim&tone trials: ");
-      Serial.println(RampingToneNum);
-      Serial.print("Go: ");
-      Serial.println(GoNum);
-      Serial.print("NoGoNum: ");
-      Serial.println(NoGoNum);
-      Serial.print("Hit: ");
-      Serial.println(Hit);
-      Serial.print("Miss: ");
-      Serial.println(Miss);
-      Serial.print("FalseAlarm: ");
-      Serial.println(FalseAlarm);
-      Serial.print("CorrectReject: ");
-      Serial.println(CorrectReject);
-      state = 0;
-      noTone(Speaker);
-      End = millis();
-    }
-  }
-
-  if (Serial.available() > 0) {
-    // read the incoming byte:
-    SerialInput = Serial.read();
-
-    //Serial.print("I received: ");
-    //Serial.println(SerialInput);
-
-    if (SerialInput == '1' && LeftOutcomeButton == 0) { // dispense left reward
-      Serial.println("Entered 1: reward");
-      //tone(Speaker, LeftCueFreq);
-      //digitalWrite(SpeakerLeft_copy, HIGH);
-      //delay(500);
-      //noTone(Speaker);
-      //digitalWrite(SpeakerLeft_copy, LOW);
-      //if (pavlovian) {
-      //  delay(DelayTime);
-      //}
-      LeftOutcomeButton = 1;
-      digitalWrite(WaterSpout2, HIGH);
-      digitalWrite(WaterSpout2_copy, HIGH);
-      OutcomeSize = SmallRewardSize;
-      LeftOutcomeTimer = millis();
-    }
-
-    if (SerialInput == '2' && RightOutcomeButton == 0) {
-      Serial.println("Entered 2: punishment");
-      //tone(Speaker, RightCueFreq);
-      //digitalWrite(SpeakerRight_copy, HIGH);
-      //delay(ToneDuration);
-      //noTone(Speaker);
-      //digitalWrite(SpeakerRight_copy, LOW);
-      //delay(DelayTime);
-      RightOutcomeButton = 1;
-      digitalWrite(Airpuff, HIGH);
-      digitalWrite(Airpuff_copy, HIGH);
-      OutcomeSize = SmallPunishSize;
-      RightOutcomeTimer = millis();
-    }
-
-    if (SerialInput == '3') {
-      Serial.println("Entered 3: Deliver blue stim");
-      //giveBlueOpto();
-      digitalWrite(ShutterBlue, LOW);
-    }
-
-    if (SerialInput == '4') {
-      Serial.println("Entered 4: Deliver red stim");
-      //      giveRedOpto();
-      digitalWrite(ShutterRed, LOW);
-    }
-
-    if (SerialInput == '5') { //blue opto pattern
-      Serial.println("Entered 5: blue pulsing");
-      giveBlueOpto();
-      //      for (int i = 0; i < 50; i++) {
-      //        digitalWrite(ShutterBlue, HIGH);
-      //        delay(PulseDurationBlue);
-      //        digitalWrite(ShutterBlue, LOW);
-      //        delay(ITIblue - PulseDurationBlue);
-      //      }
-      Serial.println("5: blue pulsing finished");
-    }
-
-    if (SerialInput == '6') { //blue pulsing pattern
-      Serial.println("Entered 6: red opto");
-      giveRedOpto();
-      Serial.println("6: red opto finished");
-    }
-
-    if (SerialInput == '7') {
-      Serial.println("Deliver 200 reward for calibration");
-      int num_repeat = 200;
-      for (int i = 0; i < num_repeat; i++) {
-        delay(100);
-        digitalWrite(WaterSpout2, HIGH);
-        digitalWrite(WaterSpout2_copy, HIGH);
-        delay(UnitRewardSize);
-        digitalWrite(WaterSpout2, LOW);
-        digitalWrite(WaterSpout2_copy, LOW);
-      }
-      Serial.print("Finished delivery x");
-      Serial.println(num_repeat);
-    }
-
-  }
-
-  //Left Button outcome
-  if ((millis() - LeftOutcomeTimer > OutcomeSize) && LeftOutcomeButton == 1) {
-    digitalWrite(WaterSpout2, LOW);
-    digitalWrite(WaterSpout2_copy, LOW);
-    Serial.print("Manual reward");
-    Serial.print("\t");
-    Serial.print(LeftOutcomeTimer);
-    Serial.print("\t");
-    Serial.println(OutcomeSize);
-    LeftOutcomeButton = 0;
-  }
-
-  //Right button outcome
-  if ((millis() - RightOutcomeTimer) > OutcomeSize && RightOutcomeButton == 1) {
-    digitalWrite(Airpuff, LOW);
-    digitalWrite(Airpuff_copy, LOW);
-    Serial.print("Manual punishment");
-    Serial.print("\t");
-    Serial.print(RightOutcomeTimer);
-    Serial.print("\t");
-    Serial.println(OutcomeSize);
-    RightOutcomeButton = 0;
-  }
 }
 
 
@@ -795,7 +671,7 @@ void playRampTone(unsigned long duration, int startFreq, int endFreq) {
     float t = (stepDelay * i) / 1000.0;
     int freq = startFreq + (int)(a * t * t);
     tone(Speaker, freq);
-    delay(stepDelay);
+    if (!behaviorWait(stepDelay)) return;
   }
   noTone(Speaker);
 }
@@ -823,9 +699,10 @@ void playJumpTone(unsigned long duration, int baseFreq, int jumpFreq, int endFre
                 : 0.0;
     int freq = baseFreq + (int)(bumpAmp * env);
     tone(Speaker, freq);
-    delay(stepDelay);
+    if (!behaviorWait(stepDelay)) return;
   }
   playRampTone(1000, baseFreq, endFreq);
+  if (state == Idle) return;
   noTone(Speaker);
 }
 
@@ -843,9 +720,10 @@ void playSineWave(unsigned long duration, int centerFreq, int amp, float modHz) 
     float phase = 2.0 * PI * modHz * t - PI / 2.0;  // shifted to start at -1
     int freq = centerFreq + (int)(amp * sin(phase));
     tone(Speaker, freq);
-    delay(stepDelay);
+    if (!behaviorWait(stepDelay)) return;
   }
   playRampTone(1000,3000,12000);
+  if (state == Idle) return;
   noTone(Speaker);
 }
 
@@ -869,16 +747,19 @@ void playFluctTone() {
   int lastFreq = 3000;
   int currentFreq;
   playRampTone(500, lastFreq, 5000);
+  if (state == Idle) return;
 
   // Random fluctuations every 50 ms
-  while (millis() - startTime < fluctDuration) {
+  while (state != Idle && millis() - startTime < fluctDuration) {
     currentFreq = random(3000, 11001);
     playRampTone(500, lastFreq, currentFreq);
+    if (state == Idle) return;
     lastFreq = currentFreq;
   }
 
   // Ramp from last random frequency to 12 kHz over rampDuration
   playRampTone(rampDuration, lastFreq, 12000);
+  if (state == Idle) return;
 }
 
 
@@ -1134,4 +1015,63 @@ void printTrials(int state, int trialReward, int trialPunish) {
     Serial.print("Time: ");
     Serial.println(millis() / 1000.0);
   }
+}
+void behaviorStartTask() {
+  SerialInput = '0';
+  getReward = 0;
+  getPunish = 0;
+  getFreeReward = 0;
+  RedPulseNum = 0;
+  BluePulseNum = 0;
+  RedOptoNow = 0;
+  BlueOptoNow = 0;
+  ShutterSoundNow = 0;
+  Start = millis();
+  End = 0;
+  Serial.print("TASK STARTED AT ");
+  Serial.print("\t");
+  Serial.println(millis());
+  state = 1;
+}
+
+void behaviorStopTask() {
+  behaviorStopOutputs();
+  state = Idle;
+  SerialInput = '0';
+  getReward = 0;
+  getPunish = 0;
+  getFreeReward = 0;
+  RedPulseNum = 0;
+  BluePulseNum = 0;
+  RedOptoNow = 0;
+  BlueOptoNow = 0;
+  ShutterSoundNow = 0;
+  Serial.print("TASK ENDED AT ");
+  Serial.print("\t");
+  Serial.println(millis() / 1000.0);
+  Serial.print("Total reward: ");
+  Serial.println(PositiveNum);
+  Serial.print("Total punishment: ");
+  Serial.println(NegativeNum);
+  Serial.print("Total stim only trials: ");
+  Serial.println(JumpingToneNum);
+  Serial.print("Total tone only trials: ");
+  Serial.println(DippingToneNum);
+  Serial.print("Total stim&tone trials: ");
+  Serial.println(RampingToneNum);
+  Serial.print("Go: ");
+  Serial.println(GoNum);
+  Serial.print("NoGoNum: ");
+  Serial.println(NoGoNum);
+  Serial.print("Hit: ");
+  Serial.println(Hit);
+  Serial.print("Miss: ");
+  Serial.println(Miss);
+  Serial.print("FalseAlarm: ");
+  Serial.println(FalseAlarm);
+  Serial.print("CorrectReject: ");
+  Serial.println(CorrectReject);
+  state = 0;
+  noTone(Speaker);
+  End = millis();
 }

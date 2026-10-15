@@ -104,6 +104,26 @@ unsigned long Start = 0; //timestamp for starting the session (used for triggeri
 unsigned long Now = 0; //current timesatmp (used for triggering camera)
 unsigned long End = 0; //timestamp for ending the session
 
+// GUI manual controls use the same letter protocol as the DA-clamp sketches.
+unsigned int CalibrationRepeats = 200;
+unsigned long CalibrationIntervalMs = 100;
+unsigned long UnitRewardSize = 8; // calibration valve opening in ms
+int LeftCueFreq = 3000;
+unsigned long ShortToneDuration = 500;
+#define BluePatternPulseMs PulseDuration
+#define BluePatternPeriodMs (PulseFreqRange[0] > 0 ? 1000UL / PulseFreqRange[0] : 0UL)
+#define BluePatternPulseCount (StimDuration * PulseFreqRange[0] / 1000UL)
+#define RedPatternPulseMs PulseDuration
+#define RedPatternPeriodMs (PulseFreqRange[0] > 0 ? 1000UL / PulseFreqRange[0] : 0UL)
+#define RedPatternPulseCount (StimDuration * PulseFreqRange[0] / 1000UL)
+int ManualPositiveNum = 0;
+int ManualNegativeNum = 0;
+#define BEHAVIOR_LEGACY_REWARD_BIG 1
+#define BEHAVIOR_LEGACY_SECOND_TONE 0
+#define BEHAVIOR_SHUTTER_OPEN HIGH
+#define BEHAVIOR_SHUTTER_CLOSED LOW
+#include "BehaviorManual.h"
+
 void setup() { //Setup function called when sketch starts. The setup function is used to initialize variables, pin modes, etc.
 
   Serial.begin(115200); //Set the data rate in bits per second. 115200 is default
@@ -146,37 +166,27 @@ void setup() { //Setup function called when sketch starts. The setup function is
 
   Serial.println("-----------------------------------------------------------------");
   Serial.println("Manual check: 1 -> reward; 2 -> punishment; 3 -> blue; 4 -> red");
-  Serial.println("Laser shutter: 5 -> red stim; 6 -> blue stim");
+  Serial.println("Laser shutter: 5 -> blue stim; 6 -> red stim");
   Serial.println("Trial start/stop: 8 -> start; 9 -> end");
   Serial.println("-----------------------------------------------------------------");
+  behaviorCapabilities();
+  behaviorReportState();
 }
 
 
 void loop() {
+  behaviorReadSerial();
+  behaviorUpdateManual();
   sync(); //Non period sync pulse (1s width) generation
   lickDetection();
+  if (state == Idle) return; // Idle must not restart cancelled task outputs.
   opto();
   //randomShutterSound(ShutterBlue);
 
   switch (state) {
     //state 0: Idle state until Start button pushed
     case Idle: //Recall Idle = 0 so we begin in our first state here
-      if (SerialInput == '8') {
-        Start = millis();
-        End = 0;
-        Serial.print("TASK STARTED AT ");
-        Serial.print("\t");
-        Serial.println(millis());
-        digitalWrite(WaterSpout, LOW);
-        digitalWrite(WaterSpout2, LOW);
-        digitalWrite(Airpuff, LOW);
-        digitalWrite(WaterSpout_copy, LOW);
-        digitalWrite(WaterSpout2_copy, LOW);
-        digitalWrite(Airpuff_copy, LOW);
-        noTone(Speaker);
-        digitalWrite(ShutterBlue, HIGH);
-        state = 1;
-      }
+
       break;
 
     //state 1: Determine the intertrial interval
@@ -196,7 +206,7 @@ void loop() {
 
     //state 2: Determine the intertrial interval
     case OptoSweeps:
-      
+
       if (millis()-ITI_start > ITI){
         if (CurrentRepeat == RepeatPerPattern){
           CurrentPattern += 1;
@@ -213,7 +223,7 @@ void loop() {
           Serial.print(" opto sweep at ");
           Serial.print(PulseFreq);
           Serial.println("Hz");
-          
+
           state = 1;
         }
 
@@ -222,7 +232,7 @@ void loop() {
           state = 1;
         }
       }
-      
+
       break;
 
     // state 3: interval between each sweep pattern
@@ -237,112 +247,6 @@ void loop() {
   // END OF SWITCH STRCUTURE //
 
 
-  // Ending Task //
-  if (SerialInput == '9') {
-    if (End == 0) {
-      Serial.print("TASK ENDED AT ");
-      Serial.print("\t");
-      Serial.println(millis());
-      state = 0;
-      noTone(Speaker);
-      End = millis();
-    }
-  }
-
-  if (Serial.available() > 0) {
-    // read the incoming byte:
-    SerialInput = Serial.read();
-
-    //Serial.print("I received: ");
-    //Serial.println(SerialInput);
-
-    if (SerialInput == '1' && LeftOutcomeButton == 0) { // dispense left reward
-      Serial.println("Entered 1: reward");
-      LeftOutcomeButton = 1;
-      digitalWrite(WaterSpout2, HIGH);
-      digitalWrite(WaterSpout2_copy, HIGH);
-      OutcomeSize = BigRewardSize;
-      LeftOutcomeTimer = millis();
-    }
-
-    if (SerialInput == '2' && RightOutcomeButton == 0) {
-      Serial.println("Entered 2: punishment");
-      RightOutcomeButton = 1;
-      digitalWrite(Airpuff, HIGH);
-      digitalWrite(Airpuff_copy, HIGH);
-      OutcomeSize = SmallPunishSize;
-      RightOutcomeTimer = millis();
-    }
-
-    if (SerialInput == '3') {
-      digitalWrite(ShutterBlue, HIGH);
-      //delay(2000);
-      //digitalWrite(ShutterBlue, LOW);
-    }
-
-    if (SerialInput == '4') {
-      digitalWrite(ShutterRed, HIGH);
-      //delay(2000);
-      //digitalWrite(ShutterRed, LOW);
-    }
-
-    // if (SerialInput == '5') { //red pulsing pattern
-    //   Serial.println("Entered 5: red pulsing");
-    //   for (int i = 0; i < 20; i++) { //For loop runs 20 times
-    //     Serial.print("Red stim #");
-    //     Serial.println(i + 1); //Print red laser stimulus number
-    //     for (int j = 0; j < 5; j++) { //For loop runs 5 times
-    //       digitalWrite(ShutterRed, HIGH); //Red shutter opens
-    //       delay(PulseDurationRed); //Shutter remains open for a delay of 2ms
-    //       //delay(4);
-    //       digitalWrite(ShutterRed, LOW); //Red shutter closes
-    //       delay(50 - PulseDurationRed); //48ms delay
-    //       //delay(46);
-    //     }
-    //     delay(9500);
-    //     //delay(19000); // for j == 20, 20Hz
-    //     //delay(18000); // for j == 40, 20Hz
-    //     //delay(18000); // for j == 40, 20Hz
-    //   }
-    //   Serial.println("5: red pulsing finished");
-    // }
-
-    // if (SerialInput == '6') { //blue pulsing pattern
-    //   Serial.println("Entered 6: blue pulsing");
-    //   for (int i = 0; i < 50; i++) {
-    //     digitalWrite(ShutterBlue, HIGH);
-    //     delay(PulseDurationBlue);
-    //     digitalWrite(ShutterBlue, LOW);
-    //     delay(ITIblue - PulseDurationBlue);
-    //   }
-    //   Serial.println("6: blue pulsing finished");
-    // }
-
-  }
-
-  //Left Button outcome
-  if ((millis() - LeftOutcomeTimer > OutcomeSize) && LeftOutcomeButton == 1) {
-    digitalWrite(WaterSpout2, LOW);
-    digitalWrite(WaterSpout2_copy, LOW);
-    Serial.print("Manual reward");
-    Serial.print("\t");
-    Serial.print(LeftOutcomeTimer);
-    Serial.print("\t");
-    Serial.println(OutcomeSize);
-    LeftOutcomeButton = 0;
-  }
-
-  //Right button outcome
-  if ((millis() - RightOutcomeTimer) > OutcomeSize && RightOutcomeButton == 1) {
-    digitalWrite(Airpuff, LOW);
-    digitalWrite(Airpuff_copy, LOW);
-    Serial.print("Manual punishment");
-    Serial.print("\t");
-    Serial.print(RightOutcomeTimer);
-    Serial.print("\t");
-    Serial.println(OutcomeSize);
-    RightOutcomeButton = 0;
-  }
 }
 
 //********************************************************************************************//
@@ -439,5 +343,43 @@ void lickDetection() {
 
 //********************************************************************************************//
 void printTrials() {
-  
+
+}
+
+void behaviorStartTask() {
+  SerialInput = '0';
+  OptoNow = 0;
+  PulseNum = 0;
+  ShutterSoundNow = 0;
+  OptoDelivering = false;
+  Start = millis();
+  End = 0;
+  Serial.print("TASK STARTED AT ");
+  Serial.print("\t");
+  Serial.println(millis());
+  digitalWrite(WaterSpout, LOW);
+  digitalWrite(WaterSpout2, LOW);
+  digitalWrite(Airpuff, LOW);
+  digitalWrite(WaterSpout_copy, LOW);
+  digitalWrite(WaterSpout2_copy, LOW);
+  digitalWrite(Airpuff_copy, LOW);
+  noTone(Speaker);
+  digitalWrite(ShutterBlue, BEHAVIOR_SHUTTER_CLOSED);
+  state = 1;
+}
+
+void behaviorStopTask() {
+  behaviorStopOutputs();
+  state = Idle;
+  SerialInput = '0';
+  OptoNow = 0;
+  PulseNum = 0;
+  ShutterSoundNow = 0;
+  OptoDelivering = false;
+  Serial.print("TASK ENDED AT ");
+  Serial.print("\t");
+  Serial.println(millis());
+  state = 0;
+  noTone(Speaker);
+  End = millis();
 }

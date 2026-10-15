@@ -123,3 +123,49 @@ class FirmwareTests(unittest.TestCase):
                 ran = subprocess.run([str(executable)], capture_output=True, text=True, timeout=10)
                 self.assertEqual(ran.returncode, 0, ran.stderr)
         self.assertEqual(headers[0], headers[1], 'The two standalone manual-control headers must match')
+
+
+@unittest.skipUnless(shutil.which('clang++') or shutil.which('g++'), 'C++ compiler unavailable')
+class CompatibleFirmwareTests(unittest.TestCase):
+    def test_every_sketch_supports_gui_protocol_and_stoppable_outputs(self):
+        compiler = shutil.which('clang++') or shutil.which('g++')
+        flags = []
+        if sys.platform == 'darwin':
+            sdk = subprocess.check_output(['xcrun', '--show-sdk-path'], text=True).strip()
+            flags = ['-isysroot', sdk, '-isystem', str(Path(sdk) / 'usr/include/c++/v1')]
+        harness = Path(__file__).parent / 'firmware'
+        expected_header = (ROOT / 'Arduino/Shun_DAClamp_Random/BehaviorManual.h').read_bytes()
+        sketches = sorted(p for p in (ROOT / 'Arduino').rglob('*.ino') if not p.name.startswith('._'))
+        self.assertEqual(len(sketches), 13)
+        for sketch in sketches:
+            with self.subTest(sketch=str(sketch.relative_to(ROOT))), tempfile.TemporaryDirectory() as temp:
+                self.assertEqual((sketch.parent / 'BehaviorManual.h').read_bytes(), expected_header)
+                self.assertEqual(sketch.stem, sketch.parent.name)
+                contents = sketch.read_text()
+                declarations = re.findall(r'\b(void|bool)\s+(\w+)\(([^)]*)\)\s*\{', contents)
+                source = '#include "Arduino.h"\n'
+                source += '\n'.join(f'{kind} {func}({args});' for kind, func, args in declarations)
+                source += f'\n#include "{sketch.as_posix()}"\n'
+                count_names = ('TrialNum', 'PositiveNum', 'NegativeNum', 'ManualPositiveNum', 'ManualNegativeNum',
+                               'LeftCueNum', 'RightCueNum', 'LickCount', 'Hit', 'Miss', 'FalseAlarm',
+                               'CorrectReject', 'GoNum', 'NoGoNum', 'OptoNum', 'toneNum', 'StimOnlyNum',
+                               'ToneOnlyNum', 'StimToneNum', 'pairNum')
+                counts = [name for name in count_names if re.search(r'(?m)^int ' + name + r'\b', contents)]
+                source += '#define BEHAVIOR_TEST_COUNTS {' + ','.join('&' + name for name in counts) + '}\n'
+                if 'RampingTone' in sketch.name:
+                    source += '#define CHECK_RAMP\n'
+                if 'RTPP' in sketch.name:
+                    source += '#define CHECK_BONSAI\n'
+                elif 'Manual_Check' in sketch.name:
+                    source += '#define CHECK_CALIBRATION_BOX\n'
+                elif 'DAClamp' not in sketch.name:
+                    source += '#define CHECK_LEGACY_BEHAVIOR\n'
+                source += f'#include "{(harness / "compatible_controls_checks.cpp").resolve().as_posix()}"\n'
+                path = Path(temp) / 'check.cpp'
+                path.write_text(source)
+                executable = Path(temp) / 'check'
+                built = subprocess.run([compiler, '-std=c++11', *flags, '-I', str(harness), str(path), '-o', str(executable)],
+                                       capture_output=True, text=True, timeout=60)
+                self.assertEqual(built.returncode, 0, built.stderr)
+                ran = subprocess.run([str(executable)], capture_output=True, text=True, timeout=10)
+                self.assertEqual(ran.returncode, 0, ran.stderr)

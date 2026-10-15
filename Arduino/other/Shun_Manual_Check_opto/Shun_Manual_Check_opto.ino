@@ -32,6 +32,39 @@ int NoGoCueFreq = 3000;
 
 char SerialInput = '0'; //for incoming serial data
 
+// GUI manual-control settings. This hardware-check sketch has no airpuff or task.
+#define Idle 0
+static int state = Idle;
+unsigned long UnitRewardSize = 25;
+unsigned long SmallRewardSize = 10;
+unsigned long BigRewardSize = 25;
+unsigned long ShortToneDuration = 500;
+#define LeftCueFreq GoCueFreq
+#define CalibrationRepeats num_repeat
+unsigned long CalibrationIntervalMs = 100;
+unsigned long BluePatternPulseMs = 5;
+unsigned long BluePatternPeriodMs = 50;
+unsigned int BluePatternPulseCount = 25;
+unsigned long RedPatternPulseMs = 5;
+unsigned long RedPatternPeriodMs = 50;
+unsigned int RedPatternPulseCount = 25;
+int LeftOutcomeButton = 0;
+int RightOutcomeButton = 0;
+int ManualPositiveNum = 0;
+int ManualNegativeNum = 0;
+unsigned int checkToneSteps = 0;
+unsigned long checkToneChanged = 0;
+#define BEHAVIOR_HAS_AIR 0
+#define BEHAVIOR_HAS_TASK 0
+#define BEHAVIOR_HAS_TONE_COPIES 0
+#define BEHAVIOR_SHUTTER_OPEN HIGH
+#define BEHAVIOR_SHUTTER_CLOSED LOW
+#define BEHAVIOR_LEGACY_REWARD_BIG 1
+#define BEHAVIOR_LEGACY_SECOND_TONE 0
+#define BEHAVIOR_CUSTOM_LEGACY
+bool behaviorHandleLegacy(char command);
+#include "BehaviorManual.h"
+
 void setup()
 {
   Serial.begin(115200);
@@ -59,138 +92,73 @@ void setup()
   digitalWrite(ShutterRed, LOW);
   noTone(Speaker);
 
+  behaviorCapabilities();
+  behaviorReportState();
+
   Serial.println("type 1 for left reward / 2 for right reward");
   Serial.println("for laser shutter: type 3 for blue / 4 for red");
 }
 
-void loop()
-{
-  // Start button check
-  if (digitalRead(Button) == 1) {
-    Serial.println("Start Button pushed");
+// Legacy 1/2 and physical buttons still calibrate the left/right spout.
+void checkCalibration(bool left, unsigned long interval) {
+  if (behaviorCalibrating || behaviorWater.active || checkToneSteps) {
+    Serial.println("ERR BUSY stop the calibration/manual stimulus first");
+    return;
   }
-
-  // Left SideButtonsForRewards callibration (drop X 50 times)
-  if (digitalRead(Button1) == 1 && ButtonStatus1 == 0)
-  {
-    ButtonStatus1 = 1;
-
-    Serial.println("Left reward button pushed");
-
-    for (int i = 0; i < num_repeat; i++) {
-      digitalWrite(WaterSpout, HIGH);
-      digitalWrite(WaterSpout_copy, HIGH);
-      delay(RewardSizeLeft);
-      digitalWrite(WaterSpout, LOW);
-      digitalWrite(WaterSpout_copy, LOW);
-      delay(50);
-    }
-    Serial.print("Finished delivery x");
-    Serial.println(num_repeat);
-    ButtonStatus1 = 0;
+  behaviorHandleCommand('c');
+  if (behaviorCalibrating) {
+    behaviorCalibrationValve = left ? WaterSpout : WaterSpout2;
+    behaviorCalibrationCopy = left ? WaterSpout_copy : WaterSpout2_copy;
+    behaviorCalibrationSize = left ? RewardSizeLeft : RewardSizeRight;
+    behaviorCalibrationInterval = interval;
   }
+}
 
-  // RIGHT SideButtonsForRewards callibration (drop X 50 times)
-  if (digitalRead(Button2) == 1 && ButtonStatus2 == 0)
-  {
-    ButtonStatus2 = 1;
-
-    Serial.println("Right reward button pushed");
-
-    for (int i = 0; i < num_repeat; i++) {
-      digitalWrite(WaterSpout2, HIGH);
-      digitalWrite(WaterSpout2_copy, HIGH);
-      delay(RewardSizeRight);
-      digitalWrite(WaterSpout2, LOW);
-      digitalWrite(WaterSpout2_copy, LOW);
-      delay(100);
-    }
-    Serial.print("Finished delivery x");
-    Serial.println(num_repeat);
-    ButtonStatus2 = 0;
+bool behaviorHandleLegacy(char command) {
+  if (command == '1' || command == '2') {
+    checkCalibration(command == '1', 100);
+    return true;
   }
-
-  // Lick Detection //
-  // LEFT
-  if (digitalRead(LickDetect1) == 0)
-  {
-    Serial.println("Left lick detected");
+  if (command == '5') {
+    if (behaviorCalibrating || checkToneSteps) {
+      Serial.println("ERR BUSY stop calibration/tone first");
+      return true;
+    }
+    checkToneSteps = 100; // Original 50 alternating pairs at 100 ms per tone.
+    checkToneChanged = millis();
+    tone(Speaker, GoCueFreq);
+    Serial.println("ACK TONE");
+    return true;
   }
-
-  // RIGHT
-  if (digitalRead(LickDetect2) == 0)
-  {
-    Serial.println("Right lick detected");
+  // Keep GUI stimuli from competing with the legacy tone sequence.
+  if (checkToneSteps && command != 'x' && command != '9') {
+    Serial.println("ERR BUSY tone sequence in progress");
+    return true;
   }
+  return false;
+}
 
-  // Serial input from user for dispensing //
-  if (Serial.available() > 0) {
-    // read the incoming byte:
-    SerialInput = Serial.read();
-
-    Serial.print("I received: ");
-    Serial.println(SerialInput);
-
-    if (SerialInput == '1') // dispense left reward
-    {
-      for (int i = 0; i < num_repeat; i++) {
-        digitalWrite(WaterSpout, HIGH);
-        digitalWrite(WaterSpout_copy, HIGH);
-        delay(RewardSizeLeft);
-        digitalWrite(WaterSpout, LOW);
-        digitalWrite(WaterSpout_copy, LOW);
-        delay(100);
-      }
-      Serial.print("Finished delivery x");
-      Serial.println(num_repeat);
-      //Serial.println(" (unit size:)");
-    }
-
-    if (SerialInput == '2') // disepnse right reward
-    {
-      for (int i = 0; i < num_repeat; i++) {
-        digitalWrite(WaterSpout2, HIGH);
-        digitalWrite(WaterSpout2_copy, HIGH);
-        delay(RewardSizeRight);
-        digitalWrite(WaterSpout2, LOW);
-        digitalWrite(WaterSpout2_copy, LOW);
-        delay(100);
-      }
-      Serial.print("Finished delivery x");
-      Serial.println(num_repeat);
-    }
-
-    if (SerialInput == '3') {
-      digitalWrite(ShutterBlue, HIGH);
-      //      delay(2000);
-      //      digitalWrite(ShutterBlue, LOW);
-    }
-
-    if (SerialInput == '4') {
-      digitalWrite(ShutterRed, HIGH);
-      //      digitalWrite(ShutterRed, HIGH);
-      //      delay(2000);
-      //      digitalWrite(ShutterRed, LOW);
-      //
-      //      for (int i = 0; i < 100; i++) {
-      //        digitalWrite(ShutterRed, HIGH);
-      //        delay(2);
-      //        digitalWrite(ShutterRed, LOW);
-      //        delay(48);
-      //      }
-    }
-
-    if (SerialInput == '5') {
-      // speaker check x 3 times
-      for (int i = 0; i < 50; i++) {
-        tone(Speaker, GoCueFreq);
-        delay(100);
-        tone(Speaker, NoGoCueFreq);
-        delay(100);
-      }
-      noTone(Speaker);
-    }
-
-    delay(1000); //delay so that reward button is no longer pressed for one drop
+void loop() {
+  behaviorReadSerial();
+  behaviorUpdateManual();
+  if (checkToneSteps && millis() - checkToneChanged >= 100) {
+    checkToneChanged = millis();
+    if (--checkToneSteps) tone(Speaker, checkToneSteps % 2 ? NoGoCueFreq : GoCueFreq);
+    else noTone(Speaker);
   }
+  int left = digitalRead(Button1);
+  int right = digitalRead(Button2);
+  if (left && !ButtonStatus1) checkCalibration(true, 50);
+  if (right && !ButtonStatus2) checkCalibration(false, 100);
+  ButtonStatus1 = left;
+  ButtonStatus2 = right;
+  if (digitalRead(LickDetect1) == LOW) Serial.println("Left lick detected");
+  if (digitalRead(LickDetect2) == LOW) Serial.println("Right lick detected");
+}
+
+void behaviorStartTask() {} // No automated task in this hardware-check sketch.
+void behaviorStopTask() {
+  state = Idle;
+  checkToneSteps = 0;
+  behaviorStopOutputs();
 }

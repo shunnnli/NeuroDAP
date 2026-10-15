@@ -4,7 +4,6 @@
 // ----- Parameters -----
 double pulse_freq = 50.0;        // Hz
 double pulse_duration = 5.0;     // ms (pulse width)
-double pulse_interval;           // ms (delay between pulses)
 unsigned long last_pulse_time = 0;
 
 const byte triggerPin = 4;       // Input from Bonsai (digital HIGH to trigger)
@@ -18,38 +17,71 @@ unsigned long TimerSync = 0;
 unsigned long SyncPulseInterval = 100 + random(1, 400);
 byte SyncNow = 0;
 
+// GUI protocol: this sketch has a red stimulation output and an external-trigger task.
+#define Idle 0
+static int state = Idle; // Start task arms the Bonsai trigger after boot/reset.
+#define ShutterRed stimOutPin
+#define BEHAVIOR_HAS_WATER 0
+#define BEHAVIOR_HAS_AIR 0
+#define BEHAVIOR_HAS_TONE 0
+#define BEHAVIOR_HAS_BLUE 0
+#define BEHAVIOR_LEGACY_REWARD_BIG 1
+#define BEHAVIOR_LEGACY_SECOND_TONE 0
+#define RedPatternPulseMs ((unsigned long)pulse_duration)
+#define RedPatternPeriodMs (pulse_freq > 0 ? (unsigned long)(1000.0 / pulse_freq) : 0UL)
+unsigned int RedPatternPulseCount = 25;
+#include "BehaviorManual.h"
+
 void setup() {
+  Serial.begin(115200);
   pinMode(triggerPin, INPUT);    // Setup trigger pin as input
   pinMode(stimOutPin, OUTPUT);   // Setup stimulation pin as output
-  digitalWrite(stimOutPin, HIGH); // Initialize output low
-  pulse_interval = (1000.0 / pulse_freq) - pulse_duration;
+  digitalWrite(stimOutPin, HIGH); // Active-low output starts closed
 
   pinMode(Sync, OUTPUT);
   digitalWrite(Sync, LOW);
   TimerSync = millis();
+  behaviorCapabilities();
+  behaviorReportState();
 }
 
 void loop() {
+  behaviorReadSerial();
+  behaviorUpdateManual();
   sync();
+  if (state == Idle) return;
 
-  // Check if the trigger line is HIGH
-  if (digitalRead(triggerPin) == HIGH) {
-    // If trigger is high, start patterned stimulation
-    unsigned long currentTime = millis();
-
-    if (currentTime - last_pulse_time >= pulse_interval + pulse_duration) {
-      // Send pulse
-      digitalWrite(stimOutPin, LOW);
-      delay(pulse_duration);
-      digitalWrite(stimOutPin, HIGH);
-
-      last_pulse_time = millis(); // Update pulse time after turning off
-    }
-  } else {
-    // If not stimulating, ensure output is low
+  // Nonblocking external-trigger pulses keep End task responsive during a pulse.
+  unsigned long now = millis();
+  if (digitalRead(triggerPin) != HIGH) {
     digitalWrite(stimOutPin, HIGH);
-    last_pulse_time = millis(); // Reset timer to avoid burst after signal goes HIGH again
+    isStimulating = false;
+    last_pulse_time = now;
+  } else if (isStimulating) {
+    if (now - last_pulse_time >= pulse_duration) {
+      digitalWrite(stimOutPin, HIGH);
+      isStimulating = false;
+      last_pulse_time = now;
+    }
+  } else if (pulse_freq > 0 && pulse_duration > 0 &&
+             pulse_duration <= 1000.0 / pulse_freq &&
+             now - last_pulse_time >= 1000.0 / pulse_freq) {
+    digitalWrite(stimOutPin, LOW);
+    isStimulating = true;
+    last_pulse_time = now;
   }
+}
+
+void behaviorStartTask() {
+  isStimulating = false;
+  last_pulse_time = millis();
+  state = 1;
+}
+
+void behaviorStopTask() {
+  state = Idle;
+  isStimulating = false;
+  behaviorStopOutputs();
 }
 
 //********************************************************************************************//

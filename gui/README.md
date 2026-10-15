@@ -65,9 +65,7 @@ unknown boards can still be selected manually.
 1. **Select Arduino file**: choose a `.ino`. The main file must have the same name
    as its parent folder, as required by Arduino. The entire sketch folder is
    compiled, including accompanying tabs and headers. Selection alone does not
-   upload anything. One existing repository folder,
-   `Arduino/Shun_OptoPair_EPLHbPair_random`, does not match its main `.ino` name;
-   arrange a correctly named copy before uploading that sketch.
+   upload anything. All bundled sketch folders have matching main filenames.
 2. **Port / Board ID**: refresh ports, select the connected Arduino, then use
    Detect or select/type a board ID. For a Mega 2560 use
    `arduino:avr:mega:cpu=atmega2560`. The defaults are COM4, 115200 baud, and this
@@ -113,7 +111,7 @@ through the USB DTR auto-reset line, without compiling, uploading, or reopening
 the serial port. It supports Mega 2560, Uno, and classic Nano boards with USB
 auto-reset enabled. Select the correct Board ID before connecting. No new firmware
 upload is needed if your sketch already reports `BEHAVIOR_CONTROLS` and
-`BEHAVIOR_STATE` on startup, as both supported DA-clamp sketches do.
+`BEHAVIOR_STATE` on startup, as all bundled sketches now do.
 
 Like restarting after an upload, this clears Arduino RAM counters and timers,
 stops the current task, and reruns `setup()` with the **last uploaded parameter
@@ -143,13 +141,44 @@ supported by this button.
 ## Manual controls and stopping
 
 The shorter configuration panels leave room for grouped manual buttons above the
-free-text serial input. Upload the updated **Shun_DAClamp_Reward** or
-**Shun_DAClamp_Random** sketch to enable them. Each sketch includes a local
-`BehaviorManual.h`; keep that file beside its `.ino` when copying the sketch.
+free-text serial input. Upload the updated version of any bundled sketch to enable them, including
+**Shun_OptoPair_RandomOutcome**, **Shun_OptoPair_Reward**, and
+**Shun_OptoPair_Punishment**, and the sketches in `Arduino/other/`.
+Each sketch includes a local `BehaviorManual.h`; keep that file beside its `.ino`
+when copying the sketch. Older copies on another computer must be updated and
+uploaded again before the controls will work.
 The GUI waits for `BEHAVIOR_CONTROLS 1` from the Arduino before enabling buttons,
 so an older sketch cannot interpret a button using a conflicting digit mapping.
 It automatically queries once after connecting if firmware identification has not arrived.
-Other sketches still support the free-text serial monitor.
+Unmodified third-party sketches still support the free-text serial monitor.
+The GUI uses the same letters for every compatible sketch. Existing behavioral
+sketch digit commands remain available: `1` keeps its original small/large reward
+choice, `2` keeps its punishment/tone choice, `3`/`4` open blue/red,
+`5`/`6` run blue/red patterns, `7` calibrates, and `8`/`9` start/stop.
+Manual patterns in OptoPair, power-sweep, and ramping-tone sketches use that color's
+configured pulse width, frequency and pulse count after setup applies `RedStim`.
+Single-pulse patterns use their configured width regardless of frequency.
+Frequency-sweep manual patterns use `PulseDuration`, `StimDuration`, and the first
+entry in `PulseFreqRange`. Its shutters remain active high; the other behavior
+sketches' shutters remain active low. Manual patterns and calibration are scheduled
+without blocking serial stop commands. Task tones also accept stop/query commands
+while playing. Idle sketches do not resume cancelled task stimulation.
+
+Two specialized sketches support only the hardware they define:
+
+- **Shun_RTPP_BonsaiToPulseStim**: red open/close/pattern and Start/End task.
+  Start enables the external Bonsai trigger; End disables it and closes the
+  output even if the trigger stays high. It now boots/resets idle; click Start
+  task to arm Bonsai-trigger stimulation.
+- **Shun_Manual_Check_opto**: rewards, tone, both lasers/patterns, calibration,
+  and End to cancel calibration/output work. There is no airpuff or automated
+  task. Legacy `1`/`2` and physical buttons still calibrate left/right spouts;
+  legacy `5` still plays the alternating tone check. GUI rewards and calibration
+  use the right spout; GUI calibration uses `UnitRewardSize`.
+
+Requests for absent outputs/tasks produce `ERR UNSUPPORTED` in the monitor.
+The current GUI still displays those buttons; the firmware rejects the command
+without touching hardware.
 
 The combined **Lasers** group contains blue and red open/close toggles plus one
 pattern button per color. Water calibration sits below Punishment and Tone in
