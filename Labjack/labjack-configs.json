@@ -12,6 +12,17 @@
     },
 
     {
+      "animal": "EP-LHb RTPP",
+      "spikeGLX": true,
+      "channels": [
+        {"name": "NaN", "freqMod": true, "display": false, "record": false},
+        {"name": "dLight", "freqMod": true, "display": false, "record": true},
+        {"name": "PMT", "freqMod": false, "display": false, "record": false},
+        {"name": "AIN9", "freqMod": true, "display": false, "record": false}
+      ]
+    },
+
+    {
       "animal": "SL470-SL471",
       "spikeGLX": true,
       "channels": [
