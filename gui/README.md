@@ -76,7 +76,9 @@ unknown boards can still be selected manually.
    Click Upload Arduino to validate your edits and copy the entire sketch to a
    temporary folder. The app applies edits to that copy, stops the protocol,
    cancels pending UDP work, closes serial, compiles, and uploads only on compile
-   success. Original sketch files are never rewritten. The monitor shows the
+   success. Upload alone leaves original sketch files unchanged. **Save edits**
+   explicitly writes your parameter changes to the selected sketch for future use.
+   The monitor shows the
    parameter overrides and upload progress. Controls are disabled during this work.
    With **Connect after upload** checked, it attempts to reopen the selected
    port. Otherwise click Connect yourself. Upload failures leave the app
@@ -262,9 +264,16 @@ section headings, and inline comments are displayed. For example:
 Values are source initializers, not live readbacks from the Arduino. Some sketches
 override initial values later in `setup()`; the GUI preserves that firmware logic.
 Editing while connected is allowed, but takes effect only after another upload.
-**Reload / reset edits** discards the current edits and rereads the
+**Reload** discards the current unsaved edits and rereads the
 source. Selecting another sketch loads its own parameters without carrying edits
 over from the previous sketch.
+**Save edits** writes the edited parameter values into the selected sketch's main
+`.ino` file, preserving comments, formatting, line endings, and other code. Saved
+values load the next time you select the sketch and are used for later uploads,
+including uploads outside this GUI. Saving does not upload or alter the running
+Arduino or parser. The GUI refuses to overwrite source changes made elsewhere
+since loading; reload and review those changes first. A successful save refreshes
+the editor's baseline, so Reload returns to the newly saved values.
 The adjacent **Upload Arduino** button performs exactly the same operation as
 the button in the Arduino script panel, including applying the edited parameters.
 

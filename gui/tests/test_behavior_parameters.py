@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from gui import behavior as gui
-from gui.parameters import apply_overrides, parameters_in, prepare_sketch, source_hash, validate_value
+from gui.parameters import apply_overrides, parameters_in, prepare_sketch, save_edits, source_hash, validate_value
 
 
 SOURCE = b'''// User settings
@@ -36,6 +36,34 @@ class ParameterTests(unittest.TestCase):
         self.sketch.mkdir()
         self.main = self.sketch / 'Reward.ino'
         self.main.write_bytes(SOURCE)
+
+    def test_saved_edits_persist_in_future_uploads_and_preserve_other_bytes(self):
+        original = SOURCE.replace(b'\n', b'\r\n')
+        self.main.write_bytes(original)
+        self.assertTrue(save_edits(self.main, {'UnitRewardSize': '35'}, source_hash(original)))
+        expected = original.replace(b'UnitRewardSize = 24;', b'UnitRewardSize = 35;')
+        self.assertEqual(self.main.read_bytes(), expected)
+        staged = prepare_sketch(self.sketch, self.base / 'staged', {}, source_hash(expected))
+        self.assertEqual((staged / self.main.name).read_bytes(), expected)
+        self.assertFalse(save_edits(self.main, {}, source_hash(expected)))
+
+    def test_save_rejects_invalid_values_or_external_changes_without_writing(self):
+        with self.assertRaises(ValueError):
+            save_edits(self.main, {'UnitRewardSize': '-1'}, source_hash(SOURCE))
+        self.assertEqual(self.main.read_bytes(), SOURCE)
+        external = SOURCE + b'// edited elsewhere\n'
+        self.main.write_bytes(external)
+        for overrides in ({'UnitRewardSize': '35'}, {}):
+            with self.assertRaisesRegex(ValueError, 'source has changed'):
+                save_edits(self.main, overrides, source_hash(SOURCE))
+        self.assertEqual(self.main.read_bytes(), external)
+
+    def test_failed_save_keeps_original_and_removes_temporary_file(self):
+        with patch('gui.parameters.os.replace', side_effect=OSError('write failed')):
+            with self.assertRaises(OSError):
+                save_edits(self.main, {'UnitRewardSize': '35'}, source_hash(SOURCE))
+        self.assertEqual(self.main.read_bytes(), SOURCE)
+        self.assertEqual(list(self.sketch.iterdir()), [self.main])
 
     def test_only_supported_settings_not_runtime_locals_or_comments(self):
         parameters = parameters_in(SOURCE.decode())

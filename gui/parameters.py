@@ -1,4 +1,4 @@
-"""Edit explicitly marked Arduino settings without modifying source sketches.
+"""Edit explicitly marked Arduino settings for upload or explicit source saving.
 
 This deliberately handles a small declaration/initializer syntax, not arbitrary
 C++. Arduino CLI remains responsible for C++ type checking and compilation.
@@ -9,9 +9,11 @@ import ast
 from collections import Counter
 from dataclasses import dataclass
 import hashlib
+import os
 from pathlib import Path
 import re
 import shutil
+import tempfile
 
 
 START = re.compile(r"^\s*//[^\n]*(?:user settings|GUI parameters begin)[^\n]*$", re.I | re.M)
@@ -197,9 +199,36 @@ def prepare_sketch(sketch, destination, overrides, expected_hash):
     return target
 
 
+def save_edits(main, overrides, expected_hash):
+    """Save validated initializer edits atomically, preserving all other bytes."""
+    main = Path(main).resolve()
+    data = main.read_bytes()
+    if source_hash(data) != expected_hash:
+        raise ValueError("The Arduino source has changed. Reload from sketch before saving edits.")
+    updated = apply_overrides(data, overrides, expected_hash)
+    if updated == data:
+        return False
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=main.parent, prefix='.' + main.name + '.',
+                                         suffix='.tmp', delete=False) as output:
+            temporary = Path(output.name)
+            output.write(updated)
+            output.flush()
+            os.fsync(output.fileno())
+        shutil.copymode(main, temporary)
+        if main.read_bytes() != data:
+            raise ValueError("The Arduino source changed while saving. Reload from sketch and try again.")
+        os.replace(temporary, main)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    return True
+
+
 class ParameterEditor:
     """Pinned calibration field plus a scrollable editor for the remaining values."""
-    def __init__(self, parent, reload_command, upload_command=None):
+    def __init__(self, parent, reload_command, upload_command=None, save_command=None):
         import tkinter as tk
         from tkinter import ttk
         self.tk, self.ttk = tk, ttk
@@ -223,11 +252,13 @@ class ParameterEditor:
         ttk.Label(self.frame, text="Daily valve calibration · applies on upload", style="Hint.TLabel").grid(row=1, column=0, sticky="w", pady=(4, 6))
         toolbar = ttk.Frame(self.frame)
         toolbar.grid(row=2, column=0, sticky="ew", pady=(0, 8))
-        toolbar.columnconfigure((0, 1), weight=1)
-        self.reload_button = ttk.Button(toolbar, text="Reload / reset edits", command=reload_command)
+        toolbar.columnconfigure((0, 1, 2), weight=1)
+        self.reload_button = ttk.Button(toolbar, text="Reload", command=reload_command)
         self.reload_button.grid(row=0, column=0, sticky="ew", padx=(0, 4))
+        self.save_button = ttk.Button(toolbar, text="Save edits", command=save_command)
+        self.save_button.grid(row=0, column=1, sticky="ew", padx=4)
         self.upload_button = ttk.Button(toolbar, text="Upload Arduino", command=upload_command)
-        self.upload_button.grid(row=0, column=1, sticky="ew", padx=(4, 0))
+        self.upload_button.grid(row=0, column=2, sticky="ew", padx=(4, 0))
         scroller = ttk.Frame(self.frame)
         scroller.grid(row=3, column=0, sticky="nsew")
         scroller.rowconfigure(0, weight=1)
@@ -314,6 +345,7 @@ class ParameterEditor:
     def set_enabled(self, enabled):
         self.enabled = enabled
         self.reload_button.configure(state="normal" if enabled else "disabled")
+        self.save_button.configure(state="normal" if enabled and self.parameters else "disabled")
         self.unit_entry.configure(state="normal" if enabled and "UnitRewardSize" in self.values else "disabled")
         for widget, boolean in self.widgets:
             widget.configure(state=("readonly" if boolean else "normal") if enabled else "disabled")

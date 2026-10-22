@@ -24,7 +24,7 @@ import time
 import uuid
 from dataclasses import asdict, dataclass, field, fields
 
-from .parameters import ParameterEditor, apply_overrides, prepare_sketch
+from .parameters import ParameterEditor, apply_overrides, prepare_sketch, save_edits
 from .manual_controls import CAPABILITY_LINE, COMMANDS, CONTROL_GROUPS, ManualState
 
 GUI_DIR = Path(__file__).resolve().parent
@@ -590,7 +590,7 @@ class BehaviorGUI:
         left = ttk.LabelFrame(columns, text="Arduino script", padding=8)
         right = ttk.LabelFrame(columns, text="Event parsing script / UDP", padding=8)
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
-        self.parameter_editor = ParameterEditor(columns, self.reload_parameters, self.upload)
+        self.parameter_editor = ParameterEditor(columns, self.reload_parameters, self.upload, self.save_parameter_edits)
         self.parameter_editor.frame.grid(row=0, column=1, sticky="nsew", padx=4)
         right.grid(row=0, column=2, sticky="nsew", padx=(8, 0))
         for frame in (left, right):
@@ -786,6 +786,21 @@ class BehaviorGUI:
         value = filedialog.askopenfilename(parent=self.root, title="Select Arduino CLI executable")
         if value:
             self.vars["cli"].set(value)
+
+    def save_parameter_edits(self):
+        from tkinter import messagebox
+        if self.pending or self.busy or self.closing:
+            return
+        try:
+            settings = self.settings(with_parameters=True)
+            sketch = sketch_directory(settings.sketch)
+            main = sketch / (sketch.name + ".ino")
+            changed = save_edits(main, settings.parameter_overrides, settings.parameter_source_hash)
+            self._load_parameters()
+            self.status.set("Edits saved to sketch. Upload Arduino to apply them." if changed else "No parameter changes to save.")
+            self.service.log(f"[parameters saved] {main}" if changed else f"[parameters unchanged] {main}")
+        except (OSError, ValueError) as exc:
+            messagebox.showerror("Save edits", str(exc), parent=self.root)
 
     def upload(self):
         from tkinter import messagebox
