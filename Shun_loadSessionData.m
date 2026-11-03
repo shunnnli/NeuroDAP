@@ -16,7 +16,7 @@ errorSessionIdx = [];
                                 plotPhotometry=true,...
                                 plotBehavior=true,...
                                 withPhotometryNI=false);
-if canceled; return; end
+if canceled; return; end  
 for s = 1:length(sessionList)
     analysisParams(s).rollingWindowTime = str2double(analysisParams(s).rollingWindowTime);
     analysisParams(s).recordLJ = eval(analysisParams(s).recordLJ);
