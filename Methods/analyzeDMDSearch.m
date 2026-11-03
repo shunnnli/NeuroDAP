@@ -18,6 +18,7 @@ arguments
         ["acquisition","reanalysis","evoked"])} = "evoked"
     options.minChargeZ double = 0.5   % only used by "evoked"
     options.nullAlpha double = 0.3    % opacity for spots the notebook drops
+    options.qcColor double = [0.6 0.6 0.6] % spots with no sweep left after QC
 
     options.color
     options.colormap
@@ -208,13 +209,13 @@ for d = 1:nDepth
 
     % A depth where the Rs limit removed every sweep has no metrics at all, so
     % the statistics panels are empty by construction and every spot is drawn
-    % transparent. Say so rather than leaving blank axes to be puzzled over.
+    % grey. Say so rather than leaving blank axes to be puzzled over.
     if any(sweepCounts > 0) && ~any(search_nSweepsKept{d} > 0)
         warning('analyzeDMDSearch:allSweepsFailedRs', ...
                 ['Depth %d: every sweep failed the Rs limit, so no spot has metrics. '...
-                 'Traces are still plotted, but the statistics panels are empty and no '...
-                 'spot is a hotspot. Re-run loadSlicesDMD with a higher maxRs to include '...
-                 'this cell.'], curDepth);
+                 'Traces are still plotted in grey, but the statistics panels are empty '...
+                 'and no spot is a hotspot. Re-run loadSlicesDMD with a higher maxRs to '...
+                 'include this cell.'], curDepth);
     end
 
     % ========================= CHANGE (Full grid for analysis) =========================
@@ -223,15 +224,20 @@ for d = 1:nDepth
     % expand them to the full 2^curDepth x 2^curDepth grid (length 4^curDepth),
     % leaving unsampled tiles empty.
     % The notebook's verdict for every spot of this depth, in the same per-spot
-    % order as depthCurrentMap. A spot the notebook would not analyze -- failing
-    % the criterion, or left with no sweep by the Rs filter -- scores false and
-    % is drawn transparent rather than dropped from the figure.
+    % order as depthCurrentMap. Nothing is ever dropped from the figure: a spot
+    % that fails the criterion is drawn transparent, and one the Rs limit left
+    % with no sweep at all is drawn grey, since that is a different answer.
     spotVerdict = localSpotVerdict(options,numel(depthCurrentMap), ...
                                    search_chargeExcessZ{d},search_reanalysis{d}, ...
                                    search_isResponseMap(:,:,d),search_spotLocation{d});
 
+    % One code per spot carries both answers to the tiles: whether it is a
+    % hotspot, and whether quality control left it with anything to judge.
+    spotState = dmdSpotPlotState(spotVerdict,sweepCounts, ...
+                                 localFitLength(search_nSweepsKept{d},nBars));
+
     [depthCurrentMapFull, ~, depthHotspotFull, ~] = ...
-        expandDepthToFullGrid(depthCurrentMap, depthBaselineMap, num2cell(spotVerdict), search_spotLocation{d}, depthResponseMap, curDepth);
+        expandDepthToFullGrid(depthCurrentMap, depthBaselineMap, num2cell(spotState), search_spotLocation{d}, depthResponseMap, curDepth);
 
     nCol = 2^curDepth;
     nRow = 2^curDepth;
@@ -398,18 +404,25 @@ for d = 1:nDepth
         nexttile(depthLayout,t);
         if isempty(depthCurrentMapFull{t})
             trace = nan(1,plotWindowLength);
-            spotHotspot = false;
+            spotState = 0;
         else
             trace = depthCurrentMapFull{t}(:,plotFirstSample:plotLastSample);
-            spotHotspot = sum(depthHotspotFull{t})>=1;
+            spotState = depthHotspotFull{t};
         end
 
-        if spotHotspot
-            plotSEM(plotWindowTime,trace,color,opacity=1,...
-                    plotIndividual=true,LineWidth=LineWidth);
-        else
-            plotSEM(plotWindowTime,trace,color,opacity=options.nullAlpha,...
-                    plotIndividual=true,LineWidth=LineWidth);
+        % 1 = hotspot, 0 = scored but not one, -1 = no sweep passed QC. The
+        % third is grey rather than a fainter version of the trace colour:
+        % it is not a null spot, it is a spot with no usable measurement.
+        switch spotState
+            case 1
+                plotSEM(plotWindowTime,trace,color,opacity=1,...
+                        plotIndividual=true,LineWidth=LineWidth);
+            case -1
+                plotSEM(plotWindowTime,trace,options.qcColor,opacity=options.nullAlpha,...
+                        plotIndividual=true,LineWidth=LineWidth);
+            otherwise
+                plotSEM(plotWindowTime,trace,color,opacity=options.nullAlpha,...
+                        plotIndividual=true,LineWidth=LineWidth);
         end
         xlim([options.timeRange(1), options.timeRange(2)]); 
         ylim([optoMin, optoMax]);
