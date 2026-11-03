@@ -1,0 +1,14 @@
+{
+  "sketch": "C:/Shun-local/NeuroDAP/Arduino/Shun_OptoPair_Punishment/Shun_OptoPair_Punishment.ino",
+  "board": "arduino:avr:mega:cpu=atmega2560",
+  "port": "COM4",
+  "baud": "115200",
+  "cli": "arduino-cli",
+  "protocol": "C:\\Shun-local\\BrainClamp\\scripts\\send_event_RPE.py",
+  "host": "192.168.50.132",
+  "udp_port": "5005",
+  "line_ending": "Newline (LF)",
+  "reconnect": true,
+  "parameter_overrides": {},
+  "parameter_source_hash": "29ee636d16789a862b3de79e090887585fc0c6bbcffbd6ebb8869c687ddef045"
+}

@@ -32,8 +32,8 @@
 //********** User settings ***********//
 // Set up parameters for the behavior
 boolean ENL = true; // whether ITI is ENL
-unsigned long UnitRewardSize = 20; // reward size of 1ul
-unsigned long SmallRewardSize = 2 * UnitRewardSize;
+unsigned long UnitRewardSize = 25; // reward size of 1ul
+unsigned long SmallRewardSize = 4 * UnitRewardSize;
 unsigned long BigRewardSize = 10 * UnitRewardSize;
 unsigned long SmallPunishSize = 50;
 unsigned long BigPunishSize = 200;
