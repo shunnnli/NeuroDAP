@@ -15,10 +15,19 @@ saveDataPath = 'default';
 [sessionParams,canceled] = inputSessionParams_singleSlice(expPath,...
                                 paradigm=1,redStim=true,...
                                 reload=false,calculateQC=true,...
-                                timeRange='[-20,100]',nArtifactSamples='0');
+                                timeRange='[-30,100]',nArtifactSamples='0');
 taskOptions = {'random','reward pairing','punish pairing'};
 task = taskOptions{sessionParams.Paradigm};
+
+% What gets STORED per spot. The notebook only ever sees what this window
+% holds: it levels and takes its noise SD over -30 to -1 ms, and its detection
+% control window runs from 55 to 100 ms, so both ends matter.
 timeRange = eval(sessionParams(1).timeRange);
+
+% What gets DISPLAYED in the per-spot tiles, matching the notebook's
+% PLOT_WINDOW_MS. Display only; it affects no metric.
+plotTimeRange = [-10,50];
+
 nArtifactSamples = str2double(sessionParams(1).nArtifactSamples);
 
 if ~isscalar(expPath); error('Multiple sessions were selected, for multi-session analysis see analyzeSlice pipeline!'); end
@@ -60,7 +69,7 @@ loadSlicesDMD(epochs,reload=true,...
 % Plot results for all searches in this session
 close all;
 cells = analyzeSlice_DMD(expPath,resultsPathDate='newest',...
-                        timeRange=timeRange,...
+                        timeRange=plotTimeRange,...
                         redStim=true,...
                         plotSearch=true,plotPairs=true,...
                         savePNG=false,savePDF=true,saveFIG=false);
