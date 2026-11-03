@@ -16,3 +16,6 @@ Methods/npy-matlab/.DS_Store
 # Python behavior GUI
 __pycache__/
 *.py[cod]
+
+# superpowers execution scratch (ledger, briefs, review packages)
+.superpowers/
