@@ -279,8 +279,9 @@ for d = 1:length(commonDepth)
     % there instead of assuming the two match. Both searches are cut to one
     % width, anchored at the pulse, so their baselines stay comparable.
     nCtrlKeep = min([size(ctrlData1,2), size(ctrlData2,2), numel(analysisWindow)]);
-    [ctrlData1,ctrlTime1] = dmdFitControlWindow(ctrlData1,nCtrlKeep,samplesPerMs);
-    [ctrlData2,ctrlTime2] = dmdFitControlWindow(ctrlData2,nCtrlKeep,samplesPerMs);
+    ctrlEndMs = dmdControlWindowEndMs(curCell.Options{1});
+    [ctrlData1,ctrlTime1] = dmdFitControlWindow(ctrlData1,nCtrlKeep,samplesPerMs,ctrlEndMs);
+    [ctrlData2,ctrlTime2] = dmdFitControlWindow(ctrlData2,nCtrlKeep,samplesPerMs,ctrlEndMs);
 
     % Calculate max/min current for plotting
     % optoMax1 = max(optoData1,[],'all'); optoMax2 = max(optoData2,[],'all');

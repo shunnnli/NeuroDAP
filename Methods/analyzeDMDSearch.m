@@ -309,7 +309,8 @@ for d = 1:nDepth
     % The control window is shorter than the analysis window once
     % baselineGuard trims it, and reconstructed data can have shorter
     % baselines still, so take whatever is there.
-    [ctrlData,ctrlTime] = dmdFitControlWindow(ctrlData,numel(analysisWindow),samplesPerMs);
+    ctrlEndMs = dmdControlWindowEndMs(curCell.Options{1});
+    [ctrlData,ctrlTime] = dmdFitControlWindow(ctrlData,numel(analysisWindow),samplesPerMs,ctrlEndMs);
 
     % Time vector (ms) based on actual available samples
     optoTime = (0:(size(optoData,2)-1)) / samplesPerMs;

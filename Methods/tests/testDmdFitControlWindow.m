@@ -53,3 +53,38 @@ verifyEmpty(testCase,data);
 verifyEmpty(testCase,time);
 
 end
+
+
+function testWindowCanEndBeforeTheStimulusWhenAGuardIsGiven(testCase)
+
+% The stored control window stops baselineGuard short of the pulse, so its
+% last sample is at -guard ms, not at 0. Drawing it as if it ended at 0 put
+% the whole baseline trace 1 ms late and closed up the guard interval.
+[~,time] = dmdFitControlWindow(zeros(1,291),301,10,-1);
+
+verifyEqual(testCase,time(end),-1,AbsTol=1e-12);
+verifyEqual(testCase,time(1),-30,AbsTol=1e-12);
+
+end
+
+
+function testTheGuardShiftsWithoutChangingSpacing(testCase)
+
+[~,time] = dmdFitControlWindow(zeros(1,291),301,10,-1);
+
+verifyEqual(testCase,diff(time(1:2)),0.1,AbsTol=1e-12);
+verifyEqual(testCase,numel(time),291);
+
+end
+
+
+function testOmittingTheGuardStillEndsAtTheStimulus(testCase)
+
+% Data written before baselineGuard existed ran up to the pulse.
+[~,withoutGuard] = dmdFitControlWindow(zeros(1,291),301,10);
+[~,withZero]     = dmdFitControlWindow(zeros(1,291),301,10,0);
+
+verifyEqual(testCase,withoutGuard(end),0);
+verifyEqual(testCase,withoutGuard,withZero);
+
+end
