@@ -12,6 +12,13 @@ arguments
     options.plotQC logical = true
     options.QCMetrics string = ["Rs","Cm","Rm","Verror","Ibaseline","Ibaseline_std"]
 
+    % Which hotspot definition drives the opaque spots and the hotspot/null
+    % split in the statistics panels. Matches the notebook's HOTSPOT_TYPE.
+    options.hotspotType string {mustBeMember(options.hotspotType, ...
+        ["acquisition","reanalysis","evoked"])} = "evoked"
+    options.minChargeZ double = 0.5   % only used by "evoked"
+    options.nullAlpha double = 0.3    % opacity for spots the notebook drops
+
     options.color
     options.colormap
 
@@ -116,6 +123,20 @@ search_cmap = curCell.("Response map"){1}.currentMap{searchIdx};
 search_bmap = curCell.("Response map"){1}.baselineMap{searchIdx};
 search_vhold = curCell.Vhold{1}(searchIdx);
 search_hotspot = curCell.("Response map"){1}.hotspot{searchIdx};
+
+% Notebook hotspot metrics, written by loadSlicesDMD. Every one of this run's
+% stored quantities changed, so an older cells_DMD.mat cannot be patched up.
+responseMapStruct = curCell.("Response map"){1};
+if ~all(isfield(responseMapStruct,{'chargeExcessZ','reanalysisHotspot','nSweepsKept'})) ...
+        || ~isfield(curCell.Stats{1},'filtered')
+    error('analyzeDMDSearch:missingDetectionMetrics',...
+          ['This cells_DMD.mat predates the notebook hotspot metrics. Re-run loadSlicesDMD '...
+           'with reload=true and timeRange [-30 100], then plot again.']);
+end
+search_isResponseMap = responseMapStruct.isResponseMap{searchIdx};
+search_chargeExcessZ = responseMapStruct.chargeExcessZ{searchIdx};
+search_reanalysis = responseMapStruct.reanalysisHotspot{searchIdx};
+search_filteredStats = curCell.Stats{1}.filtered{searchIdx};
 search_spotLocation = curCell.("Response map"){1}.spotLocation{searchIdx};
 nDepth = length(search_depths);
 
@@ -180,8 +201,16 @@ for d = 1:nDepth
     % tiles that were actually sampled (e.g., 4x4 = 16). For analysis/plotting, we
     % expand them to the full 2^curDepth x 2^curDepth grid (length 4^curDepth),
     % leaving unsampled tiles empty.
+    % The notebook's verdict for every spot of this depth, in the same per-spot
+    % order as depthCurrentMap. A spot the notebook would not analyze -- failing
+    % the criterion, or left with no sweep by the Rs filter -- scores false and
+    % is drawn transparent rather than dropped from the figure.
+    spotVerdict = localSpotVerdict(options,numel(depthCurrentMap), ...
+                                   search_chargeExcessZ{d},search_reanalysis{d}, ...
+                                   search_isResponseMap(:,:,d),search_spotLocation{d});
+
     [depthCurrentMapFull, ~, depthHotspotFull, ~] = ...
-        expandDepthToFullGrid(depthCurrentMap, depthBaselineMap, depthHotspot, search_spotLocation{d}, depthResponseMap, curDepth);
+        expandDepthToFullGrid(depthCurrentMap, depthBaselineMap, num2cell(spotVerdict), search_spotLocation{d}, depthResponseMap, curDepth);
 
     nCol = 2^curDepth;
     nRow = 2^curDepth;
@@ -249,12 +278,13 @@ for d = 1:nDepth
 
     % Slice data
     optoData = optoData(:,analysisWindow);
-    ctrlData = ctrlData(:,size(ctrlData,2)-length(analysisWindow)+1:size(ctrlData,2));
 
-    % Make control slicing robust (reconstructed data can have shorter baselines)
-    % ctrlEnd = size(ctrlData,2);
-    % ctrlStart = max(1, ctrlEnd - numel(analysisWindow) + 1);
-    % ctrlData = ctrlData(:, ctrlStart:ctrlEnd);
+    % Make control slicing robust: the control window is shorter than the
+    % analysis window once baselineGuard trims it, and reconstructed data can
+    % have shorter baselines still.
+    ctrlEnd = size(ctrlData,2);
+    ctrlStart = max(1, ctrlEnd - numel(analysisWindow) + 1);
+    ctrlData = ctrlData(:, ctrlStart:ctrlEnd);
 
     % Time vectors (ms) based on actual available samples
     optoTime = (0:(size(optoData,2)-1)) / samplesPerMs;
@@ -269,18 +299,22 @@ for d = 1:nDepth
     % (Optional) Change hotspot criteria
     % XXXXXXXXX
 
-    % Get hotspot vs null spot
-    hotspot_spotIdx = cell2mat(cellfun(@(x) sum(x)>=1, search_hotspot{d}, UniformOutput=false));
-    hotspot_sweepIdx = cell2mat(cellfun(@(x) repmat(sum(x)>=1,size(x)), search_hotspot{d}, UniformOutput=false));
+    % Get hotspot vs null spot, from the notebook's verdict. "Null spot" in the
+    % panels below is exactly the complement of the spots drawn opaque above.
+    nBars = numel(search_hotspot{d});
+    hotspot_spotIdx = localFitLength(spotVerdict,nBars) > 0;
+    hotspot_sweepIdx = repelem(hotspot_spotIdx,cellfun(@numel,search_hotspot{d}(:)));
     hotspotData = optoData(hotspot_sweepIdx,:);
     nullspotData = optoData(~hotspot_sweepIdx,:);
 
-    % Get response statistics for each spot
-    spotMax_avg = cell2mat(cellfun(@(x) mean(x,"all"), curCell.Stats{1}.max{searchIdx}{d},UniformOutput=false));
-    spotMin_avg = cell2mat(cellfun(@(x) mean(x,"all"), curCell.Stats{1}.min{searchIdx}{d},UniformOutput=false));
-    spotMaxTime_avg = cell2mat(cellfun(@(x) mean(x,"all"), curCell.Stats{1}.maxTime{searchIdx}{d},UniformOutput=false));
-    spotMinTime_avg = cell2mat(cellfun(@(x) mean(x,"all"), curCell.Stats{1}.minTime{searchIdx}{d},UniformOutput=false));
-    spotAUC_avg = cell2mat(cellfun(@(x) mean(x,"all"), curCell.Stats{1}.auc{searchIdx}{d},UniformOutput=false));
+    % Get response statistics for each spot, from the Rs-filtered sweep mean so
+    % the bars and the traces above them agree about which sweeps are in.
+    depthFiltered = search_filteredStats{d};
+    spotMax_avg = localFitLength([depthFiltered.max],nBars);
+    spotMin_avg = localFitLength([depthFiltered.min],nBars);
+    spotMaxTime_avg = localFitLength([depthFiltered.maxTime],nBars);
+    spotMinTime_avg = localFitLength([depthFiltered.minTime],nBars);
+    spotAUC_avg = localFitLength([depthFiltered.auc],nBars);
     ctrlAUC_avg = cell2mat(cellfun(@(x) mean(x,"all"), curCell.Stats{1}.baseline.auc{searchIdx}{d},UniformOutput=false));
     % ctrlSTD_avg = cell2mat(cellfun(@(x) mean(x,"all"), curCell.Stats{1}.baseline.std{searchIdx}{d},UniformOutput=false));
     ctrlMax_avg = cell2mat(cellfun(@(x) max(x,[],'all'), depthBaselineMap,UniformOutput=false));
@@ -351,7 +385,7 @@ for d = 1:nDepth
             plotSEM(plotWindowTime,trace,color,opacity=1,...
                     plotIndividual=true,LineWidth=LineWidth);
         else
-            plotSEM(plotWindowTime,trace,color,opacity=0.3,...
+            plotSEM(plotWindowTime,trace,color,opacity=options.nullAlpha,...
                     plotIndividual=true,LineWidth=LineWidth);
         end
         xlim([options.timeRange(1), options.timeRange(2)]); 
@@ -651,4 +685,46 @@ function [optoMin, optoMax] = getYlimit(data, options)
     optoMin = yLo - pad;
     optoMax = yHi + pad;
 
+end
+
+
+function verdict = localSpotVerdict(options,nSpots,chargeZ,reanalysis,isResponseMap,spotLoc)
+% The notebook's hotspot verdict for every spot of one depth, in the same
+% per-spot order as depthCurrentMap. NaN never counts as a hotspot.
+
+    switch options.hotspotType
+        case "evoked"
+            verdict = localFitLength(chargeZ,nSpots) >= options.minChargeZ;
+        case "reanalysis"
+            verdict = localFitLength(double(reanalysis),nSpots) > 0;
+        case "acquisition"
+            % The DMD software's own live call, which is stored only as a pixel
+            % map, so each spot's box is looked up in it.
+            if iscell(spotLoc); spotLoc = spotLoc{1}; end
+            verdict = false(nSpots,1);
+            for k = 1:min(nSpots,size(spotLoc,1))
+                location = spotLoc(k,:);
+                if any(isnan(location)); continue; end
+                yRange = max(1,min(size(isResponseMap,2), floor(location(1)):ceil(location(2))));
+                xRange = max(1,min(size(isResponseMap,1), floor(location(3)):ceil(location(4))));
+                verdict(k) = any(isResponseMap(xRange,yRange) > 0,'all');
+            end
+    end
+
+    verdict(isnan(verdict)) = false;
+    verdict = logical(verdict(:));
+end
+
+
+function values = localFitLength(values,n)
+% Per-spot vectors are stored over the full grid of a depth, while the
+% accumulated per-spot cell arrays stop at the last stimulated spot. Line them
+% up rather than assuming they match.
+
+    values = double(values(:));
+    if numel(values) > n
+        values = values(1:n);
+    elseif numel(values) < n
+        values(end+1:n,1) = NaN;
+    end
 end
