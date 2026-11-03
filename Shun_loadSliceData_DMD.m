@@ -10,19 +10,15 @@ clear; close all; loadNeuroDAP;
 parentPath = osPathSwitch('\\research.files.med.harvard.edu\neurobio\MICROSCOPE\Shun\Project valence\Patch\');
 expPath = uipickfiles('FilterSpec',parentPath,'Prompt','Select experiment folders');
 saveDataPath = 'default';
+timeRange = [-30,100];
 
 % Set comman params
 [sessionParams,canceled] = inputSessionParams_singleSlice(expPath,...
                                 paradigm=1,redStim=true,...
                                 reload=false,calculateQC=true,...
-                                timeRange='[-30,100]',nArtifactSamples='0');
+                                timeRange=timeRange,nArtifactSamples='0');
 taskOptions = {'random','reward pairing','punish pairing'};
 task = taskOptions{sessionParams.Paradigm};
-
-% What gets STORED per spot. The notebook only ever sees what this window
-% holds: it levels and takes its noise SD over -30 to -1 ms, and its detection
-% control window runs from 55 to 100 ms, so both ends matter.
-timeRange = eval(sessionParams(1).timeRange);
 
 % What gets DISPLAYED in the per-spot tiles, matching the notebook's
 % PLOT_WINDOW_MS. Display only; it affects no metric.
