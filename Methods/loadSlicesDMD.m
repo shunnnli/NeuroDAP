@@ -144,7 +144,7 @@ if options.reloadCells
     cellMaxTime = {};cellMinTime = {};
     cellAUC = {}; cellEIindex = {};
     cellBaselineAUC = {}; cellBaselineSTD = {}; cellQC = {};
-    cellSpotLocation = {};
+    cellSpotLocation = {}; cellDetection = {};
 
     %% Iterate & analyze individual epoch
     for row = 1:size(exp,1)
@@ -591,6 +591,7 @@ if options.reloadCells
                 cellStats.EIindex = cellEIindex';
                 cellStats.baseline.auc = cellBaselineAUC';
                 cellStats.baseline.std = cellBaselineSTD';
+                [responseMap,cellStats] = localAttachDetection(responseMap,cellStats,cellDetection);
 
                 options.searchTotalSpots = searchTotalSpots;
                 options.cellLocation = [spotsAtDepth{1,'Protocol'}{1}.cellX, spotsAtDepth{1,'Protocol'}{1}.cellY];
@@ -627,7 +628,7 @@ if options.reloadCells
                 cellMaxTime = {};cellMinTime = {};
                 cellAUC = {}; cellEIindex = {};
                 cellBaselineAUC = {}; cellBaselineSTD = {}; cellQC = {};
-                cellSpotLocation = {};
+                cellSpotLocation = {}; cellDetection = {};
             end
             continue;
         end
@@ -658,6 +659,7 @@ if options.reloadCells
             searchHotspotMap = zeros(684,608,nDepth);
             searchCurrentMap = cell(nDepth,1);
             searchBaselineMap = cell(nDepth,1);
+            searchRepMap = cell(nDepth,1);
             searchDepthList = zeros(1,nDepth);
             searchProtocols = cell(nDepth,1);
             searchSpotSequence = cell(nDepth,1);
@@ -701,6 +703,7 @@ if options.reloadCells
                 depthHotspotMap = zeros(684,608);
                 depthCurrentMap  = cell(nSpotGrid,1);
                 depthBaselineMap = cell(nSpotGrid,1);
+                depthRepMap      = cell(nSpotGrid,1);
                 depthSpotSequence = zeros(size(spotsAtDepth,1),1);
                 depthSpotLocation = nan(nSpotGrid,4);
         
@@ -743,6 +746,10 @@ if options.reloadCells
                     % Add to current map
                     depthCurrentMap{spotIdx} = [depthCurrentMap{spotIdx}; trace];
                     depthBaselineMap{spotIdx} = [depthBaselineMap{spotIdx}; baseline];
+                    % Which sweep each row came from, so the Rs limit can be
+                    % joined to it exactly rather than by assuming every spot
+                    % appears in every repetition, in order.
+                    depthRepMap{spotIdx} = [depthRepMap{spotIdx}; string(spotsAtDepth{s,'Sweep'})];
                     depthSpotSequence(s) = spotIdx;
 
                     % Get response value
@@ -809,6 +816,7 @@ if options.reloadCells
                 searchHotspotMap(:,:,depthIdx) = depthHotspotMap;
                 searchCurrentMap{depthIdx} = depthCurrentMap;
                 searchBaselineMap{depthIdx} = depthBaselineMap;
+                searchRepMap{depthIdx} = depthRepMap;
                 searchDepthList(depthIdx) = d;
                 searchSpotSequence{depthIdx} = depthSpotSequence;
                 searchSpotLocation{depthIdx} = depthSpotLocation;
@@ -823,7 +831,14 @@ if options.reloadCells
                 searchBaselineAUC{depthIdx} = depthBaselineAUC;
                 searchBaselineSTD{depthIdx} = depthBaselineSTD;
             end
-    
+
+            % Score every spot with the notebook's detection metrics. Done here,
+            % where a spot's repeated sweeps are still together with their QC
+            % rows, rather than at plot time. The metrics are stored rather than
+            % a boolean, so the criterion and its threshold stay switchable in
+            % analyzeDMDSearch without another reload.
+            searchDetection = dmdScoreSearchDetection(searchCurrentMap,searchRepMap,searchQC,options);
+
             % Save response map
             cellResponseMap{end+1} = searchResponseMap;
             isResponseMap_cell{end+1} = isResponseMap_search;
@@ -844,6 +859,7 @@ if options.reloadCells
             cellBaselineAUC{end+1} = searchBaselineAUC;
             cellBaselineSTD{end+1} = searchBaselineSTD;
             cellQC{end+1} = searchQC;
+            cellDetection{end+1} = searchDetection;
     
             % Save to cell
             curCell = spotsAtDepth{1,'Cell'};
@@ -872,6 +888,7 @@ if options.reloadCells
             cellStats.EIindex = cellEIindex';
             cellStats.baseline.auc = cellBaselineAUC';
             cellStats.baseline.std = cellBaselineSTD';
+            [responseMap,cellStats] = localAttachDetection(responseMap,cellStats,cellDetection);
 
             options.searchTotalSpots = searchTotalSpots;
             options.cellLocation = [spotsAtDepth{1,'Protocol'}{1}.cellX, spotsAtDepth{1,'Protocol'}{1}.cellY];
@@ -908,7 +925,7 @@ if options.reloadCells
             cellMaxTime = {};cellMinTime = {};
             cellAUC = {}; cellEIindex = {};
             cellBaselineAUC = {}; cellBaselineSTD = {}; cellQC = {};
-            cellSpotLocation = {};
+            cellSpotLocation = {}; cellDetection = {};
         end
     end
 end
@@ -2375,4 +2392,17 @@ function control = localMakeSyntheticControl(processed, plotWindowTime, ctrlLen)
     if ~isfield(stats.response, options.feature)
         stats.response.(options.feature) = stats.response.auc;
     end
+end
+
+
+function [responseMap,cellStats] = localAttachDetection(responseMap,cellStats,cellDetection)
+    % Spread the per-search detection structs across the Response map and Stats,
+    % shaped like the fields beside them.
+
+    responseMap.chargeExcessZ     = cellfun(@(x) x.chargeExcessZ,    cellDetection,'UniformOutput',false)';
+    responseMap.chargeExcessPc    = cellfun(@(x) x.chargeExcessPc,   cellDetection,'UniformOutput',false)';
+    responseMap.derivativeExcessZ = cellfun(@(x) x.derivativeExcessZ,cellDetection,'UniformOutput',false)';
+    responseMap.reanalysisHotspot = cellfun(@(x) x.reanalysisHotspot,cellDetection,'UniformOutput',false)';
+    responseMap.nSweepsKept       = cellfun(@(x) x.nSweepsKept,      cellDetection,'UniformOutput',false)';
+    cellStats.filtered            = cellfun(@(x) x.filtered,         cellDetection,'UniformOutput',false)';
 end
