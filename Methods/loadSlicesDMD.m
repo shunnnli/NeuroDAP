@@ -47,7 +47,7 @@ if options.reload
     options.reloadCellAnalysis = true;
     resultsFolderName = ['Results-',today];
 else
-    resultsList = sortrows(struct2cell(dir(fullfile(sessionPath,'Results-*')))',3);
+    resultsList = sortResultsFolders(sessionPath);
     if isempty(resultsList)
         options.reload = true;
         options.reloadCells = true;
