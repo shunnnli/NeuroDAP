@@ -136,7 +136,7 @@ end
 search_isResponseMap = responseMapStruct.isResponseMap{searchIdx};
 search_chargeExcessZ = responseMapStruct.chargeExcessZ{searchIdx};
 search_reanalysis = responseMapStruct.reanalysisHotspot{searchIdx};
-search_keptRows = responseMapStruct.keptRows{searchIdx};
+search_nSweepsKept = responseMapStruct.nSweepsKept{searchIdx};
 search_filteredStats = curCell.Stats{1}.filtered{searchIdx};
 search_spotLocation = curCell.("Response map"){1}.spotLocation{searchIdx};
 nDepth = length(search_depths);
@@ -194,26 +194,28 @@ for d = 1:nDepth
     % depthHotspotMap = search_hotspotMap(:,:,d);
     depthCurrentMap = search_cmap{d};
     depthBaselineMap = search_bmap{d};
-    % Drop the sweeps the Rs limit dropped, so the tiles, the control data and
-    % the statistics bars are all computed over the same set of sweeps. Without
-    % this the traces would still show sweeps the metrics had already excluded.
-    depthKeptRows = search_keptRows{d};
-    for spotIdx = 1:min(numel(depthCurrentMap),numel(depthKeptRows))
-        keep = depthKeptRows{spotIdx};
-        if isempty(keep); continue; end
-        if size(depthCurrentMap{spotIdx},1) == numel(keep)
-            depthCurrentMap{spotIdx} = depthCurrentMap{spotIdx}(keep,:);
-        end
-        if size(depthBaselineMap{spotIdx},1) == numel(keep)
-            depthBaselineMap{spotIdx} = depthBaselineMap{spotIdx}(keep,:);
-        end
-    end
-
+    % EVERY tested spot is plotted, with every sweep it recorded. The Rs limit
+    % decides which sweeps the metrics are computed from, not what the figure
+    % shows: a spot whose sweeps all failed QC still draws its traces here, and
+    % the verdict below only decides how opaque they are. The statistics bars
+    % are the metrics, so they do follow the filter -- see the note there.
+    %
     % Every per-spot quantity below is indexed over this depth's full spot grid,
     % the same index depthCurrentMap and the stored metrics use.
     nBars = numel(depthCurrentMap);
-    keptCounts = cellfun(@(x) size(x,1), depthCurrentMap(:));
-    spotSequence = repelem((1:nBars)', keptCounts);
+    sweepCounts = cellfun(@(x) size(x,1), depthCurrentMap(:));
+    spotSequence = repelem((1:nBars)', sweepCounts);
+
+    % A depth where the Rs limit removed every sweep has no metrics at all, so
+    % the statistics panels are empty by construction and every spot is drawn
+    % transparent. Say so rather than leaving blank axes to be puzzled over.
+    if any(sweepCounts > 0) && ~any(search_nSweepsKept{d} > 0)
+        warning('analyzeDMDSearch:allSweepsFailedRs', ...
+                ['Depth %d: every sweep failed the Rs limit, so no spot has metrics. '...
+                 'Traces are still plotted, but the statistics panels are empty and no '...
+                 'spot is a hotspot. Re-run loadSlicesDMD with a higher maxRs to include '...
+                 'this cell.'], curDepth);
+    end
 
     % ========================= CHANGE (Full grid for analysis) =========================
     % The saved maps (depthCurrentMap/depthBaselineMap/depthHotspot) may only include
@@ -321,12 +323,15 @@ for d = 1:nDepth
     % Get hotspot vs null spot, from the notebook's verdict. "Null spot" in the
     % panels below is exactly the complement of the spots drawn opaque above.
     hotspot_spotIdx = localFitLength(spotVerdict,nBars) > 0;
-    hotspot_sweepIdx = repelem(hotspot_spotIdx,keptCounts);
+    hotspot_sweepIdx = repelem(hotspot_spotIdx,sweepCounts);
     hotspotData = optoData(hotspot_sweepIdx,:);
     nullspotData = optoData(~hotspot_sweepIdx,:);
 
-    % Get response statistics for each spot, from the Rs-filtered sweep mean --
-    % the same sweeps the traces above are drawn from.
+    % Get response statistics for each spot, from the Rs-filtered sweep mean.
+    % These are the notebook's metrics, so they follow the Rs limit even though
+    % the traces above show every sweep: the tiles are the data, these are the
+    % numbers computed from the sweeps that passed QC. A spot whose sweeps all
+    % failed shows traces above and NaN here.
     depthFiltered = search_filteredStats{d};
     spotMax_avg = localFitLength([depthFiltered.max],nBars);
     spotMin_avg = localFitLength([depthFiltered.min],nBars);
