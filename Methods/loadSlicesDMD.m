@@ -16,9 +16,11 @@ arguments
     options.reconstructDMD logical = true % reconstruct DMD if fullSearchTable is not found
 
     options.outputFs double = 10000
-    options.timeRange double = [-20,100] % in ms
+    options.timeRange double = [-30,100] % in ms
     options.analysisWindowLength double = 30 % in ms after stim onset
     options.controlWindowLength double = 30 % in ms before stim onset
+    options.baselineGuard double = 1 % in ms, dead time between baseline and pulse
+    options.maxRs double = 30 % in MOhm, judged on min(Rs,Rs_headerString)
     options.eventSample % in sample
     options.nArtifactSamples double = 0 % in sample
     options.rcCheckRecoveryWindow double = 100 % in ms
@@ -272,6 +274,21 @@ if options.reloadCells
                 % Safety: make stimOnset consistent with what we analyze
                 protocol.stimOnset = protocol.stimOnset(1:nPulsesThisSweep);
 
+                % The detection control windows sit after each pulse's response
+                % window. If spots are stimulated faster than that, those windows
+                % hold the NEXT spot's response, which inflates the control density
+                % and biases every charge excess toward calling real spots null.
+                % Fail here rather than score against a contaminated control.
+                detectionCriteria = dmdDefaultCriteria();
+                controlEndMs = detectionCriteria.detectionWindowMs(2) + detectionCriteria.detectionGapMs ...
+                               + diff(detectionCriteria.detectionWindowMs);
+                if nPulsesThisSweep > 1 && protocol.isi < controlEndMs
+                    error('loadSlicesDMD:isiTooShort',...
+                          ['Inter-spot interval is %g ms, but the detection control window runs to '...
+                           '%g ms after each pulse and would contain the next spot''s response.'],...
+                          protocol.isi,controlEndMs);
+                end
+
                 % Define baseline window: have two windows, one before pulse and one after pulse
                 rcCheckOnset = getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck',pulseVar='delay') * (options.outputFs/1000);
                 rcCheckPulseWidth = getHeaderValue(headerString,'state.phys.internal.pulseString_RCCheck',pulseVar='pulseWidth') * (options.outputFs/1000);
@@ -296,12 +313,17 @@ if options.reloadCells
                 plotWindowLength = timeRangeEndSample(1) - timeRangeStartSample(1) + 1;
                 plotWindowTime = linspace(options.timeRange(1),options.timeRange(2),plotWindowLength);
         
-                % Define control window: 50ms before each spot stim onset
+                % Define control window: controlWindowLength before each spot stim
+                % onset, stopping baselineGuard short of the pulse so the leading
+                % edge of the stimulus artifact stays out of the baseline.
                 controlWindowSamples = options.controlWindowLength * options.outputFs/1000;
-    
-                % Define analysis window: 50ms after each spot stim onset
+                guardSamples = round(options.baselineGuard * options.outputFs/1000);
+
+                % Define analysis window: analysisWindowLength after each spot stim
+                % onset. Index 1 of plotWindow is timeRange(1), so 0 ms is one sample
+                % further in than the offset alone.
                 analysisWindowSamples = options.analysisWindowLength * options.outputFs/1000;
-                eventSample = abs(options.outputFs*options.timeRange(1)/1000);
+                eventSample = abs(options.outputFs*options.timeRange(1)/1000) + 1;
                 analysisWindow = eventSample:eventSample+analysisWindowSamples;
         
                 % Define time window for peak window analysis
@@ -366,7 +388,7 @@ if options.reloadCells
                     %% Define timeWindow and extract response
                     % Define control window
                     plotWindow = timeRangeStartSample(s):timeRangeEndSample(s);
-                    controlWindow = protocol.stimOnset(s)-controlWindowSamples-1 : protocol.stimOnset(s)-1;
+                    controlWindow = protocol.stimOnset(s)-controlWindowSamples : protocol.stimOnset(s)-guardSamples;
                     options.plotWindow = plotWindow;
                     options.controlWindow = controlWindow;
     
