@@ -9,8 +9,12 @@ function keep = dmdFilterSweepsByRs(rs,rsHeader,maxRs)
 % would have thrown away, and drops sweeps the header alone would have kept.
 %
 % A non-positive header value is not a measurement, so it is treated as
-% missing rather than as an unbeatably small Rs. A sweep with no usable
-% estimate at all does not pass.
+% missing rather than as an unbeatably small Rs.
+%
+% A sweep with no usable estimate at all is KEPT, following apply_qc_limits:
+% the limit removes sweeps that are known to be bad, not sweeps of unknown
+% quality. Reconstructed searches store a QC struct carrying no Rs, so
+% dropping them here would silently blank every spot of such a search.
 %
 % Mirrors resolve_qc_metrics(choice="min") in pyNeuroDAP's Shun_dmd_analysis
 % notebook, whose SWEEP_QC_LIMITS is {"Rs": 30.0}.
@@ -24,6 +28,6 @@ end
 rsHeader(rsHeader <= 0) = NaN;
 
 resolved = min([rs(:), rsHeader(:)],[],2,'omitnan');
-keep = reshape(resolved <= maxRs, size(rs));
+keep = reshape(isnan(resolved) | resolved <= maxRs, size(rs));
 
 end

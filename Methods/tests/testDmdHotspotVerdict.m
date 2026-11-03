@@ -136,6 +136,7 @@ verifyEqual(testCase,c.reanalysisWindowMs,[0 50]);
 verifyEqual(testCase,c.minAmplitudePa,2);
 verifyEqual(testCase,c.maxRs,30);
 verifyEqual(testCase,c.minChargeZ,0.5);
+verifyEqual(testCase,c.minSweeps,2);
 
 end
 

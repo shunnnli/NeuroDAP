@@ -686,6 +686,10 @@ if options.reloadCells
                 % Get search protocol
                 searchProtocols{depthIdx} = spotsAtDepth{1,'Protocol'}{1};
                 searchQC{depthIdx} = localSummarizeDMDQC(spotsAtDepth);
+                % The window these traces were SAVED with. Scoring must use it
+                % rather than options.timeRange, which on a reload=false run is
+                % whatever this run happens to be configured with.
+                searchStoredTimeRange = spotsAtDepth{1,'Options'}{1}.timeRange;
                 % Get search total spots
                 totalSpots = totalSpots + size(spotsAtDepth,1);
 
@@ -837,7 +841,8 @@ if options.reloadCells
             % rows, rather than at plot time. The metrics are stored rather than
             % a boolean, so the criterion and its threshold stay switchable in
             % analyzeDMDSearch without another reload.
-            searchDetection = dmdScoreSearchDetection(searchCurrentMap,searchRepMap,searchQC,options);
+            searchDetection = dmdScoreSearchDetection(searchCurrentMap,searchRepMap,searchQC, ...
+                                                      options,searchStoredTimeRange);
 
             % Save response map
             cellResponseMap{end+1} = searchResponseMap;
@@ -2404,5 +2409,6 @@ function [responseMap,cellStats] = localAttachDetection(responseMap,cellStats,ce
     responseMap.derivativeExcessZ = cellfun(@(x) x.derivativeExcessZ,cellDetection,'UniformOutput',false)';
     responseMap.reanalysisHotspot = cellfun(@(x) x.reanalysisHotspot,cellDetection,'UniformOutput',false)';
     responseMap.nSweepsKept       = cellfun(@(x) x.nSweepsKept,      cellDetection,'UniformOutput',false)';
+    responseMap.keptRows          = cellfun(@(x) x.keptRows,         cellDetection,'UniformOutput',false)';
     cellStats.filtered            = cellfun(@(x) x.filtered,         cellDetection,'UniformOutput',false)';
 end

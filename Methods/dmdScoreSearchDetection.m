@@ -1,4 +1,4 @@
-function detection = dmdScoreSearchDetection(searchCurrentMap,searchRepMap,searchQC,options)
+function detection = dmdScoreSearchDetection(searchCurrentMap,searchRepMap,searchQC,options,storedTimeRange)
 
 % Score one search's spots with the notebook's detection metrics.
 %
@@ -15,29 +15,51 @@ function detection = dmdScoreSearchDetection(searchCurrentMap,searchRepMap,searc
 %
 % searchCurrentMap{depth}{spot} is reps x samples; searchRepMap{depth}{spot}
 % names the sweep each row came from; searchQC{depth} is the struct of columns
-% localSummarizeDMDQC returns. options carries timeRange, controlWindowLength,
-% baselineGuard, analysisWindowLength and maxRs.
+% localSummarizeDMDQC returns. options carries controlWindowLength,
+% baselineGuard, analysisWindowLength, maxRs and outputFs.
+%
+% storedTimeRange is the window the spots on disk were SAVED with, read from
+% their own Options. It is not options.timeRange: the aggregation always reads
+% spots from disk, so on a reload=false run the current setting and the stored
+% window can disagree, and rebuilding the axis from the wrong one stretches it
+% silently -- the baseline then ends inside the response and every metric moves
+% without a single NaN to show for it.
 
 arguments
     searchCurrentMap cell
     searchRepMap cell
     searchQC cell
     options (1,1) struct
+    storedTimeRange (1,2) double
 end
 
 criteria = dmdDefaultCriteria();
 criteria.maxRs = options.maxRs;
-baselineMs = [-options.controlWindowLength, -options.baselineGuard];
+% One baseline window, following the options, for the levelling, the noise SD
+% and the filtered statistics alike.
+criteria.baselineMs = [-options.controlWindowLength, -options.baselineGuard];
 
 nDepth = numel(searchCurrentMap);
 emptyStats = struct('max',NaN,'min',NaN,'maxTime',NaN,'minTime',NaN,'auc',NaN);
 detection = struct('chargeExcessZ',{cell(nDepth,1)},'chargeExcessPc',{cell(nDepth,1)}, ...
                    'derivativeExcessZ',{cell(nDepth,1)},'reanalysisHotspot',{cell(nDepth,1)}, ...
-                   'nSweepsKept',{cell(nDepth,1)},'filtered',{cell(nDepth,1)});
+                   'nSweepsKept',{cell(nDepth,1)},'keptRows',{cell(nDepth,1)}, ...
+                   'filtered',{cell(nDepth,1)});
+for depthIdx = 1:nDepth
+    detection.filtered{depthIdx} = repmat(emptyStats,numel(searchCurrentMap{depthIdx}),1);
+end
 
 nSamples = localSampleCount(searchCurrentMap);
 if nSamples == 0; return; end
-timeMs = linspace(options.timeRange(1),options.timeRange(2),nSamples);
+
+expectedSamples = round(diff(storedTimeRange)*options.outputFs/1000) + 1;
+if nSamples ~= expectedSamples
+    error('dmdScoreSearchDetection:timeBaseMismatch',...
+          ['Stored traces hold %d samples, but the window they are said to come from, '...
+           '[%g %g] ms at %g Hz, implies %d. Reload the spots before scoring.'],...
+          nSamples,storedTimeRange(1),storedTimeRange(2),options.outputFs,expectedSamples);
+end
+timeMs = linspace(storedTimeRange(1),storedTimeRange(2),nSamples);
 
 % Drop sweeps failing the series-resistance limit before anything is averaged.
 filteredByDepth = cell(nDepth,1);
@@ -47,29 +69,37 @@ for depthIdx = 1:nDepth
     nSpots = numel(spotTraces);
 
     filtered = cell(nSpots,1);
+    keptRows = cell(nSpots,1);
     kept = zeros(nSpots,1);
     for spotIdx = 1:nSpots
         traces = spotTraces{spotIdx};
         if isempty(traces)
             filtered{spotIdx} = zeros(0,nSamples);
+            keptRows{spotIdx} = false(0,1);
         else
             keep = localKeepRowsByRs(sweepNames{spotIdx},searchQC{depthIdx},criteria.maxRs);
             filtered{spotIdx} = traces(keep,:);
+            keptRows{spotIdx} = keep;
         end
         kept(spotIdx) = size(filtered{spotIdx},1);
     end
 
     filteredByDepth{depthIdx} = filtered;
     detection.nSweepsKept{depthIdx} = kept;
+    detection.keptRows{depthIdx} = keptRows;
 end
 
+% A spot left with fewer than minSweeps surviving sweeps is dropped outright,
+% as filter_sweeps_by_qc does: it gets no verdict, and it does not shift the
+% reference that divides everyone else's z.
+hasEnough = @(x) size(x,1) >= criteria.minSweeps;
 allUsable = vertcat(filteredByDepth{:});
-allUsable = allUsable(cellfun(@(x) size(x,1) > 0, allUsable));
+allUsable = allUsable(cellfun(hasEnough,allUsable));
 searchRef = [];
 
 for depthIdx = 1:nDepth
     spots = filteredByDepth{depthIdx};
-    usable = spots(cellfun(@(x) size(x,1) > 0, spots));
+    usable = spots(cellfun(hasEnough,spots));
 
     try
         if numel(usable) >= criteria.minSpotsForReference
@@ -99,15 +129,16 @@ for depthIdx = 1:nDepth
 
     for spotIdx = 1:nSpots
         traces = spots{spotIdx};
+        if ~hasEnough(traces); continue; end
         scored = dmdHotspotVerdict('score',traces,timeMs,criteria,ref);
         chargeZ(spotIdx) = scored.chargeExcessZ;
         chargePc(spotIdx) = scored.chargeExcessPc;
         derivativeZ(spotIdx) = scored.derivativeExcessZ;
 
-        if size(traces,1) > 0
+        if hasEnough(traces)
             reanalysis(spotIdx) = dmdHotspotVerdict('reanalysis',traces,timeMs,criteria).isHotspot;
             filteredStats(spotIdx) = dmdSweepMeanStats(traces,timeMs, ...
-                [0 options.analysisWindowLength],criteria.peakAverageMs,baselineMs);
+                [0 options.analysisWindowLength],criteria.peakAverageMs,criteria.baselineMs);
         end
     end
 

@@ -127,7 +127,7 @@ search_hotspot = curCell.("Response map"){1}.hotspot{searchIdx};
 % Notebook hotspot metrics, written by loadSlicesDMD. Every one of this run's
 % stored quantities changed, so an older cells_DMD.mat cannot be patched up.
 responseMapStruct = curCell.("Response map"){1};
-if ~all(isfield(responseMapStruct,{'chargeExcessZ','reanalysisHotspot','nSweepsKept'})) ...
+if ~all(isfield(responseMapStruct,{'chargeExcessZ','reanalysisHotspot','nSweepsKept','keptRows'})) ...
         || ~isfield(curCell.Stats{1},'filtered')
     error('analyzeDMDSearch:missingDetectionMetrics',...
           ['This cells_DMD.mat predates the notebook hotspot metrics. Re-run loadSlicesDMD '...
@@ -136,6 +136,7 @@ end
 search_isResponseMap = responseMapStruct.isResponseMap{searchIdx};
 search_chargeExcessZ = responseMapStruct.chargeExcessZ{searchIdx};
 search_reanalysis = responseMapStruct.reanalysisHotspot{searchIdx};
+search_keptRows = responseMapStruct.keptRows{searchIdx};
 search_filteredStats = curCell.Stats{1}.filtered{searchIdx};
 search_spotLocation = curCell.("Response map"){1}.spotLocation{searchIdx};
 nDepth = length(search_depths);
@@ -193,8 +194,26 @@ for d = 1:nDepth
     % depthHotspotMap = search_hotspotMap(:,:,d);
     depthCurrentMap = search_cmap{d};
     depthBaselineMap = search_bmap{d};
-    spotSequence = repelem(1:height(search_hotspot{d}), cellfun(@numel, search_hotspot{d}))';
-    depthHotspot = search_hotspot{d};
+    % Drop the sweeps the Rs limit dropped, so the tiles, the control data and
+    % the statistics bars are all computed over the same set of sweeps. Without
+    % this the traces would still show sweeps the metrics had already excluded.
+    depthKeptRows = search_keptRows{d};
+    for spotIdx = 1:min(numel(depthCurrentMap),numel(depthKeptRows))
+        keep = depthKeptRows{spotIdx};
+        if isempty(keep); continue; end
+        if size(depthCurrentMap{spotIdx},1) == numel(keep)
+            depthCurrentMap{spotIdx} = depthCurrentMap{spotIdx}(keep,:);
+        end
+        if size(depthBaselineMap{spotIdx},1) == numel(keep)
+            depthBaselineMap{spotIdx} = depthBaselineMap{spotIdx}(keep,:);
+        end
+    end
+
+    % Every per-spot quantity below is indexed over this depth's full spot grid,
+    % the same index depthCurrentMap and the stored metrics use.
+    nBars = numel(depthCurrentMap);
+    keptCounts = cellfun(@(x) size(x,1), depthCurrentMap(:));
+    spotSequence = repelem((1:nBars)', keptCounts);
 
     % ========================= CHANGE (Full grid for analysis) =========================
     % The saved maps (depthCurrentMap/depthBaselineMap/depthHotspot) may only include
@@ -301,14 +320,13 @@ for d = 1:nDepth
 
     % Get hotspot vs null spot, from the notebook's verdict. "Null spot" in the
     % panels below is exactly the complement of the spots drawn opaque above.
-    nBars = numel(search_hotspot{d});
     hotspot_spotIdx = localFitLength(spotVerdict,nBars) > 0;
-    hotspot_sweepIdx = repelem(hotspot_spotIdx,cellfun(@numel,search_hotspot{d}(:)));
+    hotspot_sweepIdx = repelem(hotspot_spotIdx,keptCounts);
     hotspotData = optoData(hotspot_sweepIdx,:);
     nullspotData = optoData(~hotspot_sweepIdx,:);
 
-    % Get response statistics for each spot, from the Rs-filtered sweep mean so
-    % the bars and the traces above them agree about which sweeps are in.
+    % Get response statistics for each spot, from the Rs-filtered sweep mean --
+    % the same sweeps the traces above are drawn from.
     depthFiltered = search_filteredStats{d};
     spotMax_avg = localFitLength([depthFiltered.max],nBars);
     spotMin_avg = localFitLength([depthFiltered.min],nBars);
@@ -325,8 +343,8 @@ for d = 1:nDepth
     ctrlMinTime_avg = cell2mat(ctrlMinTimeIdx_avg)/options.outputFs*1000;
     spotAbsAUC = sum(abs(optoData),2)/options.outputFs; 
     ctrlAbsAUC = sum(abs(ctrlData),2)/options.outputFs;
-    spotAbsAUC_avg = accumarray(spotSequence(:), spotAbsAUC(:), [], @(x) {x});
-    ctrlAbsAUC_avg = accumarray(spotSequence(:), ctrlAbsAUC(:), [], @(x) {x});
+    spotAbsAUC_avg = accumarray(spotSequence(:), spotAbsAUC(:), [nBars 1], @(x) {x}, {[]});
+    ctrlAbsAUC_avg = accumarray(spotSequence(:), ctrlAbsAUC(:), [nBars 1], @(x) {x}, {[]});
     spotAbsAUC_avg = cell2mat(cellfun(@(x) mean(x,"all"), spotAbsAUC_avg,UniformOutput=false));
     ctrlAbsAUC_avg = cell2mat(cellfun(@(x) mean(x,"all"), ctrlAbsAUC_avg,UniformOutput=false));
 
@@ -340,8 +358,8 @@ for d = 1:nDepth
                     1:size(ctrlData,1),UniformOutput=false)');
     Eresponse_ctrl = cell2mat(arrayfun(@(x) length(findpeaks(-ctrlData(x,:),MinPeakDistance=minPeakDistanceSamples,MinPeakProminence=-Ethres,MinPeakWidth=peakWidthSamples)),...
                     1:size(ctrlData,1),UniformOutput=false)');
-    ISpotResponse_ctrl = accumarray(spotSequence(:), Iresponse_ctrl(:), [], @(x) {x});
-    ESpotResponse_ctrl = accumarray(spotSequence(:), Eresponse_ctrl(:), [], @(x) {x});
+    ISpotResponse_ctrl = accumarray(spotSequence(:), Iresponse_ctrl(:), [nBars 1], @(x) {x}, {[]});
+    ESpotResponse_ctrl = accumarray(spotSequence(:), Eresponse_ctrl(:), [nBars 1], @(x) {x}, {[]});
     Irate_ctrl = cell2mat(cellfun(@(x) length(find(x))/size(x,1), ISpotResponse_ctrl,UniformOutput=false));
     Erate_ctrl = cell2mat(cellfun(@(x) length(find(x))/size(x,1), ESpotResponse_ctrl,UniformOutput=false));
     % Opto success rate
@@ -349,8 +367,8 @@ for d = 1:nDepth
                     1:size(optoData,1),UniformOutput=false)');
     Eresponse_opto = cell2mat(arrayfun(@(x) length(findpeaks(-optoData(x,:),MinPeakDistance=minPeakDistanceSamples,MinPeakProminence=-Ethres,MinPeakWidth=peakWidthSamples)),...
                     1:size(optoData,1),UniformOutput=false)');
-    ISpotResponse_opto = accumarray(spotSequence(:), Iresponse_opto(:), [], @(x) {x});
-    ESpotResponse_opto = accumarray(spotSequence(:), Eresponse_opto(:), [], @(x) {x});
+    ISpotResponse_opto = accumarray(spotSequence(:), Iresponse_opto(:), [nBars 1], @(x) {x}, {[]});
+    ESpotResponse_opto = accumarray(spotSequence(:), Eresponse_opto(:), [nBars 1], @(x) {x}, {[]});
     Irate_opto = cell2mat(cellfun(@(x) length(find(x))/size(x,1), ISpotResponse_opto,UniformOutput=false));
     Erate_opto = cell2mat(cellfun(@(x) length(find(x))/size(x,1), ESpotResponse_opto,UniformOutput=false));
 
