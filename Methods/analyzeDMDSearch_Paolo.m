@@ -181,9 +181,14 @@ for d = 1:nDepth
     optoData = cell2mat(depthCurrentMap); 
     optoData = optoData(:,analysisWindow);
     ctrlData = cell2mat(depthBaselineMap);
-    ctrlData = ctrlData(:,size(ctrlData,2)-length(analysisWindow)+1:size(ctrlData,2));
     optoTime = linspace(0,options.analysisWindowLength,size(optoData,2));
-    ctrlTime = linspace(-options.controlWindowLength,0,size(ctrlData,2));
+
+    % The control window is shorter than the analysis window once
+    % baselineGuard trims it, so take whatever is there rather than indexing
+    % off the front of the array, and place it at the time it was recorded.
+    samplesPerMs = options.outputFs/1000;
+    ctrlEndMs = dmdControlWindowEndMs(curCell.Options{1});
+    [ctrlData,ctrlTime] = dmdFitControlWindow(ctrlData,numel(analysisWindow),samplesPerMs,ctrlEndMs);
 
     % Calculate max/min current for plotting
     % optoMax = optoData(~isoutlier(optoData)); 
@@ -314,7 +319,8 @@ for d = 1:nDepth
 
     % Plot opto vs prestim trace 
     nexttile(masterLayout,4);
-    plotSEM(ctrlTime(end-200:end),ctrlData(:,end-200:end),...
+    ctrlShow = dmdTailSamples(numel(ctrlTime),201);
+    plotSEM(ctrlTime(ctrlShow),ctrlData(:,ctrlShow),...
             [.8 .8 .8],plotIndividual=true,...
             label='Baseline');
     plotSEM(optoTime,nullspotData,[.6 .6 .6],plotIndividual=true,label='Nullspot');
