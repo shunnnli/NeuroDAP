@@ -231,21 +231,22 @@ for d = 1:length(commonDepth)
     ctrlData2 = cell2mat(depthBaselineMap2);
     
     % ========================= Shared realignment for both datasets =========================
-    % Use a common available length so analysisWindow/plot window are identical for (1) and (2)
-    nAvail1 = min(size(optoData1,2), size(ctrlData1,2));
-    nAvail2 = min(size(optoData2,2), size(ctrlData2,2));
-    nAvail  = min(nAvail1, nAvail2);
-    
-    % (Recommended) Trim to common length so downstream indexing is guaranteed consistent
+    samplesPerMs = options.outputFs/1000;
+
+    % Common available length across the two searches. This counts RESPONSE
+    % samples only. The control window is a separate, shorter window -- it
+    % stops baselineGuard short of the pulse -- so letting its width into
+    % nAvail made the realignment below believe the recording ended 1 ms
+    % before the stimulus, and collapsed the response window to one sample.
+    nAvail = min(size(optoData1,2), size(optoData2,2));
+
+    % Trim to common length so downstream indexing is guaranteed consistent
     optoData1 = optoData1(:, 1:nAvail);
-    ctrlData1 = ctrlData1(:, 1:nAvail);
     optoData2 = optoData2(:, 1:nAvail);
-    ctrlData2 = ctrlData2(:, 1:nAvail);
     
     needRealign = (plotFirstSample < 1) || (plotLastSample > nAvail) || (max(analysisWindow) > nAvail);
     
     if needRealign
-        samplesPerMs = options.outputFs/1000;
         baselineSamplesWanted = round(abs(options.timeRange(1)) * samplesPerMs);
         baselineSamples = min(max(baselineSamplesWanted, 0), nAvail - 1);
         newEventSample = baselineSamples + 1;
@@ -270,13 +271,16 @@ for d = 1:length(commonDepth)
 
     % Get prestim traces
     optoData1 = optoData1(:,analysisWindow);
-    ctrlData1 = ctrlData1(:,size(ctrlData1,2)-length(analysisWindow)+1:size(ctrlData1,2));
-    optoTime1 = linspace(0,options.analysisWindowLength,size(optoData1,2));
-    ctrlTime1 = linspace(-options.controlWindowLength,0,size(ctrlData1,2));
     optoData2 = optoData2(:,analysisWindow);
-    ctrlData2 = ctrlData2(:,size(ctrlData2,2)-length(analysisWindow)+1:size(ctrlData2,2));
-    optoTime2 = linspace(0,options.analysisWindowLength,size(optoData2,2));
-    ctrlTime2 = linspace(-options.controlWindowLength,0,size(ctrlData2,2));
+    optoTime1 = (0:(size(optoData1,2)-1)) / samplesPerMs;
+    optoTime2 = (0:(size(optoData2,2)-1)) / samplesPerMs;
+
+    % The control window is shorter than the response window, so take what is
+    % there instead of assuming the two match. Both searches are cut to one
+    % width, anchored at the pulse, so their baselines stay comparable.
+    nCtrlKeep = min([size(ctrlData1,2), size(ctrlData2,2), numel(analysisWindow)]);
+    [ctrlData1,ctrlTime1] = dmdFitControlWindow(ctrlData1,nCtrlKeep,samplesPerMs);
+    [ctrlData2,ctrlTime2] = dmdFitControlWindow(ctrlData2,nCtrlKeep,samplesPerMs);
 
     % Calculate max/min current for plotting
     % optoMax1 = max(optoData1,[],'all'); optoMax2 = max(optoData2,[],'all');
@@ -462,7 +466,8 @@ for d = 1:length(commonDepth)
     traceLayout.Layout.Tile = 4;
     traceLayout.TileSpacing = 'compact'; traceLayout.Padding = 'tight'; axis off;
     nexttile(traceLayout,1);
-    plotSEM(ctrlTime1(end-200:end),ctrlData1(:,end-200:end),...
+    ctrlShow1 = dmdTailSamples(numel(ctrlTime1),201);
+    plotSEM(ctrlTime1(ctrlShow1),ctrlData1(:,ctrlShow1),...
             [.8 .8 .8],plotIndividual=true,label='Baseline');
     plotSEM(optoTime1,nullspotData1,[.6 .6 .6],plotIndividual=true,label='Nullspot');
     plotSEM(optoTime1,hotspotData1,color1,plotIndividual=true,label='Hotspot');
@@ -470,7 +475,8 @@ for d = 1:length(commonDepth)
     legend(Location='best');
     title(['Search epoch ', num2str(searchPair(1)),': opto vs baseline trace']);
     nexttile(traceLayout,2);
-    plotSEM(ctrlTime2(end-200:end),ctrlData2(:,end-200:end),...
+    ctrlShow2 = dmdTailSamples(numel(ctrlTime2),201);
+    plotSEM(ctrlTime2(ctrlShow2),ctrlData2(:,ctrlShow2),...
             [.8 .8 .8],plotIndividual=true,label='Baseline');
     plotSEM(optoTime2,nullspotData2,[.6 .6 .6],plotIndividual=true,label='Nullspot');
     plotSEM(optoTime2,hotspotData2,color2,plotIndividual=true,label='Hotspot');

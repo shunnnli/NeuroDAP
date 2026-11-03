@@ -306,16 +306,13 @@ for d = 1:nDepth
     % Slice data
     optoData = optoData(:,analysisWindow);
 
-    % Make control slicing robust: the control window is shorter than the
-    % analysis window once baselineGuard trims it, and reconstructed data can
-    % have shorter baselines still.
-    ctrlEnd = size(ctrlData,2);
-    ctrlStart = max(1, ctrlEnd - numel(analysisWindow) + 1);
-    ctrlData = ctrlData(:, ctrlStart:ctrlEnd);
+    % The control window is shorter than the analysis window once
+    % baselineGuard trims it, and reconstructed data can have shorter
+    % baselines still, so take whatever is there.
+    [ctrlData,ctrlTime] = dmdFitControlWindow(ctrlData,numel(analysisWindow),samplesPerMs);
 
-    % Time vectors (ms) based on actual available samples
+    % Time vector (ms) based on actual available samples
     optoTime = (0:(size(optoData,2)-1)) / samplesPerMs;
-    ctrlTime = (-(size(ctrlData,2)-1):0) / samplesPerMs;
 
     % Calculate max/min current for plotting
     % optoMax = optoData(~isoutlier(optoData)); 
@@ -462,7 +459,8 @@ for d = 1:nDepth
 
     % Plot opto vs prestim trace 
     nexttile(masterLayout,4);
-    plotSEM(ctrlTime(end-200:end),ctrlData(:,end-200:end),...
+    ctrlShow = dmdTailSamples(numel(ctrlTime),201);
+    plotSEM(ctrlTime(ctrlShow),ctrlData(:,ctrlShow),...
             [.8 .8 .8],plotIndividual=true,...
             label='Baseline');
     plotSEM(optoTime,nullspotData,[.6 .6 .6],plotIndividual=true,label='Nullspot');
