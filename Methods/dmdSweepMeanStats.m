@@ -37,22 +37,23 @@ if isempty(values) || all(isnan(values)); return; end
 sampleIntervalMs = median(diff(timeMs),'omitnan');
 stats.auc = sum(values,'omitnan') * sampleIntervalMs / 1000;
 
-halfWidth = round(peakAverageMs/2/sampleIntervalMs);
 [~,maxIdx] = max(values);
 [~,minIdx] = min(values);
 
-stats.max = localAverageAround(values,maxIdx,halfWidth);
-stats.min = localAverageAround(values,minIdx,halfWidth);
 stats.maxTime = windowTime(maxIdx);
 stats.minTime = windowTime(minIdx);
+% Locate extrema inside the response window, but average on the full trace,
+% as the notebook does (including when a peak lies at a window boundary).
+stats.max = localAverageAround(meanTrace,timeMs,stats.maxTime,peakAverageMs);
+stats.min = localAverageAround(meanTrace,timeMs,stats.minTime,peakAverageMs);
 
 end
 
 
-function value = localAverageAround(values,idx,halfWidth)
+function value = localAverageAround(values,timeMs,peakTime,averageMs)
 
-lo = max(1,idx-halfWidth);
-hi = min(numel(values),idx+halfWidth);
-value = mean(values(lo:hi),'omitnan');
+half = averageMs/2;
+mask = timeMs >= peakTime-half & timeMs <= peakTime+half;
+value = mean(values(mask),'omitnan');
 
 end

@@ -27,6 +27,7 @@ arguments
     options.savePNG logical = false
     options.savePDF logical = true
     options.saveFIG logical = false
+    options.figureResolution (1,1) double {mustBePositive} = 300
 
     options.outputFs double = 10000
     options.timeRange double = [-10,50] % in ms
@@ -37,7 +38,8 @@ arguments
     options.rcCheckRecoveryWindow double = 100 % in ms
     options.peakWindow double = 2 % in ms around the peak to average
 
-    options.feature = 'auc'
+    options.feature string {mustBeMember(options.feature,["netPeak","peakToPeak","auc"])} = "netPeak"
+    options.metricWindowMs (1,2) double = dmdDefaultCriteria().metricWindowMs
     options.thresholdFactor double = 3 % 3*std
 
     options.resultsPathDate char = 'newest'
@@ -195,11 +197,27 @@ for d = 1:nDepth
     % depthHotspotMap = search_hotspotMap(:,:,d);
     depthCurrentMap = search_cmap{d};
     depthBaselineMap = search_bmap{d};
-    % EVERY tested spot is plotted, with every sweep it recorded. The Rs limit
-    % decides which sweeps the metrics are computed from, not what the figure
-    % shows: a spot whose sweeps all failed QC still draws its traces here, and
-    % the verdict below only decides how opaque they are. The statistics bars
-    % are the metrics, so they do follow the filter -- see the note there.
+    storedSweepCounts = cellfun(@(x) size(x,1),depthCurrentMap(:));
+    selectedRows = responseMapStruct.keptRows{searchIdx}{d};
+    for s = 1:numel(depthCurrentMap)
+        depthCurrentMap{s} = depthCurrentMap{s}(selectedRows{s},:);
+        depthBaselineMap{s} = depthBaselineMap{s}(selectedRows{s},:);
+    end
+    % Recompute every displayed metric from the same QC-passing, locally
+    % baseline-corrected sweep mean. The legacy saved AUC map recursively
+    % averaged pairs of values, giving later repetitions greater weight.
+    storedTime = curCell.Options{1}.timeRange;
+    timeMs = storedTime(1):1000/options.outputFs:storedTime(2);
+    baselineGuard = 1;
+    if isfield(curCell.Options{1},'baselineGuard')
+        baselineGuard = curCell.Options{1}.baselineGuard;
+    end
+    depthResponseMap = dmdPeakCurrentMap(depthCurrentMap, ...
+        cellfun(@(x) true(size(x,1),1),depthCurrentMap,'UniformOutput',false),search_spotLocation{d}, ...
+        size(depthResponseMap),timeMs,options.metricWindowMs, ...
+        [-options.controlWindowLength -baselineGuard],options.feature);
+    % All panels use exactly the same selected sweeps, including the 35 MOhm
+    % fallback selected during scoring. No rejected repeat enters a mean.
     %
     % Every per-spot quantity below is indexed over this depth's full spot grid,
     % the same index depthCurrentMap and the stored metrics use.
@@ -208,12 +226,11 @@ for d = 1:nDepth
     spotSequence = repelem((1:nBars)', sweepCounts);
 
     % A depth where the Rs limit removed every sweep has no metrics at all, so
-    % the statistics panels are empty by construction and every spot is drawn
-    % grey. Say so rather than leaving blank axes to be puzzled over.
-    if any(sweepCounts > 0) && ~any(search_nSweepsKept{d} > 0)
+    % the statistics panels and trace tiles contain no usable measurements.
+    if any(storedSweepCounts > 0) && ~any(search_nSweepsKept{d} > 0)
         warning('analyzeDMDSearch:allSweepsFailedRs', ...
                 ['Depth %d: every sweep failed the Rs limit, so no spot has metrics. '...
-                 'Traces are still plotted in grey, but the statistics panels are empty '...
+                 'The trace tiles, heatmap and statistics panels are empty '...
                  'and no spot is a hotspot. Re-run loadSlicesDMD with a higher maxRs to '...
                  'include this cell.'], curDepth);
     end
@@ -233,11 +250,15 @@ for d = 1:nDepth
 
     % One code per spot carries both answers to the tiles: whether it is a
     % hotspot, and whether quality control left it with anything to judge.
-    spotState = dmdSpotPlotState(spotVerdict,sweepCounts, ...
+    spotStates = dmdSpotPlotState(spotVerdict,storedSweepCounts, ...
                                  localFitLength(search_nSweepsKept{d},nBars));
+    keptCounts = localFitLength(search_nSweepsKept{d},nBars);
+    fprintf('Depth %d: %d sampled, %d with no QC-passing sweeps, %d with only one, %d hotspots (%s).\n', ...
+        curDepth,sum(storedSweepCounts>0),sum(storedSweepCounts>0 & keptCounts==0), ...
+        sum(keptCounts==1),sum(spotVerdict),options.hotspotType);
 
     [depthCurrentMapFull, ~, depthHotspotFull, ~] = ...
-        expandDepthToFullGrid(depthCurrentMap, depthBaselineMap, num2cell(spotState), search_spotLocation{d}, depthResponseMap, curDepth);
+        expandDepthToFullGrid(depthCurrentMap, depthBaselineMap, num2cell(spotStates), search_spotLocation{d}, depthResponseMap, curDepth);
 
     nCol = 2^curDepth;
     nRow = 2^curDepth;
@@ -260,6 +281,7 @@ for d = 1:nDepth
 
     % Get opto and prestim traces
     optoData = cell2mat(depthCurrentMap); 
+    fullOptoData = optoData;
     ctrlData = cell2mat(depthBaselineMap);
 
     % Robustly re-align indices if the requested timeRange/analysis window does not fit
@@ -332,10 +354,7 @@ for d = 1:nDepth
     nullspotData = optoData(~hotspot_sweepIdx,:);
 
     % Get response statistics for each spot, from the Rs-filtered sweep mean.
-    % These are the notebook's metrics, so they follow the Rs limit even though
-    % the traces above show every sweep: the tiles are the data, these are the
-    % numbers computed from the sweeps that passed QC. A spot whose sweeps all
-    % failed shows traces above and NaN here.
+    % These follow the same Rs-selected sweeps as the trace and current maps.
     depthFiltered = search_filteredStats{d};
     spotMax_avg = localFitLength([depthFiltered.max],nBars);
     spotMin_avg = localFitLength([depthFiltered.min],nBars);
@@ -344,12 +363,17 @@ for d = 1:nDepth
     spotAUC_avg = localFitLength([depthFiltered.auc],nBars);
     ctrlAUC_avg = cell2mat(cellfun(@(x) mean(x,"all"), curCell.Stats{1}.baseline.auc{searchIdx}{d},UniformOutput=false));
     % ctrlSTD_avg = cell2mat(cellfun(@(x) mean(x,"all"), curCell.Stats{1}.baseline.std{searchIdx}{d},UniformOutput=false));
-    ctrlMax_avg = cell2mat(cellfun(@(x) max(x,[],'all'), depthBaselineMap,UniformOutput=false));
-    ctrlMin_avg = cell2mat(cellfun(@(x) min(x,[],'all'), depthBaselineMap,UniformOutput=false));
-    [~,ctrlMaxTimeIdx_avg] = cellfun(@(x) max(x,[],'all'), depthBaselineMap,UniformOutput=false);
-    ctrlMaxTime_avg = cell2mat(ctrlMaxTimeIdx_avg)/options.outputFs*1000;
-    [~,ctrlMinTimeIdx_avg] = cellfun(@(x) max(x,[],'all'), depthBaselineMap,UniformOutput=false);
-    ctrlMinTime_avg = cell2mat(ctrlMinTimeIdx_avg)/options.outputFs*1000;
+    ctrlStats = cellfun(@(x) dmdControlMeanStats(x,options.outputFs,ctrlEndMs), ...
+        depthBaselineMap,'UniformOutput',false);
+    ctrlStats = vertcat(ctrlStats{:});
+    ctrlMax_avg = [ctrlStats.max]';
+    ctrlMin_avg = [ctrlStats.min]';
+    ctrlMaxTime_avg = [ctrlStats.maxTime]';
+    ctrlMinTime_avg = [ctrlStats.minTime]';
+    ctrlMax_avg = ctrlMax_avg(isfinite(ctrlMax_avg));
+    ctrlMin_avg = ctrlMin_avg(isfinite(ctrlMin_avg));
+    ctrlMaxTime_avg = ctrlMaxTime_avg(isfinite(ctrlMaxTime_avg));
+    ctrlMinTime_avg = ctrlMinTime_avg(isfinite(ctrlMinTime_avg));
     spotAbsAUC = sum(abs(optoData),2)/options.outputFs; 
     ctrlAbsAUC = sum(abs(ctrlData),2)/options.outputFs;
     spotAbsAUC_avg = accumarray(spotSequence(:), spotAbsAUC(:), [nBars 1], @(x) {x}, {[]});
@@ -444,11 +468,23 @@ for d = 1:nDepth
 
     % Plot response map
     ax_response = nexttile(masterLayout,3,[2 1]);
-    imagesc(depthResponseMap); axis off; hold on;
-    cb = colorbar; cb.Label.String = 'Total charge (pC)';
-    applyDMDColormap(ax_response, depthResponseMap, options.colormap, search_vhold);
+    imagesc(depthResponseMap,'AlphaData',isfinite(depthResponseMap)); axis off; hold on;
+    cb = colorbar;
+    if options.feature == "netPeak"
+        cb.Label.String = 'IPSC-EPSC current (pA)';
+        applyDMDColormap(ax_response, depthResponseMap, options.colormap, 0);
+        mapTitle = 'IPSC-EPSC current';
+    elseif options.feature == "peakToPeak"
+        cb.Label.String = 'Peak-to-peak current (pA)';
+        applyDMDColormap(ax_response, depthResponseMap, options.colormap, 11);
+        mapTitle = 'peak-to-peak current';
+    else
+        cb.Label.String = 'Total charge (pC)';
+        applyDMDColormap(ax_response, depthResponseMap, options.colormap, search_vhold);
+        mapTitle = 'auc';
+    end
     scatter(cellLoc(1),cellLoc(2),50,'o','filled','MarkerFaceColor','k','MarkerEdgeColor','none');
-    title(['Depth ', num2str(curDepth),': ',curCell.Options{1}.feature]);
+    title(mapTitle);
 
     % Plot hotspot map
     % ax_hotspot = nexttile(masterLayout,4,[2 1]); 
@@ -460,13 +496,37 @@ for d = 1:nDepth
 
     % Plot opto vs prestim trace 
     nexttile(masterLayout,4);
-    ctrlShow = dmdTailSamples(numel(ctrlTime),201);
-    plotSEM(ctrlTime(ctrlShow),ctrlData(:,ctrlShow),...
-            [.8 .8 .8],plotIndividual=true,...
-            label='Baseline');
-    plotSEM(optoTime,nullspotData,[.6 .6 .6],plotIndividual=true,label='Nullspot');
-    plotSEM(optoTime,hotspotData,color,plotIndividual=true,label='Hotspot');
-    xlabel('Time from stim (ms)'); ylabel('pA'), ylim([optoMin, optoMax]);
+    panelBase = timeMs >= -20 & timeMs < 0;
+    panelOpto = timeMs >= 0 & timeMs <= 50;
+    % One mean per stimulated spot, using the same recorded sweeps and opto
+    % colours as its tile. No repeat overlays or SEM patches in this panel.
+    shownLabels = strings(0);
+    for s = find(sweepCounts(:)>0)'
+        rows = spotSequence == s;
+        hBase = plotSEM(timeMs(panelBase),fullOptoData(rows,panelBase), ...
+            [.8 .8 .8],plotIndividual=false,plotPatch=false,label='Baseline');
+        if any(shownLabels == "Baseline"); set(hBase,'HandleVisibility','off'); end
+        shownLabels(end+1) = "Baseline";
+        spotColor = color;
+        opacity = options.nullAlpha;
+        switch spotStates(s)
+            case 1
+                opacity = 1;
+                spotLabel = "Hotspot";
+            case -1
+                spotColor = options.qcColor;
+                spotLabel = "QC excluded";
+            otherwise
+                spotLabel = "Nullspot";
+        end
+        hOpto = plotSEM(timeMs(panelOpto),fullOptoData(rows,panelOpto),spotColor,opacity=opacity, ...
+            plotIndividual=false,plotPatch=false,label=spotLabel);
+        if any(shownLabels == spotLabel); set(hOpto,'HandleVisibility','off'); end
+        shownLabels(end+1) = spotLabel;
+    end
+    xlabel('Time from stim (ms)'); ylabel('pA');
+    ylim('auto'); % include extrema of every displayed spot mean over -20..50 ms
+    xlim([-20 50]);
     legend(Location='best');
     title(['Depth ', num2str(curDepth),': opto vs baseline trace']);
 
@@ -557,7 +617,7 @@ for d = 1:nDepth
     plotScatterBar(2,ctrlMaxTime_avg,color=[.8 .8 .8]);
     xticks([1 2 3 4 5 6]); 
     xticklabels({'Excitatory','Inhibitory'});
-    ylabel('Time (ms)');
+    ylabel('Time from stim (ms)');
     title('Time to max ctrl current');
 
     % Plot spot response rate vs noise response rate (excitatory)
@@ -581,8 +641,9 @@ for d = 1:nDepth
     %% Save figure
     filename = strcat(curCell.Epochs{1}{searchIdx},'_depth',num2str(curDepth));
     filepath = fullfile(options.saveDataPath,['cell',num2str(curCell.Cell)],'Search summary');
-    saveFigures(gcf,[filename,'_',curCell.Options{1}.feature],filepath,...
-                savePNG=options.savePNG,savePDF=options.savePDF,saveFIG=options.saveFIG);
+    saveFigures(gcf,[filename,'_',char(options.feature)],filepath,...
+                savePNG=options.savePNG,savePDF=options.savePDF,saveFIG=options.saveFIG, ...
+                resolution=options.figureResolution);
     disp(['Finished: saving summary figure for search: ', curSearch,' at depth ',num2str(curDepth)]);
 end
 

@@ -35,6 +35,8 @@ end
 
 criteria = dmdDefaultCriteria();
 criteria.maxRs = options.maxRs;
+if isfield(options,'fallbackMaxRs'); criteria.fallbackMaxRs = options.fallbackMaxRs; end
+if isfield(options,'minSweeps'); criteria.minSweeps = options.minSweeps; end
 % One baseline window, following the options, for the levelling, the noise SD
 % and the filtered statistics alike.
 criteria.baselineMs = [-options.controlWindowLength, -options.baselineGuard];
@@ -77,7 +79,7 @@ for depthIdx = 1:nDepth
             filtered{spotIdx} = zeros(0,nSamples);
             keptRows{spotIdx} = false(0,1);
         else
-            keep = localKeepRowsByRs(sweepNames{spotIdx},searchQC{depthIdx},criteria.maxRs);
+            keep = localKeepRowsByRs(sweepNames{spotIdx},searchQC{depthIdx},criteria.maxRs,criteria.fallbackMaxRs);
             filtered{spotIdx} = traces(keep,:);
             keptRows{spotIdx} = keep;
         end
@@ -168,7 +170,7 @@ end
 end
 
 
-function keep = localKeepRowsByRs(sweepNames,qc,maxRs)
+function keep = localKeepRowsByRs(sweepNames,qc,maxRs,fallbackMaxRs)
 
 % Join each stored row to its sweep's QC row and apply the Rs limit. A row
 % whose sweep has no QC entry is kept: no evidence is not evidence of a bad
@@ -178,13 +180,15 @@ keep = true(numel(sweepNames),1);
 if isempty(sweepNames) || isempty(qc) || ~isfield(qc,'Sweep'); return; end
 
 qcSweeps = string(qc.Sweep);
+rs = nan(numel(sweepNames),1);
+rsHeader = nan(numel(sweepNames),1);
 for r = 1:numel(sweepNames)
     idx = find(qcSweeps == sweepNames(r),1);
     if isempty(idx); continue; end
 
-    rsHeader = NaN;
-    if isfield(qc,'Rs_headerString'); rsHeader = qc.Rs_headerString(idx); end
-    keep(r) = dmdFilterSweepsByRs(qc.Rs(idx),rsHeader,maxRs);
+    if isfield(qc,'Rs_headerString'); rsHeader(r) = qc.Rs_headerString(idx); end
+    rs(r) = qc.Rs(idx);
 end
+keep = dmdSelectSweepsByRs(rs,rsHeader,maxRs,fallbackMaxRs);
 
 end

@@ -31,6 +31,21 @@ verifyEqual(testCase,d.nSweepsKept{1},repmat(4,8,1));
 end
 
 
+function testFallbackRowsAreUsedForStatistics(testCase)
+
+[cm,rm,qc,opt] = localSearch(localFlatSpots(8));
+qc{1}.Rs = [20;31;35;36;40];
+qc{1}.Rs_headerString = qc{1}.Rs;
+cm{1}{1}(4:5,:) = 1000; % rejected rows must not contaminate the mean
+d = dmdScoreSearchDetection(cm,rm,qc,opt,[-30 100]);
+verifyEqual(testCase,d.nSweepsKept{1},repmat(3,8,1));
+verifyEqual(testCase,d.keptRows{1}{1},[true;true;true;false;false]);
+expected = dmdSweepMeanStats(cm{1}{1}(1:3,:),localTimeMs(),[0 30],1);
+verifyEqual(testCase,d.filtered{1}(1),expected,'AbsTol',1e-12);
+
+end
+
+
 function testSparseDepthBorrowsTheSearchReference(testCase)
 
 % Depth 1 has too few spots for a MAD, so it falls back to the whole search.
@@ -116,6 +131,7 @@ function testSpotsBelowMinSweepsAreNotScored(testCase)
 % surviving sweeps before it reaches the reference, so such a spot neither
 % gets a verdict nor shifts anyone else's.
 [cm,rm,qc,opt] = localSearch(localFlatSpots(8));
+opt.minSweeps = 2; % an explicit stricter setting still excludes single sweeps
 cm{1}{1} = cm{1}{1}(1,:);
 rm{1}{1} = "sweep_1";
 
@@ -124,6 +140,22 @@ d = dmdScoreSearchDetection(cm,rm,qc,opt,[-30 100]);
 verifyEqual(testCase,d.nSweepsKept{1}(1),1);
 verifyTrue(testCase,isnan(d.chargeExcessZ{1}(1)));
 verifyFalse(testCase,d.reanalysisHotspot{1}(1));
+
+end
+
+
+function testLaterNotebookDefaultScoresOneSurvivingSweep(testCase)
+
+[cm,rm,qc,opt] = localSearch(localFlatSpots(8));
+response = localRespondingSpot();
+cm{1}{1} = response(1,:);
+rm{1}{1} = "sweep_1";
+d = dmdScoreSearchDetection(cm,rm,qc,opt,[-30 100]);
+
+verifyEqual(testCase,d.nSweepsKept{1}(1),1);
+verifyTrue(testCase,isfinite(d.chargeExcessZ{1}(1)));
+verifyGreaterThan(testCase,d.chargeExcessZ{1}(1),opt.minChargeZ);
+verifyTrue(testCase,isfinite(d.filtered{1}(1).min));
 
 end
 

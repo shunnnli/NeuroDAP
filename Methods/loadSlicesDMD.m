@@ -21,6 +21,8 @@ arguments
     options.controlWindowLength double = 30 % in ms before stim onset
     options.baselineGuard double = 1 % in ms, dead time between baseline and pulse
     options.maxRs double = 30 % in MOhm, judged on min(Rs,Rs_headerString)
+    options.fallbackMaxRs double = 35 % used only if exactly one sweep passes maxRs
+    options.minSweeps (1,1) double {mustBeInteger,mustBePositive} = dmdDefaultCriteria().minSweeps
     options.eventSample % in sample
     options.nArtifactSamples double = 0 % in sample
     options.rcCheckRecoveryWindow double = 100 % in ms
