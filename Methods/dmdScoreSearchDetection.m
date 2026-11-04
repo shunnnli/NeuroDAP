@@ -47,6 +47,7 @@ detection = struct('chargeExcessZ',{cell(nDepth,1)},'chargeExcessPc',{cell(nDept
                    'derivativeExcessZ',{cell(nDepth,1)},'reanalysisHotspot',{cell(nDepth,1)}, ...
                    'nSweepsKept',{cell(nDepth,1)},'keptRows',{cell(nDepth,1)}, ...
                    'filtered',{cell(nDepth,1)});
+detection.repMap = searchRepMap;
 for depthIdx = 1:nDepth
     detection.filtered{depthIdx} = repmat(emptyStats,numel(searchCurrentMap{depthIdx}),1);
 end

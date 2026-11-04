@@ -2412,5 +2412,6 @@ function [responseMap,cellStats] = localAttachDetection(responseMap,cellStats,ce
     responseMap.reanalysisHotspot = cellfun(@(x) x.reanalysisHotspot,cellDetection,'UniformOutput',false)';
     responseMap.nSweepsKept       = cellfun(@(x) x.nSweepsKept,      cellDetection,'UniformOutput',false)';
     responseMap.keptRows          = cellfun(@(x) x.keptRows,         cellDetection,'UniformOutput',false)';
+    responseMap.repMap            = cellfun(@(x) x.repMap,           cellDetection,'UniformOutput',false)';
     cellStats.filtered            = cellfun(@(x) x.filtered,         cellDetection,'UniformOutput',false)';
 end

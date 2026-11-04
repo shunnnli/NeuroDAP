@@ -116,6 +116,9 @@ end
 
 %% Load cell info
 
+% Always apply current QC policy, even when plotting an older saved cell table.
+curCell = dmdRefreshSearchDetection(curCell,searchIdx);
+
 % Load cell info
 curSearch = curCell.Epochs{1}{searchIdx};
 search_depths = curCell.("Response map"){1}.depths{searchIdx};
@@ -127,8 +130,7 @@ search_bmap = curCell.("Response map"){1}.baselineMap{searchIdx};
 search_vhold = curCell.Vhold{1}(searchIdx);
 search_hotspot = curCell.("Response map"){1}.hotspot{searchIdx};
 
-% Notebook hotspot metrics, written by loadSlicesDMD. Every one of this run's
-% stored quantities changed, so an older cells_DMD.mat cannot be patched up.
+% Notebook hotspot metrics, refreshed above from the stored trace/QC rows.
 responseMapStruct = curCell.("Response map"){1};
 if ~all(isfield(responseMapStruct,{'chargeExcessZ','reanalysisHotspot','nSweepsKept','keptRows'})) ...
         || ~isfield(curCell.Stats{1},'filtered')
@@ -199,6 +201,7 @@ for d = 1:nDepth
     depthBaselineMap = search_bmap{d};
     storedSweepCounts = cellfun(@(x) size(x,1),depthCurrentMap(:));
     selectedRows = responseMapStruct.keptRows{searchIdx}{d};
+    depthDisplayMap = dmdDisplaySpotTraces(depthCurrentMap,selectedRows);
     for s = 1:numel(depthCurrentMap)
         depthCurrentMap{s} = depthCurrentMap{s}(selectedRows{s},:);
         depthBaselineMap{s} = depthBaselineMap{s}(selectedRows{s},:);
@@ -216,8 +219,8 @@ for d = 1:nDepth
         cellfun(@(x) true(size(x,1),1),depthCurrentMap,'UniformOutput',false),search_spotLocation{d}, ...
         size(depthResponseMap),timeMs,options.metricWindowMs, ...
         [-options.controlWindowLength -baselineGuard],options.feature);
-    % All panels use exactly the same selected sweeps, including the 35 MOhm
-    % fallback selected during scoring. No rejected repeat enters a mean.
+    % Measured maps and statistics use the selected sweeps. If none pass QC,
+    % original traces remain visible in gray, without entering the metrics.
     %
     % Every per-spot quantity below is indexed over this depth's full spot grid,
     % the same index depthCurrentMap and the stored metrics use.
@@ -230,7 +233,7 @@ for d = 1:nDepth
     if any(storedSweepCounts > 0) && ~any(search_nSweepsKept{d} > 0)
         warning('analyzeDMDSearch:allSweepsFailedRs', ...
                 ['Depth %d: every sweep failed the Rs limit, so no spot has metrics. '...
-                 'The trace tiles, heatmap and statistics panels are empty '...
+                 'Original traces are shown in gray; the heatmap and statistics remain empty '...
                  'and no spot is a hotspot. Re-run loadSlicesDMD with a higher maxRs to '...
                  'include this cell.'], curDepth);
     end
@@ -258,7 +261,7 @@ for d = 1:nDepth
         sum(keptCounts==1),sum(spotVerdict),options.hotspotType);
 
     [depthCurrentMapFull, ~, depthHotspotFull, ~] = ...
-        expandDepthToFullGrid(depthCurrentMap, depthBaselineMap, num2cell(spotStates), search_spotLocation{d}, depthResponseMap, curDepth);
+        expandDepthToFullGrid(depthDisplayMap, depthBaselineMap, num2cell(spotStates), search_spotLocation{d}, depthResponseMap, curDepth);
 
     nCol = 2^curDepth;
     nRow = 2^curDepth;
@@ -281,7 +284,6 @@ for d = 1:nDepth
 
     % Get opto and prestim traces
     optoData = cell2mat(depthCurrentMap); 
-    fullOptoData = optoData;
     ctrlData = cell2mat(depthBaselineMap);
 
     % Robustly re-align indices if the requested timeRange/analysis window does not fit
@@ -341,7 +343,8 @@ for d = 1:nDepth
     % optoMax = optoData(~isoutlier(optoData)); 
     % optoMin = optoData(~isoutlier(optoData)); 
     % optoMax = max(optoData,[],'all'); optoMin = min(optoData,[],'all');
-    [optoMin, optoMax] = getYlimit(optoData, Ethres=Ethres, Ithres=Ithres, k_sem=5);
+    displayData = cell2mat(depthDisplayMap);
+    [optoMin, optoMax] = getYlimit(displayData(:,analysisWindow), Ethres=Ethres, Ithres=Ithres, k_sem=5);
 
     % (Optional) Change hotspot criteria
     % XXXXXXXXX
@@ -440,7 +443,7 @@ for d = 1:nDepth
                 plotSEM(plotWindowTime,trace,color,opacity=1,...
                         plotIndividual=true,LineWidth=LineWidth);
             case -1
-                plotSEM(plotWindowTime,trace,options.qcColor,opacity=options.nullAlpha,...
+                plotSEM(plotWindowTime,trace,options.qcColor,opacity=1,...
                         plotIndividual=true,LineWidth=LineWidth);
             otherwise
                 plotSEM(plotWindowTime,trace,color,opacity=options.nullAlpha,...
@@ -470,6 +473,11 @@ for d = 1:nDepth
     ax_response = nexttile(masterLayout,3,[2 1]);
     imagesc(depthResponseMap,'AlphaData',isfinite(depthResponseMap)); axis off; hold on;
     cb = colorbar;
+    if ~any(isfinite(depthResponseMap),'all')
+        cb.Visible = 'off';
+        text(ax_response,0.5,0.5,'No QC-passing sweeps',Units='normalized', ...
+            HorizontalAlignment='center',Color=options.qcColor);
+    end
     if options.feature == "netPeak"
         cb.Label.String = 'IPSC-EPSC current (pA)';
         applyDMDColormap(ax_response, depthResponseMap, options.colormap, 0);
@@ -501,9 +509,9 @@ for d = 1:nDepth
     % One mean per stimulated spot, using the same recorded sweeps and opto
     % colours as its tile. No repeat overlays or SEM patches in this panel.
     shownLabels = strings(0);
-    for s = find(sweepCounts(:)>0)'
-        rows = spotSequence == s;
-        hBase = plotSEM(timeMs(panelBase),fullOptoData(rows,panelBase), ...
+    for s = find(storedSweepCounts(:)>0)'
+        panelTraces = depthDisplayMap{s};
+        hBase = plotSEM(timeMs(panelBase),panelTraces(:,panelBase), ...
             [.8 .8 .8],plotIndividual=false,plotPatch=false,label='Baseline');
         if any(shownLabels == "Baseline"); set(hBase,'HandleVisibility','off'); end
         shownLabels(end+1) = "Baseline";
@@ -515,11 +523,12 @@ for d = 1:nDepth
                 spotLabel = "Hotspot";
             case -1
                 spotColor = options.qcColor;
+                opacity = 1;
                 spotLabel = "QC excluded";
             otherwise
                 spotLabel = "Nullspot";
         end
-        hOpto = plotSEM(timeMs(panelOpto),fullOptoData(rows,panelOpto),spotColor,opacity=opacity, ...
+        hOpto = plotSEM(timeMs(panelOpto),panelTraces(:,panelOpto),spotColor,opacity=opacity, ...
             plotIndividual=false,plotPatch=false,label=spotLabel);
         if any(shownLabels == spotLabel); set(hOpto,'HandleVisibility','off'); end
         shownLabels(end+1) = spotLabel;
