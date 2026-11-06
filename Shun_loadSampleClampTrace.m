@@ -59,23 +59,21 @@ photometryIdx = find(cellfun(@(x) any(strcmpi(x,{'NI','LJ','labjack'})),{timeSer
 if isempty(photometryIdx); error('No photometry channels found in timeSeries.'); end
 daIdx = photometryIdx(1); % editable channel for manual time/trial selection; automatic search checks all
 
-%% Define time to plot (opt 1: just enter in sec)
+%% (Optional) Define time to plot (opt 1: just enter in sec)
 
-if timeOption == 1
-    sampleStart_sec = 112;
-    sampleEnd_sec = 172;
 
-    % Convert session seconds to the native NI reference sample
-    validateattributes([sampleStart_sec,sampleEnd_sec],{'numeric'},{'real','finite','nonnegative'});
-    if sampleEnd_sec <= sampleStart_sec || sampleEnd_sec > timeNI(end)-timeNI(1)
-        error('Choose an increasing time window within the session.');
-    end
-    [~,referenceIdx] = min(abs(timeNI-(timeNI(1)+sampleStart_sec)));
-    timeRange = [sampleStart_sec,sampleEnd_sec] - (timeNI(referenceIdx)-timeNI(1));
-    trialRows = [];
-elseif timeOption ~= 2
-    error('timeOption must be 1 (seconds) or 2 (trial table).');
+sampleStart_sec = 100;
+sampleEnd_sec = 165;
+
+% Convert session seconds to the native NI reference sample
+validateattributes([sampleStart_sec,sampleEnd_sec],{'numeric'},{'real','finite','nonnegative'});
+if sampleEnd_sec <= sampleStart_sec || sampleEnd_sec > timeNI(end)-timeNI(1)
+    error('Choose an increasing time window within the session.');
 end
+[~,referenceIdx] = min(abs(timeNI-(timeNI(1)+sampleStart_sec)));
+timeRange = [sampleStart_sec,sampleEnd_sec] - (timeNI(referenceIdx)-timeNI(1));
+trialRows = [];
+
 
 %% Define time to plot (opt 2: use trial table / random-session events)
 
@@ -114,65 +112,42 @@ if timeOption == 2
         disp(trials(trialRows,{'TrialNumber','CueTime','isReward','isClamp'}));
     end
 
-    % Find a continuous example with flat clamped and strong unclamped responses
+    % Find a continuous example with flat clamped and strong unclamped responses,
+    % favouring windows whose clamped water and airpuff responses are the flattest.
     if findBestClampWindow
         windowDurations_sec = 60; % default: a 60 s example; optionally use 30:5:60
         windowStep_sec = 1;
         baselineWindow_sec = [-2,0]; % mean baseline; excludes the endpoint
         responseWindow_sec = [0,2]; % relative to actual water / airpuff / tone delivery
         clampWeight = 2;
+        waterClampWeight = 4; % extra penalty on the worst clamped water response
+        airpuffClampWeight = 4; % extra penalty on the worst clamped airpuff response
 
         validateattributes(windowDurations_sec,{'numeric'},{'vector','nonempty','finite','>=',30,'<=',60});
         validateattributes(windowStep_sec,{'numeric'},{'scalar','finite','positive'});
         validateattributes(baselineWindow_sec,{'numeric'},{'size',[1,2],'finite','real'});
         validateattributes(responseWindow_sec,{'numeric'},{'size',[1,2],'finite','real'});
         validateattributes(clampWeight,{'numeric'},{'scalar','finite','nonnegative'});
+        validateattributes(waterClampWeight,{'numeric'},{'scalar','finite','nonnegative'});
+        validateattributes(airpuffClampWeight,{'numeric'},{'scalar','finite','nonnegative'});
         if diff(baselineWindow_sec) <= 0 || baselineWindow_sec(2) > 0 || diff(responseWindow_sec) <= 0
             error('Use increasing windows, with the baseline ending at or before event delivery.');
         end
 
         % Reuse the event classification saved by analyzeSessions_clamp.
         % Its clampON_event marks clamp activity within 3 s after each delivery.
-        eventFields = {'waterClampIdx','waterUnclampIdx','airpuffClampIdx', ...
-                       'airpuffUnclampIdx','toneClampIdx','toneUnclampIdx'};
-        if ~all(isfield(behavior,eventFields))
-            error('Run analyzeSessions_clamp for this random session to save water/airpuff/tone clamp classifications.');
-        end
-        eventTypes = ["Water","Water","Airpuff","Airpuff","Tone","Tone"];
-        eventSamples = []; eventType = strings(0,1); eventIsClamp = false(0,1);
-        for i = 1:length(eventFields)
-            idx = unique(double(behavior.(eventFields{i})(:)));
-            idx = idx(isfinite(idx) & idx >= 1 & idx <= numel(timeNI) & idx == fix(idx));
-            eventSamples = [eventSamples;idx]; %#ok<AGROW>
-            eventType = [eventType;repmat(eventTypes(i),length(idx),1)]; %#ok<AGROW>
-            eventIsClamp = [eventIsClamp;repmat(mod(i,2) == 1,length(idx),1)]; %#ok<AGROW>
-        end
-        eventTable = table(eventSamples,eventType,eventIsClamp, ...
-            'VariableNames',{'Sample','Type','IsClamp'});
-        eventTable = sortrows(eventTable,'Sample');
+        eventTable = getClampEventTable(behavior,timeNI);
         if isempty(eventTable)
             disp('No qualifying window exists: no water, airpuff or tone events were found.');
             return
         end
-        eventTable.Time_sec = reshape(timeNI(eventTable.Sample)-timeNI(1),[],1);
 
-        candidates = zeros(0,16);
+        candidates = zeros(0,18);
         eventScores = cell(size(timeSeries));
         for daIdx = reshape(photometryIdx,1,[])
             % RMS is direction-independent: peaks and dips both count as responses.
-            signal = timeSeries(daIdx).data;
-            finalFs = timeSeries(daIdx).finalFs;
-            system = timeSeries(daIdx).system;
-            extractRange = [min(baselineWindow_sec(1),responseWindow_sec(1)), ...
-                            max(baselineWindow_sec(2),responseWindow_sec(2))];
-            [eventTraces,eventTime] = plotTraces(eventTable.Sample,extractRange,signal,params, ...
-                signalFs=finalFs,signalSystem=system,eventSystem='ni',plot=false,rmmissing=false);
-            baselineIdx = eventTime >= baselineWindow_sec(1)-1e-9 & eventTime < baselineWindow_sec(2)-1e-9;
-            responseIdx = eventTime >= responseWindow_sec(1)-1e-9 & eventTime <= responseWindow_sec(2)+1e-9;
-            if ~any(baselineIdx) || sum(responseIdx) < 2; error('Not enough DA samples in the scoring windows.'); end
-            response = eventTraces(:,responseIdx)-mean(eventTraces(:,baselineIdx),2);
-            eventTable.RMS = sqrt(mean(response.^2,2));
-            eventTable.Valid = all(isfinite(eventTraces),2) & isfinite(eventTable.RMS);
+            [eventTable,extractRange] = scoreClampEventRMS(eventTable,timeSeries(daIdx),params, ...
+                baselineWindow_sec=baselineWindow_sec,responseWindow_sec=responseWindow_sec);
 
             % Score only events whose full baseline and response fit in the window.
             for duration_sec = reshape(windowDurations_sec,1,[])
@@ -185,6 +160,16 @@ if timeOption == 2
                     if ~any(clamped) || ~any(unclamped); continue; end
                     unclampRMS = mean(eventTable.RMS(unclamped));
                     clampRMS = max(eventTable.RMS(clamped));
+                    % Score the clamped water and airpuff traces separately so a window
+                    % that is flat for both outranks one that is flat only for tone or
+                    % for a single event type. 0 when the window holds no clamped event
+                    % of that type, which the composition ranking below deprioritises.
+                    waterClamped = clamped & eventTable.Type == "Water";
+                    if any(waterClamped); waterClampRMS = max(eventTable.RMS(waterClamped));
+                    else; waterClampRMS = 0; end
+                    airpuffClamped = clamped & eventTable.Type == "Airpuff";
+                    if any(airpuffClamped); airpuffClampRMS = max(eventTable.RMS(airpuffClamped));
+                    else; airpuffClampRMS = 0; end
                     nWater = sum(included & eventTable.Type == "Water");
                     nAirpuff = sum(included & eventTable.Type == "Airpuff");
                     nTone = sum(included & eventTable.Type == "Tone");
@@ -192,16 +177,18 @@ if timeOption == 2
                     nWaterUnclamp = sum(unclamped & eventTable.Type == "Water");
                     nAirpuffClamp = sum(clamped & eventTable.Type == "Airpuff");
                     nAirpuffUnclamp = sum(unclamped & eventTable.Type == "Airpuff");
-                    score = unclampRMS-clampWeight*clampRMS;
+                    score = unclampRMS-clampWeight*clampRMS- ...
+                        waterClampWeight*waterClampRMS-airpuffClampWeight*airpuffClampRMS;
                     candidates(end+1,:) = [start_sec,end_sec,duration_sec,score,unclampRMS, ...
-                        clampRMS,sum(clamped),sum(unclamped),nWater,nAirpuff,nTone,daIdx, ...
+                        clampRMS,waterClampRMS,airpuffClampRMS,sum(clamped),sum(unclamped),nWater,nAirpuff,nTone,daIdx, ...
                         nWaterClamp,nWaterUnclamp,nAirpuffClamp,nAirpuffUnclamp]; %#ok<SAGROW>
                 end
             end
             eventScores{daIdx} = eventTable;
         end
         windowCandidates = array2table(candidates,'VariableNames',{'Start_sec','End_sec','Duration_sec', ...
-            'Score','MeanUnclampRMS','WorstClampRMS','NClamp','NUnclamp','NWater','NAirpuff','NTone','ChannelIndex', ...
+            'Score','MeanUnclampRMS','WorstClampRMS','WorstWaterClampRMS','WorstAirpuffClampRMS', ...
+            'NClamp','NUnclamp','NWater','NAirpuff','NTone','ChannelIndex', ...
             'NWaterClamp','NWaterUnclamp','NAirpuffClamp','NAirpuffUnclamp'});
         windowCandidates.ChannelName = reshape(string({timeSeries(windowCandidates.ChannelIndex).name}),[],1);
         if isempty(windowCandidates)
@@ -218,33 +205,41 @@ if timeOption == 2
             {'NCombinations','NMatchedTypes','Score','Duration_sec','Start_sec'}, ...
             {'descend','descend','descend','ascend','ascend'});
 
-        % Ensure the entire displayed DA / clamp interval is recorded and finite.
-        selectedWindowIdx = [];
-        for i = 1:height(windowCandidates)
-            daIdx = windowCandidates.ChannelIndex(i);
-            sampleStart_sec = windowCandidates.Start_sec(i);
-            sampleEnd_sec = windowCandidates.End_sec(i);
-            [~,referenceIdx] = min(abs(timeNI-(timeNI(1)+sampleStart_sec)));
-            timeRange = [sampleStart_sec,sampleEnd_sec]-(timeNI(referenceIdx)-timeNI(1));
-            try
-                candidateTrace = getSampleClampTrace(timeSeries,params,referenceIdx,timeRange, ...
-                    daIdx=daIdx,removeClampBaseline=false);
-            catch ME
-                if strcmp(ME.identifier,'getSampleClampTrace:WindowOutsideRecording'); continue; end
-                rethrow(ME)
-            end
-            if any(~isfinite([candidateTrace.DA,candidateTrace.blueClamp,candidateTrace.redClamp])); continue; end
-            selectedWindowIdx = i;
-            break
-        end
-        if isempty(selectedWindowIdx)
+        % Screening step: keep the best non-overlapping candidates whose DA and
+        % clamp commands are recorded in full, then show DA alone for each one.
+        nTopCandidates = 5;
+        windowCandidates.Candidate = (1:height(windowCandidates))';
+        [topCandidates,topCandidateTraces] = selectTopClampWindows(windowCandidates, ...
+            timeSeries,params,timeNI,nTop=nTopCandidates);
+        if isempty(topCandidates)
             disp('No qualifying window exists with continuous, finite DA and clamp recordings.');
             return
         end
-        selectedWindow = windowCandidates(selectedWindowIdx,:);
+        topCandidates.Label = string(compose('%d/4 combos | clamp RMS %.3f', ...
+            topCandidates.NCombinations,topCandidates.WorstClampRMS));
+        candidateClampEpochs = getClampEpochs(timeSeries);
+        % Type / IsClamp / Time_sec are the same on every channel, so any copy labels
+        labelEvents = eventTable(:,{'Sample','Type','IsClamp','Time_sec'});
+        candidateFig = plotClampWindowGrid(topCandidates,topCandidateTraces, ...
+            events=labelEvents,clampEpochs=candidateClampEpochs,channelIdx=photometryIdx, ...
+            titleText=sprintf('%s | best trial-type candidates (DA only)',sessionName));
+        disp('Top trial-type candidates:');
+        disp(topCandidates(:,{'ChannelName','Rank','Start_sec','End_sec','NCombinations', ...
+            'NMatchedTypes','Score','WorstClampRMS','WorstWaterClampRMS','WorstAirpuffClampRMS'}));
+
+        % The best candidate overall becomes the window the detail cell plots
+        [~,bestRow] = min(topCandidates.Candidate);
+        selectedWindow = topCandidates(bestRow,:);
+        daIdx = selectedWindow.ChannelIndex;
+        sampleStart_sec = selectedWindow.Start_sec;
+        sampleEnd_sec = selectedWindow.End_sec;
+        referenceIdx = selectedWindow.ReferenceIdx;
+        timeRange = selectedWindow.TimeRange;
         eventTable = eventScores{daIdx};
-        selectedEvents = eventTable(eventTable.Time_sec >= sampleStart_sec & eventTable.Time_sec <= sampleEnd_sec,:);
-        selectedEvents.InScore = selectedEvents.Valid & selectedEvents.Time_sec+extractRange(1) >= sampleStart_sec & ...
+        selectedEvents = eventTable(eventTable.Time_sec >= sampleStart_sec & ...
+            eventTable.Time_sec <= sampleEnd_sec,:);
+        selectedEvents.InScore = selectedEvents.Valid & ...
+            selectedEvents.Time_sec+extractRange(1) >= sampleStart_sec & ...
             selectedEvents.Time_sec+extractRange(2) <= sampleEnd_sec;
         trialRows = [];
         disp('Selected random-session window:'); disp(selectedWindow);
@@ -252,15 +247,41 @@ if timeOption == 2
             fprintf('No valid window contains all four combinations. Selected the best available coverage: %d/4 combinations.\n',selectedWindow.NCombinations);
         end
         disp(selectedEvents);
+
+        fprintf(['Current window: %s %g-%g s. Run the detail cell for DA + clamp index, or copy ' ...
+                 'another window into the opt 1 cell first.\n'], ...
+            selectedWindow.ChannelName,sampleStart_sec,sampleEnd_sec);
+
+        clampWindowSearch.sessionName = sessionName;
+        clampWindowSearch.windowCandidates = windowCandidates;
+        clampWindowSearch.topCandidates = topCandidates;
+        clampWindowSearch.traces = topCandidateTraces;
+        clampWindowSearch.eventScores = eventScores;
+        clampWindowSearch.selectedWindow = selectedWindow;
+        clampWindowSearch.events = selectedEvents;
+        clampWindowSearch.photometryIdx = photometryIdx;
+        clampWindowSearch.rankingOrder = {'NCombinations','NMatchedTypes','Score'};
+        clampWindowSearch.settings = struct('windowDurations_sec',windowDurations_sec, ...
+            'windowStep_sec',windowStep_sec,'baselineWindow_sec',baselineWindow_sec, ...
+            'responseWindow_sec',responseWindow_sec,'clampWeight',clampWeight, ...
+            'waterClampWeight',waterClampWeight,'airpuffClampWeight',airpuffClampWeight, ...
+            'nTopCandidates',nTopCandidates);
+        clampWindowSearch.figure = candidateFig;
     end
 end
 
-%% Plot the trace
+%% Plot the detail trace: DA and clamp index for the window set above
 
-% Same extraction helpers as session analysis; retain each signal's stored Fs
-removeClampBaseline = timeOption == 2 && ~findBestClampWindow; % manual trials only
+% The detail step of the screening flow: pick a window from a screening figure
+% (or type one into the opt 1 cell), then run this cell to see the clamp index
+% under DA. It uses whatever referenceIdx / timeRange is currently set, so it
+% works after opt 1, after the trial-type search and after the duration search.
+
+removeClampBaseline = false; % true subtracts each clamp command's [-0.2,0) s median
+detailDaIdx = daIdx;         % photometry channel to show
+
 sampleClampTrace = getSampleClampTrace(timeSeries,params,referenceIdx,timeRange, ...
-                        daIdx=daIdx,removeClampBaseline=removeClampBaseline);
+                        daIdx=detailDaIdx,removeClampBaseline=removeClampBaseline);
 sampleClampTrace.sessionpath = sessionpath;
 sampleClampTrace.sessionName = sessionName;
 sampleClampTrace.trialRow = trialRows;
@@ -269,58 +290,150 @@ if ~isempty(trialRows)
     sampleClampTrace.trial = trials(trialRows,:);
     sampleClampTrace.trialNumber = trials.TrialNumber(trialRows)';
 end
-if timeOption == 2 && findBestClampWindow
-    sampleClampTrace.windowCandidates = windowCandidates;
-    sampleClampTrace.photometryIdx = photometryIdx;
-    sampleClampTrace.selectedChannelIdx = daIdx;
-    sampleClampTrace.eventScores = eventScores;
-    sampleClampTrace.selectedWindow = selectedWindow;
-    sampleClampTrace.events = selectedEvents;
-    sampleClampTrace.baselineWindow_sec = baselineWindow_sec;
-    sampleClampTrace.responseWindow_sec = responseWindow_sec;
-    sampleClampTrace.clampWeight = clampWeight;
-    sampleClampTrace.rankingOrder = {'NCombinations','NMatchedTypes','Score'};
+
+% Deliveries inside the window, rebuilt here so the cell stands on its own
+detailEvents = table();
+try
+    detailEvents = getClampEventTable(behavior,timeNI);
+    detailEvents = detailEvents(detailEvents.Time_sec >= sampleStart_sec & ...
+                                detailEvents.Time_sec <= sampleEnd_sec,:);
+catch ME
+    if ~strcmp(ME.identifier,'getClampEventTable:MissingClassification'); rethrow(ME); end
 end
+sampleClampTrace.events = detailEvents;
+detailClampEpochs = getClampEpochs(timeSeries);
 
-% Plot against session time so the interval between trials remains visible
-DA = sampleClampTrace.DA;
-clampIndex = sampleClampTrace.clampIndex;
-timeDA = sampleClampTrace.sessionTimeDA_sec;
-timeClamp = sampleClampTrace.sessionTimeClamp_sec;
-clampColor = [.232 .76 .58];
-
-initializeFig(0.65,0.65,ScreenSize=get(groot,'ScreenSize'),Visible='on'); tiledlayout(2,1);
-axDA = nexttile;
-plotTraces(DA,timeDA,color=clampColor,plotPatch=false);
-title(sampleClampTrace.DAName,'Interpreter','none');
-xlabel('Time (s)'); ylabel(sampleClampTrace.DAUnits);
-
-axClamp = nexttile;
-plotTraces(clampIndex,timeClamp,color=[.3 .3 .3],plotPatch=false);
-if removeClampBaseline; title('Clamp index (red - blue, baseline subtracted)');
-else; title('Clamp index (red - blue)'); end
-xlabel('Time (s)'); ylabel('Clamp index (%)');
-
-for i = 1:length(trialRows)
-    cueTime_sec = timeNI(trials.CueTime(trialRows(i)))-timeNI(1);
-    trialLabel = sprintf('Trial %g',trials.TrialNumber(trialRows(i)));
-    xline(axDA,cueTime_sec,':',trialLabel,'HandleVisibility','off');
-    xline(axClamp,cueTime_sec,':',trialLabel,'HandleVisibility','off');
-end
-if timeOption == 2 && findBestClampWindow
-    for i = 1:height(selectedEvents)
-        if selectedEvents.IsClamp(i); state = 'clamp'; eventColor = clampColor;
-        else; state = 'unclamp'; eventColor = [.6 .3 .1]; end
-        eventLabel = sprintf('%s (%s)',selectedEvents.Type(i),state);
-        if ~selectedEvents.InScore(i); eventLabel = sprintf('%s *',eventLabel); end
-        xline(axDA,selectedEvents.Time_sec(i),':',eventLabel,'Color',eventColor,'HandleVisibility','off');
-        xline(axClamp,selectedEvents.Time_sec(i),':',eventLabel,'Color',eventColor,'HandleVisibility','off');
-    end
-    % * marks events displayed but excluded from scoring (partial or missing windows).
-end
-linkaxes([axDA,axClamp],'x'); xlim([sampleStart_sec,sampleEnd_sec]);
-sgtitle(sprintf('%s | %.3f to %.3f s',sessionName,sampleStart_sec,sampleEnd_sec),'Interpreter','none');
-sampleClampTrace.figure = gcf;
+% Plot against session time so the interval between deliveries remains visible.
+% plotSampleClampTrace marks each delivery with plotEvent (airpuff patches span
+% 0.2 s) and colors clamped and unclamped deliveries differently.
+[axDA,axClamp,sampleFig] = plotSampleClampTrace(sampleClampTrace, ...
+    events=detailEvents,clampEpochs=detailClampEpochs, ...
+    trials=trials,trialRows=trialRows,timeNI=timeNI, ...
+    xlim=[sampleStart_sec,sampleEnd_sec],airpuffDuration=0.2, ...
+    titleText=sprintf('%s | %.3f to %.3f s',sessionName,sampleStart_sec,sampleEnd_sec));
+sampleClampTrace.figure = sampleFig;
+sampleClampTrace.axes = [axDA,axClamp];
 disp('Finished: example DA and clampIndex traces plotted');
 
-return
+%% Find the flattest 30 s windows with equal clamped / unclamped duration (DA only)
+
+% Independent of the cells above: marks when the clamp command is on, scans
+% every 30 s window of every photometry channel and keeps the non-overlapping
+% windows that spend half their time clamped and whose DA is flattest while
+% clamped. Deliveries are drawn but never required, so a window needs no
+% particular mix of water / airpuff / tone. Clamp index is not plotted here:
+% each tile shows DA alone, one row per photometry channel.
+
+flatWindow_sec = 30;
+flatStep_sec = 1;
+clampOnThreshold_pct = 1;   % command percent counted as clamping, as in analyzeSessions_clamp
+clampGapFill_sec = 0.1;     % fill shorter OFF gaps so one clamp epoch stays one epoch
+maxDurationImbalance = 0.1; % |clamped fraction - 0.5| allowed, i.e. 40-60% clamped
+minSideSamples = 10;        % DA samples required on each side before scoring a window
+nTopWindows = 5;
+airpuffDuration_sec = 0.2;
+
+validateattributes(flatWindow_sec,{'numeric'},{'scalar','finite','positive'});
+validateattributes(flatStep_sec,{'numeric'},{'scalar','finite','positive'});
+validateattributes(clampOnThreshold_pct,{'numeric'},{'scalar','finite','positive'});
+validateattributes(clampGapFill_sec,{'numeric'},{'scalar','finite','nonnegative'});
+validateattributes(maxDurationImbalance,{'numeric'},{'scalar','finite','nonnegative','<=',0.5});
+validateattributes(minSideSamples,{'numeric'},{'scalar','finite','positive','integer'});
+validateattributes(nTopWindows,{'numeric'},{'scalar','finite','positive','integer'});
+
+[clampEpochs,clampOn,clampTime_sec] = getClampEpochs(timeSeries, ...
+    threshold_pct=clampOnThreshold_pct,gapFill_sec=clampGapFill_sec);
+fprintf('Clamp on for %.1f%% of the session, in %d epochs.\n', ...
+    100*mean(clampOn),size(clampEpochs,1));
+
+% Deliveries are labels only here; they do not gate the search
+flatEvents = getClampEventTable(behavior,timeNI);
+
+% Score every window of every channel: half clamped, and flat while clamped
+sessionDuration_sec = timeNI(end)-timeNI(1);
+flatWindows = table();
+for ch = reshape(photometryIdx,1,[])
+    da = double(timeSeries(ch).data(:));
+    daFs = double(timeSeries(ch).finalFs);
+    daTime_sec = (0:numel(da)-1)'/daFs + double(timeSeries(ch).time_offset);
+    % Clamp state on the DA grid, so fractions match the plotted samples
+    daClamped = interp1(clampTime_sec,double(clampOn),daTime_sec,'nearest','extrap') > 0.5;
+    rows = zeros(0,7);
+    for start_sec = 0:flatStep_sec:(sessionDuration_sec-flatWindow_sec)
+        end_sec = start_sec+flatWindow_sec;
+        first = max(1,ceil((start_sec-daTime_sec(1))*daFs)+1);
+        last = min(numel(da),floor((end_sec-daTime_sec(1))*daFs)+1);
+        if last-first+1 < 2*minSideSamples; continue; end
+        window = da(first:last);
+        clampedHere = daClamped(first:last);
+        if any(~isfinite(window)); continue; end
+        if sum(clampedHere) < minSideSamples || sum(~clampedHere) < minSideSamples; continue; end
+        clampFraction = mean(clampedHere);
+        if abs(clampFraction-0.5) > maxDurationImbalance; continue; end
+        inWindow = flatEvents.Time_sec >= start_sec & flatEvents.Time_sec <= end_sec;
+        rows(end+1,:) = [start_sec,end_sec,clampFraction,std(window(clampedHere)), ...
+            std(window(~clampedHere)),sum(inWindow & flatEvents.IsClamp), ...
+            sum(inWindow & ~flatEvents.IsClamp)]; %#ok<SAGROW>
+    end
+    if isempty(rows); continue; end
+    channelWindows = array2table(rows,'VariableNames',{'Start_sec','End_sec','ClampFraction', ...
+        'ClampStd','UnclampStd','NClampDelivery','NUnclampDelivery'});
+    channelWindows.ChannelIndex = repmat(ch,height(channelWindows),1);
+    flatWindows = [flatWindows;channelWindows]; %#ok<AGROW>
+end
+if isempty(flatWindows)
+    fprintf(['No %g s window is %g-%g%% clamped. Raise maxDurationImbalance, or check that ' ...
+             'the clamp epochs are long enough for this window.\n'], ...
+        flatWindow_sec,100*(0.5-maxDurationImbalance),100*(0.5+maxDurationImbalance));
+    return
+end
+flatWindows.ChannelName = reshape(string({timeSeries(flatWindows.ChannelIndex).name}),[],1);
+
+% Flattest clamped DA first; neighbouring starts overlap heavily, so keep only
+% the best non-overlapping windows that getSampleClampTrace can extract in full.
+flatWindows = sortrows(flatWindows,{'ClampStd','Start_sec'},{'ascend','ascend'});
+[topWindows,topTraces] = selectTopClampWindows(flatWindows,timeSeries,params,timeNI, ...
+    nTop=nTopWindows);
+if isempty(topWindows)
+    disp('No balanced window has continuous, finite DA.');
+    return
+end
+disp('Flattest windows with equal clamped / unclamped duration:');
+disp(topWindows(:,{'ChannelName','Rank','Start_sec','End_sec','ClampFraction','ClampStd', ...
+    'UnclampStd','NClampDelivery','NUnclampDelivery'}));
+
+% One row per photometry channel, its top windows across the row
+topWindows.Label = string(compose('%.0f%% clamped | std %.3f', ...
+    100*topWindows.ClampFraction,topWindows.ClampStd));
+flatFig = plotClampWindowGrid(topWindows,topTraces,events=flatEvents, ...
+    clampEpochs=clampEpochs,channelIdx=photometryIdx,airpuffDuration=airpuffDuration_sec, ...
+    titleText=sprintf('%s | flattest %g s windows, half clamped by duration (DA only)', ...
+        sessionName,flatWindow_sec));
+
+% The flattest window becomes the current one, so the detail cell can plot it
+[~,bestFlatRow] = min(topWindows.ClampStd);
+daIdx = topWindows.ChannelIndex(bestFlatRow);
+sampleStart_sec = topWindows.Start_sec(bestFlatRow);
+sampleEnd_sec = topWindows.End_sec(bestFlatRow);
+referenceIdx = topWindows.ReferenceIdx(bestFlatRow);
+timeRange = topWindows.TimeRange(bestFlatRow,:);
+trialRows = [];
+fprintf(['Current window: %s %g-%g s. Run the detail cell for DA + clamp index, or copy ' ...
+         'another window into the opt 1 cell first.\n'], ...
+    topWindows.ChannelName(bestFlatRow),sampleStart_sec,sampleEnd_sec);
+
+flatClampWindows.sessionName = sessionName;
+flatClampWindows.sessionpath = sessionpath;
+flatClampWindows.windows = flatWindows;
+flatClampWindows.top = topWindows;
+flatClampWindows.traces = topTraces;
+flatClampWindows.events = flatEvents;
+flatClampWindows.clampOn = clampOn;
+flatClampWindows.clampEpochs = clampEpochs;
+flatClampWindows.clampTime_sec = clampTime_sec;
+flatClampWindows.settings = struct('window_sec',flatWindow_sec,'step_sec',flatStep_sec, ...
+    'clampOnThreshold_pct',clampOnThreshold_pct,'clampGapFill_sec',clampGapFill_sec, ...
+    'maxDurationImbalance',maxDurationImbalance,'minSideSamples',minSideSamples, ...
+    'nTopWindows',nTopWindows);
+flatClampWindows.figure = flatFig;
+disp('Finished: flattest clamped DA windows plotted');
