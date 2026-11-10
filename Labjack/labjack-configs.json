@@ -1,6 +1,16 @@
 {
   "configs": [
     {
+      "animal": "channal map (relative to animal)", 
+      "spikeGLX": true,
+      "channels": [
+        {"name": "left-side-green", "freqMod": false, "display": false, "record": false},
+        {"name": "right-side-green", "freqMod": false, "display": false, "record": false},
+        {"name": "right-side-red", "freqMod": false, "display": false, "record": false},
+        {"name": "left-side-red", "freqMod": false, "display": false, "record": false}
+      ]
+    },
+    {
       "animal": "EP-LHb",
       "spikeGLX": true,
       "channels": [
@@ -85,6 +95,39 @@
         {"name": "NAc-LS", "freqMod": false, "display": false, "record": false},
         {"name": "NAc-LS", "freqMod": false, "display": false, "record": true},
         {"name": "DLS", "freqMod": false, "display": false, "record": true}
+      ]
+    },
+
+    {
+      "animal": "SL484-SL487",
+      "spikeGLX": true,
+      "channels": [
+        {"name": "nan", "freqMod": false, "display": false, "record": false},
+        {"name": "NAc-right", "freqMod": false, "display": false, "record": true},
+        {"name": "NAc-left", "freqMod": false, "display": false, "record": true},
+        {"name": "nan", "freqMod": false, "display": false, "record": false}
+      ]
+    },
+
+    {
+      "animal": "SL489,SL492,SL493",
+      "spikeGLX": true,
+      "channels": [
+        {"name": "DMS", "freqMod": false, "display": false, "record": true},
+        {"name": "NAc-LS", "freqMod": false, "display": false, "record": true},
+        {"name": "nan", "freqMod": false, "display": false, "record": false},
+        {"name": "nan", "freqMod": false, "display": false, "record": false}
+      ]
+    },
+
+    {
+      "animal": "SL494-SL498",
+      "spikeGLX": true,
+      "channels": [
+        {"name": "NAc-MS", "freqMod": false, "display": false, "record": true},
+        {"name": "NAc-LS", "freqMod": false, "display": false, "record": true},
+        {"name": "nan", "freqMod": false, "display": false, "record": false},
+        {"name": "nan", "freqMod": false, "display": false, "record": false}
       ]
     }
   ]
