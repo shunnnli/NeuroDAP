@@ -7,7 +7,7 @@ function [axDA,axClamp,fig] = plotSampleClampTrace(sample,options)
 % window was clamped can be read off the DA panel itself.
 % Water, airpuff and tone deliveries are marked with plotEvent: the patch
 % width is the delivery duration (airpuff defaults to 0.2 s) and the color
-% separates clamped from unclamped deliveries.
+% identifies the delivery type. Clamp state appears in parentheses in the label.
 %
 % Pass ax= to draw DA into existing axes (one tile per window in a summary
 % figure); the clamp index needs its own tile, so set plotClampIndex=false.
@@ -82,6 +82,7 @@ if options.plotClampIndex
 end
 
 % Markers go on every panel so the two can be read against each other
+[~,~,~,~,~,~,bluePurpleRed] = loadColors;
 axList = axDA; if ~isempty(axClamp); axList = [axDA,axClamp]; end
 for ax = axList
     axes(ax); hold on %#ok<LAXES>
@@ -101,13 +102,13 @@ for ax = axList
     for i = 1:height(options.events)
         type = string(options.events.Type(i));
         switch upper(type)
-            case "WATER";   duration = options.waterDuration;
-            case "AIRPUFF"; duration = options.airpuffDuration;
-            case "TONE";    duration = options.toneDuration;
-            otherwise;      duration = 0;
+            case "WATER";   duration = options.waterDuration; eventColor = bluePurpleRed(1,:);
+            case "AIRPUFF"; duration = options.airpuffDuration; eventColor = [0.2,0.2,0.2];
+            case "TONE";    duration = options.toneDuration; eventColor = bluePurpleRed(250,:);
+            otherwise;      duration = 0; eventColor = [0.2,0.2,0.2];
         end
-        if options.events.IsClamp(i); state = "clamp"; eventColor = options.clampColor;
-        else; state = "unclamp"; eventColor = options.unclampColor; end
+        if options.events.IsClamp(i); state = "clamp";
+        else; state = "unclamp"; end
         label = sprintf('%s (%s)',type,state);
         % * marks events shown but left out of scoring (partial or missing windows)
         if ismember('InScore',options.events.Properties.VariableNames) && ~options.events.InScore(i)
