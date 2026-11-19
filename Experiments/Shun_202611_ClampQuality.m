@@ -431,22 +431,26 @@ return
 % without replacing the animals variable used by sections 1-3.
 % Layout reference: https://doi.org/10.64898/2026.07.24.740623
 % Peak inclusion follows the paper's Fiber photometry methods: local
-% minimum-to-maximum rise >=1.5% dF/F; exclude +/-2 s around reward.
+% minimum-to-maximum rise above the configured cutoff (paper: >=1.5%).
+% Analyze >3 s after reward, with a 2 s buffer before the next cue.
 % Saved traces retain NeuroDAP preprocessing, not the paper's raw-signal
 % normalization/filtering. See measureSpontaneousTransients for details.
+
 transientFolder = osPathSwitch('/Volumes/Neurobio/MICROSCOPE/Shun/Project clamping/Results/202604-BiPOLES');
 transientSettings.spontaneousFile = fullfile(transientFolder,'animals_20260722_random-toM446.mat');
 transientSettings.rewardFile = fullfile(transientFolder,'animals_20260722_random-toM446.mat');
 transientSettings.animals = 'All'; % or {'SL431','SL432','SL433'}
-% One selection per condition (OFF, ON). Task uses substring matching;
+% Two source selections. Task uses substring matching;
 % signal/event use exact matching. Edit these for other animals MAT files.
 % Water-aligned windows start AFTER the reward exclusion and end before the
 % next cue minus 2 s, preventing overlap and excluding neighboring events.
 % These are sampled inter-event windows, not whole-session frequencies.
+% Trial labels select source snippets only. Actual ON/OFF segments are
+% determined from matching blueClamp/redClamp commands within each snippet.
 transientSettings.spontaneousSelections = struct( ...
     'task',{'Random','Random'},'signal',{'NAc-clamp','NAc-clamp'}, ...
     'event',{'Water (unclamp)','Water (clamp)'}, ...
-    'window',{[2,4.5],[2,4.5]}, ...
+    'window',{[3,4.5],[3,4.5]}, ...
     'rewardAligned',{true,true},'cueToRewardSeconds',{0,0}, ...
     'confirmedEventFree',{false,false});
 % Random water is delivered at the cue. For delayed-reward tasks, set
@@ -462,8 +466,12 @@ transientSettings.rewardBaseline = [-0.5,0];
 transientSettings.rewardPeakWindow = [0,1.5];
 transientSettings.scale = 100; % fractional dF/F -> percent; use 1 if already %
 % Not valid for z-scored input. downsampleSignal(...,dff=true) stores fractions.
-transientSettings.minimumRisePercent = 1.5;
-transientSettings.rewardExclusionSeconds = 2;
+transientSettings.minimumRisePercent = 5; % require rise strictly greater than this
+transientSettings.rewardExclusionSeconds = 3;
+transientSettings.nextCueGuardSeconds = 2;
+% Commands are percent of range (0-100). ON = either channel >1%; OFF =
+% both <=1%. Missing commands are excluded. Detect within each state run.
+transientSettings.clampActiveThresholdPercent = 1;
 transientSettings.peakDefinition = 'Local maximum minus immediately preceding local minimum';
 transientSettings.preprocessing = 'Existing NeuroDAP dF/F; 5 ms moving mean rounded to samples';
 transientSettings.methodSource = 'https://doi.org/10.64898/2026.07.24.740623';

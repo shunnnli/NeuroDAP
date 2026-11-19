@@ -46,7 +46,7 @@ class Settings:
     baud: str = "115200"
     cli: str = "arduino-cli"
     protocol: str = str(PARSER_DIR / "send_event_RPE.py")
-    host: str = "192.168.50.132"
+    host: str = "192.168.50.218"
     udp_port: str = "5005"
     line_ending: str = "Newline (LF)"
     reconnect: bool = True

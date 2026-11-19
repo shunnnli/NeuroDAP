@@ -4,6 +4,7 @@ function [amplitudes,peakIndices,minIndices] = detectPaperPositivePeaks(x,minimu
 % The paper specifies >=1.5% rise, not prominence, absolute height or a
 % minimum distance. Pairing with the immediately preceding local minimum
 % and taking the first sample of a flat extremum are implementation choices.
+% This implementation requires rise strictly greater than minimumRise.
 % Endpoints are not extrema; never bridge a missing sample or trial boundary.
 x = double(x(:)');
 assert(all(isfinite(x)),'Pass separate finite segments to the detector.');
@@ -17,7 +18,7 @@ for k = maxs
     m = mins(find(mins<k,1,'last'));
     if isempty(m); continue; end
     rise = y(k)-y(m);
-    if rise>=minimumRise
+    if rise>minimumRise
         amplitudes(end+1) = rise; %#ok<AGROW>
         peakIndices(end+1) = idx(k); %#ok<AGROW>
         minIndices(end+1) = idx(m); %#ok<AGROW>

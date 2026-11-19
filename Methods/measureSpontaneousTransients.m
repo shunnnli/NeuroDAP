@@ -4,18 +4,17 @@ function [animalSummary,sessionSummary,windowSummary] = measureSpontaneousTransi
 % Raw preprocessing in the paper: 50 Hz lowpass, downsample to 50 Hz,
 % sliding 5 ms average, recording-mean normalization. These inputs already
 % contain processed dF/F, so we retain their preprocessing. Re-normalizing
-% snippets would change the meaning of the fixed 1.5% threshold.
+% snippets would change the meaning of the configured percent threshold.
 %
-% Default: Water-aligned Random trials, strictly >2 s after reward and
+% Default: Water-aligned Random trials, strictly >3 s after reward and
 % <2 s before the next cue. This conservative subset also avoids cues and
 % duplicate time across adjacent trials. ITI is stored in seconds. For
 % non-reward anchors, caller must explicitly confirm event-free windows.
-% Condition labels describe the selected windows; do not infer clamp state
-% from a Baseline event or a session name without checking the protocol.
-assert(numel(cfg.spontaneousSelections)==2,'Specify OFF and ON selections.');
-records = cell(0,9);
-for c = 1:2
-    sel = cfg.spontaneousSelections(c);
+% Source labels select snippets; measured command activity assigns ON/OFF.
+% This measures actuator output, not whether a zero-output controller is armed.
+records = cell(0,13);
+for selection = 1:numel(cfg.spontaneousSelections)
+    sel = cfg.spontaneousSelections(selection);
     assert(sel.window(1)<sel.window(2),'Invalid spontaneous window.');
     rows = contains({animals.task},sel.task,'IgnoreCase',true) & ...
         strcmpi({animals.name},sel.signal) & strcmpi({animals.event},sel.event);
@@ -47,6 +46,8 @@ for c = 1:2
             assert(all(ismember({'ITI','isReward'},tt.Properties.VariableNames)), ...
                 'Water windows require ITI (seconds) and isReward metadata.');
         end
+        [clampActive,blueRow,redRow] = getTrialClampActivity(animals,r, ...
+            cfg.clampActiveThresholdPercent);
         % Trial-number resets identify concatenated sessions. Keep each
         % row's session labels distinct; selections should use one anchor
         % event per condition, avoiding duplicate representations of trials.
@@ -70,23 +71,34 @@ for c = 1:2
             if sel.rewardAligned
                 if tt.isReward(j)~=1 || ~isfinite(tt.ITI(j)); continue; end
                 % End before the next cue, even when it is not a reward.
-                last = min(last,tt.ITI(j)-sel.cueToRewardSeconds-cfg.rewardExclusionSeconds);
+                last = min(last,tt.ITI(j)-sel.cueToRewardSeconds-cfg.nextCueGuardSeconds);
             end
             idx = t>sel.window(1)+dt*1e-6 & t<last-dt*1e-6;
             if sum(idx)<3; continue; end
-            x = cfg.scale*double(row.data(j,idx));
-            if any(~isfinite(x)); continue; end
-            % 5 ms moving mean is one sample for saved traces <=100 Hz.
-            x = movmean(x,max(1,round(0.005/dt)));
-            amps = detectPaperPositivePeaks(x,cfg.minimumRisePercent);
             key = sessionNames(sessionIdx(j));
-            records(end+1,:) = {string(row.animal),c,key,r,j, ...
-                numel(amps),numel(x)*dt,sum(amps),mean(amps)}; %#ok<AGROW>
+            for state = 0:1
+                % Never bridge missing samples or a change in command state.
+                valid = idx & clampActive(j,:)==state & isfinite(row.data(j,:));
+                edges = diff([false,valid,false]);
+                starts = find(edges==1); stops = find(edges==-1)-1;
+                for segment = 1:numel(starts)
+                    samples = starts(segment):stops(segment);
+                    if numel(samples)<3; continue; end
+                    x = cfg.scale*double(row.data(j,samples));
+                    % 5 ms moving mean is one sample for saved traces <=100 Hz.
+                    x = movmean(x,max(1,round(0.005/dt)));
+                    amps = detectPaperPositivePeaks(x,cfg.minimumRisePercent);
+                    records(end+1,:) = {string(row.animal),state+1,key,r,j, ...
+                        numel(amps),numel(x)*dt,sum(amps),mean(amps), ...
+                        t(samples(1)),t(samples(end))+dt,blueRow,redRow}; %#ok<AGROW>
+                end
+            end
         end
     end
 end
 windowSummary = cell2table(records,'VariableNames',{'Animal','Condition','Session', ...
-    'AnimalRow','TrialRow','Count','Seconds','AmplitudeSum','MeanAmplitude'});
+    'AnimalRow','TrialRow','Count','Seconds','AmplitudeSum','MeanAmplitude', ...
+    'StartTime','EndTime','BlueClampRow','RedClampRow'});
 windowSummary.Animal = string(windowSummary.Animal);
 windowSummary.Session = string(windowSummary.Session);
 % One metric per session, as in the paper; ambiguous legacy rows are
