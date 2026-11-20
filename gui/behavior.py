@@ -25,6 +25,7 @@ import uuid
 from dataclasses import asdict, dataclass, field, fields
 
 from .parameters import ParameterEditor, apply_overrides, prepare_sketch, save_edits
+from .reward_receiver import RewardReceiver
 from .manual_controls import CAPABILITY_LINE, COMMANDS, CONTROL_GROUPS, ManualState
 
 GUI_DIR = Path(__file__).resolve().parent
@@ -48,6 +49,7 @@ class Settings:
     protocol: str = str(PARSER_DIR / "send_event_RPE.py")
     host: str = "192.168.50.218"
     udp_port: str = "5005"
+    reward_port: str = "5006"
     line_ending: str = "Newline (LF)"
     reconnect: bool = True
     parameter_overrides: dict[str, str] = field(default_factory=dict)
@@ -202,6 +204,7 @@ class BehaviorService:
         self.ser = None
         self.protocol = None
         self.udp = None
+        self.reward_receiver = None
         self.buffer = bytearray()
         self.busy = False
         self.manual_ready = False
@@ -221,7 +224,8 @@ class BehaviorService:
 
     def state(self):
         self.events.put(("state", {"connected": self.ser is not None,
-                                  "protocol": self.protocol is not None, "busy": self.busy}))
+                                  "protocol": self.protocol is not None, "busy": self.busy,
+                                  "rewards": self.reward_receiver is not None}))
 
     def submit(self, name, *args):
         self.commands.put((name, args))
@@ -261,6 +265,13 @@ class BehaviorService:
                         self.log(f"[serial error] {exc}")
                         self.do_disconnect()
                         self.state()
+                if self.reward_receiver:
+                    try:
+                        self.reward_receiver.poll()
+                    except Exception as exc:
+                        self.log(f'[reward receiver error] {exc}')
+                        self.do_stop_rewards()
+                        self.state()
                 if self.udp:
                     try:
                         self.udp.poll()
@@ -270,6 +281,31 @@ class BehaviorService:
                         self.state()
         finally:
             self.do_disconnect()
+
+    def do_start_rewards(self, settings):
+        if not self.ser or self.busy or self.resetting:
+            raise ValueError('Connect the behavior Arduino first.')
+        if self.reward_receiver:
+            raise ValueError('Reward receiver is already enabled.')
+        host = str(ipaddress.IPv4Address(settings.host.strip()))
+        port = int(settings.reward_port)
+        if not 1 <= port <= 65535:
+            raise ValueError('Reward receiver port must be 1–65535.')
+        self.reward_receiver = RewardReceiver(
+            port, host, ROOT / 'data' / 'reward_tasks',
+            lambda command: self.do_send(command, 'None'), self.log,
+            lambda: self.ser is not None and not self.busy and not self.resetting
+                    and not self.manual_state.calibrating)
+        self.log(f'[reward receiver] Enabled on TCP {port}, accepting BrainClamp at {host}.')
+
+    def do_stop_rewards(self):
+        receiver, self.reward_receiver = self.reward_receiver, None
+        if receiver:
+            try:
+                receiver.close()
+            except Exception as exc:
+                self.log(f'[reward log close error] {exc}')
+            self.log('[reward receiver] Disabled.')
 
     def do_refresh(self):
         serial_module()
@@ -327,6 +363,7 @@ class BehaviorService:
         if ':'.join(board.strip().split(':')[:3]) not in (
                 'arduino:avr:mega', 'arduino:avr:uno', 'arduino:avr:nano'):
             raise ValueError("Reset Arduino supports Mega, Uno, and classic Nano USB auto-reset. Select the correct Board ID.")
+        self.do_stop_rewards()
         if self.udp:
             self.udp.cancel_pending()
         self.manual_ready = False
@@ -365,6 +402,7 @@ class BehaviorService:
                 self.events.put(("manual", False))
 
     def do_disconnect(self):
+        self.do_stop_rewards()
         self.manual_ready = False
         self.manual_state = ManualState()
         self.events.put(("manual_state", asdict(self.manual_state)))
@@ -397,6 +435,8 @@ class BehaviorService:
     def do_send(self, text, ending):
         if not self.ser:
             raise RuntimeError("Connect the Arduino before sending a command.")
+        if text.strip() in ("x", "c"):
+            self.do_stop_rewards()
         packet = (text + LINE_ENDINGS[ending]).encode("utf-8")
         try:
             count = self.ser.write(packet)
@@ -412,6 +452,8 @@ class BehaviorService:
             raise ValueError("Unknown manual action.")
         if not self.manual_ready:
             raise RuntimeError("Upload the compatible behavior-control firmware and connect first.")
+        if action in ("end_task", "calibration"):
+            self.do_stop_rewards()
         if action == "end_task":
             self.do_stop_protocol()  # cancel delayed local UDP work on task stop
         self.do_send(COMMANDS[action], "None")
@@ -428,6 +470,16 @@ class BehaviorService:
             del self.buffer[:boundary + 1]
             line = raw.decode("utf-8", errors="replace")
             self.log(f"[RX] {line}")
+            if self.reward_receiver:
+                try:
+                    self.reward_receiver.serial_line(line)
+                except Exception as exc:
+                    self.log(f'[reward log error] {exc}')
+                    self.do_stop_rewards()
+                    self.state()
+                if line == CAPABILITY_LINE or line.startswith(('ACK END_TASK', 'TASK ENDED AT')):
+                    self.do_stop_rewards()
+                    self.state()
             if line == CAPABILITY_LINE:
                 self.manual_ready = True
                 if self.resetting:
@@ -545,6 +597,7 @@ class BehaviorGUI:
         self.service = BehaviorService()
         self.connected = self.protocol_running = self.busy = self.pending = False
         self.manual_ready = False
+        self.rewards_enabled = False
         self.manual_state = ManualState()
         self.closing = False
         self.parameter_sketch = None
@@ -637,6 +690,12 @@ class BehaviorGUI:
                       row=5, column=0, columnspan=3, sticky="w", pady=(8, 0))
         ttk.Label(right, text="Serial monitoring works without a parser.\nUDP sends are logged; receipt is not confirmed.\nEnd parser cancels pending sends, not remote actions.",
                   style="Hint.TLabel", wraplength=330, justify="left").grid(row=6, column=0, columnspan=3, sticky="w", pady=(0, 8))
+
+        self._entry(right, "Reward TCP port", "reward_port", 7, protocol=True)
+        self.rewards_button = ttk.Button(right, text="Enable reward receiver", command=self.toggle_rewards)
+        self.rewards_button.grid(row=8, column=0, columnspan=3, sticky='ew', pady=4)
+        ttk.Label(right, text="Accepts tasks only from Receiver IPv4 above (BrainClamp).\nTask logs: NeuroDAP/data/reward_tasks/",
+                  style="Hint.TLabel", wraplength=330).grid(row=9, column=0, columnspan=3, sticky='w')
 
         command_row = ttk.LabelFrame(outer, text="Manual controls", padding=6)
         command_row.grid(row=2, column=0, sticky="ew", pady=(10, 8))
@@ -819,6 +878,12 @@ class BehaviorGUI:
     def reset_arduino(self):
         self.request("reset_arduino", self.vars["board"].get())
 
+    def toggle_rewards(self):
+        if self.rewards_enabled:
+            self.request('stop_rewards')
+        else:
+            self.request('start_rewards', self.settings())
+
     def toggle_protocol(self):
         if self.protocol_running:
             self.request("stop_protocol")
@@ -840,7 +905,7 @@ class BehaviorGUI:
         for widget in self.config_widgets:
             enable(widget, not blocked and not self.connected)
         for widget in self.protocol_widgets:
-            enable(widget, not blocked and not self.protocol_running)
+            enable(widget, not blocked and not self.protocol_running and not self.rewards_enabled)
         for widget in (self.refresh_button, self.detect_button, self.load_button):
             enable(widget, not blocked and not self.connected)
         enable(self.upload_button, not blocked)
@@ -848,6 +913,8 @@ class BehaviorGUI:
         enable(self.reset_button, not blocked and self.connected)
         enable(self.connect_button, not blocked)
         enable(self.protocol_button, not blocked and self.connected)
+        enable(self.rewards_button, not blocked and self.connected)
+        self.rewards_button.configure(text='Disable reward receiver' if self.rewards_enabled else 'Enable reward receiver')
         enable(self.send_button, not blocked and self.connected)
         enable(self.command_entry, not blocked and self.connected)
         for button in self.manual_buttons:
@@ -875,6 +942,7 @@ class BehaviorGUI:
             except queue.Empty:
                 break
             if kind == "state":
+                self.rewards_enabled = value.get("rewards", False)
                 self.connected, self.protocol_running, self.busy = value["connected"], value["protocol"], value["busy"]
                 self.status.set("Compiling / uploading…" if self.busy else
                                 ("Connected | Parser running" if self.protocol_running else

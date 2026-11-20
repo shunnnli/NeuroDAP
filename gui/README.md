@@ -382,3 +382,13 @@ experiment is operated. When a C++ compiler is available, both complete DA-clamp
 sketches are compiled and executed against mock Arduino I/O to check stop/count
 preservation, patterns, rewards, calibration interruption and legacy commands.
 This does not replace an Arduino-core build or validation on the target rig.
+
+## Photometry reward tasks from BrainClamp
+
+Connect the behavior Arduino, set **Receiver IPv4** to the BrainClamp computer's address, and click **Enable reward receiver**. The separate reward TCP port defaults to `5006`; use the same port in BrainClamp Task settings. The existing UDP parser can run independently.
+
+In BrainClamp, start streaming, open **Task settings**, load the example task, enter this behavior computer's IPv4 address, choose thresholds/reward size/cooldown/limit, and start the task. Each accepted request writes one `w` or `W` byte through the existing serial connection. There is no requirement for a firmware capability banner for this feature; the selected sketch must implement those reward commands.
+
+Logs are saved automatically under `NeuroDAP/data/reward_tasks/` as JSONL, including configuration, trigger samples, serial sends, and raw Arduino replies. A serial-send confirmation is not a physical delivery confirmation. Disable the receiver or use End task to stop remote requests; disconnect/reset/upload and water calibration also disable it. An already accepted Arduino pulse is allowed to complete. Tasks never reconnect or retry rewards automatically.
+
+See [BrainClamp task setup](../../BrainClamp/docs/photometry-reward-task.md) in a sibling checkout for the full task configuration and stopping rules.

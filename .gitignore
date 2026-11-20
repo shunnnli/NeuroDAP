@@ -19,3 +19,6 @@ __pycache__/
 
 # superpowers execution scratch (ledger, briefs, review packages)
 .superpowers/
+
+# Machine-local photometry task logs
+/data/reward_tasks/
